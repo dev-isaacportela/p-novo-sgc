@@ -32,15 +32,21 @@ export default function AbaAlertas(ctx: ExtensaoContexto) {
   const bloqueado = ctx.travado || !pedido.podeEditar || salvando;
   const naoLidos = pedido.alertas.filter((alerta) => !alerta.lido).length;
 
-  async function gravar(executar: () => Promise<void>) {
+  /**
+   * Uma escrita, o recarregamento do pedido e — só quando a contagem muda — um
+   * `kbCardAtualizar` para o cartão do quadro. `pendentesDepois` é calculado
+   * aqui e não lido do estado recarregado: justificar não muda a contagem,
+   * marcar como lido muda de forma previsível.
+   */
+  async function gravar(executar: () => Promise<void>, pendentesDepois: number) {
     setSalvando(true);
     setErro('');
     try {
       await executar();
       await pedido.recarregar(ctx.card.id);
-      const pendentes = String(Math.max(0, naoLidos - 1));
-      if (capaMudou(ctx.card, { alertas_pendentes: pendentes })) {
-        await atualizarCapaDoQuadro(ctx.card, { alertas_pendentes: pendentes });
+      const espelho = { alertas_pendentes: String(pendentesDepois) };
+      if (capaMudou(ctx.card, espelho)) {
+        await atualizarCapaDoQuadro(ctx.card, espelho);
         await ctx.recarregar();
       }
     } catch (falha) {
@@ -51,26 +57,16 @@ export default function AbaAlertas(ctx: ExtensaoContexto) {
   }
 
   async function marcarLido(id: number) {
+    const pendentes = pedido.alertas.filter((alerta) => !alerta.lido && alerta.id !== id).length;
     await gravar(async () => {
       await acao('sgcEscAlertaLer', { idCard: ctx.card.id, id, lidoEm: agora() });
-    });
+    }, pendentes);
   }
 
   async function marcarTodosLidos() {
-    setSalvando(true);
-    setErro('');
-    try {
+    await gravar(async () => {
       await acao('sgcEscAlertaLer', { idCard: ctx.card.id, id: 0, lidoEm: agora() });
-      await pedido.recarregar(ctx.card.id);
-      if (capaMudou(ctx.card, { alertas_pendentes: '0' })) {
-        await atualizarCapaDoQuadro(ctx.card, { alertas_pendentes: '0' });
-        await ctx.recarregar();
-      }
-    } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : 'Não foi possível marcar os alertas como lidos.');
-    } finally {
-      setSalvando(false);
-    }
+    }, 0);
   }
 
   async function salvarJustificativa() {
@@ -79,7 +75,7 @@ export default function AbaAlertas(ctx: ExtensaoContexto) {
     setJustificando(null);
     await gravar(async () => {
       await acao('sgcEscAlertaJustificar', { idCard: ctx.card.id, codprod, justificativa: texto.trim() });
-    });
+    }, naoLidos);
   }
 
   if (pedido.carregando) {
