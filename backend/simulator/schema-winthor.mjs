@@ -11,7 +11,9 @@
 // literal por tabela, começando pela frase de criação idempotente, para o
 // leitor de DDL por texto (readSetupDdl) reconhecer o bloco.
 //
-// Colunas: as que os plans 001 (§Simulador) e 003 (§"Tabelas PC*") citam.
+// Colunas: as que os plans 001 (§Simulador), 003 (§"Tabelas PC*") e, na onda 2,
+// 005 (§"Tabelas PC*", R-027: PCNFENT, PCLANC novas; PCMOV e PCPRODUT ganham
+// colunas) citam. As linhas continuam por conta dos seeds de cada feature.
 
 export const DDL = [
   // Compartilhadas com a 001 (sgcWintFornecedores/sgcWintFiliais) e com a 003.
@@ -32,7 +34,8 @@ export const DDL = [
   )`,
 
   // sgcWintAnaliseMontagem / sgcWintBuscarProduto (003). OBS2 marca inativo;
-  // PRAZOVAL e a validade minima do produto (dias).
+  // PRAZOVAL e a validade minima do produto (dias). CODFAB/CODAUXILIAR (EAN)
+  // sao da 005 (R-027): casamento de item da NF quando o CODPROD nao bate.
   `CREATE TABLE IF NOT EXISTS PCPRODUT (
     CODPROD INT PRIMARY KEY,
     DESCRICAO VARCHAR(200),
@@ -43,7 +46,9 @@ export const DDL = [
     CODSEC INT,
     QTUNITCX DECIMAL(15,3),
     OBS2 VARCHAR(200),
-    PRAZOVAL INT
+    PRAZOVAL INT,
+    CODFAB VARCHAR(60),
+    CODAUXILIAR VARCHAR(20)
   )`,
 
   // Estoque e venda por produto/filial (003).
@@ -68,7 +73,9 @@ export const DDL = [
     DTPREVISTA VARCHAR(10)
   )`,
 
-  // Movimento de venda (sgcWintAnaliseMontagem soma por CODOPER = 'S').
+  // Movimento de venda (sgcWintAnaliseMontagem soma por CODOPER = 'S') e de
+  // entrada (CODOPER = 'E', 005/R-027): NUMTRANSENT/NUMNOTA/SERIE ligam à NF
+  // de PCNFENT; NUMLOTE/DATAVALIDADE casam o lote da 005 com o da 003 (PCLOTE).
   `CREATE TABLE IF NOT EXISTS PCMOV (
     NUMTRANSITEM INT,
     CODPROD INT,
@@ -78,7 +85,43 @@ export const DDL = [
     DTMOV VARCHAR(10),
     QT DECIMAL(15,3),
     PUNIT DECIMAL(15,4),
-    NUMPED INT
+    NUMPED INT,
+    NUMTRANSENT INT,
+    NUMNOTA INT,
+    SERIE VARCHAR(10),
+    NUMLOTE VARCHAR(30),
+    DATAVALIDADE VARCHAR(10)
+  )`,
+
+  // Entrada de NF no WinThor (005, R-027): é dela que sgcWintNfEntradas/
+  // sgcWintNfBuscar leem; DTCANCEL preenchida = nota cancelada, nunca conta.
+  `CREATE TABLE IF NOT EXISTS PCNFENT (
+    NUMTRANSENT INT PRIMARY KEY,
+    NUMNOTA INT,
+    SERIE VARCHAR(10),
+    CODFORNEC INT,
+    CODFILIAL VARCHAR(10),
+    DTEMISSAO VARCHAR(10),
+    DTENT VARCHAR(10),
+    DTCANCEL VARCHAR(10),
+    VLTOTAL DECIMAL(15,2),
+    CHAVENFE VARCHAR(50),
+    PRAZO INT,
+    ESPECIE VARCHAR(20)
+  )`,
+
+  // Duplicatas da NF (005, R-027): sgcWintNfParcelas lê os dias de vencimento
+  // (resultadoDePrazo, RN-007 do plan da 005) por NUMTRANSENT/NUMNOTA.
+  `CREATE TABLE IF NOT EXISTS PCLANC (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    NUMTRANSENT INT,
+    NUMNOTA INT,
+    CODFORNEC INT,
+    DTEMISSAO VARCHAR(10),
+    DTVENC VARCHAR(10),
+    VALOR DECIMAL(15,2),
+    DUPLIC VARCHAR(20),
+    NUMPARCELAMENTO INT
   )`,
 
   // CODATV1 marca cliente publico (licitação — RN-011, D-002 do plan da 003).

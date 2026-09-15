@@ -572,7 +572,8 @@ export async function suite(ctx) {
     assert.match(String(capaAnalise.CAPA_JSON), /alertas_pendentes/);
     const obrigatorios = db.prepare('SELECT COUNT(*) AS N FROM KB_CAMPO WHERE BOARD_ID = ? AND OBRIGATORIO = 1').get(boardId);
     assert.equal(Number(obrigatorios.N), 0);
-    assert.equal(Number(db.prepare('SELECT COUNT(*) AS N FROM KB_CAMPO WHERE BOARD_ID = ?').get(boardId).N), 6);
+    // 6 campos da 002 (CAMPOS) + 1 da onda 2 (CAMPOS_008: `faturamento`, R-048).
+    assert.equal(Number(db.prepare('SELECT COUNT(*) AS N FROM KB_CAMPO WHERE BOARD_ID = ?').get(boardId).N), 7);
   });
 
   await teste('RN-018: a prioridade aceita alta e recusa altissima', async () => {

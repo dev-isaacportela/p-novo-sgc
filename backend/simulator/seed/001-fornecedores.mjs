@@ -51,9 +51,12 @@ export function seed001(db, cenario) {
     1015, 'FRESENIUS KABI BRASIL LTDA', '49324221000104', '49.324.221/0001-04',
     7, 'uteis', 5000.00, 7, 15, '', 120, 0, 0, 1, U.admin, agora, U.admin, agora,
   ).lastInsertRowid;
+  // VALIDADE_MINIMA_DIAS 180 (R-043 do 000, onda 2): a 005 confere a validade
+  // do lote da NF contra o cadastro do fornecedor, nunca contra o padrão de
+  // 120 (esse fica só na regra pura, para quem não tem linha aqui).
   const id1042 = inserirFornecedor.run(
     1042, 'NESTLE BRASIL LTDA', '60409075000132', '60.409.075/0001-32',
-    10, 'corridos', 3000.00, 1, 10, '', 90, 2, 7, 1, U.admin, agora, U.admin, agora,
+    10, 'corridos', 3000.00, 1, 10, '', 180, 2, 7, 1, U.admin, agora, U.admin, agora,
   ).lastInsertRowid;
   const id1088 = inserirFornecedor.run(
     1088, 'DANONE NUTRICAO ESPECIALIZADA LTDA', '02414711000138', '02.414.711/0001-38',
