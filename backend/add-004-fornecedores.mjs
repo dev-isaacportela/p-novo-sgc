@@ -22,6 +22,11 @@
 //
 // NAO EXECUTE DA MAQUINA LOCAL sem decisao explicita do usuario.
 // Uso (no sandbox): cd backend && node add-004-fornecedores.mjs
+//
+// Regra: todo INSERT ... SELECT ... WHERE leva FROM DUAL entre o SELECT e o
+// WHERE (padrao do add-005). SQLite aceita SELECT <expr> WHERE <cond> sem
+// FROM, mas o MySQL da plataforma não — é erro de sintaxe lá. O dialeto do
+// simulador remove o FROM DUAL, então nada muda localmente.
 
 import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -67,6 +72,7 @@ const ESCRITAS = [
 SELECT {{codfornec}}, '{{fornecedor}}', '{{cnpj}}', NULLIF('{{cnpjFormatado}}', ''), {{prazoEntregaDias}}, '{{prazoEntregaTipo}}',
     {{pedidoMinimo}}, {{fechamentoDiaInicio}}, {{fechamentoDiaFim}}, NULLIF('{{linkPlataforma}}', ''), {{validadeMinimaDias}},
     {{slaAnaliseDias}}, {{slaFaturamentoDias}}, ({{ativo}} = 1), NULLIF({{usuarioId}}, 0), '{{agora}}', NULLIF({{usuarioId}}, 0), '{{agora}}'
+FROM DUAL
 WHERE ${GUARDA}`,
   },
   {
@@ -94,6 +100,7 @@ WHERE ID = {{id}} AND ${GUARDA}`,
     resumo: 'RF-006 — filial atendida',
     code: `INSERT INTO SGC_FORNECEDOR_FILIAL (FORNECEDOR_ID, CODFILIAL, FILIAL)
 SELECT {{fornecedorId}}, '{{codfilial}}', NULLIF('{{filial}}', '')
+FROM DUAL
 WHERE ${GUARDA}`,
   },
   {
@@ -124,6 +131,7 @@ WHERE LINHA_ID IN (SELECT ID FROM SGC_FORNECEDOR_LINHA WHERE FORNECEDOR_ID = {{f
     resumo: 'RF-007 — linha de produto',
     code: `INSERT INTO SGC_FORNECEDOR_LINHA (FORNECEDOR_ID, NOME, ORDEM)
 SELECT {{fornecedorId}}, '{{nome}}', {{ordem}}
+FROM DUAL
 WHERE ${GUARDA}`,
   },
   {
@@ -132,6 +140,7 @@ WHERE ${GUARDA}`,
     resumo: 'RF-008 — contato de envio da linha',
     code: `INSERT INTO SGC_FORNECEDOR_LINHA_CONTATO (LINHA_ID, NOME, EMAIL)
 SELECT {{linhaId}}, NULLIF('{{nome}}', ''), '{{email}}'
+FROM DUAL
 WHERE ${GUARDA}`,
   },
   {
@@ -140,6 +149,7 @@ WHERE ${GUARDA}`,
     resumo: 'RF-009 — faixa/opção de prazo de pagamento',
     code: `INSERT INTO SGC_FORNECEDOR_FAIXA_PRAZO (LINHA_ID, VALOR_DE, VALOR_ATE, ROTULO, PARCELAS, ORDEM)
 SELECT {{linhaId}}, {{valorDe}}, {{valorAte}}, COALESCE(NULLIF('{{rotulo}}', ''), 'Opção única'), '{{parcelas}}', {{ordem}}
+FROM DUAL
 WHERE ${GUARDA}`,
   },
   {
@@ -154,6 +164,7 @@ WHERE ${GUARDA}`,
     resumo: 'RF-010 — documento do fornecedor',
     code: `INSERT INTO SGC_FORNECEDOR_DOCUMENTO (FORNECEDOR_ID, TIPO, NOME, ENDERECO, VENCIMENTO, CRIADO_POR, CRIADO_EM)
 SELECT {{fornecedorId}}, '{{tipo}}', '{{nome}}', '{{endereco}}', NULLIF('{{vencimento}}', ''), NULLIF({{usuarioId}}, 0), '{{agora}}'
+FROM DUAL
 WHERE ${GUARDA}`,
   },
   {
@@ -162,6 +173,7 @@ WHERE ${GUARDA}`,
     resumo: 'RF-012 — uma linha de histórico por campo alterado (FO-06 B)',
     code: `INSERT INTO SGC_FORNECEDOR_LOG (FORNECEDOR_ID, CAMPO, DE, PARA, POR, EM)
 SELECT {{fornecedorId}}, '{{campo}}', NULLIF('{{de}}', ''), NULLIF('{{para}}', ''), NULLIF({{usuarioId}}, 0), '{{agora}}'
+FROM DUAL
 WHERE ${GUARDA}`,
   },
 ];
