@@ -8,7 +8,10 @@
  */
 import * as React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { KanbanSquare, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import {
+  Bell, CalendarClock, Gauge, KanbanSquare, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
+  PlusCircle, ShieldCheck, Truck, X,
+} from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { clearSession } from '@/lib/mitra-auth';
@@ -16,10 +19,28 @@ import { SessaoContext, type Sessao } from '@/lib/sessao';
 import { BRAND_GREEN, Monogram, Wordmark } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
+// Sem regra de persona aqui ainda (P-03, spec 002): todo mundo vê os sete
+// itens até a 002 filtrar por permissoesDe(persona, acesso).verQuadro.
 const MENU = [
   {
     grupo: 'Compras',
-    itens: [{ to: '/quadro', label: 'Quadro de compras', Icone: KanbanSquare }],
+    itens: [
+      { to: '/quadro', label: 'Quadro de compras', Icone: KanbanSquare },
+      { to: '/pedidos/novo', label: 'Novo pedido', Icone: PlusCircle },
+      { to: '/agenda', label: 'Agenda', Icone: CalendarClock },
+      { to: '/notificacoes', label: 'Notificações', Icone: Bell },
+    ],
+  },
+  {
+    grupo: 'Cadastros',
+    itens: [
+      { to: '/fornecedores', label: 'Fornecedores', Icone: Truck },
+      { to: '/coberturas', label: 'Coberturas', Icone: Gauge },
+    ],
+  },
+  {
+    grupo: 'Administração',
+    itens: [{ to: '/seguranca', label: 'Segurança', Icone: ShieldCheck }],
   },
 ];
 
