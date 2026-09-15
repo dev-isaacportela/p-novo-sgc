@@ -8,27 +8,41 @@ Ambiente de teste deste projeto, com banco SQLite próprio e dados simulados
 cada `backend/add-00N-*.mjs` do `PUBLISH_ORDER` (`config.mjs`) — `add-001-kanban.mjs`
 reexporta as server functions da lib `@benenutri/mitra-kanban` com os ids do
 `frontend/src/lib/server-functions.ts` deste projeto; `add-004..007` publicam
-as `sgc*` da onda 1 — e executa o SQL e o JavaScript literais. O schema é lido
-de três fontes (`DDL_SOURCES`, sem execução: leitura de texto por
-`schema.mjs`): as 16 tabelas `SGC_*` de `backend/setup-backend.mjs`, o
-`schema.mjs` da lib instalada em `node_modules` e as tabelas `PC*` do WinThor
-em `backend/simulator/schema-winthor.mjs` (só simulador — a plataforma usa o
-Oracle real, pelo `jdbcId` de `add-003-jdbc-winthor.mjs`).
+as `sgc*` da onda 1 e `add-008..010` as da onda 2 (005 notas fiscais, 006
+trânsito, 007 B.O. — ainda stub, `definitions = []`, até cada feature chegar)
+— e executa o SQL e o JavaScript literais. O schema é lido de três fontes
+(`DDL_SOURCES`, sem execução: leitura de texto por `schema.mjs`): as tabelas
+`SGC_*` de `backend/setup-backend.mjs` (ondas 1 e 2, R-026 — a onda 2 edita o
+`CREATE` das tabelas existentes em vez de `ALTER`, porque nada foi publicado
+ainda), o `schema.mjs` da lib instalada em `node_modules` e as tabelas `PC*`
+do WinThor em `backend/simulator/schema-winthor.mjs` (`PCNFENT`/`PCLANC`
+novas e colunas novas em `PCMOV`/`PCPRODUT`, R-027 — só simulador; a
+plataforma usa o Oracle real, pelo `jdbcId` de `add-003-jdbc-winthor.mjs`).
+Dias úteis (R-025/R-038): `backend/lib/dias-uteis.mjs` exporta os fragmentos
+SQL (`somarDiasUteis`, `somarDiasCorridos`, `diasUteisEntre`), que rodam sem
+alteração no dialeto abaixo — `mysql-dialect.mjs` ganhou `FLOOR`/`MOD` como
+função registrada e `DATE_ADD(col, INTERVAL <expressão> DAY)` como reescrita
+(antes só literal).
 
 ## Seed e smoke, um arquivo por spec
 
 - `simulator/seed.mjs` cria o schema, os 5 usuários, o quadro e as 10 fases, e
   chama `simulator/seed/00N-*.mjs` nesta ordem: `001-fornecedores`,
-  `002-quadro`, `003-itens`, `004-agenda`. Cada um exporta `seed00N(db, cenario)`;
-  hoje só a 002 grava algo (as personas de `SGC_USUARIO_PERSONA`) — as demais
-  são stub até a feature preencher (fornecedores, itens/alertas/cobertura,
-  agendamentos).
+  `002-quadro`, `003-itens`, `004-agenda`, `005-notas-fiscais`, `006-transito`,
+  `007-bo`. Cada um exporta `seed00N(db, cenario)`; 001-004 já semeiam a onda 1
+  (fornecedores, quadro/personas/campos, itens/alertas/cobertura,
+  agendamentos); 005-007 são stub até cada feature da onda 2 preencher.
 - `simulator/smoke.mjs` é o orquestrador: abre **um** banco descartável
   (`smoke/base.mjs`, `abrirContexto()`) e roda, na ordem, `smoke/000-esqueleto.mjs`
-  (o esqueleto do projeto — S0-001..S0-006) e `smoke/00N-*.mjs` de cada spec.
-  Cada um exporta `suite(ctx)`, com `ctx.chamar`/`ctx.teste` prontos; hoje as
-  quatro suítes de spec são stub (`suite(ctx) {}`) — o `teste()` de cada
-  cenário C-00N/RN-00N do plan entra lá.
+  (o esqueleto do projeto — S0-001..S0-006), `smoke/000-dias-uteis.mjs`
+  (S0-007..S0-009 — prova o fragmento SQL de `lib/dias-uteis.mjs` contra o
+  dialeto do simulador) e `smoke/00N-*.mjs` de cada spec. Cada um exporta
+  `suite(ctx)`, com `ctx.chamar`/`ctx.teste` prontos; 001-004 já têm os
+  cenários da onda 1; 005-007 são stub (`suite(ctx) {}`) — o `teste()` de cada
+  cenário C-00N/RN-00N do plan entra lá. R-045 (revisão cruzada): como o banco
+  é um só para as sete suítes, nenhuma suíte da onda 2 pode assumir total
+  absoluto de listagem — conta pelo banco, por diferença, ou recorta pelos
+  próprios cards (`CARDS_00N`).
 
 ```bash
 cd backend && npm test            # sim:check + sim:smoke

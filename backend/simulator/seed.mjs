@@ -1,8 +1,9 @@
 // Dados simulados do SGC 2 — os 5 usuarios da equipe de compras, o quadro
 // "Compras" e as 10 fases do motor (regra F-01: mesmos nomes e mesma ordem do
-// SGC anterior), mais os dados de cada spec da onda 1, um modulo por spec em
-// seed/00N-*.mjs (personas em SGC_USUARIO_PERSONA so pela 002; fornecedores e
-// filiais so pela 001 — R-017). Nenhum KB_CAMPO nem card
+// SGC anterior), mais os dados de cada spec das ondas 1 e 2, um modulo por
+// spec em seed/00N-*.mjs (personas em SGC_USUARIO_PERSONA so pela 002;
+// fornecedores e filiais so pela 001 — R-017; as specs 005-007 so inserem
+// linhas suas). Nenhum KB_CAMPO nem card
 // aqui: sao dado da 002 (campos do quadro) em diante.
 //
 // O SCHEMA nao esta aqui (sai de setup-backend.mjs — as 16 tabelas SGC_* — mais
@@ -19,6 +20,9 @@ import { seed001 } from './seed/001-fornecedores.mjs';
 import { seed002 } from './seed/002-quadro.mjs';
 import { seed003 } from './seed/003-itens.mjs';
 import { seed004 } from './seed/004-agenda.mjs';
+import { seed005 } from './seed/005-notas-fiscais.mjs';
+import { seed006 } from './seed/006-transito.mjs';
+import { seed007 } from './seed/007-bo.mjs';
 
 const iso = (data) => data.toISOString().slice(0, 19);
 
@@ -94,6 +98,9 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
   seed002(db, CENARIO);
   seed003(db, CENARIO);
   seed004(db, CENARIO);
+  seed005(db, CENARIO);
+  seed006(db, CENARIO);
+  seed007(db, CENARIO);
 
   db.close();
   return counts;

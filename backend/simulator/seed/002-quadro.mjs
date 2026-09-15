@@ -9,14 +9,16 @@
 // também precisa (R-001), sem depender do resto desta spec.
 //
 // As listas de campos e automações NÃO são copiadas: vêm de
-// backend/add-005-quadro-compras.mjs, o mesmo arquivo que as cria no sandbox.
-// Assim o que o smoke testa é o que a plataforma recebe.
+// backend/add-005-quadro-compras.mjs (CAMPOS) e, na onda 2, de
+// backend/add-008-notas-fiscais.mjs (CAMPOS_008, R-048) — os mesmos arquivos
+// que os criam no sandbox. Assim o que o smoke testa é o que a plataforma recebe.
 //
 // Os ids dos ganchos saem de backend/ids-do-mapa.mjs (o mapa INTEIRO deste
 // projeto, B-08) — o `lerIdsDoMapa` da lib só devolve as kbEsc*.
 
 import { fileURLToPath } from 'node:url';
 import { CAMPOS, CAPA_POR_FASE, automacoes } from '../../add-005-quadro-compras.mjs';
+import { CAMPOS_008 } from '../../add-008-notas-fiscais.mjs';
 import { idsDoMapa } from '../../ids-do-mapa.mjs';
 
 const MAPA = fileURLToPath(new URL('../../../frontend/src/lib/server-functions.ts', import.meta.url));
@@ -71,6 +73,11 @@ export function seed002(db, cenario, { completo = false } = {}) {
     VALUES (?, NULL, ?, ?, ?, 0, ?, 0, ?, ?, NULL, 1)`);
   CAMPOS.forEach((campo, indice) => inserirCampo.run(
     boardId, campo.chave, campo.label, campo.tipo, campo.noCard ? 1 : 0, indice + 1, JSON.stringify(campo.config || {}),
+  ));
+
+  /* ── campo(s) da onda 2 (R-048): `faturamento`, de CAMPOS_008 (add-008) ── */
+  CAMPOS_008.forEach((campo, indice) => inserirCampo.run(
+    boardId, campo.chave, campo.label, campo.tipo, campo.noCard ? 1 : 0, CAMPOS.length + indice + 1, JSON.stringify(campo.config || {}),
   ));
 
   /* ── capa por fase (DS-01/C-06 e CA-04) ── */

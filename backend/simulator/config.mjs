@@ -45,6 +45,9 @@ export const HEALTH_TABLE = 'KB_BOARD';
 // Ordem do sandbox (mesma do README da 000): a 001 lê fornecedor/filial do
 // WinThor (precisa da conexão JDBC já criada), a 002 lê a 001, a 003 lê a 002
 // e a 004 lê a 002 e a 003. Cada add-00N publica as SFs da sua spec.
+// Onda 2 (R-024 do 000): 005 -> add-008-notas-fiscais.mjs, 006 ->
+// add-009-transito.mjs, 007 -> add-010-bo.mjs, nessa ordem lógica (006 e 007
+// leem SGC_NF da 005). add-002 continua fora, por último no sandbox.
 export const PUBLISH_ORDER = [
   'add-001-kanban.mjs',
   'add-003-jdbc-winthor.mjs',
@@ -52,6 +55,9 @@ export const PUBLISH_ORDER = [
   'add-005-quadro-compras.mjs',
   'add-006-itens.mjs',
   'add-007-agenda.mjs',
+  'add-008-notas-fiscais.mjs',
+  'add-009-transito.mjs',
+  'add-010-bo.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -83,4 +89,7 @@ export const CHECK_INPUT = {
   nivel: '',
   // spec 004 (agenda de análises):
   situacao: '', hoje: '2026-09-15', id: '1',
+  // spec 005 (notas fiscais e faturamento): a 005 preenche quando publicar.
+  // spec 006 (trânsito e recebimento): a 006 preenche quando publicar.
+  // spec 007 (produtos em B.O.): a 007 preenche quando publicar.
 };
