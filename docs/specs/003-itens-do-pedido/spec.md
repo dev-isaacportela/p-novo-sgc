@@ -34,9 +34,9 @@ pedido só sai da Análise quando tudo que exigia leitura ou justificativa foi t
 | gestor (gerência de compras) | o mesmo do analista, e conferir na aprovação técnica o que foi justificado | diária |
 | diretoria | ver a lista, o total e as justificativas antes de aprovar | semanal |
 | admin (TI) | manter os limites de cobertura por fornecedor, departamento, seção e produto | eventual |
-| quem tem acesso somente-leitura | consultar a lista e os alertas, sem alterar nada | eventual |
-
-O perfil **comercial** não aparece nesta tabela de propósito: ele não vê o quadro nem os
+Além dos perfis, o **nível de acesso** que a plataforma dá a cada pessoa continua valendo: quem
+tem acesso somente-leitura vê a lista e os alertas e não altera nada, qualquer que seja o seu
+perfil. O perfil **comercial** não aparece na tabela de propósito: ele não vê o quadro nem os
 pedidos, e portanto não usa nada desta feature.
 
 ## Cenários
@@ -44,7 +44,7 @@ pedidos, e portanto não usa nada desta feature.
 Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 **C-001 — A análise chega inteira, em uma consulta**
-- **Dado que** existe um pedido do fornecedor 101 para a filial 1 com período de 01/08/2026 a 14/09/2026 (45 dias), e o fornecedor tem 20 produtos, sendo 1 marcado como inativo e 1 do departamento 4
+- **Dado que** existe um pedido do fornecedor 1015 para a filial 1 com período de 01/08/2026 a 14/09/2026 (45 dias), e o fornecedor tem 20 produtos, sendo 1 marcado como inativo e 1 do departamento 4
 - **Quando** a compradora abre a aba de itens
 - **Então** a lista mostra 18 produtos, cada um com venda do período, venda de licitação, estoque, trânsito, custo da última entrada, unidades por caixa, curva, sugestão e cobertura
 
@@ -189,7 +189,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 | ID | Requisito | Como se mede |
 |---|---|---|
-| RNF-001 | Salvar a lista custa **uma** chamada ao servidor, qualquer que seja o número de itens alterados, mais no máximo uma segunda quando o total do pedido muda | Contador de chamadas com 1, 9 e 60 itens alterados: sempre ≤ 2 |
+| RNF-001 | Salvar a lista custa **três** chamadas ao servidor no máximo — gravar os itens, recalcular os alertas e atualizar o cartão (total e alertas pendentes) —, qualquer que seja o número de itens alterados | Contador de chamadas com 1, 9 e 60 itens alterados: sempre ≤ 3 |
 | RNF-002 | Abrir um pedido não custa nenhuma chamada por item: a lista, os alertas e o prazo vêm junto com a capa | Contador de chamadas ao abrir um pedido com 40 itens: as mesmas de um pedido vazio |
 | RNF-003 | A análise de um fornecedor com 300 produtos volta em uma consulta e é desenhada em até 3 s | Cronômetro sobre o fornecedor com mais produtos |
 | RNF-004 | Nenhuma operação sobre o ERP escreve: análise, busca, lotes, excesso e prazo são leitura | Revisão das consultas; nenhuma altera dado do ERP |
@@ -224,7 +224,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 | Cenário / regra | Evidência automática exigida | Camada |
 |---|---|---|
-| C-001 | A consulta de análise do fornecedor 101 na filial 1, período 01/08–14/09/2026, devolve 18 linhas (não 20): o inativo e o do departamento 4 ficaram de fora; a contagem é maior que zero | regra de negócio |
+| C-001 | A consulta de análise do fornecedor 1015 na filial 1, período 01/08–14/09/2026, devolve 18 linhas (não 20): o inativo e o do departamento 4 ficaram de fora; a contagem é maior que zero | regra de negócio |
 | C-002 | venda 18, meses 1,5, estoque 5, trânsito 2 → sugestão 21 | regra de tela |
 | C-003 | venda 6, meses 1,5, estoque 0, trânsito 0 → sugestão 10 | regra de tela |
 | C-004 | sugestão 21 com 12 unidades por caixa → 24; com 1 unidade por caixa → 21 | regra de tela |
