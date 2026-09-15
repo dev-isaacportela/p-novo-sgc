@@ -533,7 +533,7 @@ const BASE = [
     description: 'RF-018/RF-019 - lista paginada das notas vencidas dos pedidos em Enviado e Em Trânsito; busca por número da nota, fornecedor ou pedido no ERP; faixa ate3|4a7|mais7. Params: busca, faixa, hoje, limite, offset.',
     code: `SELECT A.ID, A.ID_CARD, A.TITULO, A.FASE, A.NUMNOTA, A.SERIE, A.CODFORNEC, A.FORNECEDOR,
   A.CODFILIAL, A.FILIAL, A.NUMPED_WINTHOR, A.DT_EMISSAO, A.PRAZO_ENTREGA_DIAS, A.PRAZO_ENTREGA_TIPO,
-  A.DT_PREVISAO, A.DIAS_ATRASO, A.VL_TOTAL
+  A.DT_PREVISAO, A.DIAS_ATRASO, A.VL_TOTAL, A.SITUACAO
 FROM ${CAMADA_ATRASO}
 WHERE ${FILTROS_ATRASO}
 ORDER BY A.DIAS_ATRASO DESC, A.VL_TOTAL DESC

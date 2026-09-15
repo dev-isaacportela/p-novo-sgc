@@ -198,6 +198,8 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
     const minhas = vencidas.filter((linha) => TODOS.includes(Number(linha.ID_CARD))).map((linha) => Number(linha.NUMNOTA)).sort();
     assert.deepEqual(minhas, [90003, 90006, 90011, 90012, 90013]);
     assert.ok(!acharNota(vencidas, 90015), 'nota de pedido em faturamento não entra (RN-011)');
+    // A tela rotula pela SITUACAO da linha (recebimento.ts): a listagem precisa devolvê-la, senão tudo vira 'sem prazo parametrizado'.
+    assert.ok(vencidas.length > 0 && vencidas.every((linha) => linha.SITUACAO === 'atrasada'), 'toda linha da lista de vencidas traz SITUACAO = atrasada');
 
     // R-045: sem literal — o esperado é contado no banco, pela mesma regra.
     const esperado = db.prepare(`SELECT COUNT(*) AS TOTAL, COALESCE(SUM(NF.VL_TOTAL), 0) AS VALOR
