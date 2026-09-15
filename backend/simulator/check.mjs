@@ -9,15 +9,20 @@
 // Uso: cd backend && npm run sim:check
 
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync } from 'node:fs';
-import { DB_PATH, CHECK_INPUT } from './config.mjs';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { SEED, CHECK_INPUT } from './config.mjs';
 import { seedDatabase } from './seed.mjs';
 import { registerMysqlFunctions } from './mysql-dialect.mjs';
 import { loadDefinitions, createRunner } from './runtime.mjs';
 
-if (!existsSync(DB_PATH)) seedDatabase(DB_PATH);
+// Banco descartavel proprio (como o smoke): o banco de desenvolvimento em
+// simulator/data/ pode ser anterior ao schema atual e faria o check mentir.
+const DB = join(tmpdir(), `p-novo-sgc-${SEED}-${process.pid}-check.db`);
+seedDatabase(DB, { reset: true });
 
-const db = new DatabaseSync(DB_PATH);
+const db = new DatabaseSync(DB);
 registerMysqlFunctions(db);
 const { byName, overridden } = await loadDefinitions();
 const execute = createRunner(db);
@@ -51,4 +56,5 @@ const vazias = ok.filter((r) => r.detalhe.startsWith('0 '));
 if (vazias.length) console.log(`  ${vazias.length} rodaram sem devolver linha (seed cobre?): ${vazias.map((r) => r.name).join(', ')}`);
 if (overridden.length) console.log(`  redefinidas entre scripts: ${overridden.map((o) => `${o.name} (${o.de} -> ${o.para})`).join(', ')}`);
 db.close();
+for (const sufixo of ['', '-wal', '-shm']) rmSync(`${DB}${sufixo}`, { force: true });
 process.exitCode = falhas.length ? 1 : 0;
