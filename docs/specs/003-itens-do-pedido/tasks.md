@@ -54,9 +54,9 @@
 - [x] **T-037** — `AbaItens`: bloco de prazo de pagamento — padrão pelas faixas da 001, sugestão por `sgcWintPrazoPagamento`, comparação por `compararPrazo`, diálogo de justificativa com mínimo de 10 caracteres e gravação normalizada por `sgcEscPedidoPrazo` → `frontend/src/pages/quadro/abas/Itens.tsx`
 - [x] **T-038** — `AbaAlertas`: lista por item com tipo, mensagem, situação de leitura e justificativa; "Marcar como lido" (`sgcEscAlertaLer`) e diálogo "Justificar" por produto (`sgcEscAlertaJustificar`), cada um seguido de `kbCardAtualizar` com `valoresJson = { alertas_pendentes }` para o cartão do quadro; a `contagem` da aba lê o mesmo campo → `frontend/src/pages/quadro/abas/Alertas.tsx`
 - [x] **T-039** — `verificarSaidaAnalise(cardId)`: uma chamada de `sgcAnaliseSair`, devolvendo `{ ok, erro }` no formato do `antesDeMover` — a tela só chama `ctx.mover` depois do `ok` → `frontend/src/pages/quadro/abas/verificar-saida.ts`
-- [ ] **T-040** — **Pedir ao integrador**: ligar as abas no `/quadro` (`abasExtras` com Itens e Alertas, `contagem` de alertas), envolver o `KanbanBoard` no `PedidoProvider` e plugar `verificarSaidaAnalise` no `antesDeMover` de `analise → tecnica` → `frontend/src/pages/quadro/QuadroPage.tsx`
+- [x] **T-040** — **Pedir ao integrador**: ligar as abas no `/quadro` (`abasExtras` com Itens e Alertas, `contagem` de alertas), envolver o `KanbanBoard` no `PedidoProvider` e plugar `verificarSaidaAnalise` no `antesDeMover` de `analise → tecnica` → `frontend/src/pages/quadro/QuadroPage.tsx`
 - [x] **T-041** `[P]` — `CoberturasPage`: listagem por nível com `SelectMenu`, `Toolbar` colada à tabela, diálogo de cadastro/edição (`sgcEscCoberturaGravar`), desativação (`sgcEscCoberturaExcluir`) e formulário desabilitado (nunca escondido) para quem não é admin nem gestor → `frontend/src/pages/coberturas/CoberturasPage.tsx`
-- [ ] **T-042** — **Pedir ao integrador**: rota `/coberturas` e item de menu (admin e gestor) → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx`
+- [x] **T-042** — **Pedir ao integrador**: rota `/coberturas` e item de menu (admin e gestor) → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx`
 
 ## Testes
 
