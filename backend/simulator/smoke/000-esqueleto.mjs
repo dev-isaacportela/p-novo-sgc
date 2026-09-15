@@ -16,8 +16,9 @@ export async function suite(ctx) {
     assert.equal(byName.size, ESCRITAS.length + PUBLICAS.length);
     assert.equal(overridden.length, 0);
     for (const definicao of byName.values()) assert.ok(!definicao.code.includes('__KB_IDS__'), `${definicao.name} ficou com o marcador de ids`);
-    assert.equal(byId.size, ESCRITAS.length);
-    for (const [id, definicao] of byId) assert.ok(definicao, `id ${id} do mapa nao resolve para uma escrita`);
+    // byId agora resolve TODO nome publicado (ids-do-mapa.mjs), nao so as kbEsc*.
+    assert.equal(byId.size, byName.size);
+    for (const [id, definicao] of byId) assert.ok(definicao, `id ${id} do mapa nao resolve para uma definicao`);
   });
 
   await teste('S0-002: kbUsuarioSessao devolve cada um dos 5 usuarios do seed pelo :VAR_USER (nome e e-mail)', async () => {

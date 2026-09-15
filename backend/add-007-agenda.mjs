@@ -9,6 +9,12 @@
 // frontend/src/lib/server-functions.ts até o sync-server-function-map.mjs
 // trazer os reais do sandbox — mesmo padrão de add-001-kanban.mjs.
 //
+// sgcAgendaProcessar chama kbCardCriar e sgcEscPedidoCapaInserir (002) por
+// id, sem sessão: no simulador resolve pelo mapa inteiro de
+// backend/ids-do-mapa.mjs (`idsDoMapa`), usado em
+// backend/simulator/smoke/base.mjs; na publicação real o id vem por NOME,
+// via `listServerFunctionsMitra`.
+//
 // Ainda SEM Server Function: a spec 004 entra aqui. `definitions = []` até lá.
 //
 // NAO EXECUTE DA MAQUINA LOCAL sem decisao explicita do usuario.

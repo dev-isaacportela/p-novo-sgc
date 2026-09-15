@@ -12,6 +12,11 @@
 // com `jdbcIdWinthor` de add-003-jdbc-winthor.mjs — nunca por id numérico
 // fixo. No simulador o jdbcId é ignorado.
 //
+// SF chamada por id de dentro de um JAVASCRIPT desta spec (se houver): no
+// simulador resolve pelo mapa inteiro de backend/ids-do-mapa.mjs
+// (`idsDoMapa`), usado em backend/simulator/smoke/base.mjs; na publicação
+// real o id vem por NOME, via `listServerFunctionsMitra`.
+//
 // Ainda SEM Server Function: a spec 001 entra aqui. `definitions = []` até lá.
 //
 // NAO EXECUTE DA MAQUINA LOCAL sem decisao explicita do usuario.

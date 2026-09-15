@@ -15,6 +15,10 @@
 // PARA, POR, EM. As tabelas PC* do WinThor NAO entram aqui: sao do Oracle na
 // plataforma e, no simulador, vivem em backend/simulator/schema-winthor.mjs.
 //
+// Tipo unico por nome de coluna, em toda tabela que a repetir (evita
+// UNION/JOIN de tipos divergentes entre specs): CODFORNEC INT, CODFILIAL
+// VARCHAR(10), FORNECEDOR VARCHAR(200), FILIAL VARCHAR(200).
+//
 // NAO EXECUTE ESTE ARQUIVO DA MAQUINA LOCAL sem decisao explicita do usuario:
 // o mitra-sdk e um cliente HTTP puro e nao gera migration; quem materializa a
 // migration e a plataforma, ao fim de um turno no sandbox.
@@ -50,10 +54,10 @@ const DDL_002 = [
   `CREATE TABLE IF NOT EXISTS SGC_PEDIDO (
     ID INT AUTO_INCREMENT PRIMARY KEY,
     ID_CARD INT NOT NULL,
-    CODFORNEC VARCHAR(20),
-    FORNECEDOR VARCHAR(180),
+    CODFORNEC INT,
+    FORNECEDOR VARCHAR(200),
     CODFILIAL VARCHAR(10),
-    FILIAL VARCHAR(120),
+    FILIAL VARCHAR(200),
     PERIODO_INICIO VARCHAR(10),
     PERIODO_FIM VARCHAR(10),
     VL_TOTAL DECIMAL(15,2) DEFAULT 0,
@@ -257,7 +261,7 @@ const DDL_004 = [
     ID INT AUTO_INCREMENT PRIMARY KEY,
     CODFORNEC INT,
     FORNECEDOR VARCHAR(200),
-    CODFILIAL VARCHAR(5),
+    CODFILIAL VARCHAR(10),
     FILIAL VARCHAR(200),
     DATA_ANALISE VARCHAR(10),
     PERIODO_INICIO VARCHAR(10),

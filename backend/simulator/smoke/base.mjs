@@ -15,7 +15,7 @@ import { SEED, FRONTEND_MAP } from '../config.mjs';
 import { seedDatabase, USUARIOS, CENARIO, FASES } from '../seed.mjs';
 import { registerMysqlFunctions } from '../mysql-dialect.mjs';
 import { loadDefinitions, createRunner } from '../runtime.mjs';
-import { ESCRITAS, lerIdsDoMapa } from '@benenutri/mitra-kanban/backend';
+import { idsDoMapa } from '../../ids-do-mapa.mjs';
 
 export { assert, USUARIOS, CENARIO, FASES, FRONTEND_MAP };
 
@@ -29,11 +29,14 @@ export async function abrirContexto() {
   registerMysqlFunctions(db);
   const { byName, overridden } = await loadDefinitions();
 
-  // As JAVASCRIPT chamam as escritas por id: o id vem do mapa DESTE projeto.
+  // As JAVASCRIPT chamam por id (kbCardCriar sem sessao, os ganchos gravados
+  // em KB_META, as sgcEsc* internas de cada spec): resolve qualquer nome
+  // publicado por id local, pelo mapa INTEIRO deste projeto (ids-do-mapa.mjs
+  // — nao so as kbEsc* da lib, que e tudo que lerIdsDoMapa da lib devolve).
   const byId = new Map();
-  for (const [chave, id] of Object.entries(lerIdsDoMapa(FRONTEND_MAP))) {
-    const escrita = ESCRITAS.find((e) => e.chave === chave);
-    if (escrita) byId.set(id, byName.get(escrita.name));
+  for (const [nome, id] of Object.entries(idsDoMapa(FRONTEND_MAP))) {
+    const definicao = byName.get(nome);
+    if (definicao) byId.set(id, definicao);
   }
   const execute = createRunner(db, { resolveById: (id) => byId.get(id) ?? null });
 

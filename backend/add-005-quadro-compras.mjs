@@ -12,6 +12,12 @@
 // servidor) entram em `ganchos` no `instalar()` de add-001-kanban.mjs, junto
 // com esta spec — não aqui.
 //
+// SF chamada por id (kbCardCriar sem sessão, os ganchos gravados em KB_META,
+// as sgcEsc* internas desta spec): no simulador resolve pelo mapa inteiro de
+// backend/ids-do-mapa.mjs (`idsDoMapa`), usado em
+// backend/simulator/smoke/base.mjs; na publicação real o id vem por NOME,
+// via `listServerFunctionsMitra`.
+//
 // Ainda SEM Server Function: a spec 002 entra aqui. `definitions = []` até lá.
 //
 // NAO EXECUTE DA MAQUINA LOCAL sem decisao explicita do usuario.

@@ -13,6 +13,12 @@
 // jdbcId é ignorado. sgcCustoUnidadesPorCaixa é INTEGRATION (conexão
 // gestao-de-custos), não JDBC.
 //
+// sgcEscPedidoReprovacoesLimpar (002) é chamada por id de dentro de
+// sgcAnaliseSair: no simulador resolve pelo mapa inteiro de
+// backend/ids-do-mapa.mjs (`idsDoMapa`), usado em
+// backend/simulator/smoke/base.mjs; na publicação real o id vem por NOME,
+// via `listServerFunctionsMitra`.
+//
 // Ainda SEM Server Function: a spec 003 entra aqui. `definitions = []` até lá.
 //
 // NAO EXECUTE DA MAQUINA LOCAL sem decisao explicita do usuario.
