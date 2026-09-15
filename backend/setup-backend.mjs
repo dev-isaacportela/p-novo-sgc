@@ -1,13 +1,23 @@
 // Schema do projeto — SGC 2 (Sistema de Gestão de Compras da Benenutri).
 //
-// Ainda sem tabelas próprias: o schema de hoje é só o da biblioteca
-// @benenutri/mitra-kanban (13 tabelas KB_*), criado por `add-001-kanban.mjs`.
-// As tabelas `SGC_*` da onda 1 entram AQUI, quando as specs 003+ chegarem: um
-// template literal `CREATE TABLE IF NOT EXISTS` POR TABELA, sem repetir a
-// frase de abertura do DDL em comentário — o simulador local lê o DDL por
-// texto (backend/simulator/schema.mjs) e NÃO aplica `ALTER TABLE`; coluna
-// nova em tabela já existente é upgrade aditivo no `add-NNN` que a introduzir
-// e, também, no CREATE aqui (quem instala do zero e o simulador acompanham).
+// Todo o DDL SGC_* da onda 1 (specs 001-004), tabela por tabela — cada uma num
+// template literal proprio comecando pela frase de criacao idempotente, sem
+// repetir a frase com parentese em comentario: e assim que o simulador local
+// le o DDL por texto (backend/simulator/schema.mjs), sem executar este
+// arquivo. Coluna nova em tabela ja existente e upgrade aditivo no add-NNN que
+// a introduzir e, tambem, no CREATE aqui (quem instala do zero e o simulador
+// acompanham) — nunca ALTER escondido, nunca DROP, nunca RENAME.
+//
+// Convencoes do 000 (docs/specs/000-visao-geral/README.md): colunas em
+// UPPERCASE; datas em VARCHAR(10), carimbos em VARCHAR(19), preenchidos no
+// codigo; sem FOREIGN KEY (convencao do projeto — nem o simulador nem a
+// plataforma dependem delas); ID autoincremento; tabela de log com CAMPO, DE,
+// PARA, POR, EM. As tabelas PC* do WinThor NAO entram aqui: sao do Oracle na
+// plataforma e, no simulador, vivem em backend/simulator/schema-winthor.mjs.
+//
+// Tipo unico por nome de coluna, em toda tabela que a repetir (evita
+// UNION/JOIN de tipos divergentes entre specs): CODFORNEC INT, CODFILIAL
+// VARCHAR(10), FORNECEDOR VARCHAR(200), FILIAL VARCHAR(200).
 //
 // NAO EXECUTE ESTE ARQUIVO DA MAQUINA LOCAL sem decisao explicita do usuario:
 // o mitra-sdk e um cliente HTTP puro e nao gera migration; quem materializa a
@@ -18,18 +28,282 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 
+// spec 002 — SGC_FASE (tradutor CHAVE estavel <-> KB_FASE.ID) e SGC_USUARIO_PERSONA.
+const DDL_002 = [
+  `CREATE TABLE IF NOT EXISTS SGC_FASE (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    BOARD_ID INT NOT NULL,
+    CHAVE VARCHAR(30) NOT NULL,
+    FASE_ID INT NOT NULL,
+    ORDEM INT NOT NULL DEFAULT 0,
+    UNIQUE KEY UK_SGC_FASE (BOARD_ID, CHAVE),
+    INDEX IX_SGC_FASE_FASE (FASE_ID)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS SGC_USUARIO_PERSONA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    USUARIO_ID INT NOT NULL,
+    PERSONA VARCHAR(20) NOT NULL,
+    ATUALIZADO_POR INT,
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_USUARIO_PERSONA (USUARIO_ID)
+  )`,
+
+  // 1:1 com KB_CARD. Sem coluna PRIORIDADE (R-009: vive so no campo do
+  // quadro). ENVIO_OBS/ENVIO_POR/ENVIO_EM completam o registro do envio (EN-03).
+  `CREATE TABLE IF NOT EXISTS SGC_PEDIDO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    CODFORNEC INT,
+    FORNECEDOR VARCHAR(200),
+    CODFILIAL VARCHAR(10),
+    FILIAL VARCHAR(200),
+    PERIODO_INICIO VARCHAR(10),
+    PERIODO_FIM VARCHAR(10),
+    VL_TOTAL DECIMAL(15,2) DEFAULT 0,
+    PRAZO_PADRAO VARCHAR(120),
+    PRAZO_ACORDADO VARCHAR(120),
+    PRAZO_JUSTIFICATIVA TEXT,
+    TEC_POR INT,
+    TEC_EM VARCHAR(19),
+    TEC_MOTIVO TEXT,
+    TEC_PRODUTOS_REPROVADOS TEXT,
+    DIR_POR INT,
+    DIR_EM VARCHAR(19),
+    DIR_MOTIVO TEXT,
+    DT_ENVIO VARCHAR(10),
+    CANAL VARCHAR(20),
+    EMAIL_ENVIO VARCHAR(255),
+    NUMPED_WINTHOR VARCHAR(30),
+    ENVIO_OBS TEXT,
+    ENVIO_POR INT,
+    ENVIO_EM VARCHAR(19),
+    CANC_MOTIVO TEXT,
+    CANC_POR INT,
+    CANC_EM VARCHAR(19),
+    ORIGEM VARCHAR(20) NOT NULL DEFAULT 'manual',
+    ID_AGENDA INT DEFAULT 0,
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_PEDIDO_CARD (ID_CARD)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS SGC_COMUNICACAO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    TIPO VARCHAR(20) NOT NULL DEFAULT 'email',
+    PARA VARCHAR(255),
+    CC VARCHAR(255),
+    ASSUNTO VARCHAR(255),
+    CORPO TEXT,
+    ENVIADO_POR INT,
+    ENVIADO_EM VARCHAR(19),
+    INDEX IX_SGC_COMUNICACAO_CARD (ID_CARD)
+  )`,
+];
+
+// spec 003 — itens do pedido, alertas de análise e limites de cobertura.
+const DDL_003 = [
+  `CREATE TABLE IF NOT EXISTS SGC_PEDIDO_ITEM (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    CODPROD INT NOT NULL,
+    DESCRICAO VARCHAR(200),
+    EMBALAGEM VARCHAR(60),
+    UNIDADE VARCHAR(10),
+    CODEPTO INT,
+    CODSEC INT,
+    UN_POR_CAIXA DECIMAL(15,3),
+    QT_VENDA_TOTAL DECIMAL(15,3),
+    QT_VENDA_LICITACAO DECIMAL(15,3),
+    QT_ESTOQUE DECIMAL(15,3),
+    QT_TRANSITO DECIMAL(15,3),
+    QT_SUGERIDA DECIMAL(15,3),
+    QT_PEDIDA DECIMAL(15,3) DEFAULT 0,
+    PRECO_CUSTO DECIMAL(15,4),
+    TIPO_PRECO VARCHAR(10) DEFAULT 'padrao',
+    CURVA_ABC VARCHAR(1),
+    COBERTURA_DIAS DECIMAL(15,2),
+    COBERTURA_LIMITE INT,
+    COBERTURA_JUSTIFICATIVA VARCHAR(500),
+    OBSERVACAO VARCHAR(500),
+    STATUS VARCHAR(20) DEFAULT 'montagem',
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_POR INT,
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_PEDIDO_ITEM (ID_CARD, CODPROD),
+    INDEX IX_SGC_PEDIDO_ITEM_CARD (ID_CARD)
+  )`,
+
+  // Liga ao item por (ID_CARD, CODPROD) — nao por ID_ITEM: o upsert em lote da
+  // 003 nao devolve ids, e o item pode sair e voltar (D-007 do plan da 003).
+  `CREATE TABLE IF NOT EXISTS SGC_ALERTA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    CODPROD INT NOT NULL,
+    TIPO VARCHAR(20),
+    CHAVE VARCHAR(120),
+    MENSAGEM VARCHAR(400),
+    LIDO BOOLEAN DEFAULT FALSE,
+    LIDO_POR INT,
+    LIDO_EM VARCHAR(19),
+    JUSTIFICATIVA VARCHAR(500),
+    CRIADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_ALERTA (ID_CARD, CHAVE),
+    INDEX IX_SGC_ALERTA_CARD (ID_CARD, LIDO)
+  )`,
+
+  // Sem linha aplicavel, o limite padrao e 35 dias (AN-07) — resolvido na regra pura.
+  `CREATE TABLE IF NOT EXISTS SGC_COBERTURA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    NIVEL VARCHAR(20),
+    CODIGO VARCHAR(20),
+    DESCRICAO VARCHAR(200),
+    LIMITE_DIAS INT NOT NULL,
+    ATIVO BOOLEAN DEFAULT TRUE,
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_POR INT,
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_COBERTURA (NIVEL, CODIGO)
+  )`,
+];
+
+// spec 001 — cadastro do ERP e parametrização de compra por fornecedor.
+const DDL_001 = [
+  `CREATE TABLE IF NOT EXISTS SGC_FORNECEDOR (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    CODFORNEC INT NOT NULL,
+    FORNECEDOR VARCHAR(200) NOT NULL,
+    CNPJ VARCHAR(14) NOT NULL,
+    CNPJ_FORMATADO VARCHAR(18),
+    PRAZO_ENTREGA_DIAS INT NOT NULL DEFAULT 0,
+    PRAZO_ENTREGA_TIPO VARCHAR(10) NOT NULL DEFAULT 'uteis',
+    PEDIDO_MINIMO DECIMAL(15,2) NOT NULL DEFAULT 0,
+    FECHAMENTO_DIA_INICIO INT NOT NULL DEFAULT 1,
+    FECHAMENTO_DIA_FIM INT NOT NULL DEFAULT 1,
+    LINK_PLATAFORMA VARCHAR(500),
+    VALIDADE_MINIMA_DIAS INT NOT NULL DEFAULT 0,
+    SLA_ANALISE_DIAS INT NOT NULL DEFAULT 0,
+    SLA_FATURAMENTO_DIAS INT NOT NULL DEFAULT 0,
+    ATIVO BOOLEAN NOT NULL DEFAULT TRUE,
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_POR INT,
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_FORNECEDOR (CODFORNEC)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS SGC_FORNECEDOR_FILIAL (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    FORNECEDOR_ID INT NOT NULL,
+    CODFILIAL VARCHAR(10) NOT NULL,
+    FILIAL VARCHAR(200),
+    INDEX IX_SGC_FORNECEDOR_FILIAL (FORNECEDOR_ID)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS SGC_FORNECEDOR_LINHA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    FORNECEDOR_ID INT NOT NULL,
+    NOME VARCHAR(200) NOT NULL,
+    ORDEM INT NOT NULL DEFAULT 1,
+    INDEX IX_SGC_FORNECEDOR_LINHA (FORNECEDOR_ID)
+  )`,
+
+  // EN-02 A: e daqui que sai o destinatario do pedido.
+  `CREATE TABLE IF NOT EXISTS SGC_FORNECEDOR_LINHA_CONTATO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    LINHA_ID INT NOT NULL,
+    NOME VARCHAR(200),
+    EMAIL VARCHAR(255) NOT NULL
+  )`,
+
+  // Uma linha por OPCAO (duas opcoes na mesma faixa repetem VALOR_DE/VALOR_ATE
+  // com ROTULO diferente). VALOR_ATE = 0 e "sem teto" (D-004 do plan da 001).
+  `CREATE TABLE IF NOT EXISTS SGC_FORNECEDOR_FAIXA_PRAZO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    LINHA_ID INT NOT NULL,
+    VALOR_DE DECIMAL(15,2) NOT NULL DEFAULT 0,
+    VALOR_ATE DECIMAL(15,2) NOT NULL DEFAULT 0,
+    ROTULO VARCHAR(80) NOT NULL DEFAULT 'Opção única',
+    PARCELAS VARCHAR(100) NOT NULL,
+    ORDEM INT NOT NULL DEFAULT 1
+  )`,
+
+  // ENDERECO e a URL publica devolvida pelo envio do arquivo (uploadFilePublicMitra).
+  `CREATE TABLE IF NOT EXISTS SGC_FORNECEDOR_DOCUMENTO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    FORNECEDOR_ID INT NOT NULL,
+    TIPO VARCHAR(40) NOT NULL DEFAULT 'Documento',
+    NOME VARCHAR(255) NOT NULL,
+    ENDERECO VARCHAR(700) NOT NULL,
+    VENCIMENTO VARCHAR(10),
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19)
+  )`,
+
+  // Uma linha por campo alterado (FO-06 B).
+  `CREATE TABLE IF NOT EXISTS SGC_FORNECEDOR_LOG (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    FORNECEDOR_ID INT NOT NULL,
+    CAMPO VARCHAR(120) NOT NULL,
+    DE VARCHAR(2000),
+    PARA VARCHAR(2000),
+    POR INT,
+    EM VARCHAR(19),
+    INDEX IX_SGC_FORNECEDOR_LOG (FORNECEDOR_ID, ID)
+  )`,
+];
+
+// spec 004 — agenda de análises (agendamento recorrente que gera pedido).
+const DDL_004 = [
+  `CREATE TABLE IF NOT EXISTS SGC_AGENDA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    CODFORNEC INT,
+    FORNECEDOR VARCHAR(200),
+    CODFILIAL VARCHAR(10),
+    FILIAL VARCHAR(200),
+    DATA_ANALISE VARCHAR(10),
+    PERIODO_INICIO VARCHAR(10),
+    PERIODO_FIM VARCHAR(10),
+    RECORRENCIA VARCHAR(10) DEFAULT 'nenhuma',
+    DATA_LIMITE_RECORRENCIA VARCHAR(10),
+    OBSERVACAO VARCHAR(500),
+    ATIVO BOOLEAN DEFAULT TRUE,
+    PROCESSADO_EM VARCHAR(19),
+    ID_CARD_GERADO INT,
+    DATA_ENVIO_REAL VARCHAR(19),
+    DATA_PLANEJADA_ORIGINAL VARCHAR(10),
+    CANCELADO_EM VARCHAR(19),
+    CANCELADO_POR INT,
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_EM VARCHAR(19)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS SGC_AGENDA_PARTICIPANTE (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_AGENDA INT,
+    USUARIO_ID INT,
+    CRIADO_EM VARCHAR(19)
+  )`,
+];
+
+export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004];
+
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 }
 
 if (isEntrypoint()) {
   if (!process.env.MITRA_BASE_URL) throw new Error('MITRA_BASE_URL ausente: este script roda no sandbox do Mitra, com o .env real.');
-  const { configureSdkMitra } = await import('mitra-sdk');
+  const { configureSdkMitra, runDdlMitra } = await import('mitra-sdk');
   configureSdkMitra({
     baseURL: process.env.MITRA_BASE_URL,
     token: process.env.MITRA_TOKEN,
     integrationURL: process.env.MITRA_BASE_URL_INTEGRATIONS,
   });
-  // Nenhuma tabela SGC_* ainda — nada para rodar além do aviso.
-  console.log('p-novo-sgc: nenhuma tabela própria ainda. O schema vem da lib — rode `node add-001-kanban.mjs`.');
+  const projectId = Number(process.env.MITRA_PROJECT_ID);
+  for (const sql of DDL) await runDdlMitra({ projectId, sql });
+  console.log(`Pronto: ${DDL.length} tabelas SGC_* garantidas.`);
 }

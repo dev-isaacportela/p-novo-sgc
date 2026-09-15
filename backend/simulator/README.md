@@ -5,11 +5,30 @@ Ambiente de teste deste projeto, com banco SQLite próprio e dados simulados
 `simulator/uploads/` ficam de fora (`.gitignore` da raiz).
 
 **Não existe handler reimplementado.** O simulador carrega as `definitions` de
-`backend/add-001-kanban.mjs` — que reexporta as server functions da lib
-`@benenutri/mitra-kanban` com os ids do `frontend/src/lib/server-functions.ts`
-deste projeto — e executa o SQL e o JavaScript literais. O schema é lido do
-`schema.mjs` da lib instalada em `node_modules` (este projeto ainda não tem
-tabelas `SGC_*` próprias — ver `backend/setup-backend.mjs`).
+cada `backend/add-00N-*.mjs` do `PUBLISH_ORDER` (`config.mjs`) — `add-001-kanban.mjs`
+reexporta as server functions da lib `@benenutri/mitra-kanban` com os ids do
+`frontend/src/lib/server-functions.ts` deste projeto; `add-004..007` publicam
+as `sgc*` da onda 1 — e executa o SQL e o JavaScript literais. O schema é lido
+de três fontes (`DDL_SOURCES`, sem execução: leitura de texto por
+`schema.mjs`): as 16 tabelas `SGC_*` de `backend/setup-backend.mjs`, o
+`schema.mjs` da lib instalada em `node_modules` e as tabelas `PC*` do WinThor
+em `backend/simulator/schema-winthor.mjs` (só simulador — a plataforma usa o
+Oracle real, pelo `jdbcId` de `add-003-jdbc-winthor.mjs`).
+
+## Seed e smoke, um arquivo por spec
+
+- `simulator/seed.mjs` cria o schema, os 5 usuários, o quadro e as 10 fases, e
+  chama `simulator/seed/00N-*.mjs` nesta ordem: `001-fornecedores`,
+  `002-quadro`, `003-itens`, `004-agenda`. Cada um exporta `seed00N(db, cenario)`;
+  hoje só a 002 grava algo (as personas de `SGC_USUARIO_PERSONA`) — as demais
+  são stub até a feature preencher (fornecedores, itens/alertas/cobertura,
+  agendamentos).
+- `simulator/smoke.mjs` é o orquestrador: abre **um** banco descartável
+  (`smoke/base.mjs`, `abrirContexto()`) e roda, na ordem, `smoke/000-esqueleto.mjs`
+  (o esqueleto do projeto — S0-001..S0-006) e `smoke/00N-*.mjs` de cada spec.
+  Cada um exporta `suite(ctx)`, com `ctx.chamar`/`ctx.teste` prontos; hoje as
+  quatro suítes de spec são stub (`suite(ctx) {}`) — o `teste()` de cada
+  cenário C-00N/RN-00N do plan entra lá.
 
 ```bash
 cd backend && npm test            # sim:check + sim:smoke
@@ -25,10 +44,11 @@ cd backend && npm run sim         # http://localhost:3109
 | `ana@sgc.local` | Ana Analista | MEMBER |
 | `gil@sgc.local` | Gil Gestor | MEMBER |
 | `dora@sgc.local` | Dora Diretora | MEMBER |
-| `leo@sgc.local` | Leo Leitura | MEMBER |
+| `leo@sgc.local` | Leo Comercial | MEMBER |
 
-Persona (analista/gestor/diretoria/leitura) é dado do SGC (`SGC_USUARIO_PERSONA`),
-que entra na spec 002 — aqui os 5 usuários existem só em `INT_USER`.
+Persona (`admin`/`analista`/`gestor`/`diretoria`/`comercial`, P-01) é dado do
+SGC (`SGC_USUARIO_PERSONA`), gravada pelo `seed/002-quadro.mjs`: admin→admin,
+ana→analista, gil→gestor, dora→diretoria, leo→comercial.
 
 ## Quadro do seed
 

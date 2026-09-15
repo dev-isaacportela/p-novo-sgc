@@ -10,6 +10,13 @@ import { Alert, Button, Card } from '@/components/page';
 import LoginPage from '@/pages/LoginPage';
 import QuadroPage from '@/pages/quadros/QuadroPage';
 import QuadroAdminPage from '@/pages/quadros/QuadroAdminPage';
+import NovoPedidoPage from '@/pages/pedidos/NovoPedidoPage';
+import FornecedoresPage from '@/pages/fornecedores/FornecedoresPage';
+import FornecedorPage from '@/pages/fornecedores/FornecedorPage';
+import CoberturasPage from '@/pages/coberturas/CoberturasPage';
+import AgendaPage from '@/pages/agenda/AgendaPage';
+import NotificacoesPage from '@/pages/notificacoes/NotificacoesPage';
+import SegurancaPage from '@/pages/seguranca/SegurancaPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -65,14 +72,22 @@ function Autenticado() {
     );
   }
 
-  // Onda 1 do SGC 2: o quadro de compras. Pedidos, fornecedores e agenda entram
-  // com as specs 001–004 (docs/specs/000-visao-geral).
+  // Onda 1 do SGC 2: quadro de compras (002), fornecedores (001), itens e
+  // coberturas (003), agenda (004) — telas reais chegam com as specs; aqui só
+  // as rotas e páginas stub (docs/specs/000-visao-geral).
   return (
     <Routes>
       <Route element={<AdminLayout usuario={usuario} />}>
         <Route index element={<Navigate to="/quadro" replace />} />
         <Route path="quadro" element={<QuadroPage />} />
         <Route path="quadro/admin" element={<QuadroAdminPage />} />
+        <Route path="pedidos/novo" element={<NovoPedidoPage />} />
+        <Route path="fornecedores" element={<FornecedoresPage />} />
+        <Route path="fornecedores/:codfornec" element={<FornecedorPage />} />
+        <Route path="coberturas" element={<CoberturasPage />} />
+        <Route path="agenda" element={<AgendaPage />} />
+        <Route path="notificacoes" element={<NotificacoesPage />} />
+        <Route path="seguranca" element={<SegurancaPage />} />
         <Route path="*" element={<Navigate to="/quadro" replace />} />
       </Route>
     </Routes>
