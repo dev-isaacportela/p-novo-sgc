@@ -145,7 +145,7 @@ que as chama, **antes** de escrever:
 | Escrita | Quem chama | Quem confere a persona |
 |---|---|---|
 | `sgcEscPedidoCapaInserir` | `sgcAgendaProcessar` (004, cron sem sessão) | ninguém: o cron roda com o token do projeto e grava em nome de quem agendou (`criadoPor`) |
-| `sgcEscPedidoReprovacoesLimpar` | `sgcAnaliseSair` (003) | o próprio `sgcAnaliseSair`, por `runQueryMitra` com `:VAR_USER` |
+| `sgcEscPedidoReprovacoesLimpar` | `sgcAnaliseSair` (003), no `antesDeMover` de `analise → tecnica` | o próprio `sgcAnaliseSair`, por `runQueryMitra` com `:VAR_USER` |
 | `sgcEscPedidoEnvio`, `sgcEscComunicacaoInserir` | `sgcEnvioIndustriaRegistrar` (002) | o próprio JS, no passo 1 |
 
 `sgcEscPedidoCapaInserir` grava as mesmas colunas de `sgcEscPedidoCriar`, com
@@ -327,7 +327,8 @@ FROM (
        aqui — alertas lidos, justificativa de item alertado, cobertura acima do
        limite, prazo divergente e pelo menos um item com quantidade (AL-04,
        AL-05, AL-06, PZ-03, R-008). A tela chama a mesma SF pelo
-       `antesDeMover`, então a frase é a mesma nos dois lugares. */
+       `antesDeMover` (dentro do `sgcAnaliseSair`), então a frase é a mesma nos
+       dois lugares. */
     (SELECT COUNT(*) FROM SGC_ALERTA A WHERE A.ID_CARD = C.ID AND A.LIDO = FALSE) AS PENDENCIAS,
     'Há pendências na Análise: leia os alertas e justifique os itens antes de enviar para a Aprovação Técnica.' AS PENDENCIAS_MOTIVO
   FROM KB_CARD C
@@ -564,14 +565,15 @@ chama `kbCardCriar` com `origem: 'sistema'`/`criadoPor` e depois
 1. `podeMover` (tela, síncrono): `motivoDeDestino(...)` desabilita o destino
    com o motivo, antes de qualquer clique.
 2. `antesDeMover` (tela, assíncrono, no clique): para `analise → tecnica` chama
-   `verificarSaidaAnalise(cardId)` (003), que regera os alertas e consulta
-   `sgcAnaliseSaidaVerificar`; a mensagem de recusa é a mesma do gancho.
-3. `sgcPodeMover` (servidor, o gancho): o motor pergunta antes de gravar.
-   Quem chamar `kbCardMover` por fora da tela bate aqui (RF-011).
-4. **Depois** de o movimento `analise → tecnica` dar certo, a tela chama
-   `sgcAnaliseSair` (003), que remove os itens zerados, recalcula o total,
-   chama `sgcEscPedidoReprovacoesLimpar` (002, por id) e registra a nota do
-   resumo (AT-04, R-011, D-009).
+   **`sgcAnaliseSair` (003), e só ele** — uma execução que regera os alertas,
+   consulta `sgcAnaliseSaidaVerificar` e, com `PODE = 0`, devolve
+   `{ ok: false, erro }` **sem gravar nada**; passando, remove os itens zerados,
+   recalcula o total, chama `sgcEscPedidoReprovacoesLimpar` (002, por id) e
+   registra a nota do resumo (AT-04, R-011, D-009). Não existe um
+   `verificarSaidaAnalise` separado.
+3. `sgcPodeMover` (servidor, o gancho): o motor reconfere pelo bloco
+   `PENDENCIAS` antes de gravar. Quem chamar `kbCardMover` por fora da tela
+   bate aqui (RF-011).
 
 **Decidir** (aprovar, reprovar, cancelar): diálogo → escrita SQL guardada →
 `kbNotaRegistrar` → `ctx.mover(fase)`. A escrita vem **antes** do movimento
@@ -734,10 +736,11 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
   marcadas no código, que a 003 substitui pelo corpo de
   `sgcAnaliseSaidaVerificar` (SQL, `cardId`, devolve `PODE`/`MOTIVO`), com
   `{{cardId}} = C.ID`. A mesma SF é chamada pela tela, dentro de
-  `verificarSaidaAnalise` (003), no `antesDeMover` do destino `tecnica`.
+  `sgcAnaliseSair` (003), que é o `antesDeMover` do destino `tecnica`.
 - `sgcEscPedidoReprovacoesLimpar` (002, id 7256, `{{usuarioId}}` + `{{idCard}}`):
-  quem a chama é o `sgcAnaliseSair` da 003, depois do movimento (AT-04, R-011).
-  `sgcEscPedidoReenviar` **não existe**.
+  quem a chama é o `sgcAnaliseSair` da 003, dentro do `antesDeMover`, depois de
+  a verificação passar e antes do movimento (AT-04, R-011).
+  `sgcEscPedidoReenviar` e `verificarSaidaAnalise` **não existem**.
 - As colunas `VL_TOTAL`, `PRAZO_PADRAO`, `PRAZO_ACORDADO` e
   `PRAZO_JUSTIFICATIVA` de `SGC_PEDIDO`, e o campo do quadro
   `alertas_pendentes`: criados aqui, escritos lá.
@@ -781,7 +784,7 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 | D-006 | Uma automação de e-mail por fase (11 no total) | uma só, sem `faseId` | EM-01 A pede "por fase" justamente para o administrador ajustar o texto de uma etapa sem tocar em código; o custo é 11 linhas no instalador |
 | D-007 | `/pedidos/novo` chama `kbCardCriar` e depois a escrita da capa, da tela | uma JS do SGC que chame `kbCardCriar` por dentro | chamada aninhada não propaga `:VAR_USER` com garantia: o card nasceria sem criador e sem responsável |
 | D-008 | `sgcEnvioIndustriaRegistrar` confere persona e fase **no próprio JS**, e as duas escritas que ele chama recebem `enviadoPor` como parâmetro | `:VAR_USER` nas escritas do envio | a chamada é aninhada (mesma razão de D-076 da lib). A conferência acontece uma vez, antes do e-mail — que é a parte irreversível |
-| D-009 | A limpeza das reprovações acontece **depois** do movimento, dentro do `sgcAnaliseSair` da 003, que chama `sgcEscPedidoReprovacoesLimpar` (R-011) | escrever no `antesDeMover`, ou uma ação extra "Enviar para aprovação técnica" | escrever antes apagaria as reprovações mesmo se o motor recusasse o movimento; e a ação extra obrigaria a desabilitar o "Mover para" normal, inventando um segundo caminho para o que já é uma transição. Remover zerados, recalcular o total e limpar reprovação são o mesmo passo do processo — ficam numa chamada só |
+| D-009 | `sgcAnaliseSair` (003) **é** o `antesDeMover` de `analise → tecnica`: verificar e arrumar acontecem na mesma execução, antes do `ctx.mover` (R-011) | verificar numa JS e arrumar em outra, depois do movimento | arrumar depois deixa o card em Técnica com itens zerados e reprovações velhas se a segunda chamada falhar — pior que o inverso. Verificar antes e recusar sem gravar é a mesma chamada, uma JS a menos por saída, e o gancho `sgcPodeMover` reconfere no servidor. **Risco aceito**: se o motor recusar o movimento depois da arrumação, as escritas já feitas não são destrutivas (o zerado sairia de qualquer jeito; a reprovação some com o card ainda em Análise), a persona já foi barrada pelo `podeMover` síncrono e o quadro não tem campo obrigatório |
 | D-010 | Prioridade vive **só** no campo do quadro; `SGC_PEDIDO` não tem a coluna (R-009) | guardar nas duas pontas e sincronizar | prioridade é o único dos campos que a **pessoa** edita direto no card (C-07 B); sincronizar de volta custaria uma escrita por edição de campo, e o motor não avisa o consumidor quando um campo muda. `/pedidos/novo` passa o valor inicial nos `valores` de `api.cardCriar` |
 | D-011 | Cancelar segue a mesma regra de movimento: quem não move aquele card não o cancela (a diretoria cancela na fase dela) | diretoria cancela de qualquer fase | CA-01 libera a fase de origem, P-07 limita a persona; juntas, cancelar é um movimento como os outros, e o gancho não precisa de exceção |
 | D-012 | Nenhum campo do quadro é obrigatório | marcar os campos da fase como obrigatórios | o motor cobra obrigatório em qualquer direção e barraria cancelar e voltar (F-05 A) |
