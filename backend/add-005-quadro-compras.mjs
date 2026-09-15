@@ -158,14 +158,21 @@ const PERSONA_EFETIVA = `COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'ME
                             WHEN 'RESTRICTED' THEN 'comercial'
                             ELSE 'analista' END)`;
 
-/** P-12: é esta guarda que faz a regra valer para quem chama por fora da tela. */
-const guardaPersona = (...personas) => `EXISTS (
+/**
+ * P-12: é esta guarda que faz a regra valer para quem chama por fora da tela.
+ * `guardaPersonaDe` recebe o usuário por parâmetro porque as escritas "por id"
+ * (chamadas de dentro de um JAVASCRIPT, onde `:VAR_USER` não se propaga) também
+ * precisam dela: o perfil business libera todas as SFs, e sem guarda o comercial
+ * gravava envio e comunicação chamando a SF direto (achado A1 da revisão).
+ */
+const guardaPersonaDe = (usuario, ...personas) => `EXISTS (
     SELECT 1 FROM INT_USER IU
     LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
-    WHERE IU.ID = :VAR_USER
+    WHERE IU.ID = ${usuario}
       AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
       AND ${PERSONA_EFETIVA} IN (${aspas(personas)})
   )`;
+const guardaPersona = (...personas) => guardaPersonaDe(':VAR_USER', ...personas);
 
 /** Decisão que só existe numa etapa (aprovação técnica, da diretoria…). */
 const guardaFase = (chave) => `EXISTS (
@@ -433,30 +440,33 @@ WHERE ID_CARD = {{cardId}} AND TRIM('{{motivo}}') <> ''
     {
       name: 'sgcEscPedidoReprovacoesLimpar',
       type: 'SQL',
-      description: 'RF-015 (R-011) - apaga as reprovacoes ao sair de novo da Analise. Chamada POR ID pelo sgcAnaliseSair (003), sem :VAR_USER. Params: usuarioId, idCard.',
+      description: 'RF-015 (R-011) - apaga as reprovacoes ao sair de novo da Analise. Chamada POR ID pelo sgcAnaliseSair (003), sem :VAR_USER: a guarda cai sobre o usuarioId recebido. Params: usuarioId, idCard.',
       code: `UPDATE SGC_PEDIDO SET
   TEC_MOTIVO = '', TEC_PRODUTOS_REPROVADOS = '', DIR_MOTIVO = ''
-WHERE ID_CARD = {{idCard}} AND {{usuarioId}} > 0`,
+WHERE ID_CARD = {{idCard}} AND {{usuarioId}} > 0
+  AND ${guardaPersonaDe('{{usuarioId}}', 'admin', 'analista', 'gestor')}`,
     },
     {
       name: 'sgcEscPedidoEnvio',
       type: 'SQL',
-      description: 'RF-020 - registro do envio a industria. Chamada POR ID pelo sgcEnvioIndustriaRegistrar, que ja conferiu a persona. Params: cardId, canal, email, dtEnvio, numped, obs, enviadoPor, agora.',
+      description: 'RF-020 - registro do envio a industria. Chamada POR ID pelo sgcEnvioIndustriaRegistrar (que ja conferiu a persona) e guardada de novo aqui pelo enviadoPor. Params: cardId, canal, email, dtEnvio, numped, obs, enviadoPor, agora.',
       code: `UPDATE SGC_PEDIDO SET
   DT_ENVIO = '{{dtEnvio}}', CANAL = '{{canal}}', EMAIL_ENVIO = '{{email}}',
   NUMPED_WINTHOR = '{{numped}}', ENVIO_OBS = '{{obs}}',
   ENVIO_POR = {{enviadoPor}}, ENVIO_EM = '{{agora}}',
   ATUALIZADO_EM = '{{agora}}'
-WHERE ID_CARD = {{cardId}} AND TRIM('{{dtEnvio}}') <> '' AND TRIM('{{numped}}') <> ''`,
+WHERE ID_CARD = {{cardId}} AND TRIM('{{dtEnvio}}') <> '' AND TRIM('{{numped}}') <> ''
+  AND ${guardaPersonaDe('{{enviadoPor}}', 'admin', 'analista', 'gestor')}`,
     },
     {
       name: 'sgcEscComunicacaoInserir',
       type: 'SQL',
-      description: 'RF-023 (EN-06 B) - registra a comunicacao enviada ao fornecedor. Chamada POR ID pelo sgcEnvioIndustriaRegistrar. Params: cardId, tipo, para, cc, assunto, corpo, enviadoPor, enviadoEm.',
+      description: 'RF-023 (EN-06 B) - registra a comunicacao enviada ao fornecedor. Chamada POR ID pelo sgcEnvioIndustriaRegistrar e guardada pelo enviadoPor. Params: cardId, tipo, para, cc, assunto, corpo, enviadoPor, enviadoEm.',
       code: `INSERT INTO SGC_COMUNICACAO (ID_CARD, TIPO, PARA, CC, ASSUNTO, CORPO, ENVIADO_POR, ENVIADO_EM)
 SELECT {{cardId}}, '{{tipo}}', '{{para}}', '{{cc}}', '{{assunto}}', '{{corpo}}', {{enviadoPor}}, '{{enviadoEm}}'
 FROM DUAL
-WHERE {{cardId}} > 0 AND TRIM('{{tipo}}') <> ''`,
+WHERE {{cardId}} > 0 AND TRIM('{{tipo}}') <> ''
+  AND ${guardaPersonaDe('{{enviadoPor}}', 'admin', 'analista', 'gestor')}`,
     },
     {
       name: 'sgcEscPersonaSalvar',

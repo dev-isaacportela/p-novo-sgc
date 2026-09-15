@@ -406,6 +406,50 @@ export async function suite(ctx) {
     assert.match(comunicacoes[0].PARA, /portal\.nutrilatina/);
   });
 
+  // A1 (revisão adversarial): o perfil business libera TODAS as server
+  // functions, então quem quiser pode chamar a escrita "por id" direto, sem
+  // passar pelo sgcEnvioIndustriaRegistrar. A guarda de persona sobre o
+  // usuário recebido é o que impede isso.
+  await teste('A1: comercial nao grava envio nem comunicacao por id — as tres escritas guardadas pelo usuario recebido nao mudam nada com o Leo', async () => {
+    const card = await criarPedido();
+    emFase(card, 'envio');
+    db.prepare("UPDATE SGC_PEDIDO SET TEC_MOTIVO = 'Preço acima do praticado', DIR_MOTIVO = 'Fluxo de caixa' WHERE ID_CARD = ?").run(card);
+
+    await chamar('sgcEscPedidoEnvio', {
+      cardId: card, canal: 'plataforma', email: '', dtEnvio: '2026-09-15',
+      numped: '000111', obs: '', enviadoPor: U.leo, agora: AGORA,
+    }, U.leo);
+    await chamar('sgcEscComunicacaoInserir', {
+      cardId: card, tipo: 'email', para: 'leo@sgc.local', cc: '', assunto: 'Pedido',
+      corpo: '<p>Pedido</p>', enviadoPor: U.leo, enviadoEm: AGORA,
+    }, U.leo);
+    await chamar('sgcEscPedidoReprovacoesLimpar', { usuarioId: U.leo, idCard: card }, U.leo);
+
+    const pedido = pedidoDe(card);
+    assert.ok(!pedido.DT_ENVIO, 'o comercial nao registra envio por id');
+    assert.ok(!pedido.NUMPED_WINTHOR);
+    assert.equal(pedido.ENVIO_POR, null);
+    assert.equal(Number(db.prepare('SELECT COUNT(*) AS N FROM SGC_COMUNICACAO WHERE ID_CARD = ?').get(card).N), 0);
+    assert.equal(pedido.TEC_MOTIVO, 'Preço acima do praticado', 'o comercial nao apaga a reprovacao');
+    assert.equal(pedido.DIR_MOTIVO, 'Fluxo de caixa');
+
+    // A mesma chamada pela analista continua funcionando: a guarda barra a
+    // persona errada, não a escrita.
+    await chamar('sgcEscPedidoEnvio', {
+      cardId: card, canal: 'plataforma', email: '', dtEnvio: '2026-09-15',
+      numped: '000111', obs: '', enviadoPor: U.ana, agora: AGORA,
+    }, U.ana);
+    await chamar('sgcEscComunicacaoInserir', {
+      cardId: card, tipo: 'plataforma', para: 'portal', cc: '', assunto: 'Pedido',
+      corpo: '', enviadoPor: U.ana, enviadoEm: AGORA,
+    }, U.ana);
+    await chamar('sgcEscPedidoReprovacoesLimpar', { usuarioId: U.ana, idCard: card }, 0);
+    const depois = pedidoDe(card);
+    assert.equal(depois.NUMPED_WINTHOR, '000111');
+    assert.equal(depois.TEC_MOTIVO, '');
+    assert.equal(Number(db.prepare('SELECT COUNT(*) AS N FROM SGC_COMUNICACAO WHERE ID_CARD = ?').get(card).N), 1);
+  });
+
   /* ─────────── T-086 — e-mails e histórico ─────────── */
 
   await teste('C-032: entrar na Aprovacao Tecnica dispara a automacao da fase para os 2 responsaveis + a copia fixa', async () => {
