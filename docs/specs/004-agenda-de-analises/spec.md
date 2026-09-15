@@ -37,7 +37,7 @@ está atrasado, o que já virou pedido e o que foi cancelado.
 Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 **C-001 — Agendar uma análise com o período padrão**
-- **Dado que** a analista escolheu o fornecedor Prodiet, a filial 1 e a data de análise 20/10/2026
+- **Dado que** a analista escolheu o fornecedor Fresenius Kabi, a filial Benenutri Matriz e a data de análise 20/10/2026
 - **Quando** ela deixa o período de vendas no padrão de 45 dias e salva
 - **Então** o agendamento é gravado com período de 05/09/2026 a 20/10/2026, sem recorrência, e aparece na lista como **pendente**
 
@@ -107,9 +107,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** o sistema recusa: cancelar é da gerência, da diretoria ou do admin, e o agendamento continua pendente
 
 **C-021 — Fornecedor inativo não entra em agendamento novo**
-- **Dado que** o fornecedor Support foi inativado no cadastro e já tem um agendamento para 20/09/2026
+- **Dado que** o fornecedor Danone foi inativado no cadastro e já tem um agendamento para 20/09/2026
 - **Quando** a analista abre a escolha de fornecedor para agendar
-- **Então** Support não aparece entre as opções e um agendamento novo para ele é recusado; o agendamento de 20/09/2026 que já existia continua na lista, continua sendo processado e continua editável nos demais campos
+- **Então** Danone não aparece entre as opções e um agendamento novo para ele é recusado; o agendamento de 20/09/2026 que já existia continua na lista, continua sendo processado e continua editável nos demais campos
 
 **C-015 — Agendamento atrasado**
 - **Dado que** existe um agendamento de 14/09/2026 ainda sem pedido gerado e hoje é 15/09/2026
@@ -174,7 +174,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | ID | Requisito | Como se mede |
 |---|---|---|
 | RNF-001 | Processar um agendamento custa no máximo 5 operações de gravação: 3 no caso simples, 4 com recorrência, 5 com recorrência e participantes | Contador de chamadas ao servidor no teste automatizado do processamento |
-| RNF-002 | Uma rodada automática processa no máximo 50 agendamentos; o que sobra fica para a rodada seguinte (30 minutos depois) | Com 60 vencidos, a primeira rodada processa 50 e a segunda 10 |
+| RNF-002 | Uma rodada automática processa no máximo 30 agendamentos; o que sobra fica para a rodada seguinte (30 minutos depois) | Com 40 vencidos, a primeira rodada processa 30 e a segunda 10 |
 | RNF-003 | O processamento é idempotente: repetir a rodada não cria pedido, ocorrência nem marcação nova | Rodar duas vezes seguidas e comparar a contagem de pedidos (C-007) |
 | RNF-004 | Falha em um agendamento não interrompe os demais da mesma rodada | C-020 |
 | RNF-005 | A listagem responde em até 2 s com 5.000 agendamentos, paginada de 50 em 50 | Cronômetro sobre volume de teste |
@@ -204,7 +204,7 @@ Conceitos do negócio e como se relacionam — **sem** schema, tipo ou tabela.
 - **RN-010** — A lista de participantes é regravada inteira a cada gravação (limpa e reinsere), nunca parcialmente.
 - **RN-011** — Criar, editar e processar manualmente é de admin, analista e gestor (a gerência monta pedido, então também agenda); cancelar é de admin, gestor e diretoria; comercial não opera a agenda e quem tem acesso só de leitura não opera nada. A regra vale também quando a ação chega por fora da tela.
 - **RN-012** — O envio do pedido à indústria atualiza o agendamento que o gerou: grava a data real do envio e, quando ela difere da data planejada, guarda a planejada original (uma vez só) e a data da análise passa a ser a real.
-- **RN-013** — O dia usado para decidir vencimento e atraso é o dia no horário de Brasília.
+- **RN-013** — O dia que decide vencimento no processamento automático é o dia no horário de Brasília; a tela mostra a situação pelo dia de quem está olhando. Na virada do dia, para quem estiver em outro fuso, as duas leituras podem divergir por no máximo uma rodada (30 minutos) — e nunca no que é gravado.
 - **RN-014** — O processamento manual opera sobre a data do agendamento dentro do recorte, inclusive datas futuras; a verificação automática opera só sobre o que venceu.
 - **RN-015** — Fornecedor inativo não entra em agendamento novo. O que já estava agendado segue: continua na lista, é processado e pode ser editado nos demais campos, e a recorrência dele continua criando as próximas ocorrências — inativar fornecedor não mexe na agenda já gravada.
 
@@ -235,7 +235,7 @@ automática e com que números; **como** (arquivo, ferramenta) é do `plan.md`.
 | C-016 | Envio em 22/10/2026 de análise planejada para 20/10/2026 grava data de envio 22/10, planejada original 20/10 e data da análise 22/10; um segundo envio em 23/10 mantém a planejada original 20/10 | regra de negócio |
 | C-017 | Gravar com 3 participantes e regravar com 2 deixa exatamente 2; a ocorrência criada pela recorrência nasce com os mesmos 2 | regra de negócio |
 | C-018 | Com 6 agendamentos semeados, o filtro situação "atrasado" devolve 2 linhas e o total devolve 2 | regra de negócio |
-| C-019 | O pedido criado tem criador = id da analista, responsável = id da analista, título "Filial 1 · Prodiet", origem "agenda" e o registro de entrada na fase Análise com origem "sistema" | regra de negócio |
+| C-019 | O pedido criado tem criador = id da analista, responsável = id da analista, título "BENENUTRI MATRIZ · FRESENIUS KABI BRASIL LTDA" (filial e fornecedor em maiúsculas, como todo pedido), origem "agenda" e o registro de entrada na fase Análise com origem "sistema" | regra de negócio |
 | C-020 | Rodada com 3 vencidos, o do meio inválido, devolve 2 processados e 1 erro; o inválido continua sem pedido e sem marcação | regra de negócio |
 | C-021 | Com 3 fornecedores, um inativado: a escolha do agendamento devolve 2; gravar agendamento novo para o inativo não grava nada; o agendamento que ele já tinha continua na lista e é processado na rodada seguinte | regra de negócio |
 | RN-001 | 31/01/2026 mensal → 28/02/2026; 30/03/2026 mensal → 30/04/2026 | regra de tela |
