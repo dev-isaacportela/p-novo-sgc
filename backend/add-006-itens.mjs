@@ -40,17 +40,19 @@ export const WINTHOR = [
 
 /* ──────────────────────────────────────────────────────────────────────────
    A guarda de persona — UM texto só, o da 002 (R-013), copiado literalmente;
-   só a lista de personas muda. `:VAR_USER` só vale em SF chamada DIRETO da
-   tela; escrita chamada por id de dentro de um JAVASCRIPT recebe
-   `{{usuarioId}}` cru e quem confere a persona é o JS, antes de escrever.
+   só a lista de personas e o dono da sessão mudam. `:VAR_USER` vale em SF
+   chamada DIRETO da tela; escrita chamada por id de dentro de um JAVASCRIPT
+   recebe `{{usuarioId}}` cru — e leva a MESMA guarda sobre ele. O perfil
+   business libera todas as SFs, então "só o JS confere" não protege nada:
+   quem chama a escrita por id, por fora da tela, passaria direto (A1).
    ────────────────────────────────────────────────────────────────────────── */
 
-function guarda(personas) {
+function guarda(personas, quem = ':VAR_USER') {
   const lista = personas.map((p) => `'${p}'`).join(', ');
   return `EXISTS (
     SELECT 1 FROM INT_USER IU
     LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
-    WHERE IU.ID = :VAR_USER
+    WHERE IU.ID = ${quem}
       AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
       AND COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
                                  WHEN 'ADMIN' THEN 'admin'
@@ -58,6 +60,9 @@ function guarda(personas) {
                                  ELSE 'analista' END) IN (${lista})
   )`;
 }
+
+/** A mesma guarda, para a escrita interna que recebe o usuário como parâmetro. */
+const guardaInterna = (personas) => guarda(personas, '{{usuarioId}}');
 
 const MONTAGEM = ['admin', 'analista', 'gestor'];
 const COBERTURA = ['admin', 'gestor'];
@@ -258,12 +263,21 @@ const COLUNAS_ITEM = `ID_CARD, CODPROD, DESCRICAO, EMBALAGEM, UNIDADE, CODEPTO, 
    PRECO_CUSTO, TIPO_PRECO, CURVA_ABC, COBERTURA_DIAS, COBERTURA_LIMITE,
    COBERTURA_JUSTIFICATIVA, OBSERVACAO, STATUS, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM`;
 
+const COLUNAS_ALERTA = 'ID_CARD, CODPROD, TIPO, CHAVE, MENSAGEM, LIDO, CRIADO_EM';
+
+const emLista = (colunas) => colunas.split(',').map((coluna) => coluna.trim());
+
 // D-006: um upsert de várias tuplas, em lotes de 200 — 200 itens não podem
 // virar 200 execuções (teto de 300/min do projeto). `{{linhas}}` é FRAGMENTO
 // de SQL montado pelo sgcItensGravar (que escapa o texto), não valor de
 // coluna: por isso vai sem aspas. CRIADO_EM não entra no UPDATE.
+//
+// A1: o lote é `SELECT … UNION ALL SELECT …` dentro de uma derivada, e não
+// `VALUES (…), (…)`, justamente para caber o `WHERE <guarda>` — que vale para
+// o lote inteiro, numa execução só (o teto de RNF-001 não muda).
 const SQL_ITEM_GRAVAR = `INSERT INTO SGC_PEDIDO_ITEM (${COLUNAS_ITEM})
-VALUES {{linhas}}
+SELECT * FROM ({{linhas}}) LOTE
+WHERE ${guardaInterna(MONTAGEM)}
 ON DUPLICATE KEY UPDATE
   DESCRICAO = VALUES(DESCRICAO), EMBALAGEM = VALUES(EMBALAGEM), UNIDADE = VALUES(UNIDADE),
   CODEPTO = VALUES(CODEPTO), CODSEC = VALUES(CODSEC), UN_POR_CAIXA = VALUES(UN_POR_CAIXA),
@@ -278,7 +292,7 @@ ON DUPLICATE KEY UPDATE
 const ESCRITAS = [
   {
     name: 'sgcEscItemGravar',
-    resumo: 'RF-012 - upsert em lote dos itens do pedido (uma execução por lote de 200 tuplas). Params: linhas (fragmento VALUES montado por sgcItensGravar)',
+    resumo: 'RF-012 - upsert em lote dos itens do pedido (uma execução por lote de 200 tuplas). Params: linhas (fragmento SELECT montado por sgcItensGravar), usuarioId int',
     interna: true,
     code: SQL_ITEM_GRAVAR,
   },
@@ -294,7 +308,8 @@ WHERE ID_CARD = {{idCard}} AND CODPROD = {{codprod}} AND STATUS <> 'removido'
     resumo: 'RF-024/RN-014 - ao sair da Análise, item sem quantidade sai da lista. Params: idCard int, usuarioId int, atualizadoEm string',
     interna: true,
     code: `UPDATE SGC_PEDIDO_ITEM SET STATUS = 'removido', ATUALIZADO_POR = {{usuarioId}}, ATUALIZADO_EM = '{{atualizadoEm}}'
-WHERE ID_CARD = {{idCard}} AND STATUS IN ('montagem', 'reprovado') AND QT_PEDIDA <= 0`,
+WHERE ID_CARD = {{idCard}} AND STATUS IN ('montagem', 'reprovado') AND QT_PEDIDA <= 0
+  AND ${guardaInterna(MONTAGEM)}`,
   },
   {
     name: 'sgcEscItemStatusFase',
@@ -305,17 +320,20 @@ WHERE ID_CARD = {{idCard}} AND STATUS <> 'removido'
   },
   {
     name: 'sgcEscAlertaInserir',
-    resumo: 'RF-016 - upsert dos alertas gerados; regerar NAO apaga LIDO nem JUSTIFICATIVA. Params: linhas (fragmento VALUES montado por sgcAlertasGerar)',
+    resumo: 'RF-016 - upsert dos alertas gerados; regerar NAO apaga LIDO nem JUSTIFICATIVA. Params: linhas (fragmento SELECT montado por sgcAlertasGerar), usuarioId int',
     interna: true,
     code: `INSERT INTO SGC_ALERTA (ID_CARD, CODPROD, TIPO, CHAVE, MENSAGEM, LIDO, CRIADO_EM)
-VALUES {{linhas}}
+SELECT * FROM ({{linhas}}) LOTE
+WHERE ${guardaInterna(MONTAGEM)}
 ON DUPLICATE KEY UPDATE MENSAGEM = VALUES(MENSAGEM)`,
   },
   {
     name: 'sgcEscAlertaRemoverObsoletos',
-    resumo: 'RF-016 - apaga o alerta cuja causa sumiu (chave fora da lista viva). Params: idCard int, chaves (fragmento de lista montado por sgcAlertasGerar)',
+    resumo: 'RF-016 - apaga o alerta cuja causa sumiu (chave fora da lista viva). Params: idCard int, chaves (fragmento de lista montado por sgcAlertasGerar), usuarioId int',
     interna: true,
-    code: `DELETE FROM SGC_ALERTA WHERE ID_CARD = {{idCard}} AND CHAVE NOT IN ({{chaves}})`,
+    code: `DELETE FROM SGC_ALERTA
+WHERE ID_CARD = {{idCard}} AND CHAVE NOT IN ({{chaves}})
+  AND ${guardaInterna(MONTAGEM)}`,
   },
   {
     name: 'sgcEscAlertaLer',
@@ -336,6 +354,7 @@ WHERE ID_CARD = {{idCard}} AND CODPROD = {{codprod}}
     resumo: 'RF-027 - limite de cobertura por nível (cadastro e edição); regravar reativa o que foi desativado. Params: nivel string, codigo string, descricao string, limiteDias int, atualizadoEm string',
     code: `INSERT INTO SGC_COBERTURA (NIVEL, CODIGO, DESCRICAO, LIMITE_DIAS, ATIVO, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
 SELECT '{{nivel}}', '{{codigo}}', '{{descricao}}', {{limiteDias}}, 1, '{{atualizadoEm}}', :VAR_USER, '{{atualizadoEm}}'
+FROM DUAL
 WHERE ${guarda(COBERTURA)}
 ON DUPLICATE KEY UPDATE
   DESCRICAO = VALUES(DESCRICAO), LIMITE_DIAS = VALUES(LIMITE_DIAS), ATIVO = 1,
@@ -356,17 +375,17 @@ WHERE ID_CARD = {{idCard}} AND ${guarda(MONTAGEM)}`,
   },
   {
     name: 'sgcEscPedidoTotal',
-    resumo: 'RF-013/RN-008 - o total soma no próprio banco, nunca chega por parâmetro (AN-12). Params: idCard int',
+    resumo: 'RF-013/RN-008 - o total soma no próprio banco, nunca chega por parâmetro (AN-12). Params: idCard int, usuarioId int',
     interna: true,
     code: `UPDATE SGC_PEDIDO SET VL_TOTAL = (
   SELECT COALESCE(SUM(I.QT_PEDIDA * I.PRECO_CUSTO), 0) FROM SGC_PEDIDO_ITEM I
   WHERE I.ID_CARD = {{idCard}} AND I.STATUS <> 'removido'
 )
-WHERE ID_CARD = {{idCard}}`,
+WHERE ID_CARD = {{idCard}} AND ${guardaInterna(MONTAGEM)}`,
   },
 ];
 
-const AVISO_INTERNA = 'Escrita interna, chamada por id de dentro das server functions JAVASCRIPT da spec 003 (a persona já foi conferida lá). Nao chamar do frontend.';
+const AVISO_INTERNA = 'Escrita interna, chamada por id de dentro das server functions JAVASCRIPT da spec 003; leva a guarda de persona sobre o usuarioId recebido (A1). Nao chamar do frontend.';
 
 /* ─────────────── JavaScript (orquestração) ─────────────── */
 
@@ -406,6 +425,17 @@ function texto(valor, teto) {
   return String(valor === null || valor === undefined ? '' : valor)
     .replace(/[\\u0000-\\u001f]/g, ' ').slice(0, teto || 200).replace(/'/g, "''");
 }
+// A1: o lote vai como derivada SELECT ... UNION ALL SELECT ... (e nao VALUES),
+// que e a unica forma de pendurar o WHERE da guarda numa execucao so. Apenas a
+// primeira linha nomeia as colunas: o MySQL exige nome na derivada, o SQLite
+// aceita igual.
+function lote(colunas, linhas) {
+  return linhas.map(function (valores, ordem) {
+    return 'SELECT ' + valores.map(function (valor, coluna) {
+      return ordem === 0 ? valor + ' AS ' + colunas[coluna] : valor;
+    }).join(', ');
+  }).join(' UNION ALL ');
+}
 function agora() { return new Date().toISOString().slice(0, 19); }
 function moeda(valor) {
   const partes = Math.abs(numero(valor)).toFixed(2).split('.');
@@ -432,20 +462,26 @@ async function persona(fallbackId) {
 function podeMontar(quem) {
   return quem.id > 0 && quem.nivel !== 'READ_ONLY' && ['admin', 'analista', 'gestor'].indexOf(quem.persona) !== -1;
 }
-async function pedidoEmAnalise(cardId) {
+// P-08 B (A2): RESTRICTED so opera os PROPRIOS cards. A conferencia mora aqui,
+// num lugar so, porque toda escrita de montagem passa por este pedido.
+async function pedidoEmAnalise(cardId, usuarioId) {
+  const quemId = inteiro(usuarioId);
   const linhas = await consultar(
     'SELECT P.ID_CARD, P.CODFILIAL, P.CODFORNEC FROM SGC_PEDIDO P'
     + ' JOIN KB_CARD C ON C.ID = P.ID_CARD'
     + ' JOIN SGC_FASE F ON F.FASE_ID = C.FASE_ID AND F.CHAVE = ' + "'analise'"
-    + ' WHERE P.ID_CARD = ' + inteiro(cardId) + ' AND C.EXCLUIDO_EM IS NULL');
+    + ' JOIN INT_USER IU ON IU.ID = ' + quemId
+    + ' WHERE P.ID_CARD = ' + inteiro(cardId) + ' AND C.EXCLUIDO_EM IS NULL'
+    + " AND (COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'RESTRICTED' OR C.CRIADO_POR = " + quemId + ')');
   return linhas[0] || null;
-}`;
+}
+const FORA_DA_ANALISE = 'O pedido não está na Análise, ou é de outra pessoa e o seu acesso é restrito aos próprios pedidos.';`;
 
 const JS_ITENS_GRAVAR = `${PRELUDIO}
 const cardId = inteiro(event.cardId);
 const quem = await persona();
 if (!podeMontar(quem)) return { ok: false, erro: 'Seu perfil não pode editar os itens deste pedido.' };
-if (!await pedidoEmAnalise(cardId)) return { ok: false, erro: 'O pedido não está na Análise: os itens não podem ser editados.' };
+if (!await pedidoEmAnalise(cardId, quem.id)) return { ok: false, erro: FORA_DA_ANALISE };
 
 let itens = event.itensJson;
 if (typeof itens === 'string') { try { itens = JSON.parse(itens); } catch (e) { itens = null; } }
@@ -453,11 +489,12 @@ if (!Array.isArray(itens)) return { ok: false, erro: 'Lista de itens inválida.'
 itens = itens.filter(function (item) { return inteiro(item && item.codprod) > 0; });
 if (itens.length === 0) return { ok: true, itens: 0, total: 0 };
 
+const COLUNAS = ${JSON.stringify(emLista(COLUNAS_ITEM))};
 const quando = agora();
 const tuplas = itens.map(function (item) {
   const tipoPreco = String(item.tipoPreco || 'padrao') === 'especial' ? 'especial' : 'padrao';
   const curva = ['A', 'B', 'C'].indexOf(String(item.curvaAbc || '')) !== -1 ? String(item.curvaAbc) : 'C';
-  return '(' + [
+  return [
     cardId, inteiro(item.codprod),
     "'" + texto(item.descricao, 200) + "'", "'" + texto(item.embalagem, 60) + "'", "'" + texto(item.unidade, 10) + "'",
     inteiro(item.codepto), inteiro(item.codsec), numero(item.unPorCaixa),
@@ -467,14 +504,14 @@ const tuplas = itens.map(function (item) {
     numero(item.coberturaDias), inteiro(item.coberturaLimite),
     "'" + texto(item.coberturaJustificativa, 500) + "'", "'" + texto(item.observacao, 500) + "'",
     "'montagem'", "'" + quando + "'", quem.id, "'" + quando + "'",
-  ].join(', ') + ')';
+  ];
 });
 
 // Lotes de 200 tuplas: 200 itens alterados são 2 execuções aninhadas, não 200 (D-006).
 for (let inicio = 0; inicio < tuplas.length; inicio += 200) {
-  await chamar('sgcEscItemGravar', { linhas: tuplas.slice(inicio, inicio + 200).join(', ') });
+  await chamar('sgcEscItemGravar', { linhas: lote(COLUNAS, tuplas.slice(inicio, inicio + 200)), usuarioId: quem.id });
 }
-await chamar('sgcEscPedidoTotal', { idCard: cardId });
+await chamar('sgcEscPedidoTotal', { idCard: cardId, usuarioId: quem.id });
 const capa = await consultar('SELECT VL_TOTAL FROM SGC_PEDIDO WHERE ID_CARD = ' + cardId);
 return { ok: true, itens: itens.length, total: numero(capa[0] && capa[0].VL_TOTAL) };`;
 
@@ -491,13 +528,14 @@ const itens = await consultar(
   'SELECT CODPROD FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ' + cardId + " AND STATUS <> 'removido'");
 const codprods = itens.map(function (linha) { return inteiro(linha.CODPROD); }).filter(function (c) { return c > 0; });
 
+const COLUNAS = ${JSON.stringify(emLista(COLUNAS_ALERTA))};
 const quando = agora();
 const tuplas = [];
 const chaves = [];
 function acrescentar(tipo, codprod, chave, mensagem) {
   if (chaves.indexOf(chave) !== -1) return;
   chaves.push(chave);
-  tuplas.push('(' + [cardId, codprod, "'" + tipo + "'", "'" + texto(chave, 120) + "'", "'" + texto(mensagem, 400) + "'", 0, "'" + quando + "'"].join(', ') + ')');
+  tuplas.push([cardId, codprod, "'" + tipo + "'", "'" + texto(chave, 120) + "'", "'" + texto(mensagem, 400) + "'", 0, "'" + quando + "'"]);
 }
 
 // ORA-01795: o IN do Oracle para em 1.000 expressões; o legado já fatiava.
@@ -522,14 +560,14 @@ for (let inicio = 0; inicio < codprods.length; inicio += 500) {
 
 if (tuplas.length > 0) {
   for (let inicio = 0; inicio < tuplas.length; inicio += 200) {
-    await chamar('sgcEscAlertaInserir', { linhas: tuplas.slice(inicio, inicio + 200).join(', ') });
+    await chamar('sgcEscAlertaInserir', { linhas: lote(COLUNAS, tuplas.slice(inicio, inicio + 200)), usuarioId: quem.id });
   }
 }
 // Lista vazia não pode virar NOT IN () — a chave impossível apaga tudo.
 const vivas = chaves.length > 0
   ? chaves.map(function (chave) { return "'" + texto(chave, 120) + "'"; }).join(', ')
   : "'__sem_alerta__'";
-await chamar('sgcEscAlertaRemoverObsoletos', { idCard: cardId, chaves: vivas });
+await chamar('sgcEscAlertaRemoverObsoletos', { idCard: cardId, chaves: vivas, usuarioId: quem.id });
 
 const pendentes = await consultar('SELECT COUNT(*) AS N FROM SGC_ALERTA WHERE ID_CARD = ' + cardId + ' AND LIDO = 0');
 return { ok: true, total: chaves.length, naoLidos: inteiro(pendentes[0] && pendentes[0].N) };`;
@@ -539,7 +577,7 @@ const JS_ANALISE_SAIR = `${PRELUDIO}
 const cardId = inteiro(event.cardId);
 const quem = await persona();
 if (!podeMontar(quem)) return { ok: false, erro: 'Seu perfil não pode enviar este pedido para a aprovação técnica.' };
-if (!await pedidoEmAnalise(cardId)) return { ok: false, erro: 'O pedido não está na Análise.' };
+if (!await pedidoEmAnalise(cardId, quem.id)) return { ok: false, erro: FORA_DA_ANALISE };
 
 // AL-03: recalcula os alertas antes de barrar — o que sumiu não pode travar.
 const gerados = await chamar('sgcAlertasGerar', { cardId: cardId, usuarioId: quem.id });
@@ -563,7 +601,7 @@ const justAlerta = inteiro(linhaJust.N);
 
 const quando = agora();
 await chamar('sgcEscItemRemoverZerados', { idCard: cardId, usuarioId: quem.id, atualizadoEm: quando });
-await chamar('sgcEscPedidoTotal', { idCard: cardId });
+await chamar('sgcEscPedidoTotal', { idCard: cardId, usuarioId: quem.id });
 // AT-04/R-011: a SF é da 002 e recebe usuarioId cru (chamada aninhada não
 // propaga :VAR_USER); a persona já foi conferida acima, antes de escrever.
 await chamar('sgcEscPedidoReprovacoesLimpar', { idCard: cardId, usuarioId: quem.id });
@@ -577,7 +615,10 @@ if (justAlerta > 0 || inteiro(resumo.JUST_COBERTURA) > 0) {
   nota += ' ' + justAlerta + ' itens justificados por alerta, ' + inteiro(resumo.JUST_COBERTURA) + ' por cobertura acima do limite.';
 }
 if (removidos > 0) nota += ' ' + removidos + ' itens zerados foram removidos.';
-await chamar('kbNotaRegistrar', { cardId: cardId, texto: nota, usuarioId: quem.id });
+// D-07: a nota é registro, não pré-requisito — falha dela não desfaz a saída.
+try {
+  await chamar('kbNotaRegistrar', { cardId: cardId, texto: nota, usuarioId: quem.id });
+} catch (e) { /* a saída já aconteceu; a nota é acessória */ }
 
 return { ok: true, itens: restantes, removidos: removidos, total: total };`;
 
