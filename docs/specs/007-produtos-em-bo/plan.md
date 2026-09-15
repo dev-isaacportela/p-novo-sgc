@@ -81,7 +81,7 @@ Histórico append-only; a vigente é espelhada em `SGC_PEDIDO.DT_PREVISAO_BO`. �
 | `ID_CARD` | `INT NOT NULL` | |
 | `TIPO` | `VARCHAR(20) DEFAULT 'carta_falta'` | `carta_falta` \| `outro` (RN-011) |
 | `NOME_ARQUIVO` | `VARCHAR(255)` | |
-| `URL` | `VARCHAR(700)` | endereço público devolvido pelo envio do arquivo; mesmo tamanho do `ENDERECO` da 001 |
+| `ENDERECO` | `VARCHAR(700)` | endereço público devolvido pelo envio do arquivo; **o mesmo nome e o mesmo tipo** de `SGC_FORNECEDOR_DOCUMENTO.ENDERECO` da 001 (R-040) |
 | `ENVIADO_POR` | `INT` | |
 | `ENVIADO_EM` | `VARCHAR(19)` | |
 
@@ -94,10 +94,11 @@ Histórico append-only; a vigente é espelhada em `SGC_PEDIDO.DT_PREVISAO_BO`. �
 | `DT_PREVISAO_BO` | `VARCHAR(10)` | previsão vigente (espelho da última de `SGC_BO_PREVISAO`) |
 | `ALERTA_BO_EM` | `VARCHAR(10)` | **o dia** do último aviso, não o carimbo — o alerta é um por dia e a coluna é comparada com o dia (D-005; evita a dívida D-13 da onda 1) |
 
-### Valor novo em `SGC_PEDIDO_ITEM.STATUS` (R-022)
+### Valor novo em `SGC_PEDIDO_ITEM.STATUS` (R-022, R-039)
 
-`bo`, ao lado de `montagem`, `aprovado`, `reprovado`, `enviado` e `removido`. Nenhuma
-mudança de schema: a coluna já é `VARCHAR(20)`.
+`bo`, ao lado de `montagem`, `aprovado`, `reprovado`, `enviado` e `removido` — e **só**
+ele: R-039 fecha que a situação do item não acompanha Faturamento nem Concluídas, e que o
+item liberado volta a `enviado`. Nenhuma mudança de schema: a coluna já é `VARCHAR(20)`.
 
 ### Só leitura, de outras specs
 
@@ -143,8 +144,8 @@ cliente impactado é o cliente da empresa, não o da filial que comprou (D-004).
 |---|---|---|---|---|
 | `sgcBoItensCard` | 7701 | `idCard` (0) | `ID, CODPROD, DESCRICAO, EMBALAGEM, UNIDADE, QT_PENDENTE, QT_PEDIDA, PRECO_CUSTO, VL_PENDENTE, OBSERVACAO, STATUS, CLIENTES_IMPACTADOS, QT_VENDIDA_60D, CRIADO_POR_NOME, CRIADO_EM, RESOLVIDO_POR_NOME, RESOLVIDO_EM` | RF-001, RF-012 |
 | `sgcBoPrevisoesCard` | 7702 | `idCard` (0) | `ID, DT_PREVISAO, OBSERVACAO, REGISTRADO_POR_NOME, REGISTRADO_EM` | RF-006 |
-| `sgcBoDocumentosCard` | 7703 | `idCard` (0) | `ID, TIPO, NOME_ARQUIVO, URL, ENVIADO_POR_NOME, ENVIADO_EM` | RF-011 |
-| `sgcBoPainel` | 7704 | `busca` (`''`), `situacao` (`''`), `status` (`''`), `hoje` (`''`), `limite` (50), `offset` (0) | `ID, ID_CARD, TITULO, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, CODPROD, DESCRICAO, UNIDADE, QT_PENDENTE, VL_PENDENTE, CLIENTES_IMPACTADOS, QT_VENDIDA_60D, OBSERVACAO, STATUS, DT_PREVISAO_BO, SITUACAO_PREVISAO, CARTA_FALTA_URL, CRIADO_EM` | RF-015, RF-016, RF-017, RF-022 |
+| `sgcBoDocumentosCard` | 7703 | `idCard` (0) | `ID, TIPO, NOME_ARQUIVO, ENDERECO, ENVIADO_POR_NOME, ENVIADO_EM` | RF-011 |
+| `sgcBoPainel` | 7704 | `busca` (`''`), `situacao` (`''`), `status` (`''`), `hoje` (`''`), `limite` (50), `offset` (0) | `ID, ID_CARD, TITULO, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, CODPROD, DESCRICAO, UNIDADE, QT_PENDENTE, VL_PENDENTE, CLIENTES_IMPACTADOS, QT_VENDIDA_60D, OBSERVACAO, STATUS, DT_PREVISAO_BO, SITUACAO_PREVISAO, CARTA_FALTA_ENDERECO, CRIADO_EM` | RF-015, RF-016, RF-017, RF-022 |
 | `sgcBoPainelTotal` | 7705 | `busca`, `situacao`, `status`, `hoje` | `TOTAL` | RF-017 |
 
 ```sql
@@ -178,9 +179,9 @@ SELECT B.ID, B.ID_CARD, C.TITULO,
     WHEN P.DT_PREVISAO_BO < '{{hoje}}'         THEN 'vencida'
     WHEN P.DT_PREVISAO_BO = '{{hoje}}'         THEN 'hoje'
     ELSE 'no_prazo' END                        AS SITUACAO_PREVISAO,
-  COALESCE((SELECT D.URL FROM SGC_BO_DOCUMENTO D
+  COALESCE((SELECT D.ENDERECO FROM SGC_BO_DOCUMENTO D
             WHERE D.ID_CARD = B.ID_CARD AND D.TIPO = 'carta_falta'
-            ORDER BY D.ENVIADO_EM DESC, D.ID DESC LIMIT 1), '') AS CARTA_FALTA_URL,
+            ORDER BY D.ENVIADO_EM DESC, D.ID DESC LIMIT 1), '') AS CARTA_FALTA_ENDERECO,
   COALESCE(B.CRIADO_EM, '') AS CRIADO_EM
 FROM SGC_BO_ITEM B
 JOIN KB_CARD C  ON C.ID = B.ID_CARD AND C.EXCLUIDO_EM IS NULL
@@ -300,7 +301,7 @@ consulta ao WinThor** no cron.
 | `sgcEscItemStatusBo` | 7752 | `{{usuarioId}}` (interna) | `idCard`, `codprods`, `status`, `usuarioId`, `atualizadoEm` | `UPDATE SGC_PEDIDO_ITEM SET STATUS='{{status}}', ATUALIZADO_POR={{usuarioId}}, ATUALIZADO_EM='{{atualizadoEm}}' WHERE ID_CARD={{idCard}} AND CODPROD IN ({{codprods}}) AND STATUS <> 'removido' AND <guardaInterna>` | RF-001, RF-012, R-022 |
 | `sgcEscBoPrevisaoInserir` | 7753 | `:VAR_USER` + `admin`/`analista`/`gestor` | `idCard`, `dtPrevisao`, `observacao`, `registradoEm` | `INSERT INTO SGC_BO_PREVISAO (…) SELECT {{idCard}}, '{{dtPrevisao}}', '{{observacao}}', :VAR_USER, '{{registradoEm}}' FROM DUAL WHERE <guarda>` | RF-006 |
 | `sgcEscPedidoPrevisaoBo` | 7754 | `:VAR_USER` + `admin`/`analista`/`gestor` | `idCard`, `dtPrevisao` | `UPDATE SGC_PEDIDO SET DT_PREVISAO_BO='{{dtPrevisao}}', ALERTA_BO_EM='' WHERE ID_CARD={{idCard}} AND <guarda>` | RF-007 |
-| `sgcEscBoDocumentoInserir` | 7755 | `:VAR_USER` + `admin`/`analista`/`gestor` | `idCard`, `tipo`, `nomeArquivo`, `url`, `enviadoEm` | `INSERT INTO SGC_BO_DOCUMENTO (…) SELECT {{idCard}}, '{{tipo}}', '{{nomeArquivo}}', '{{url}}', :VAR_USER, '{{enviadoEm}}' FROM DUAL WHERE <guarda>` | RF-011 |
+| `sgcEscBoDocumentoInserir` | 7755 | `:VAR_USER` + `admin`/`analista`/`gestor` | `idCard`, `tipo`, `nomeArquivo`, `endereco`, `enviadoEm` | `INSERT INTO SGC_BO_DOCUMENTO (…) SELECT {{idCard}}, '{{tipo}}', '{{nomeArquivo}}', '{{endereco}}', :VAR_USER, '{{enviadoEm}}' FROM DUAL WHERE <guarda>` | RF-011 |
 | `sgcEscPedidoAlertaBo` | 7756 | `{{usuarioId}}` (interna) | `idCard`, `alertaEm`, `usuarioId` | `UPDATE SGC_PEDIDO SET ALERTA_BO_EM='{{alertaEm}}' WHERE ID_CARD={{idCard}} AND <guardaInterna>` | RF-008 |
 
 `sgcEscPedidoPrevisaoBo` **sempre** zera `ALERTA_BO_EM`: registrar previsão é, por
@@ -622,13 +623,13 @@ exige para aceitar `usuarioId` (mesmo arranjo do cron da 004).
 | C-003 | `smoke/007-bo.mjs` | `sgcPodeMover` do card `faturamento` para a fase `bo`, antes do C-001, devolve `PODE = 0` e `MOTIVO` igual a `MOTIVO_ENTRADA_BO`; depois do C-001, `PODE = 1` e `MOTIVO` `''` |
 | C-004 · RN-004 | `smoke/007-bo.mjs` | `sgcEscBoPrevisaoInserir` + `sgcEscPedidoPrevisaoBo` como `ana` com `2026-10-05`: `sgcBoPrevisoesCard` devolve 2 linhas (a do seed e a nova, com `REGISTRADO_POR_NOME`) e `SGC_PEDIDO.DT_PREVISAO_BO` = `'2026-10-05'` |
 | C-005 | `smoke/007-bo.mjs` | com `ALERTA_BO_EM` = hoje, `sgcEscPedidoPrevisaoBo` com hoje+7 deixa `ALERTA_BO_EM` = `''` e `DT_PREVISAO_BO` = hoje+7; o `sgcBoMonitorar` seguinte não inclui esse card em `resultados` |
-| C-006 · RN-011 | `smoke/007-bo.mjs` | `sgcEscBoDocumentoInserir` com `tipo: 'carta_falta'` → `sgcBoDocumentosCard` devolve 2 linhas (a do seed e a nova) com `NOME_ARQUIVO`, `URL`, `ENVIADO_POR_NOME` e `ENVIADO_EM`; com `tipo: 'planilha'` a linha é gravada como `'outro'` |
+| C-006 · RN-011 | `smoke/007-bo.mjs` | `sgcEscBoDocumentoInserir` com `tipo: 'carta_falta'` → `sgcBoDocumentosCard` devolve 2 linhas (a do seed e a nova) com `NOME_ARQUIVO`, `ENDERECO`, `ENVIADO_POR_NOME` e `ENVIADO_EM`; com `tipo: 'planilha'` a linha é gravada como `'outro'` |
 | C-007 · RN-007 | `smoke/007-bo.mjs` | `sgcBoMarcar` com `[{ codprod: 5201, status: 'liberado' }]` no card `bo` devolve `abertos: 1`; `SGC_BO_ITEM` do 5201 fica `liberado` com `RESOLVIDO_POR` = `gil` e `RESOLVIDO_EM` preenchido; `SGC_PEDIDO_ITEM` do 5201 volta a `enviado` e o do 5202 continua `bo` |
 | C-008 | `smoke/007-bo.mjs` | com 2 abertos, `sgcPodeMover` do card `bo` para `concluido` devolve `PODE = 0` e `MOTIVO` = `'Resolva os 2 itens em B.O. antes de concluir o pedido.'`; o mesmo para `faturamento>concluido` no card `faturamento` depois do C-001; no card `boLimpo`, `bo>concluido` devolve `PODE = 1` e `MOTIVO` `''` |
 | C-009 | `smoke/007-bo.mjs` | com 2 abertos, `sgcPodeMover` do card `bo` para `faturamento` devolve `PODE = 1` e `MOTIVO` `''` |
 | C-010 · RN-006 | `smoke/007-bo.mjs` | `sgcBoMonitorar` com `userId = 0` devolve `{ avisados: 1 }` (o card `bo`); `SGC_AVISO` ganha 1 linha `TIPO = 'bo_previsao'`, `CHAVE = 'bo_previsao:<idCard>:<hoje>'`, `PARA_USUARIO_ID = 0`, `PARA_PERSONA = ''`, com a data da previsão e `'2 itens'` no `TEXTO`; `SGC_PEDIDO.ALERTA_BO_EM` = hoje; `KB_LOG` do card ganha 1 nota; a segunda chamada devolve `avisados: 0` e `SELECT COUNT(*) FROM SGC_AVISO` continua 1 |
 | C-011 · RF-010 | `smoke/007-bo.mjs` | na mesma rodada do C-010, `resultados` não traz `boLimpo` (previsão hoje+10), nem `boSemPrevisao` (`DT_PREVISAO_BO` `''`), nem `faturamento` (fase); `SGC_AVISO` deles tem contagem 0 |
-| C-012 · RN-010 | `smoke/007-bo.mjs` | `sgcBoPainel({ status: 'aberto', hoje })` devolve **3** linhas e `sgcBoPainelTotal` `TOTAL: 3`; a **primeira** é o 5101 do `boSemPrevisao` (`SITUACAO_PREVISAO: 'sem_previsao'`); com `situacao: 'vencida'` devolve 2 (as do card `bo`); com `status: ''` devolve 4; a linha do card `bo` traz `CARTA_FALTA_URL` não vazia e `VL_PENDENTE` = 40 × 19,00 |
+| C-012 · RN-010 | `smoke/007-bo.mjs` | `sgcBoPainel({ status: 'aberto', hoje })` devolve **3** linhas e `sgcBoPainelTotal` `TOTAL: 3`; a **primeira** é o 5101 do `boSemPrevisao` (`SITUACAO_PREVISAO: 'sem_previsao'`); com `situacao: 'vencida'` devolve 2 (as do card `bo`); com `status: ''` devolve 4; a linha do card `bo` traz `CARTA_FALTA_ENDERECO` não vazia e `VL_PENDENTE` = 40 × 19,00 |
 | C-013 | `smoke/007-bo.mjs` + `tests/bo.test.mjs` | `sgcBoPainel` com `userId = leo` devolve as mesmas 3 linhas; `menuParaPersona(permissoesDe('comercial', 'MEMBER'))` devolve exatamente 1 item, com `to: '/bo'` |
 | C-014 · RN-009 (tela) | `tests/bo.test.mjs` | `permissoesDe('diretoria','MEMBER')` → `{ verBo: true, operarBo: false }`; `permissoesDe('gestor','MEMBER')` → os dois `true`; `permissoesDe('gestor','READ_ONLY')` → `verBo: true`, `operarBo: false`; `permissoesDe('comercial','MEMBER')` → `verBo: true`, `operarBo: false` |
 | C-015 · RN-009 (servidor) | `smoke/007-bo.mjs` | `sgcBoMarcar` como `leo` e como `dora` devolve `ok: false` citando o perfil e `SGC_BO_ITEM` do card não cresce; como `gil` grava; um usuário `READ_ONLY` também é recusado; um `RESTRICTED` que não criou o card é recusado com a frase de acesso restrito |
@@ -681,12 +682,13 @@ SF extra; o preâmbulo JS de `add-006-itens.mjs` (`chamar`, `lote`, `texto`, `in
   `listServerFunctionsMitra` e falha alto.
 - `backend/sql/notificacoes-avisos.sql` (R-023) — o ramo de `SGC_AVISO` na
   `notificacoesUniao()`; nada desta spec escreve na `notificacoesUniao`.
-- **Peço à 005** (achado da leitura do legado, seção 5 do `add-bo-fase-produtos.mjs`): o
-  cron `sgcFaturamentoMonitorar` **não deve alertar pedido na fase `bo`** — esse pedido já
-  tem a cobrança diária de `bo_previsao`, e no legado os dois alertas diários sobre o mesmo
-  pedido foram o motivo de separar a base da tela; a tela `/faturamentos-pendentes`, ao
-  contrário, **continua mostrando** o pedido em B.O., com `DT_PREVISAO_BO` e a contagem de
-  itens em aberto (é a informação que explica por que o faturamento parou).
+- **R-041** (decidido a partir de achado desta spec na leitura do legado, seção 5 do
+  `add-bo-fase-produtos.mjs`): o cron `sgcFaturamentoMonitorar` da 005 **não alerta pedido
+  na fase `bo`** — esse pedido já tem a cobrança diária de `bo_previsao`, e no legado os
+  dois alertas diários sobre o mesmo pedido foram o motivo de separar a base da tela; a
+  tela `/faturamentos-pendentes`, ao contrário, **continua mostrando** o pedido em B.O.,
+  com `DT_PREVISAO_BO` e a contagem de itens em aberto (é a informação que explica por que
+  o faturamento parou). O teste que prova isso é da 005.
 
 **Consome da 006 (trânsito e recebimento):** nada.
 
@@ -711,7 +713,7 @@ SF extra; o preâmbulo JS de `add-006-itens.mjs` (`chamar`, `lote`, `texto`, `in
 | D-005 | `ALERTA_BO_EM` é `VARCHAR(10)` — o dia | `VARCHAR(19)` com o carimbo, como no legado e como `DATA_ENVIO_REAL` da 004 | A regra é "um aviso por dia": guardar hora obriga todo leitor a fatiar a string, que é exatamente a dívida D-13 da onda 1 |
 | D-006 | O painel filtra por `B.STATUS`, **não** pela fase do card | Repetir o `C.ID_FASE = 16` do legado | No legado, item em aberto num card que voltou para Trânsito sumia do painel e ficava `EM_BO` para sempre — inconsistência silenciosa. Aqui a verdade é o `STATUS` do item, e liberar é uma ação explícita |
 | D-007 | `SGC_BO_ITEM` aponta para o item por `CODPROD` (com `ID_CARD`), não por `ID_ITEM` | `ID_ITEM` como no legado | Mesmo motivo de D-007 da 003: o upsert em lote não devolve ids e o item pode ser removido e readicionado, o que invalidaria o `ID_ITEM` mas não o produto. E é o que torna o `UNIQUE (ID_CARD, CODPROD)` possível |
-| D-008 | Item liberado volta para `enviado`, e `SGC_PEDIDO_ITEM.STATUS` ganha só o valor `bo` | Criar também `faturamento` e `concluido` como F-07 previa | R-022 introduz **um** valor novo. Os outros dois não têm dono na onda 2 — ver *Pedidos ao 000* |
+| D-008 | `SGC_PEDIDO_ITEM.STATUS` ganha **só** o valor `bo` nesta onda; item liberado volta para `enviado` | Uma situação de item por fase do pedido | R-039: a situação do item não acompanha Faturamento nem Concluídas — `bo` é o único valor novo, e `enviado` é para onde o item volta. Menos estado, menos lugar para desincronizar |
 | D-009 | `sgcEscPedidoPrevisaoBo` (tela, `:VAR_USER`) e `sgcEscPedidoAlertaBo` (interna, `{{usuarioId}}`) são **duas** SFs sobre a mesma tabela | Uma SF só, com o usuário resolvido por `COALESCE(NULLIF(:VAR_USER, 0), {{usuarioId}})` | Aceitar `usuarioId` como identidade quando a sessão não resolve é literalmente a dívida D-06 da onda 1. Duas SFs, duas identidades, uma instrução cada — e a segunda espelha `sgcEscPedidoAlertaFaturamento` (005) e `sgcEscNfAlertaAtraso` (006) |
 | D-010 | O cron alerta enquanto o pedido estiver em `bo`, sem olhar o percentual faturado | Repetir o `PERC_FATURADO < 100` do legado | No SGC 2 sair do B.O. é um movimento de fase, explícito; um pedido 100 % faturado que continua em `bo` tem item em aberto e **deve** ser cobrado. Ler o percentual ainda criaria dependência de escrita da 005 dentro do meu cron |
 | D-011 | `MOTIVO_ENTRADA_BO` é fixo (vai literal para `M`/`MOTIVOS`); a frase da conclusão é dinâmica e vive na coluna `PENDENCIAS_BO_MOTIVO` + na pura `motivoConclusaoBo` | As duas frases fixas, sem contagem | A contagem é o que torna a recusa acionável ("resolva **os 2**"), e o arranjo já existe na 003 (`PENDENCIAS_MOTIVO`). A frase fixa vai para o `MOTIVOS` e entra no teste de 500 combinações; a dinâmica é testada pelos dois lados com os mesmos números |
@@ -724,7 +726,7 @@ SF extra; o preâmbulo JS de `add-006-itens.mjs` (`chamar`, `lote`, `texto`, `in
 | Risco | Impacto | Mitigação |
 |---|---|---|
 | `sgcEscAvisoInserir` (005) mudar de nome ou de parâmetro | o cron de B.O. não publica, ou grava aviso torto | contrato listado em *Dependências*; o `add-010` resolve por nome em `listServerFunctionsMitra` e falha alto ("Server function sem id no mapa"), nunca grava errado; o smoke do C-010 confere as colunas gravadas |
-| O cron de faturamento da 005 continuar alertando pedido em `bo` | duas cobranças diárias sobre o mesmo pedido — o defeito que o legado corrigiu separando a base da tela | pedido explícito à 005 em *Dependências*; se chegar assim na integração, o teste que prova isso é da 005 |
+| O cron de faturamento da 005 continuar alertando pedido em `bo` | duas cobranças diárias sobre o mesmo pedido — o defeito que o legado corrigiu separando a base da tela | R-041 fecha a regra no contrato e a 005 já foi avisada; o teste que prova isso é da 005 |
 | `IN ({{codprods}})` acima de 1.000 produtos estoura `ORA-01795` | a marcação em massa falha | o JS fatia em 500 e soma os resultados, como o `sgcAlertasGerar` da 003 |
 | Descrição de produto com aspas quebrar o fragmento `{{linhas}}` | gravação falha ou injeta | `texto()` do preâmbulo dobra aspas simples e corta caracteres de controle; o smoke marca um produto com `'` na descrição |
 | Dois usuários marcando o mesmo produto ao mesmo tempo | registro duplicado | `UNIQUE (ID_CARD, CODPROD)` + `ON DUPLICATE KEY UPDATE`: a corrida vira atualização, não duplicata (C-016) |
@@ -735,28 +737,30 @@ SF extra; o preâmbulo JS de `add-006-itens.mjs` (`chamar`, `lote`, `texto`, `in
 
 Vazio: nenhuma violação de princípio.
 
-## Pedidos ao 000
+## Pedidos ao 000 — respondidos
 
-1. **`sgcEscPedidoAlertaBo` (7756) é uma SF a mais** do que a linha da 007 na tabela do 000
-   (que lista seis escritas). Justificativa em D-009: a marca do alerta é escrita de
-   processo (`{{usuarioId}}`) e o registro de previsão é escrita de tela (`:VAR_USER`) —
-   uma instrução por SF, uma identidade por SF. A 005 e a 006 têm a SF equivalente
-   (`sgcEscPedidoAlertaFaturamento`, `sgcEscNfAlertaAtraso`). Confirmar o nome.
-2. **`sgcBoCarregar` (7707) é uma SF a mais**, pelo mesmo motivo que a 001 tem
-   `sgcFornecedorCarregar` e a 002 tem `sgcPedidoCarregar`: o orçamento de execuções manda
-   a aba carregar em uma. Confirmar o nome.
-3. **`sgcBoPainelTotal`** — a tabela do 000 escreve `sgcBoPainel`/`Total`; adotei
-   `sgcBoPainelTotal`, no padrão de `sgcFornecedorListarTotal`/`sgcAgendaListarTotal`.
-4. **`SGC_PEDIDO_ITEM.STATUS`** — F-07 previa também `EM FATURAMENTO` e `CONCLUÍDO` para a
-   onda 2, e R-022 só introduz `bo`. Nesta spec o item liberado volta a `enviado` (D-008).
-   Confirmar que os outros dois valores ficam para a onda 3, ou dizer qual spec os
-   introduz.
-5. **`SGC_BO_DOCUMENTO.URL`** — a 001 chama a mesma coisa de `ENDERECO`
-   (`SGC_FORNECEDOR_DOCUMENTO.ENDERECO VARCHAR(700)`). Mantive `URL` porque é o nome do
-   modelo de R-026, mas a convenção "o mesmo dado tem o mesmo nome" pede uma escolha — se o
-   000 preferir `ENDERECO`, é troca de uma palavra em três lugares desta spec.
-6. **Cobrança do faturamento × cobrança do B.O.** — registrar no contrato que o cron
-   `sgcFaturamentoMonitorar` (005) não alerta pedido na fase `bo`, e que
-   `/faturamentos-pendentes` continua mostrando esse pedido com a previsão de B.O. e a
-   contagem de itens em aberto. É regra do legado (seção 5 do `add-bo-fase-produtos.mjs`)
-   que nenhuma das três seções do contrato menciona.
+Os seis pedidos desta spec foram decididos pelo 000 e já estão aplicados acima. Ficam
+registrados para quem ler o plan sem o histórico:
+
+1. **`sgcEscPedidoAlertaBo` (7756), SF a mais — aceita.** A marca do alerta é escrita de
+   processo (`{{usuarioId}}`) e o registro de previsão é escrita de tela (`:VAR_USER`):
+   uma instrução por SF, uma identidade por SF (D-009). Espelha
+   `sgcEscPedidoAlertaFaturamento` (005) e `sgcEscNfAlertaAtraso` (006).
+2. **`sgcBoCarregar` (7707), SF a mais — aceita.** Pelo mesmo motivo que a 001 tem
+   `sgcFornecedorCarregar` e a 002 tem `sgcPedidoCarregar`: o orçamento manda a aba
+   carregar em uma execução (D-001, RNF-001).
+3. **`sgcBoPainelTotal` — aceito**, no padrão de
+   `sgcFornecedorListarTotal`/`sgcAgendaListarTotal`.
+4. **R-039 — `SGC_PEDIDO_ITEM.STATUS` ganha só `bo`.** Não existem situações de item "em
+   faturamento" nem "concluído": o item liberado volta a `enviado` (D-008). Nenhuma outra
+   spec introduz valor novo nessa coluna na onda 2.
+5. **R-040 — o documento do B.O. usa `ENDERECO VARCHAR(700)`**, o mesmo nome e tipo de
+   `SGC_FORNECEDOR_DOCUMENTO.ENDERECO` (001), no lugar do `URL` do rascunho de R-026. Vale
+   para a tabela, para `sgcEscBoDocumentoInserir` (`{{endereco}}`), para
+   `sgcBoDocumentosCard` e para a coluna `CARTA_FALTA_ENDERECO` do painel. O `CHECK_INPUT`
+   não muda: o `sim:check` pula escrita, então nenhum parâmetro de documento entra lá.
+6. **R-041 — a cobrança do faturamento não se soma à do B.O.** O cron
+   `sgcFaturamentoMonitorar` (005) não alerta pedido na fase `bo` — esse pedido já tem a
+   cobrança diária de `bo_previsao` —, e `/faturamentos-pendentes` continua mostrando o
+   pedido em B.O. com `DT_PREVISAO_BO` e a contagem de itens em aberto. É a regra que o
+   legado fixou na seção 5 do `add-bo-fase-produtos.mjs`; a 005 já foi avisada.
