@@ -231,6 +231,19 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
 
   def('CEIL', 1, (value) => (value == null ? null : Math.ceil(Number(value))));
   def('CEILING', 1, (value) => (value == null ? null : Math.ceil(Number(value))));
+
+  // FLOOR depende de flag de compilação do SQLite (SQLITE_ENABLE_MATH_FUNCTIONS),
+  // por isso vira função registrada, como o CEIL já é (R-025/R-043).
+  def('FLOOR', 1, (value) => (value == null ? null : Math.floor(Number(value))));
+  // MOD(a, b) existe em MySQL; no SQLite é o operador `%` — função registrada
+  // para os fragmentos de dias úteis (backend/lib/dias-uteis.mjs) poderem usar
+  // a mesma sintaxe MySQL nos dois lados. Sinal do resultado segue o dividendo,
+  // como o MOD do MySQL.
+  def('MOD', 2, (a, b) => {
+    if (a == null || b == null || Number(b) === 0) return null;
+    return Number(a) % Number(b);
+  });
+
   def('IFNULL', 2, (a, b) => (a == null ? b : a));
   def('LCASE', 1, (value) => (value == null ? null : String(value).toLowerCase()));
   def('UCASE', 1, (value) => (value == null ? null : String(value).toUpperCase()));
@@ -259,6 +272,65 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
   });
 }
 
+/** Acha o `)` que fecha o `(` em `indiceAbre`, ignorando parenteses dentro de
+ * aspas — precisa ser um scanner proprio (nao regex) porque o valor do
+ * DATE_ADD desta spec costuma ser ele mesmo um literal entre aspas
+ * (`DATE_ADD('1970-01-05', INTERVAL (...) DAY)`, R-025), e o
+ * `mapOutsideStrings` usado no resto deste arquivo cortaria o texto bem no
+ * meio dessa chamada. */
+function acharFechamentoForaDeAspas(texto, indiceAbre) {
+  let profundidade = 0;
+  let aspa = null;
+  for (let i = indiceAbre; i < texto.length; i += 1) {
+    const c = texto[i];
+    if (aspa) {
+      if (c === aspa && texto[i + 1] === aspa) { i += 1; continue; }
+      if (c === aspa) aspa = null;
+      continue;
+    }
+    if (c === "'" || c === '"') { aspa = c; continue; }
+    if (c === '(') profundidade += 1;
+    else if (c === ')') {
+      profundidade -= 1;
+      if (profundidade === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * DATE_ADD(valor, INTERVAL (<expressão>) DAY) -> MITRA_DATE_ADD(valor,
+ * (<expressão>), 'DAY'). Só entra quando o intervalo é uma EXPRESSÃO entre
+ * parênteses (R-025/R-043 do 000: `somarDiasUteis`/`somarDiasCorridos` de
+ * backend/lib/dias-uteis.mjs somam uma coluna, não um literal) — o
+ * `INTERVAL <literal> DAY` simples continua coberto pelo regex de
+ * DATE_ADD/DATE_SUB de `toSqlite()`, mais abaixo. Roda sobre o SQL INTEIRO
+ * (não por chunk) porque precisa achar o `)` que fecha a chamada mesmo quando
+ * ela tem um literal de aspas no meio.
+ */
+function reescreverDateAddComExpressao(sql) {
+  const ABERTURA = /\bDATE_(ADD|SUB)\s*\(/gi;
+  let saida = '';
+  let cursor = 0;
+  let m;
+  while ((m = ABERTURA.exec(sql))) {
+    if (m.index < cursor) continue;
+    const abreChamada = ABERTURA.lastIndex - 1;
+    const fechaChamada = acharFechamentoForaDeAspas(sql, abreChamada);
+    if (fechaChamada === -1) continue;
+    const miolo = sql.slice(abreChamada + 1, fechaChamada);
+    const casado = miolo.match(/^([\s\S]+?),\s*INTERVAL\s*\(([\s\S]+)\)\s*(DAY|HOUR|MINUTE|SECOND)\s*$/i);
+    if (!casado) continue;
+    const sinal = m[1].toUpperCase() === 'SUB' ? '-1 * ' : '';
+    saida += sql.slice(cursor, m.index);
+    saida += `MITRA_DATE_ADD(${casado[1]}, ${sinal}(${casado[2]}), '${casado[3].toUpperCase()}')`;
+    cursor = fechaChamada + 1;
+    ABERTURA.lastIndex = cursor;
+  }
+  saida += sql.slice(cursor);
+  return saida;
+}
+
 /**
  * Reescreve o que nao cabe em funcao escalar. Trabalha so fora de literais de
  * string, para nunca alterar um dado que por acaso pareca SQL.
@@ -266,7 +338,7 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
 export function toSqlite(sql) {
   let limiteRownum = null;
 
-  const resultado = mapOutsideStrings(String(sql), (chunk) => {
+  const resultado = mapOutsideStrings(reescreverDateAddComExpressao(String(sql)), (chunk) => {
     let out = chunk;
 
     // DATE_SUB(x, INTERVAL 30 DAY) -> MITRA_DATE_ADD(x, -30, 'DAY')
