@@ -80,4 +80,5 @@ export const CHECK_INPUT = {
   codprods: '5001,5002', codprod: '0', diasValidade: '90', diasEstoque: '80',
   nivel: '', cardId: '1',
   // spec 004 (agenda de análises):
+  codfornec: '0', codfilial: '', dataInicio: '', dataFim: '', situacao: '', hoje: '2026-09-15', id: '1', idAgenda: '1',
 };
