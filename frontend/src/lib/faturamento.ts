@@ -86,6 +86,29 @@ export function nivelDeAlerta(diasUteis: number): 0 | 3 | 5 {
 }
 
 /**
+ * RN-013 / R-042 — a capa tem nota quando há VALOR faturado, e não quando há
+ * linha em `SGC_NF`: os dois caminhos que escrevem o campo `faturamento`
+ * (a aba e o cron `sgcFaturamentoMonitorar`) precisam do MESMO critério, senão
+ * uma nota de `VL_TOTAL` zero faz cada lado escrever um texto e sobrescrever o
+ * outro a cada rodada.
+ */
+export function temNfNaCapa(vlFaturado: unknown): boolean {
+  return numero(vlFaturado) > 0;
+}
+
+/**
+ * RF-023 / R-043 — a cobrança enviada vira contato no histórico do pedido. O
+ * resumo é montado aqui porque as DUAS telas que abrem o diálogo de cobrança
+ * (a aba do pedido e `/faturamentos-pendentes`) gravam o mesmo texto.
+ */
+export function resumoDaCobranca(assunto: string, para: string): string {
+  const destino = String(para ?? '').trim();
+  const titulo = String(assunto ?? '').trim();
+  return `Cobrança de faturamento enviada por e-mail para ${destino || 'a indústria'}`
+    + (titulo ? ` — ${titulo}` : '');
+}
+
+/**
  * RN-013 — a linha de faturamento do cartão. Sem nota e com menos de 3 dias
  * úteis não há linha: campo vazio, cartão limpo.
  */

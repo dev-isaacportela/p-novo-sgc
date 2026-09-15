@@ -19,7 +19,7 @@ import { acao } from '@/lib/mitra-api';
 import { fmtData, fmtDataHora, hojeIso, moeda } from '@/lib/formato';
 import { diasUteisEntre } from '@/lib/dias-uteis';
 import { ROTULO_OCORRENCIA, textoDaOcorrencia } from '@/lib/nf';
-import { percentuaisFaturados, textoDaCapaFaturamento } from '@/lib/faturamento';
+import { percentuaisFaturados, temNfNaCapa, textoDaCapaFaturamento } from '@/lib/faturamento';
 import { usePersona } from '@/lib/persona';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 import {
@@ -132,7 +132,10 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
     });
     const espelho = {
       faturamento: textoDaCapaFaturamento({
-        temNf: novos.nfs.length > 0,
+        // A-7: o MESMO critério do cron (valor faturado > 0), não a contagem de
+        // linhas de SGC_NF — com uma nota de VL_TOTAL zero os dois textos
+        // divergiam e um sobrescrevia o outro a cada rodada.
+        temNf: temNfNaCapa(novos.pedido.VL_FATURADO),
         vlFaturado: Number(novos.pedido.VL_FATURADO) || 0,
         percValor: Number(novos.pedido.PERC_FATURADO_VALOR) || valor,
         saldo,

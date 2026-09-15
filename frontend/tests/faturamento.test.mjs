@@ -10,6 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   percentuaisFaturados, nivelDeAlerta, textoDaCapaFaturamento, colunasDoCsv,
+  temNfNaCapa, resumoDaCobranca,
 } from '../src/lib/faturamento.ts';
 
 test('C-014 / RN-008: 72.000 de 120.000 e 1.200 de 2.000 dão 60 % em valor e em quantidade, com saldo de 48.000', () => {
@@ -83,4 +84,29 @@ test('C-026: colunasDoCsv devolve o cabeçalho e uma linha por pedido, na ordem 
   ]);
   assert.equal(corpo[1][9], 9, 'a linha incompleta não quebra: coluna ausente vira vazia ou zero');
   assert.equal(corpo[1][6], '0,00');
+});
+
+test('A-7 (revisão onda 2): a capa tem nota pelo VALOR faturado, não pela contagem de linhas de SGC_NF — a nota de VL_TOTAL zero fazia a tela e o cron escreverem textos diferentes', () => {
+  assert.equal(temNfNaCapa(72000), true);
+  assert.equal(temNfNaCapa(0), false, 'uma nota vinculada com valor zero não é faturamento');
+  assert.equal(temNfNaCapa(''), false);
+  assert.equal(temNfNaCapa(null), false);
+
+  // O caso do achado: uma nota existe (nfs.length > 0), mas VL_FATURADO é zero
+  // e já se passaram 4 dias úteis. O cron escreve a linha de pendência; a tela,
+  // pelo critério antigo, escreveria "R$ 0,00 (0 %)" e as duas se sobrescreveriam.
+  const capa = (temNf) => textoDaCapaFaturamento({ temNf, vlFaturado: 0, percValor: 0, saldo: 120000, diasUteis: 4 });
+  assert.equal(capa(temNfNaCapa(0)), 'Faturamento pendente · 4 dias úteis');
+  assert.match(capa(true), /R\$ 0,00 \(0 %\)/, 'é este o texto que divergia do cron');
+});
+
+test('A-4 (revisão onda 2): a cobrança enviada vira contato no histórico — o resumo é um só para as duas telas que abrem o diálogo', () => {
+  assert.equal(
+    resumoDaCobranca('Faturamento pendente — pedido 998901', 'captacao@fresenius-kabi.com'),
+    'Cobrança de faturamento enviada por e-mail para captacao@fresenius-kabi.com — Faturamento pendente — pedido 998901',
+  );
+  // `sgcEscContatoInserir` recusa resumo vazio (TRIM('{{resumo}}') <> ''):
+  // sem assunto e sem destinatário o texto ainda precisa existir.
+  assert.equal(resumoDaCobranca('', ''), 'Cobrança de faturamento enviada por e-mail para a indústria');
+  assert.ok(resumoDaCobranca('', '').trim().length > 0);
 });
