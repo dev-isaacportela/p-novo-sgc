@@ -91,5 +91,7 @@ export const CHECK_INPUT = {
   situacao: '', hoje: '2026-09-15', id: '1',
   // spec 005 (notas fiscais e faturamento): a 005 preenche quando publicar.
   // spec 006 (trânsito e recebimento): a 006 preenche quando publicar.
-  // spec 007 (produtos em B.O.): a 007 preenche quando publicar.
+  // spec 007 (produtos em B.O.): dias entra sem aspas em sgcWintClientesImpactados
+  // (TRUNC(SYSDATE) - {{dias}}) — sem valor, o sim:check quebra por sintaxe.
+  dias: '60', status: '',
 };
