@@ -17,6 +17,10 @@ import CoberturasPage from '@/pages/coberturas/CoberturasPage';
 import AgendaPage from '@/pages/agenda/AgendaPage';
 import NotificacoesPage from '@/pages/notificacoes/NotificacoesPage';
 import SegurancaPage from '@/pages/seguranca/SegurancaPage';
+import NotasFiscaisPage from '@/pages/fiscal/NotasFiscaisPage';
+import FaturamentosPendentesPage from '@/pages/fiscal/FaturamentosPendentesPage';
+import NfsAtrasoPage from '@/pages/fiscal/NfsAtrasoPage';
+import BoPage from '@/pages/bo/BoPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -74,7 +78,9 @@ function Autenticado() {
 
   // Onda 1 do SGC 2: quadro de compras (002), fornecedores (001), itens e
   // coberturas (003), agenda (004) — telas reais chegam com as specs; aqui só
-  // as rotas e páginas stub (docs/specs/000-visao-geral).
+  // as rotas e páginas stub (docs/specs/000-visao-geral). Onda 2 (005-007):
+  // notas fiscais, faturamentos pendentes, NFs em atraso e produtos em B.O.
+  // ainda são stub ("Em construção") — a base (S2) só cria a rota e o menu.
   return (
     <Routes>
       <Route element={<AdminLayout usuario={usuario} />}>
@@ -88,6 +94,10 @@ function Autenticado() {
         <Route path="agenda" element={<AgendaPage />} />
         <Route path="notificacoes" element={<NotificacoesPage />} />
         <Route path="seguranca" element={<SegurancaPage />} />
+        <Route path="notas-fiscais" element={<NotasFiscaisPage />} />
+        <Route path="faturamentos-pendentes" element={<FaturamentosPendentesPage />} />
+        <Route path="nfs-em-atraso" element={<NfsAtrasoPage />} />
+        <Route path="bo" element={<BoPage />} />
         <Route path="*" element={<Navigate to="/quadro" replace />} />
       </Route>
     </Routes>

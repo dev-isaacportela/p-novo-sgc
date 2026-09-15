@@ -9,8 +9,8 @@
 import * as React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  Bell, CalendarClock, Gauge, KanbanSquare, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
-  PlusCircle, ShieldCheck, Truck, X, type LucideIcon,
+  AlertTriangle, Bell, CalendarClock, FileText, Gauge, KanbanSquare, LogOut, Menu, PackageX,
+  PanelLeftClose, PanelLeftOpen, PlusCircle, Receipt, ShieldCheck, Truck, X, type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -26,6 +26,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 const ICONES: Record<string, LucideIcon> = {
   '/quadro': KanbanSquare, '/pedidos/novo': PlusCircle, '/agenda': CalendarClock, '/notificacoes': Bell,
   '/fornecedores': Truck, '/coberturas': Gauge, '/seguranca': ShieldCheck,
+  // Onda 2 (005-007):
+  '/notas-fiscais': FileText, '/faturamentos-pendentes': Receipt, '/nfs-em-atraso': AlertTriangle, '/bo': PackageX,
 };
 
 function agruparMenu(itens: ItemDeMenu[]) {
