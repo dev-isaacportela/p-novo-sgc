@@ -482,17 +482,14 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
     assert.notEqual(String(nfDoBanco(90006).ALERTA_ATRASO_EM).slice(0, 4), '2030');
   });
 
-  /* ─────────── T-088 — conclusão do pedido (RF-022) — depende da S4 ─────────── */
+  /* ─────────── T-088 — conclusão do pedido (RF-022) ─────────── */
 
-  const ganchoTemNf = String(byName.get('sgcPodeMover')?.code ?? '').includes('SGC_NF_OCORRENCIA');
-
-  await teste(`C-019 / RN-013: concluir o F6 com uma comparação de NF sem decisão é recusado pelo servidor, com o motivo da pendência${ganchoTemNf ? '' : ' [DEPENDE DA S4: os fragmentos pendencias-conclusao-nf/bo ainda não estão compostos no sgcPodeMover — o teste confere só a pré-condição]'}`, async () => {
+  await teste('C-019 / RN-013: concluir o F6 com uma comparação de NF sem decisão é recusado pelo servidor, com o motivo da pendência (pendencias-conclusao-nf.sql no sgcPodeMover)', async () => {
+    assert.ok(String(byName.get('sgcPodeMover')?.code ?? '').includes('SGC_NF_OCORRENCIA'), 'o gancho compõe o fragmento da 005');
     const pendentes = Number(db.prepare(
       "SELECT COUNT(*) AS N FROM SGC_NF_OCORRENCIA WHERE ID_CARD = ? AND DECISAO = 'pendente'",
     ).get(F6).N);
     assert.equal(pendentes, 1, 'o seed do F6 tem a ocorrência sem decisão de que C-019 depende');
-
-    if (!ganchoTemNf) return;
 
     const recusa = linhas(await chamar('sgcPodeMover', {
       usuarioId: U.gil, cardId: F6, boardId: CENARIO.boardCompras, faseId: fases.concluido,

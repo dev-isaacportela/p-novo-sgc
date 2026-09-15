@@ -109,17 +109,14 @@ export async function suite(ctx) {
 
   /* ─────────── T-086/T-087 — entrada em B.O. (antes de marcar) ─────────── */
 
-  await teste('C-003 / RN-003: Faturamento -> B.O. exige ao menos 1 item marcado (pendencias-bo-entrada.sql, pendente de S4); Enviado -> B.O. não existe no fluxo', async () => {
+  await teste('C-003 / RN-003: Faturamento -> B.O. exige ao menos 1 item marcado (pendencias-bo-entrada.sql no sgcPodeMover); Enviado -> B.O. não existe no fluxo', async () => {
     assert.equal(contarBo(CARDS_007.faturamento), 0, 'zero item marcado, antes do C-001');
     const semItem = await podeMover(U.ana, CARDS_007.faturamento, 'bo');
-    if (Number(semItem.PODE) === 0) {
-      assert.equal(semItem.MOTIVO, 'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.');
-    } else {
-      assert.equal(Number(semItem.PODE), 1, 'sem a integração S4, o par fica livre — nenhum ramo bloqueia ainda');
-      console.log('    (pendente S4: sqlPodeMover ainda sem os ramos de backend/sql/pendencias-bo-entrada.sql)');
-    }
+    assert.equal(Number(semItem.PODE), 0, 'sem item marcado o servidor recusa a entrada em B.O.');
+    assert.equal(semItem.MOTIVO, 'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.');
+    assert.equal(semItem.MOTIVO, MOTIVOS.boEntrada, 'a frase da tela é a mesma do servidor (R-046)');
 
-    // RN-003 (2ª evidência): o par não existe no fluxo, com ou sem a integração S4.
+    // RN-003 (2ª evidência): o par não existe no fluxo.
     emFase(CARDS_007.faturamento, 'enviado');
     try {
       const deEnviado = await podeMover(U.ana, CARDS_007.faturamento, 'bo');
@@ -223,7 +220,7 @@ export async function suite(ctx) {
 
   /* ─────────── T-089/T-090 — conclusão e volta (gancho, R-030) ─────────── */
 
-  await teste('C-008: *>concluido recusa com item de B.O. em aberto e libera sem nenhum aberto (pendencias-conclusao-bo.sql, pendente de S4)', async () => {
+  await teste('C-008: *>concluido recusa com item de B.O. em aberto e libera sem nenhum aberto (pendencias-conclusao-bo.sql no sgcPodeMover)', async () => {
     assert.equal(contarAbertos(CARDS_007.bo), 2);
     // depois do C-001/C-016 (5201, 5202) e do C-015 (5101, marcado como gil): 3 abertos.
     assert.equal(contarAbertos(CARDS_007.faturamento), 3);
@@ -236,15 +233,10 @@ export async function suite(ctx) {
     assert.equal(Number(limpoConcluido.PODE), 1, 'sem item aberto, sempre pode concluir');
     assert.equal(limpoConcluido.MOTIVO, '');
 
-    if (Number(boConcluido.PODE) === 0) {
-      assert.equal(boConcluido.MOTIVO, 'Resolva os 2 itens em B.O. antes de concluir o pedido.');
-      assert.equal(Number(fatConcluido.PODE), 0);
-      assert.equal(fatConcluido.MOTIVO, 'Resolva os 3 itens em B.O. antes de concluir o pedido.');
-    } else {
-      assert.equal(Number(boConcluido.PODE), 1);
-      assert.equal(Number(fatConcluido.PODE), 1);
-      console.log('    (pendente S4: sqlPodeMover ainda sem os ramos de backend/sql/pendencias-conclusao-bo.sql)');
-    }
+    assert.equal(Number(boConcluido.PODE), 0, 'com item aberto o servidor recusa concluir');
+    assert.equal(boConcluido.MOTIVO, 'Resolva os 2 itens em B.O. antes de concluir o pedido.');
+    assert.equal(Number(fatConcluido.PODE), 0);
+    assert.equal(fatConcluido.MOTIVO, 'Resolva os 3 itens em B.O. antes de concluir o pedido.');
   });
 
   await teste('C-009: com 2 abertos, B.O. -> Faturamento devolve pode e motivo vazio (voltar não tem exigência)', async () => {
@@ -270,7 +262,7 @@ export async function suite(ctx) {
     }
   });
 
-  await teste('RN-008: a frase de *>concluido muda no singular/plural conforme a contagem de abertos (pendencias-conclusao-bo.sql, pendente de S4)', async () => {
+  await teste('RN-008: a frase de *>concluido muda no singular/plural conforme a contagem de abertos (pendencias-conclusao-bo.sql no sgcPodeMover)', async () => {
     // Cenário sintético (codprods 6001-6003, fora do catálogo real) sobre o
     // card boLimpo, para não disputar estado com C-007/C-009/C-010 no card bo.
     const inserirTemp = db.prepare(`INSERT INTO SGC_BO_ITEM (ID_CARD, CODPROD, DESCRICAO, QT_PENDENTE, STATUS, CRIADO_POR, CRIADO_EM)
@@ -281,18 +273,17 @@ export async function suite(ctx) {
       inserirTemp.run(CARDS_007.boLimpo, 6001, U.ana, AGORA_BO);
       inserirTemp.run(CARDS_007.boLimpo, 6002, U.ana, AGORA_BO);
       const dois = await podeMover(U.ana, CARDS_007.boLimpo, 'concluido');
-      if (Number(dois.PODE) === 0) {
-        assert.equal(dois.MOTIVO, 'Resolva os 2 itens em B.O. antes de concluir o pedido.');
-        db.prepare('DELETE FROM SGC_BO_ITEM WHERE ID_CARD = ? AND CODPROD = 6002').run(CARDS_007.boLimpo);
-        const um = await podeMover(U.ana, CARDS_007.boLimpo, 'concluido');
-        assert.equal(um.MOTIVO, 'Resolva o 1 item em B.O. antes de concluir o pedido.', 'singular');
-        inserirTemp.run(CARDS_007.boLimpo, 6002, U.ana, AGORA_BO);
-        inserirTemp.run(CARDS_007.boLimpo, 6003, U.ana, AGORA_BO);
-        const tres = await podeMover(U.ana, CARDS_007.boLimpo, 'concluido');
-        assert.equal(tres.MOTIVO, 'Resolva os 3 itens em B.O. antes de concluir o pedido.');
-      } else {
-        console.log('    (pendente S4: sqlPodeMover ainda sem os ramos de backend/sql/pendencias-conclusao-bo.sql)');
-      }
+      assert.equal(Number(dois.PODE), 0);
+      assert.equal(dois.MOTIVO, 'Resolva os 2 itens em B.O. antes de concluir o pedido.');
+      db.prepare('DELETE FROM SGC_BO_ITEM WHERE ID_CARD = ? AND CODPROD = 6002').run(CARDS_007.boLimpo);
+      const um = await podeMover(U.ana, CARDS_007.boLimpo, 'concluido');
+      assert.equal(Number(um.PODE), 0);
+      assert.equal(um.MOTIVO, 'Resolva o 1 item em B.O. antes de concluir o pedido.', 'singular');
+      inserirTemp.run(CARDS_007.boLimpo, 6002, U.ana, AGORA_BO);
+      inserirTemp.run(CARDS_007.boLimpo, 6003, U.ana, AGORA_BO);
+      const tres = await podeMover(U.ana, CARDS_007.boLimpo, 'concluido');
+      assert.equal(Number(tres.PODE), 0);
+      assert.equal(tres.MOTIVO, 'Resolva os 3 itens em B.O. antes de concluir o pedido.');
     } finally {
       limparTemp();
     }
@@ -301,13 +292,14 @@ export async function suite(ctx) {
   /* ─────────── T-091/T-092 — cobrança diária (cron) ─────────── */
 
   let primeiraRodadaBo;
-  await teste('C-010 / RN-006: a verificação diária avisa o pedido com previsão vencida (2 itens) e não avisa de novo no mesmo dia (SGC_AVISO/nota dependem de sgcEscAvisoInserir da 005, pendente de S4)', async () => {
+  await teste('C-010 / RN-006: a verificação diária avisa o pedido com previsão vencida (2 itens) e não avisa de novo no mesmo dia (SGC_AVISO por sgcEscAvisoInserir da 005, R-023)', async () => {
     primeiraRodadaBo = await chamar('sgcBoMonitorar', {}, 0);
     assert.equal(primeiraRodadaBo.ok, true, primeiraRodadaBo.erro);
     const tentados = primeiraRodadaBo.resultados.concat(primeiraRodadaBo.erros).map((r) => r.idCard);
     assert.ok(tentados.includes(CARDS_007.bo), 'previsão vencida, sem alerta hoje — deveria ter sido tentado');
 
-    if (ctx.byName.has('sgcEscAvisoInserir')) {
+    assert.ok(ctx.byName.has('sgcEscAvisoInserir'), 'a 005 publica sgcEscAvisoInserir (R-023)');
+    {
       const resultado = primeiraRodadaBo.resultados.find((r) => r.idCard === CARDS_007.bo);
       assert.ok(resultado, 'o card bo deveria ter sido avisado com sucesso');
       assert.equal(resultado.abertos, 2);
@@ -326,10 +318,6 @@ export async function suite(ctx) {
       const segunda = await chamar('sgcBoMonitorar', {}, 0);
       assert.ok(!segunda.resultados.some((r) => r.idCard === CARDS_007.bo), 'não avisa de novo no mesmo dia');
       assert.equal(db.prepare('SELECT COUNT(*) AS N FROM SGC_AVISO WHERE ID_CARD = ?').get(CARDS_007.bo).N, 1);
-    } else {
-      const erro = primeiraRodadaBo.erros.find((e) => e.idCard === CARDS_007.bo);
-      assert.ok(erro, 'sem a 005 publicada, a chamada por id falha e cai em erros[] — não derruba o lote');
-      console.log('    (pendente S4: sgcEscAvisoInserir da 005 ainda não existe neste worktree)');
     }
   });
 
