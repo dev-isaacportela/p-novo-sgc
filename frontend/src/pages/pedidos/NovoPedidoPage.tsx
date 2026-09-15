@@ -8,12 +8,14 @@
 // R-002/C-08: o seletor de fornecedor sai de `sgcFornecedorListar({ ativo: 1 })`
 // — fornecedor inativo não é oferecido, e `sgcWintFornecedores` nunca aparece
 // em tela de pedido. C-09: as filiais vêm de `sgcFornecedorCarregar`, a única
-// fonte do que aquele fornecedor atende.
+// fonte do que aquele fornecedor atende — é uma server function JAVASCRIPT, que
+// devolve `{ fornecedor, filiais, contatos… }`, e por isso se chama com `acao`,
+// não com `linhas` (que devolveria `[]` e deixaria a filial vazia para sempre).
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useKanban } from '@benenutri/mitra-kanban';
 
-import { linhas } from '@/lib/mitra-api';
+import { acao, linhas } from '@/lib/mitra-api';
 import { usePersona } from '@/lib/persona';
 import { instanteIso, periodoPadrao, PRIORIDADES, tituloDoPedido, validarNovoPedido } from '@/lib/pedido';
 import { QUADRO_COMPRAS } from '@/lib/quadro';
@@ -23,6 +25,8 @@ import {
 } from '@/components/page';
 
 const ROTULO_PRIORIDADE: Record<string, string> = { normal: 'Normal', alta: 'Alta', urgente: 'Urgente' };
+
+type Registro = Record<string, unknown>;
 
 interface Opcao {
   value: string;
@@ -43,6 +47,7 @@ export default function NovoPedidoPage() {
   const [prioridade, setPrioridade] = React.useState<string>(PRIORIDADES[0]);
   const [erros, setErros] = React.useState<ReturnType<typeof validarNovoPedido>['erros']>({});
   const [falha, setFalha] = React.useState<string | null>(null);
+  const [semParametro, setSemParametro] = React.useState(false);
   const [gravando, setGravando] = React.useState(false);
 
   React.useEffect(() => {
@@ -65,19 +70,26 @@ export default function NovoPedidoPage() {
     };
   }, []);
 
-  // C-09: a filial só abre depois do fornecedor escolhido, e lista o que ele atende.
+  // C-09: a filial só abre depois do fornecedor escolhido, e lista o que ele
+  // atende. Fornecedor sem parametrização devolve `fornecedor: null` — aí não
+  // há filial nenhuma e o pedido não pode nascer.
   React.useEffect(() => {
     if (!codfornec) return;
     let vivo = true;
-    linhas('sgcFornecedorCarregar', { codfornec: Number(codfornec) }).then(
-      (registros) => {
+    acao('sgcFornecedorCarregar', { codfornec: Number(codfornec) }).then(
+      (dados) => {
         if (!vivo) return;
+        const parametrizado = Boolean(dados.fornecedor);
+        const registros: Registro[] = Array.isArray(dados.filiais) ? dados.filiais : [];
+        setSemParametro(!parametrizado);
         setFiliais(registros
           .filter((registro) => registro.CODFILIAL !== undefined && registro.CODFILIAL !== null)
           .map((registro) => ({ value: String(registro.CODFILIAL), label: String(registro.FILIAL ?? registro.CODFILIAL) })));
       },
       () => {
-        if (vivo) setFiliais([]);
+        if (!vivo) return;
+        setFiliais([]);
+        setSemParametro(true);
       },
     );
     return () => {
@@ -89,6 +101,7 @@ export default function NovoPedidoPage() {
     setCodfornec(valor);
     setCodfilial('');
     setFiliais([]);
+    setSemParametro(false);
   }
 
   const nomeFornecedor = fornecedores.find((item) => item.value === codfornec)?.label ?? '';
@@ -150,7 +163,7 @@ export default function NovoPedidoPage() {
         actions={
           <>
             <Button onClick={() => navigate('/quadro')} disabled={gravando}>Voltar</Button>
-            <Button variant="primary" onClick={criar} disabled={gravando}>
+            <Button variant="primary" onClick={criar} disabled={gravando || semParametro}>
               {gravando ? 'Criando...' : 'Criar pedido'}
             </Button>
           </>
@@ -161,6 +174,11 @@ export default function NovoPedidoPage() {
       {!fornecedores.length ? (
         <Alert tone="warn" className="mb-4">
           Nenhum fornecedor parametrizado ainda. Cadastre o fornecedor em Fornecedores antes de criar o pedido.
+        </Alert>
+      ) : null}
+      {semParametro ? (
+        <Alert tone="warn" className="mb-4">
+          Este fornecedor ainda não tem parametrização (filiais e contatos). Cadastre em Fornecedores antes de criar o pedido.
         </Alert>
       ) : null}
 
