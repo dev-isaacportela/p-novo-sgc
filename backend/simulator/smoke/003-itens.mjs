@@ -5,13 +5,6 @@
 // frontend/tests/{compras,cobertura,prazo-pagamento}.test.mjs; aqui fica o que
 // só a server function real responde. Toda consulta ao WinThor assere
 // contagem > 0 — vazio não é verde.
-//
-// (Isolamento removido na integração: PCFORNEC/PCFILIAL vêm do seed da 001 e as
-// seed/001-fornecedores.mjs e SGC_FASE é do seed/002-quadro.mjs, os dois ainda
-// stub. Sem eles o JOIN de PCFILIAL zera as consultas de lote/excesso e
-// nenhuma SF reconhece a fase `analise`, então esta suíte insere o mínimo com
-// INSERT OR IGNORE. O mesmo vale para o substituto de
-// sgcEscPedidoReprovacoesLimpar (SF da 002, chamada por id pelo sgcAnaliseSair).
 
 import { readFileSync } from 'node:fs';
 import { toSqlite } from '../mysql-dialect.mjs';
@@ -366,5 +359,77 @@ export async function suite(ctx) {
     await chamar('sgcEscCoberturaExcluir', { id: Number(secao.ID), atualizadoEm: '2026-09-15T09:50:00' }, U.gil);
     const depoisDaExclusao = await linhas(ctx, 'sgcCoberturaListar', { nivel: 'secao', limite: 200, offset: 0 }, U.gil);
     assert.equal(depoisDaExclusao.length, 0, 'exclusao e desativacao: o limite sai da resolucao');
+  });
+
+  /* ── A1/A2 — a guarda das escritas internas (revisao adversarial) ────── */
+
+  await teste('A1: comercial nao grava item, alerta nem total por id', async () => {
+    const card = CARDS_003.gravacao;
+    const contar = (sql, ...par) => Number(db.prepare(sql).get(...par).N);
+    const zerados = "SELECT COUNT(*) AS N FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND STATUS IN ('montagem', 'reprovado') AND QT_PEDIDA <= 0";
+    const antes = {
+      itens: contar('SELECT COUNT(*) AS N FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ?', card),
+      zerados: contar(zerados, card),
+      alertas: contar('SELECT COUNT(*) AS N FROM SGC_ALERTA WHERE ID_CARD = ?', CARDS_003.alertas),
+    };
+
+    // O MESMO fragmento que o sgcItensGravar monta — so o usuario muda.
+    const valores = [card, 99999, "'INJETADO'", "'CX 12'", "'UN'", 2, 21, 12,
+      0, 0, 0, 0, 0, 7, 10.0, "'padrao'", "'C'", 0, 35, "''", "''",
+      "'montagem'", "'2026-09-15T10:00:00'", U.leo, "'2026-09-15T10:00:00'"];
+    const colunas = ['ID_CARD', 'CODPROD', 'DESCRICAO', 'EMBALAGEM', 'UNIDADE', 'CODEPTO', 'CODSEC',
+      'UN_POR_CAIXA', 'QT_VENDA_TOTAL', 'QT_VENDA_LICITACAO', 'QT_ESTOQUE', 'QT_TRANSITO', 'QT_SUGERIDA',
+      'QT_PEDIDA', 'PRECO_CUSTO', 'TIPO_PRECO', 'CURVA_ABC', 'COBERTURA_DIAS', 'COBERTURA_LIMITE',
+      'COBERTURA_JUSTIFICATIVA', 'OBSERVACAO', 'STATUS', 'CRIADO_EM', 'ATUALIZADO_POR', 'ATUALIZADO_EM'];
+    const fragmento = `SELECT ${valores.map((valor, i) => `${valor} AS ${colunas[i]}`).join(', ')}`;
+    await chamar('sgcEscItemGravar', { linhas: fragmento, usuarioId: U.leo }, U.leo);
+    assert.equal(contar('SELECT COUNT(*) AS N FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = 99999', card), 0,
+      'o comercial nao pode injetar item pelo fragmento da escrita interna');
+
+    await chamar('sgcEscItemRemoverZerados', { idCard: card, usuarioId: U.leo, atualizadoEm: '2026-09-15T10:00:00' }, U.leo);
+    assert.equal(contar(zerados, card), antes.zerados, 'o comercial nao remove os itens zerados');
+
+    // O ataque do relatorio: zerar os alertas destravaria a saida da Analise.
+    await chamar('sgcEscAlertaRemoverObsoletos', { idCard: CARDS_003.alertas, chaves: "'__nada__'", usuarioId: U.leo }, U.leo);
+    assert.equal(contar('SELECT COUNT(*) AS N FROM SGC_ALERTA WHERE ID_CARD = ?', CARDS_003.alertas), antes.alertas,
+      'o comercial nao apaga alerta de ninguem');
+
+    await chamar('sgcEscAlertaInserir', {
+      linhas: `SELECT ${card} AS ID_CARD, 99999 AS CODPROD, 'excesso' AS TIPO, 'injetado' AS CHAVE, 'INJETADO' AS MENSAGEM, 0 AS LIDO, '2026-09-15T10:00:00' AS CRIADO_EM`,
+      usuarioId: U.leo,
+    }, U.leo);
+    assert.equal(contar("SELECT COUNT(*) AS N FROM SGC_ALERTA WHERE CHAVE = 'injetado'"), 0, 'o comercial nao insere alerta');
+
+    // O total: sentinela no banco prova que a soma nem chegou a rodar.
+    db.prepare('UPDATE SGC_PEDIDO SET VL_TOTAL = -1 WHERE ID_CARD = ?').run(card);
+    await chamar('sgcEscPedidoTotal', { idCard: card, usuarioId: U.leo }, U.leo);
+    assert.equal(Number(db.prepare('SELECT VL_TOTAL FROM SGC_PEDIDO WHERE ID_CARD = ?').get(card).VL_TOTAL), -1,
+      'o comercial nao recalcula o total');
+    // A mesma chamada, com a analista no usuarioId, roda: a guarda barra a pessoa, nao a SF.
+    await chamar('sgcEscPedidoTotal', { idCard: card, usuarioId: U.ana }, U.ana);
+    assert.ok(Number(db.prepare('SELECT VL_TOTAL FROM SGC_PEDIDO WHERE ID_CARD = ?').get(card).VL_TOTAL) > 0);
+    assert.equal(contar('SELECT COUNT(*) AS N FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ?', card), antes.itens);
+  });
+
+  await teste('A2: RESTRICTED com persona analista nao grava item de pedido alheio, grava no proprio (P-08 B)', async () => {
+    db.prepare("INSERT INTO INT_USER (DESCR, NOME, ACCESS_LEVEL, ATIVO) VALUES ('rita@sgc.local', 'Rita Restrita', 'RESTRICTED', 1)").run();
+    const rita = Number(db.prepare('SELECT MAX(ID) AS ID FROM INT_USER').get().ID);
+    db.prepare('INSERT INTO SGC_USUARIO_PERSONA (USUARIO_ID, PERSONA) VALUES (?, ?)').run(rita, 'analista');
+
+    const card = CARDS_003.gravacao; // criado pela Ana
+    const itensJson = JSON.stringify([umItem(5016, 4, 25.0)]);
+    const conta = () => Number(db.prepare('SELECT COUNT(*) AS N FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = 5016').get(card).N);
+
+    const alheio = await chamar('sgcItensGravar', { cardId: card, itensJson }, rita);
+    assert.equal(alheio.ok, false, 'pedido de outra pessoa nao se edita com acesso restrito');
+    assert.match(alheio.erro, /outra pessoa|restrito/i);
+    assert.equal(conta(), 0);
+
+    db.prepare('UPDATE KB_CARD SET CRIADO_POR = ? WHERE ID = ?').run(rita, card);
+    const proprio = await chamar('sgcItensGravar', { cardId: card, itensJson }, rita);
+    assert.equal(proprio.ok, true, proprio.erro);
+    assert.equal(conta(), 1, 'no proprio pedido a mesma pessoa grava');
+
+    db.prepare('UPDATE KB_CARD SET CRIADO_POR = ? WHERE ID = ?').run(U.ana, card);
   });
 }

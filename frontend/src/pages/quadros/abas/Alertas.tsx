@@ -24,7 +24,7 @@ const ROTULO_TIPO: Record<string, string> = {
 const agora = () => new Date().toISOString().slice(0, 19);
 
 export default function AbaAlertas(ctx: ExtensaoContexto) {
-  const pedido = usePedido(ctx.card.id);
+  const pedido = usePedido(ctx.card.id, ctx.card.criadoPor);
   const [erro, setErro] = React.useState('');
   const [salvando, setSalvando] = React.useState(false);
   const [justificando, setJustificando] = React.useState<{ codprod: number; texto: string } | null>(null);

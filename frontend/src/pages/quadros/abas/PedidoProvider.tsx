@@ -5,16 +5,18 @@
 import * as React from 'react';
 import { acao, linhas } from '@/lib/mitra-api';
 import { itemDeLinha } from '@/lib/compras';
+import type { NivelAcesso, Persona } from '@/lib/permissoes';
+import { permissoesDe, personaDe } from '@/lib/permissoes';
 import type { CapaPedido, ContextoPedido, EstadoPedido } from './pedido-contexto';
-import {
-  ESTADO_VAZIO, PERSONAS_QUE_MONTAM, PedidoContexto, alertaDeLinha, capaDeLinha,
-} from './pedido-contexto';
+import { ESTADO_VAZIO, PedidoContexto, alertaDeLinha, capaDeLinha } from './pedido-contexto';
 
 type Linha = Record<string, unknown>;
+type Sessao = { persona: Persona; acesso: NivelAcesso; usuarioId: number };
 
 export function PedidoProvider({ children }: { children: React.ReactNode }) {
   const [estado, setEstado] = React.useState<EstadoPedido>(ESTADO_VAZIO);
-  const [persona, setPersona] = React.useState('');
+  // null = ainda não resolvida ou falhou: menor privilégio, tela de leitura.
+  const [sessao, setSessao] = React.useState<Sessao | null>(null);
   const emCurso = React.useRef(0);
 
   React.useEffect(() => {
@@ -22,8 +24,12 @@ export function PedidoProvider({ children }: { children: React.ReactNode }) {
     // P-02: persona não resolvida é analista. Falha de consulta, porém, é menor
     // privilégio — a tela fica de leitura em vez de deixar gravar no escuro.
     linhas('sgcPersonaAtual')
-      .then((rows) => { if (vivo) setPersona(String(rows[0]?.PERSONA ?? 'analista')); })
-      .catch(() => { if (vivo) setPersona(''); });
+      .then((rows) => {
+        if (!vivo) return;
+        const linha = rows[0] as { PERSONA?: string; ACCESS_LEVEL?: string; USUARIO_ID?: unknown } | undefined;
+        setSessao({ ...personaDe(linha ?? null), usuarioId: Number(linha?.USUARIO_ID ?? 0) || 0 });
+      })
+      .catch(() => { if (vivo) setSessao(null); });
     return () => { vivo = false; };
   }, []);
 
@@ -59,13 +65,21 @@ export function PedidoProvider({ children }: { children: React.ReactNode }) {
     setEstado((atual) => ({ ...atual, capa }));
   }, []);
 
-  const valor = React.useMemo<ContextoPedido>(() => ({
-    ...estado,
-    persona,
-    podeEditar: PERSONAS_QUE_MONTAM.includes(persona),
-    recarregar,
-    definirCapa,
-  }), [estado, persona, recarregar, definirCapa]);
+  const valor = React.useMemo<ContextoPedido>(() => {
+    // A MESMA matriz da 002 (R-013): quem edita pedido é quem monta, e
+    // READ_ONLY não edita nada. RESTRICTED é filtrado no `usePedido`, que é
+    // quem sabe de quem é o card (P-08 B).
+    const permissoes = sessao ? permissoesDe(sessao.persona, sessao.acesso) : null;
+    return {
+      ...estado,
+      persona: sessao?.persona ?? '',
+      podeEditar: permissoes?.editarPedido ?? false,
+      somenteProprios: permissoes?.somenteProprios ?? false,
+      usuarioId: sessao?.usuarioId ?? 0,
+      recarregar,
+      definirCapa,
+    };
+  }, [estado, sessao, recarregar, definirCapa]);
 
   return <PedidoContexto.Provider value={valor}>{children}</PedidoContexto.Provider>;
 }

@@ -45,6 +45,9 @@ export interface EstadoPedido {
 export interface ContextoPedido extends EstadoPedido {
   persona: string;
   podeEditar: boolean;
+  /** P-08 B: RESTRICTED opera só os pedidos que criou. */
+  somenteProprios: boolean;
+  usuarioId: number;
   recarregar: (cardId: number) => Promise<void>;
   definirCapa: (capa: CapaPedido) => void;
 }
@@ -52,9 +55,6 @@ export interface ContextoPedido extends EstadoPedido {
 export const ESTADO_VAZIO: EstadoPedido = {
   cardId: 0, carregando: false, erro: '', capa: null, itens: [], alertas: [],
 };
-
-/** Quem monta pedido (R-013); `comercial` nem chega ao quadro (P-03). */
-export const PERSONAS_QUE_MONTAM = ['admin', 'analista', 'gestor'];
 
 export const PedidoContexto = React.createContext<ContextoPedido | null>(null);
 
@@ -93,8 +93,12 @@ export function alertaDeLinha(linha: Linha): AlertaPedido {
 /**
  * Lê o pedido do card aberto, carregando-o na primeira vez que este card
  * aparece. Card já carregado não gera execução nenhuma.
+ *
+ * `criadoPor` é o dono do card (`ctx.card.criadoPor`): com ele o `podeEditar`
+ * espelha na tela a guarda que o `pedidoEmAnalise` do add-006 faz no servidor
+ * — RESTRICTED só edita o que criou (P-08 B).
  */
-export function usePedido(cardId: number): ContextoPedido {
+export function usePedido(cardId: number, criadoPor?: number | null): ContextoPedido {
   const contexto = React.useContext(PedidoContexto);
   if (!contexto) throw new Error('usePedido precisa do <PedidoProvider> em volta do quadro.');
   const { cardId: carregado, carregando, recarregar } = contexto;
@@ -103,5 +107,9 @@ export function usePedido(cardId: number): ContextoPedido {
     if (cardId && cardId !== carregado && !carregando) void recarregar(cardId);
   }, [cardId, carregado, carregando, recarregar]);
 
-  return contexto;
+  const alheio = contexto.somenteProprios && Number(criadoPor ?? 0) !== contexto.usuarioId;
+  return React.useMemo(
+    () => (alheio ? { ...contexto, podeEditar: false } : contexto),
+    [contexto, alheio],
+  );
 }
