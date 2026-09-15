@@ -12,7 +12,7 @@
 
 import { assert, CENARIO } from './base.mjs';
 import { seed002Extras } from '../seed/002-quadro.mjs';
-import { motivoDeDestino, FASES as CHAVES_FASE } from '../../../frontend/src/lib/transicoes.ts';
+import { motivoDeDestino, MOTIVOS, FASES as CHAVES_FASE } from '../../../frontend/src/lib/transicoes.ts';
 
 const AGORA = '2026-09-15T12:00:00';
 const CAPA = {
@@ -706,9 +706,16 @@ export async function suite(ctx) {
 
     // R-046 (onda 2): quatro pares são decididos SÓ no servidor (nota vinculada,
     // item em B.O., conferência e B.O. pendentes) — a tela libera e o gancho
-    // decide pelo dado. Neles, quando a tela libera, o servidor pode recusar,
-    // mas nunca sem motivo (R-020); o resto continua caractere a caractere.
-    const SO_SERVIDOR = new Set(['enviado>transito', 'faturamento>bo', 'faturamento>concluido', 'bo>concluido']);
+    // decide pelo dado; o resto continua caractere a caractere. O pedido
+    // "montado" nasce com NF vinculada, sem conferência pendente e sem item em
+    // B.O.: enviado>transito e as duas conclusões liberam, faturamento>bo recusa
+    // com a frase de R-030 (a mesma de MOTIVOS.boEntrada).
+    const SO_SERVIDOR = {
+      'enviado>transito': [1, ''],
+      'faturamento>bo': [0, MOTIVOS.boEntrada],
+      'faturamento>concluido': [1, ''],
+      'bo>concluido': [1, ''],
+    };
     let comparadas = 0;
     let decididasNoServidor = 0;
     for (const origem of CHAVES_FASE) {
@@ -718,9 +725,10 @@ export async function suite(ctx) {
           const tela = motivoDeDestino(persona, 'MEMBER', origem, destino, estado);
           const servidor = await podeMover(usuarioId, card, destino);
           const podeNaTela = tela === null;
-          if (podeNaTela && SO_SERVIDOR.has(`${origem}>${destino}`)) {
-            if (Number(servidor.PODE) === 1) assert.equal(servidor.MOTIVO, '', `${persona} ${origem}>${destino}: liberado com motivo`);
-            else assert.notEqual(servidor.MOTIVO, '', `${persona} ${origem}>${destino}: recusado sem motivo`);
+          const esperado = podeNaTela ? SO_SERVIDOR[`${origem}>${destino}`] : undefined;
+          if (esperado) {
+            assert.equal(Number(servidor.PODE), esperado[0], `${persona} ${origem}>${destino}: servidor ${servidor.PODE}, esperado ${esperado[0]}`);
+            assert.equal(servidor.MOTIVO, esperado[1], `${persona} ${origem}>${destino}`);
             decididasNoServidor += 1;
           } else {
             assert.equal(Number(servidor.PODE) === 1, podeNaTela, `${persona} ${origem}>${destino}: tela ${tela} x servidor ${servidor.PODE}`);
@@ -733,5 +741,30 @@ export async function suite(ctx) {
     assert.equal(comparadas, 500);
     // 4 pares x 3 personas que a tela libera (admin, analista, gestor).
     assert.equal(decididasNoServidor, 12);
+
+    // R-044 (revisão da onda 2, A-13): o mesmo pedido com 1 item em B.O. aberto
+    // inverte os quatro pares — faturamento>bo libera e as duas conclusões
+    // recusam com a frase de pendencias-conclusao-bo.sql (singular).
+    const COM_BO_ABERTO = {
+      'enviado>transito': [1, ''],
+      'faturamento>bo': [1, ''],
+      'faturamento>concluido': [0, 'Resolva o 1 item em B.O. antes de concluir o pedido.'],
+      'bo>concluido': [0, 'Resolva o 1 item em B.O. antes de concluir o pedido.'],
+    };
+    db.prepare(`INSERT INTO SGC_BO_ITEM (ID_CARD, CODPROD, DESCRICAO, QT_PENDENTE, STATUS, CRIADO_POR, CRIADO_EM)
+      VALUES (?, 1, 'ITEM DE TESTE', 1, 'aberto', ?, ?)`).run(card, U.ana, AGORA);
+    try {
+      for (const [par, [pode, motivo]] of Object.entries(COM_BO_ABERTO)) {
+        const [origem, destino] = par.split('>');
+        emFase(card, origem);
+        for (const [persona, usuarioId] of personas.slice(0, 3)) {
+          const servidor = await podeMover(usuarioId, card, destino);
+          assert.equal(Number(servidor.PODE), pode, `${persona} ${par} com B.O. aberto: servidor ${servidor.PODE}`);
+          assert.equal(servidor.MOTIVO, motivo, `${persona} ${par} com B.O. aberto`);
+        }
+      }
+    } finally {
+      db.prepare('DELETE FROM SGC_BO_ITEM WHERE ID_CARD = ?').run(card);
+    }
   });
 }

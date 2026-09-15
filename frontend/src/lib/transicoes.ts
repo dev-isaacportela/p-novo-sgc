@@ -58,12 +58,13 @@ export const MOTIVOS: Readonly<Record<string, string>> = {
   excluir: 'Excluir pedido é da gerência, da diretoria ou do administrador. Para encerrar um pedido, use "Cancelar compra".',
   // Onda 2 (R-030/R-046): as travas de Trânsito e de conclusão são SÓ do
   // servidor — `motivoDeDestino` não ganha ramo novo (o espelho síncrono
-  // custaria uma SF por cartão do quadro). Os textos ficam aqui porque são os
-  // mesmos de `M` em backend/add-005-quadro-compras.mjs e de
-  // backend/sql/pendencias-{transito,conclusao-nf}.sql; a lib mostra a frase do
+  // custaria uma SF por cartão do quadro). Só os textos FIXOS ficam aqui, iguais
+  // caractere a caractere a `M` em backend/add-005-quadro-compras.mjs (o smoke
+  // 002 confere); as frases das conclusões (`Decida as N conferências…`,
+  // `Resolva os N itens em B.O.…`) levam contagem e são só do servidor
+  // (backend/sql/pendencias-conclusao-{nf,bo}.sql). A lib mostra a frase do
   // gancho na faixa de aviso do card.
   transito: 'Vincule ao menos uma nota fiscal ao pedido antes de mover para Em Trânsito para BN.',
-  conclusaoNf: 'Decida as N conferências de nota fiscal pendentes antes de concluir o pedido.',
   boEntrada: 'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.',
 };
 

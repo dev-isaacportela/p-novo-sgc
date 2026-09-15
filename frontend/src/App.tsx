@@ -76,11 +76,11 @@ function Autenticado() {
     );
   }
 
-  // Onda 1 do SGC 2: quadro de compras (002), fornecedores (001), itens e
-  // coberturas (003), agenda (004) — telas reais chegam com as specs; aqui só
-  // as rotas e páginas stub (docs/specs/000-visao-geral). Onda 2 (005-007):
-  // notas fiscais, faturamentos pendentes, NFs em atraso e produtos em B.O.
-  // ainda são stub ("Em construção") — a base (S2) só cria a rota e o menu.
+  // Rotas por spec (docs/specs/000-visao-geral): onda 1 — quadro de compras
+  // (002), fornecedores (001), itens e coberturas (003), agenda (004); onda 2 —
+  // notas fiscais e faturamentos pendentes (005), NFs em atraso (006), produtos
+  // em B.O. (007). Quem barra persona sem acesso é cada página, no topo, com a
+  // mesma frase do servidor; o menu (AdminLayout) só esconde.
   return (
     <Routes>
       <Route element={<AdminLayout usuario={usuario} />}>
