@@ -33,7 +33,7 @@ nem por fora dela.
 | Gerência de compras (gestor) | aprovar ou reprovar tecnicamente, mover o pedido em qualquer etapa, excluir pedido | diária |
 | Diretoria | aprovar, reprovar ou devolver à gerência o pedido que está na etapa dela; excluir pedido | semanal |
 | Administrador (TI) | manter as etapas, os campos e os avisos automáticos do quadro; atribuir a persona de cada pessoa | eventual |
-| Consulta (leitura) | acompanhar o andamento sem operar nada | diária |
+| Comercial | nesta onda, nada no quadro: o comercial não vê pedidos, agenda nem fornecedores — a persona existe para barrar o acesso até as solicitações da onda 3 | — |
 
 ## Cenários
 
@@ -78,15 +78,20 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** move o pedido para "Faturamento em Andamento"
 - **Então** o pedido muda de etapa normalmente
 
-**C-008 — Quem é de consulta não move nada**
-- **Dado que** o Leo tem a persona de leitura
+**C-008 — Acesso somente leitura vê e não opera**
+- **Dado que** o Gil é gestor e o acesso dele na plataforma foi mudado para somente leitura
 - **Quando** abre qualquer pedido
-- **Então** todos os destinos e todas as ações aparecem desabilitados com o motivo "Seu acesso é somente leitura." e nenhuma tentativa dele altera o pedido
+- **Então** todos os destinos e todas as ações aparecem desabilitados com o motivo "Seu acesso é somente leitura." e nenhuma tentativa dele altera o pedido — o nível da plataforma vale acima da persona
 
 **C-009 — Acesso restrito opera só os próprios pedidos**
 - **Dado que** o usuário tem acesso restrito na plataforma e o pedido 13 foi criado por outra pessoa
 - **Quando** tenta mover o pedido 13
 - **Então** a recusa diz que ele só opera os pedidos que criou; o pedido 14, criado por ele, continua movível
+
+**C-044 — O comercial não entra no quadro**
+- **Dado que** o Leo tem a persona comercial
+- **Quando** entra no sistema
+- **Então** o menu não traz Quadro, Agenda nem Fornecedores; abrir o endereço do quadro direto mostra "Seu perfil não tem acesso ao quadro de compras." e qualquer tentativa dele de mover ou excluir pedido é recusada pelo servidor com a mesma frase
 
 **C-010 — Pessoa sem persona atribuída age como analista**
 - **Dado que** a Paula não tem persona atribuída e tem acesso comum na plataforma
@@ -286,6 +291,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-010 | Destino fora da regra DEVE aparecer desabilitado com o motivo, nunca sumir | C-005, C-006, C-017, C-023, C-029 | must |
 | RF-011 | A mesma regra de movimentação DEVE valer no servidor, independentemente da tela | C-011: a chamada direta é recusada com o mesmo motivo | must |
 | RF-012 | A persona DEVE ser um dado por usuário; sem persona vale o nível de acesso da plataforma e, em falha, analista | C-010 | must |
+| RF-033 | A persona comercial DEVE ficar fora do quadro, da agenda e dos fornecedores — no menu, na rota e no servidor | C-044 | must |
 | RF-013 | Aprovar tecnicamente DEVE gravar quem e quando, limpar a reprovação anterior e levar o pedido à Diretoria | C-013 | must |
 | RF-014 | Reprovar tecnicamente DEVE exigir motivo, aceitar a lista de produtos reprovados e devolver o pedido à Análise | C-014, C-015 | must |
 | RF-015 | Sair de novo da Análise DEVE limpar as reprovações anteriores (técnica e diretoria) | C-016 | must |
@@ -321,18 +327,19 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 - **Pedido de compra** — a compra de um fornecedor para uma filial, num período de vendas. Nasce na Análise, caminha pelas etapas e termina concluído ou cancelado. Tem criador, responsáveis, valor total, prioridade e as decisões tomadas sobre ele.
 - **Etapa** — uma das dez fases do processo. Tem nome e cor editáveis pelo administrador e uma identidade estável de que as regras dependem.
-- **Persona** — o papel da pessoa no SGC: analista, gestor, diretoria, administrador ou leitura. É um dado atribuído por usuário e decide o que cada um pode fazer.
+- **Persona** — o papel da pessoa no SGC: analista, gestor, diretoria, administrador ou comercial. É um dado atribuído por usuário e decide o que cada um pode fazer. O comercial, nesta onda, é quem **não** usa o quadro.
 - **Decisão** — aprovação técnica, reprovação técnica, aprovação da diretoria, reprovação da diretoria, devolução, cancelamento e envio. Cada uma guarda quem, quando e, quando exigido, o motivo.
 - **Comunicação** — cada envio do pedido à indústria (por e-mail ou pela plataforma), com destinatário, cópia, assunto, conteúdo, quem enviou e quando.
 - **Notificação** — o que aconteceu nos pedidos de uma pessoa: entrou como responsável, o pedido mudou de etapa, chegou mensagem nova de outra pessoa.
 
 ## Regras de negócio
 
-- **RN-001** — A persona vem do cadastro do usuário; sem persona atribuída, vale o nível de acesso da plataforma (administrador → admin, comum → analista, restrito → leitura); se a consulta falhar, vale analista.
+- **RN-001** — A persona vem do cadastro do usuário; sem persona atribuída, vale o nível de acesso da plataforma (administrador → admin, comum → analista, restrito → comercial); se a consulta falhar, vale analista.
 - **RN-002** — Acesso somente leitura não opera nada; acesso restrito opera apenas os pedidos que a própria pessoa criou. Os dois valem **além** da persona, nunca no lugar dela.
+- **RN-021** — A persona comercial não vê o quadro, a agenda nem os fornecedores: o item some do menu, a rota é recusada e o servidor nega qualquer movimento ou exclusão feito por ela.
 - **RN-003** — As transições permitidas são as de RF-009 e não são configuráveis.
 - **RN-004** — De "Análise/Montagem de Pedido" para "Aprovação da Diretoria" nunca, com a mensagem de C-005.
-- **RN-005** — Movimenta o pedido: administrador, analista e gestor em qualquer etapa; diretoria só na etapa "Aprovação da Diretoria"; leitura, nenhuma.
+- **RN-005** — Movimenta o pedido: administrador, analista e gestor em qualquer etapa; diretoria só na etapa "Aprovação da Diretoria"; comercial, nenhuma.
 - **RN-006** — "Compras Canceladas" só se alcança pelo formulário de cancelamento, com motivo preenchido; a lista de destinos sempre mostra a etapa desabilitada.
 - **RN-007** — Cancelar não exige nada da etapa atual.
 - **RN-008** — "Compras Concluídas" e "Compras Canceladas" não têm saída; só o administrador do quadro reabre.
@@ -360,7 +367,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-005 | mover 1→3 devolve recusa com a mensagem exata de F-04 e o pedido continua na etapa 1 | regra de negócio |
 | C-006 | diretoria movendo pedido na etapa 2 → recusa citando "Aprovação da Diretoria"; na etapa 3 → aceita | regra de negócio |
 | C-007 | gestor move 6→7 com sucesso | regra de negócio |
-| C-008 | persona leitura: 0 destinos liberados nas 10 etapas e a recusa cita "somente leitura" | regra de tela e de negócio |
+| C-008 | gestor com acesso somente leitura: 0 destinos liberados nas 10 etapas e a recusa cita "somente leitura" | regra de tela e de negócio |
 | C-009 | acesso restrito: pedido de outro → recusa; pedido próprio → aceita | regra de negócio |
 | C-010 | usuário sem linha de persona resolve para analista e move 1→2 | regra de negócio |
 | C-011 | a regra chamada diretamente (sem passar pela tela) devolve pode=0 e o mesmo motivo de C-006 | regra de negócio |
@@ -396,11 +403,13 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-041 | com 1 responsável novo + 1 movimentação + 1 mensagem nova, a lista devolve 3 linhas em ordem decrescente e o total 3 | regra de negócio |
 | C-042 | salvar persona "gestor" para o Gil devolve 1 linha atualizada; a mesma escrita como analista → recusa | regra de negócio |
 | C-043 | depois das 4 decisões, o histórico do pedido tem 4 linhas de decisão, cada uma com quem e quando | regra de negócio |
-| RN-001 | sem persona e acesso comum → analista; acesso administrador → admin; acesso restrito → leitura | regra de tela |
-| RN-002 | leitura + persona gestor → não opera; restrito + analista → só os próprios | regra de tela |
+| C-044 | persona comercial: o menu devolve 0 itens de compras, a rota do quadro é recusada e `PODE = 0` em mover e excluir, com a frase do perfil | regra de tela e de negócio |
+| RN-001 | sem persona e acesso comum → analista; acesso administrador → admin; acesso restrito → comercial | regra de tela |
+| RN-002 | somente leitura + persona gestor → não opera; restrito + analista → só os próprios | regra de tela |
+| RN-021 | comercial: `verQuadro` falso na tela e recusa no servidor em mover e excluir | regra de tela e de negócio |
 | RN-003 | a tabela de transições devolve exatamente 22 pares liberados: 14 do fluxo e 8 para Canceladas | regra de tela |
 | RN-004 | o par etapa 1 → etapa 3 é o único recusado com a mensagem de F-04, nas duas camadas | regra de tela e de negócio |
-| RN-005 | 5 personas × 10 etapas: diretoria só libera a etapa 3; leitura, nenhuma | regra de tela |
+| RN-005 | 5 personas × 10 etapas: diretoria só libera a etapa 3; comercial, nenhuma | regra de tela |
 | RN-006 | destino "Compras Canceladas" sem motivo gravado → recusa no servidor | regra de negócio |
 | RN-007 | cancelar a partir da etapa 1 com pendências de saída: aceito, com 0 verificações de saída executadas | regra de negócio |
 | RN-008 | etapas 9 e 10: 0 destinos liberados para qualquer persona | regra de tela |
@@ -410,7 +419,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-012 | envio com contato fora da lista cadastrada → recusa | regra de tela |
 | RN-013 | mover 4→5 com data de envio gravada → aceito; sem ela → recusado | regra de negócio |
 | RN-014 | título de "1 — Matriz" + "Nutrilatina" = "1 — MATRIZ · NUTRILATINA"; período de 15/09/2026 = 01/08 a 15/09 | regra de tela |
-| RN-015 | excluir: admin/gestor/diretoria = 1; analista/leitura = 0 | regra de negócio |
+| RN-015 | excluir: admin/gestor/diretoria = 1; analista/comercial = 0 | regra de negócio |
 | RN-016 | administrar o quadro: admin = 1; as outras 4 personas = 0 | regra de negócio |
 | RN-017 | o quadro é criado com 0 campos obrigatórios, e mover para trás e cancelar não cobram formulário | regra de negócio |
 | RN-018 | prioridade aceita normal/alta/urgente e nasce normal | regra de negócio |
@@ -433,7 +442,7 @@ Verificação manual (só olho humano verifica):
 - [ ] **Prazo de pagamento: comparação e justificativa** — o pedido guarda os valores, mas a exigência ao sair da Análise é da spec 003.
 - [ ] **Arrastar cartão entre colunas** — decidido contra (UI-01): mover é no pedido aberto.
 - [ ] **Aviso passageiro de sucesso (toast)** — decidido contra (UI-02).
-- [ ] **Persona "comercial" e solicitações do comercial** — onda 3.
+- [ ] **Solicitações do comercial** — onda 3. A persona comercial existe nesta onda só para barrar o acesso (C-044); ela não ganha tela nenhuma aqui.
 - [ ] **Formulário público** — fora do SGC 2, em todas as ondas.
 - [ ] **Migração dos pedidos do sistema antigo** — o sistema começa vazio.
 - [ ] **Transições configuráveis pelo administrador** — decidido contra (F-03 A): a tabela é regra testada.

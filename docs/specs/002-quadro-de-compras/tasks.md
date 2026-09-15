@@ -17,31 +17,31 @@
 - [ ] **T-004** — no `add-005`, as **11 automações** de e-mail da tabela do `plan.md` (gatilho `card_movido` por `faseId`, ação `enviar_email`, cópia fixa `compras@benenutri.com` nas dez primeiras, `{{anexos}}` na décima primeira), idempotentes por nome → `backend/add-005-quadro-compras.mjs`
 - [ ] **T-005** `[P]` — no `add-005`, as leituras: `sgcPersonaAtual`, `sgcPersonasListar`, `sgcPersonasListarTotal`, `sgcFasesListar`, `sgcComunicacoesListar`, `sgcNotificacoesListar`, `sgcNotificacoesListarTotal` (todas paginadas onde listam, filtro desligado `''`/`0`) → `backend/add-005-quadro-compras.mjs`
 - [ ] **T-006** — no `add-005`, as **regras ligadas**: `sgcPodeMover` e `sgcPodeExcluir` no contrato da spec 013 (`{{usuarioId}}`, `{{cardId}}`, `{{boardId}}`, `{{faseId}}` → uma linha `PODE`/`MOTIVO`), com o `CASE` na ordem do `plan.md` e o bloco `PENDENCIAS` isolado e comentado como reserva da spec 003 → `backend/add-005-quadro-compras.mjs`
-- [ ] **T-007** — no `add-005`, as **escritas** guardadas por `:VAR_USER`, uma instrução cada, com a guarda de persona e a de fase: `sgcEscPedidoCriar`, `sgcEscPedidoTecnicaAprovar`, `sgcEscPedidoTecnicaReprovar`, `sgcEscPedidoDiretoriaAprovar`, `sgcEscPedidoDiretoriaReprovar`, `sgcEscPedidoCancelar`, `sgcEscPedidoReenviar`, `sgcEscPersonaSalvar`; e as duas chamadas pelo JS, com `enviadoPor` como parâmetro: `sgcEscPedidoEnvio`, `sgcEscComunicacaoInserir` → `backend/add-005-quadro-compras.mjs`
-- [ ] **T-008** — no `add-005`, `sgcPedidoCarregar` (JAVASCRIPT: capa + `itens: []` + `alertas: []` numa execução, com o ponto de extensão da 003 comentado) e `sgcEnvioIndustriaRegistrar` (JAVASCRIPT: persona e fase numa consulta com `:VAR_USER` → `sendEmailMitra` com a cópia fixa → comunicação → capa → agenda quando `ID_AGENDA > 0` → `kbNotaRegistrar`) → `backend/add-005-quadro-compras.mjs`
-- [ ] **T-009** — bloco 002 do mapa: 21 nomes em `SERVER_FUNCTION_NAMES` e os ids locais `7201…7211` e `7250…7259` em `SERVER_FUNCTIONS`, no formato rígido (uma linha por entrada, sem comentário dentro do bloco) → `frontend/src/lib/server-functions.ts`
+- [ ] **T-007** — no `add-005`, as **escritas**, uma instrução cada. Guardadas por `:VAR_USER` (chamadas da tela), com a guarda de persona e a de fase: `sgcEscPedidoCriar`, `sgcEscPedidoTecnicaAprovar`, `sgcEscPedidoTecnicaReprovar`, `sgcEscPedidoDiretoriaAprovar`, `sgcEscPedidoDiretoriaReprovar`, `sgcEscPedidoCancelar`, `sgcEscPersonaSalvar`. Chamadas **por id**, com `{{usuarioId}}` e sem `:VAR_USER`: `sgcEscPedidoReprovacoesLimpar` (R-011, para o `sgcAnaliseSair` da 003), `sgcEscPedidoCapaInserir` (R-010, para o cron da 004; `ORIGEM`/`ID_AGENDA`, idempotente por `ID_CARD`), `sgcEscPedidoEnvio` e `sgcEscComunicacaoInserir` → `backend/add-005-quadro-compras.mjs`
+- [ ] **T-008** — no `add-005`, `sgcPedidoCarregar` (JAVASCRIPT: capa + itens + alertas numa execução, nas colunas fechadas com a 003 — alerta por `CODPROD`, sem `ID_ITEM`) e `sgcEnvioIndustriaRegistrar` (JAVASCRIPT: persona e fase numa consulta com `:VAR_USER` → `sendEmailMitra` com a cópia fixa → comunicação → capa → `sgcEscAgendaEnvio` (004, id 7458, `{ idCard, dtEnvio }`) quando `ID_AGENDA > 0` → `kbNotaRegistrar`) → `backend/add-005-quadro-compras.mjs`
+- [ ] **T-009** — bloco 002 do mapa: 22 nomes em `SERVER_FUNCTION_NAMES` e os ids locais `7201…7211` e `7250…7260` em `SERVER_FUNCTIONS`, no formato rígido (uma linha por entrada, sem comentário dentro do bloco) → `frontend/src/lib/server-functions.ts`
 - [ ] **T-010** — **(integrador)** pedir `instalar({ sdk, projectId, mapaFrontend: MAPA, ganchos: { podeMover: 'sgcPodeMover', podeExcluir: 'sgcPodeExcluir' } })` → `backend/add-001-kanban.mjs`
 - [ ] **T-011** — **(integrador)** pedir `add-005-quadro-compras.mjs` no `PUBLISH_ORDER` (depois do `add-004-fornecedores.mjs`) e as chaves novas do `CHECK_INPUT` listadas no `plan.md` › *Simulador* → `backend/simulator/config.mjs`
 
 ## Simulador
 
-- [ ] **T-020** — `seed002(db, CENARIO, { completo })`: `SGC_FASE` (10 chaves), `SGC_USUARIO_PERSONA` (admin 1, ana 2 analista, gil 3 gestor, dora 4 diretoria, leo 5 leitura) + 1 usuário sem persona, os 6 campos, as 11 automações, `KB_META` com os dois ganchos apontando para 7206/7207, e os 6 pedidos (`analise`, `tecnica`, `diretoria`, `envio` sem envio, `enviado` com envio + 1 comunicação, `cancelado` com motivo); com `completo`, mais 2 alertas não lidos no P1 e 2 anexos no P5 → `backend/simulator/seed/002-quadro.mjs`
+- [ ] **T-020** — `seed002(db, CENARIO, { completo })`: `SGC_FASE` (10 chaves), `SGC_USUARIO_PERSONA` (admin 1, ana 2 analista, gil 3 gestor, dora 4 diretoria, leo 5 **comercial**) + 1 usuário sem persona, os 6 campos, as 11 automações, `KB_META` com os dois ganchos apontando para 7206/7207, e os 6 pedidos (`analise`, `tecnica`, `diretoria`, `envio` sem envio, `enviado` com envio + 1 comunicação, `cancelado` com motivo); com `completo`, mais 2 alertas não lidos no P1 e 2 anexos no P5 → `backend/simulator/seed/002-quadro.mjs`
 - [ ] **T-021** — **(integrador)** pedir a chamada de `seed002` no `seedDatabase`, depois das fases → `backend/simulator/seed.mjs`
 - [ ] **T-022** — conferir no `sim:check` se `INSERT … ON DUPLICATE KEY UPDATE` (o upsert de `sgcEscPersonaSalvar`) traduz para SQLite; se não, abrir o shim ao integrador → `backend/simulator/mysql-dialect.mjs` **(integrador, se necessário)**
 
 ## Frontend
 
-- [ ] **T-030** `[P]` — `permissoes.ts`: `Persona`, `NivelAcesso`, `personaDe`, `permissoesDe` com a matriz do `plan.md` (porte de `getPermissions`), `READ_ONLY` zerando a operação e `RESTRICTED` ligando `somenteProprios` → `frontend/src/lib/permissoes.ts`
+- [ ] **T-030** `[P]` — `permissoes.ts`: `Persona` (`admin`, `analista`, `gestor`, `diretoria`, `comercial`), `NivelAcesso`, `personaDe` (sem persona → nível da plataforma: ADMIN→admin, MEMBER→analista, RESTRICTED→comercial; falha→analista) e `permissoesDe` com a matriz do `plan.md` (porte de `getPermissions`), `comercial` com `verQuadro` falso, `READ_ONLY` zerando a operação e `RESTRICTED` ligando `somenteProprios` → `frontend/src/lib/permissoes.ts`
 - [ ] **T-031** `[P]` — `transicoes.ts`: `FASES`, `TRANSICOES` (22 pares), `MOTIVOS` com os textos de recusa e `motivoDeDestino` na mesma ordem do `CASE` da SQL → `frontend/src/lib/transicoes.ts`
 - [ ] **T-032** `[P]` — `pedido.ts`: `tituloDoPedido`, `periodoPadrao` (45 dias), `validarNovoPedido`, `validarMotivo`, `validarEnvio`, `PRIORIDADES` → `frontend/src/lib/pedido.ts`
 - [ ] **T-033** — `persona.ts`: lê `sgcPersonaAtual` uma vez por sessão, guarda em memória, limpa no logout e devolve `{ persona, acesso, usuarioId, permissoes }` → `frontend/src/lib/persona.ts`
-- [ ] **T-034** — `lib/quadro.ts` ganha `ROTULO_NOVO_PEDIDO`, `ROTA_NOVO_PEDIDO` e `ATUALIZAR_A_CADA_MS` (é o que o teste lê); `QuadroPage`: `novoCard` ("Novo pedido" → `/pedidos/novo`), `atualizarACadaMs`, `podeMover` (sobre `motivoDeDestino`), `antesDeMover` (saída da Análise: `sgcAnaliseSaidaVerificar` da 003 quando existir, mais `sgcEscPedidoReenviar`), `podeExcluir` (espelho de `permissoesDe`) e `acoesExtras` → `frontend/src/lib/quadro.ts`, `frontend/src/pages/quadro/QuadroPage.tsx`
-- [ ] **T-035** — `AcoesDoPedido`: os 7 botões por fase e persona, desabilitados com o motivo no `title` quando falta permissão, e os diálogos de motivo (reprovação técnica com produtos, reprovação da diretoria, cancelamento) e de envio (canal, contato, data, número do pedido, observação), no padrão §9.5 → `frontend/src/pages/quadro/AcoesDoPedido.tsx`
-- [ ] **T-036** `[P]` — guarda de persona em `QuadroAdminPage`: sem `administrarQuadro`, `Alert` com o motivo e link para `/quadro`, sem renderizar o `BoardAdmin` → `frontend/src/pages/quadro/QuadroAdminPage.tsx`
-- [ ] **T-037** — `NovoPedidoPage`: fornecedor e filial (leituras da spec 001), período com o padrão de 45 dias, título em pré-visualização; grava com `kbCardCriar` + `sgcEscPedidoCriar` e navega para `/quadro?card=<id>` → `frontend/src/pages/pedidos/NovoPedidoPage.tsx`
+- [ ] **T-034** — `lib/quadro.ts` ganha `ROTULO_NOVO_PEDIDO`, `ROTA_NOVO_PEDIDO` e `ATUALIZAR_A_CADA_MS` (é o que o teste lê); `QuadroPage`: `novoCard` ("Novo pedido" → `/pedidos/novo`), `atualizarACadaMs`, `podeMover` (sobre `motivoDeDestino`), `antesDeMover` (saída da Análise: `verificarSaidaAnalise` da 003 quando existir) e, **depois** de o movimento `analise → tecnica` dar certo, `sgcAnaliseSair` (003), `podeExcluir` (espelho de `permissoesDe`) e `acoesExtras` → `frontend/src/lib/quadro.ts`, `frontend/src/pages/quadro/QuadroPage.tsx`
+- [ ] **T-035** — `AcoesDoPedido`: os 7 botões por fase e persona, desabilitados com o motivo no `title` quando falta permissão, e os diálogos de motivo (reprovação técnica com produtos, reprovação da diretoria, cancelamento) e de envio (canal, contato, data no `DatePicker` da spec 004, número do pedido, observação), no padrão §9.5 → `frontend/src/pages/quadro/AcoesDoPedido.tsx`
+- [ ] **T-036** `[P]` — guardas de persona: em `QuadroAdminPage`, sem `administrarQuadro` → `Alert` com o motivo e link para `/quadro`, sem renderizar o `BoardAdmin`; em `QuadroPage`, sem `verQuadro` (persona comercial) → `Alert` "Seu perfil não tem acesso ao quadro de compras." e nada de `KanbanBoard` (RN-021) → `frontend/src/pages/quadro/QuadroAdminPage.tsx`, `frontend/src/pages/quadro/QuadroPage.tsx`
+- [ ] **T-037** — `NovoPedidoPage`: fornecedor e filial (leituras da spec 001), período com o padrão de 45 dias no `DatePicker` da spec 004 (UI-03 B), prioridade e título em pré-visualização; grava com `api.cardCriar` (`valores` com fornecedor, filial e prioridade) + `sgcEscPedidoCriar` e navega para `/quadro?card=<id>` → `frontend/src/pages/pedidos/NovoPedidoPage.tsx`
 - [ ] **T-038** `[P]` — `NotificacoesPage`: `sgcNotificacoesListar` + `…Total`, páginas de 25, `Badge` por tipo, link para o pedido, `EmptyState` "Tudo em dia" → `frontend/src/pages/notificacoes/NotificacoesPage.tsx`
 - [ ] **T-039** `[P]` — `SegurancaPage`: busca, tabela de usuários com `SelectMenu` de persona por linha (`sgcEscPersonaSalvar`), paginação, e recusa visível para quem não é admin nem diretoria → `frontend/src/pages/seguranca/SegurancaPage.tsx`
-- [ ] **T-040** — **(integrador)** pedir as rotas `/pedidos/novo`, `/notificacoes` e `/seguranca` e os itens de menu correspondentes, filtrados por permissão (P-03) → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx`
+- [ ] **T-040** — **(integrador)** pedir as rotas `/pedidos/novo`, `/notificacoes` e `/seguranca` e os itens de menu correspondentes, filtrados por permissão: a persona comercial não vê Quadro, Agenda nem Fornecedores (P-03, RN-021) → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx`
 
 ## Testes
 
@@ -51,16 +51,16 @@ por arquivo e bloco, com os ids de cada `teste()`/`test()` explícitos.
 Todos os `teste()` do backend ficam em `backend/simulator/smoke/002-quadro.mjs`,
 com o id no título.
 
-- [ ] **T-080** — criação do pedido: `C-001` (card na `analise`, título gerado, criador e responsável, 1 linha em `SGC_PEDIDO`)
+- [ ] **T-080** — criação do pedido: `C-001` (card na `analise`, título gerado, criador e responsável, 1 linha em `SGC_PEDIDO` com `ORIGEM = manual`) e a variante do cron, `sgcEscPedidoCapaInserir` com `origem: agenda` e `idAgenda` (R-010)
 - [ ] **T-081** — movimentação: `C-004`, `C-005`, `C-006`, `C-007`, `C-012`, `C-021`, `RN-004`, `RN-011`, `RN-020` — cada um com o par de fases, a persona e o `MOTIVO` esperado
-- [ ] **T-082** — personas e acessos: `C-008`, `C-009`, `C-010`, `C-011` (gancho em `KB_META` e chamada direta), `RN-001` pelo servidor
+- [ ] **T-082** — personas e acessos: `C-008` (READ_ONLY), `C-009` (RESTRICTED), `C-010`, `C-011` (gancho em `KB_META` e chamada direta), `C-044` e `RN-021` (comercial recusada em mover e excluir), `RN-001` pelo servidor
 - [ ] **T-083** — aprovação técnica e da diretoria: `C-013`, `C-014`, `C-015`, `C-016`, `C-017`, `C-018`, `C-019`, `C-020`, `RN-009`, `RN-010`
 - [ ] **T-084** — cancelamento: `C-022`, `C-024`, `C-025`, `RN-006`, `RN-007`
 - [ ] **T-085** — envio à indústria: `C-027`, `C-028`, `C-029`, `C-030`, `C-031`, `RN-013`
 - [ ] **T-086** — e-mails e histórico: `C-032`, `C-033`, `C-034`, `C-043`, `RN-019`
 - [ ] **T-087** — quadro, exclusão, notificações e segurança: `C-035`, `C-038`, `C-039`, `C-041`, `C-042`, `RN-015`, `RN-017`, `RN-018`, `RNF-003`
 - [ ] **T-088** — orçamento e equivalência: `RNF-001` (abrir pedido = 2 execuções), `RNF-004` (1 linha) e `RNF-005` (500 combinações de `motivoDeDestino` × `sgcPodeMover` sem divergência)
-- [ ] **T-089** `[P]` — testes de tela (`node --test`), um arquivo por módulo puro: `permissoes.test.mjs` (`RN-001`, `RN-002`, `RN-016`, `C-038`, `C-040`), `transicoes.test.mjs` (`RN-003`, `RN-004`, `RN-005`, `RN-008`, `C-008`, `C-023`, `C-026`) e `pedido.test.mjs` (`C-002`, `C-003`, `C-036`, `C-037`, `RN-012`, `RN-014`, `RNF-002`) → `frontend/tests/`
+- [ ] **T-089** `[P]` — testes de tela (`node --test`), um arquivo por módulo puro: `permissoes.test.mjs` (`RN-001`, `RN-002`, `RN-016`, `RN-021`, `C-038`, `C-040`, `C-044`), `transicoes.test.mjs` (`RN-003`, `RN-004`, `RN-005`, `RN-008`, `C-008`, `C-023`, `C-026`) e `pedido.test.mjs` (`C-002`, `C-003`, `C-036`, `C-037`, `RN-012`, `RN-014`, `RNF-002`) → `frontend/tests/`
 
 ## Verificação
 
@@ -90,6 +90,7 @@ bloco `PENDENCIAS` de T-006 e nas `abasExtras` de T-034.
 | Requisito / cenário | Tasks | Teste |
 |---|---|---|
 | RF-001 / C-001, C-002 | T-001, T-007, T-032, T-037 | T-080, T-089 |
+| RF-001 (R-010, capa pelo cron) | T-007 | T-080 |
 | RF-002, RF-003 / C-003 | T-032, T-037 | T-089 |
 | RF-004 / C-001 | T-037 | T-080 |
 | RF-005 / RN-020 | T-002 | T-081 |
@@ -99,8 +100,9 @@ bloco `PENDENCIAS` de T-006 e nas `abasExtras` de T-034.
 | RF-009, RF-010 / C-004…C-007, C-012, C-021, RN-003, RN-004, RN-005, RN-008, RN-011 | T-006, T-031, T-034 | T-081, T-089 |
 | RF-011 / C-011 | T-006, T-010 | T-082, T-088 |
 | RF-012 / C-008, C-009, C-010, RN-001, RN-002 | T-005, T-030, T-033 | T-082, T-089 |
+| RF-033 / C-044, RN-021 | T-006, T-030, T-036, T-040 | T-082, T-089 |
 | RF-013, RF-014 / C-013, C-014, C-015, C-017, RN-009 | T-007, T-035 | T-083 |
-| RF-015 / C-016, RN-010 | T-007, T-034 | T-083 |
+| RF-015 / C-016, RN-010 (R-011: quem chama é a 003) | T-007, T-034 | T-083 |
 | RF-016, RF-017, RF-018 / C-018, C-019, C-020 | T-007, T-035 | T-083 |
 | RF-019 / C-022, C-023, C-024, C-025, RN-006, RN-007 | T-003, T-007, T-031, T-035 | T-084, T-089 |
 | RF-020, RF-021 / C-027, C-028, C-030, RN-012 | T-008, T-032, T-035 | T-085, T-089 |

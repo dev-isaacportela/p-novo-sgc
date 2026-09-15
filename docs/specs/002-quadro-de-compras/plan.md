@@ -11,7 +11,7 @@
 | Spec antes de código | sim | `spec.md` aprovada, zero `[NEEDS CLARIFICATION]` |
 | Backend escrito local, executado no sandbox | sim | `add-005-quadro-compras.mjs` (novo, desta spec) e duas linhas em arquivos do integrador: as quatro tabelas no `setup-backend.mjs` e `ganchos` no `add-001-kanban.mjs`. Nada roda `mitra-sdk` da máquina local |
 | Migrations append-only | sim | nenhum arquivo de `backend/migrations/` é criado, editado ou adicionado ao commit; o sandbox materializa |
-| Leitura e escrita por Server Function | sim | 11 leituras/JS (72xx) e 10 escritas SQL guardadas por `:VAR_USER` (725x); zero CRUD REST em tela de usuário final; o quadro fala com o motor pelo transporte `linhas`/`acao` |
+| Leitura e escrita por Server Function | sim | 11 leituras/JS (72xx) e 11 escritas SQL (7250–7260): 7 guardadas por `:VAR_USER` (chamadas da tela) e 4 por `{{usuarioId}}`, chamadas **só por id** de dentro de um JS ou do cron (exceção registrada no `000`: chamada aninhada não propaga a sessão). Zero CRUD REST em tela de usuário final; o quadro fala com o motor pelo transporte `linhas`/`acao` |
 | Simulador cobre a feature | sim | `simulator/seed/002-quadro.mjs` (personas, fases, campos, automações, ganchos e 6 pedidos), `CHECK_INPUT` estendido, `add-005` no `PUBLISH_ORDER` |
 | Testes automatizados obrigatórios | sim | cada linha da seção **Testes** da spec vira `teste()` em `backend/simulator/smoke/002-quadro.mjs` ou `test()` em `frontend/tests/{permissoes,transicoes,pedido}.test.mjs` |
 | Design tokens, sem cor literal | sim | telas só com o vocabulário de `components/page.tsx` e os primitivos de `components/ui/`; cor de fase e de opção sai da rampa de dados do motor (`data-1…8`), nunca hex |
@@ -33,7 +33,7 @@ integrador) junto com as das specs 001, 003 e 004, antes do fan-out. Datas em
 | Entidade (spec) | Tabela | Campos-chave | Observação |
 |---|---|---|---|
 | Etapa | `SGC_FASE` | `ID`, `BOARD_ID`, `CHAVE`, `FASE_ID`, `ORDEM` | tradutor chave estável ↔ `KB_FASE.ID`; `UNIQUE (BOARD_ID, CHAVE)` e índice em `FASE_ID` (o gancho traduz nos dois sentidos a cada movimento) |
-| Persona | `SGC_USUARIO_PERSONA` | `ID`, `USUARIO_ID`, `PERSONA`, `ATUALIZADO_POR`, `ATUALIZADO_EM` | 1:1 com `INT_USER`; `UNIQUE (USUARIO_ID)`; `PERSONA` ∈ `admin`, `analista`, `gestor`, `diretoria`, `leitura` |
+| Persona | `SGC_USUARIO_PERSONA` | `ID`, `USUARIO_ID`, `PERSONA`, `ATUALIZADO_POR`, `ATUALIZADO_EM` | 1:1 com `INT_USER`; `UNIQUE (USUARIO_ID)`; `PERSONA` ∈ `admin`, `analista`, `gestor`, `diretoria`, `comercial` (P-01) |
 | Pedido de compra | `SGC_PEDIDO` | ver abaixo | 1:1 com `KB_CARD`, `UNIQUE (ID_CARD)` |
 | Comunicação | `SGC_COMUNICACAO` | `ID`, `ID_CARD`, `TIPO`, `PARA`, `CC`, `ASSUNTO`, `CORPO`, `ENVIADO_POR`, `ENVIADO_EM` | `TIPO` ∈ `email`, `plataforma`; índice em `ID_CARD` |
 
@@ -50,7 +50,6 @@ CREATE TABLE IF NOT EXISTS SGC_PEDIDO (
   PERIODO_INICIO VARCHAR(10),
   PERIODO_FIM VARCHAR(10),
   VL_TOTAL DECIMAL(15,2) DEFAULT 0,
-  PRIORIDADE VARCHAR(20) DEFAULT 'normal',
   PRAZO_PADRAO VARCHAR(120),
   PRAZO_ACORDADO VARCHAR(120),
   PRAZO_JUSTIFICATIVA TEXT,
@@ -82,8 +81,9 @@ CREATE TABLE IF NOT EXISTS SGC_PEDIDO (
 
 - `VL_TOTAL`, `PRAZO_PADRAO`, `PRAZO_ACORDADO` e `PRAZO_JUSTIFICATIVA` são **gravados pela spec 003** (AN-12, PZ-01): a 002 cria as colunas, nunca escreve nelas.
 - `TEC_PRODUTOS_REPROVADOS` guarda os códigos separados por vírgula (`"1024,2088"`), no mesmo formato que a lib usa para `responsaveisIds`. A lista de produtos para marcar vem da 003.
-- `ENVIO_OBS`, `ENVIO_POR` e `ENVIO_EM` completam o registro do envio de EN-03 (o `000` cita as outras quatro colunas do bloco).
-- `PRIORIDADE` nasce `normal` e **não é reescrita depois**: o valor vivo é o do campo do quadro (D-010).
+- `ENVIO_OBS`, `ENVIO_POR` e `ENVIO_EM` completam o registro do envio de EN-03.
+- **Não existe coluna `PRIORIDADE`** (R-009): prioridade vive só no campo do quadro, que é
+  onde a pessoa a edita; `/pedidos/novo` a informa nos `valores` de `api.cardCriar`.
 
 Campos do quadro `compras` (`KB_CAMPO`, criados pelo `add-005`, chave estável):
 
@@ -92,7 +92,7 @@ Campos do quadro `compras` (`KB_CAMPO`, criados pelo `add-005`, chave estável):
 | `fornecedor` | `texto` | capa de todas as fases (`NO_CARD`) | 002, na criação |
 | `filial` | `texto` | capa de todas as fases | 002, na criação |
 | `valor_total` | `moeda` | capa de todas as fases | 003, ao gravar itens |
-| `prioridade` | `selecao` (`normal`, `alta`, `urgente`) | capa de todas as fases | a pessoa, no card aberto |
+| `prioridade` | `selecao` (`normal`, `alta`, `urgente`) | capa de todas as fases | a pessoa, no card aberto — **dono único** do valor (R-009); nasce `normal` na criação |
 | `alertas_pendentes` | `numero` | capa só da fase `analise` (`CAPA_JSON`) | 003, ao gerar alertas |
 | `motivo_cancelamento` | `texto_longo` | capa só da fase `cancelado` (`CAPA_JSON`) | 002, ao cancelar |
 
@@ -112,7 +112,7 @@ Todo nome entra em `SERVER_FUNCTION_NAMES` e o id local em `SERVER_FUNCTIONS`
 | `sgcPersonasListar` | 7202 | SQL | `busca` (`''`), `limite`, `offset` | `USUARIO_ID, NOME, EMAIL, ACCESS_LEVEL, PERSONA` | RF-030 |
 | `sgcPersonasListarTotal` | 7203 | SQL | `busca` (`''`) | `TOTAL` | RF-030, RNF-003 |
 | `sgcFasesListar` | 7204 | SQL | `boardId` (`0` = todos) | `CHAVE, FASE_ID, NOME, ORDEM, TIPO, COR` | RF-005 |
-| `sgcPedidoCarregar` | 7205 | JAVASCRIPT | `cardId` | `{ ok, pedido, itens, alertas }` numa execução | RF-006, RNF-001 |
+| `sgcPedidoCarregar` | 7205 | JAVASCRIPT | `cardId` | `{ ok, pedido, itens, alertas }` numa execução — ver as colunas fechadas com a 003 abaixo | RF-006, RNF-001 |
 | `sgcPodeMover` | 7206 | SQL (gancho) | `usuarioId`, `cardId`, `boardId`, `faseId` | 1 linha: `PODE` (1/0), `MOTIVO` | RF-009, RF-011, RNF-004 |
 | `sgcPodeExcluir` | 7207 | SQL (gancho) | `usuarioId`, `cardId`, `boardId`, `faseId` (`0`) | 1 linha: `PODE`, `MOTIVO` | RF-027 |
 | `sgcComunicacoesListar` | 7208 | SQL | `cardId`, `limite`, `offset` | `ID, TIPO, PARA, CC, ASSUNTO, ENVIADO_POR, ENVIADO_NOME, ENVIADO_EM` | RF-023 |
@@ -125,14 +125,32 @@ Todo nome entra em `SERVER_FUNCTION_NAMES` e o id local em `SERVER_FUNCTIONS`
 | `sgcEscPedidoDiretoriaAprovar` | 7253 | SQL | `cardId`, `agora` | — | RF-016 |
 | `sgcEscPedidoDiretoriaReprovar` | 7254 | SQL | `cardId`, `motivo`, `agora` | — | RF-017 |
 | `sgcEscPedidoCancelar` | 7255 | SQL | `cardId`, `motivo`, `agora` | — | RF-019 |
-| `sgcEscPedidoReenviar` | 7256 | SQL | `cardId`, `agora` | — | RF-015 |
-| `sgcEscPedidoEnvio` | 7257 | SQL | `cardId`, `canal`, `email`, `dtEnvio`, `numped`, `obs`, `enviadoPor`, `agora` | — | RF-020 |
-| `sgcEscComunicacaoInserir` | 7258 | SQL | `cardId`, `tipo`, `para`, `cc`, `assunto`, `corpo`, `enviadoPor`, `enviadoEm` | — | RF-023 |
+| `sgcEscPedidoReprovacoesLimpar` | 7256 | SQL **por id** (`{{usuarioId}}`, sem `:VAR_USER`) | `usuarioId`, `idCard`, `agora` | — | RF-015 (R-011) |
+| `sgcEscPedidoEnvio` | 7257 | SQL **por id** (`{{usuarioId}}`) | `cardId`, `canal`, `email`, `dtEnvio`, `numped`, `obs`, `enviadoPor`, `agora` | — | RF-020 |
+| `sgcEscComunicacaoInserir` | 7258 | SQL **por id** (`{{usuarioId}}`) | `cardId`, `tipo`, `para`, `cc`, `assunto`, `corpo`, `enviadoPor`, `enviadoEm` | — | RF-023 |
 | `sgcEscPersonaSalvar` | 7259 | SQL | `usuarioAlvo`, `persona`, `agora` | — | RF-030 |
+| `sgcEscPedidoCapaInserir` | 7260 | SQL **por id** (`{{usuarioId}}`, sem `:VAR_USER`) | `usuarioId`, `cardId`, `codfornec`, `fornecedor`, `codfilial`, `filial`, `periodoInicio`, `periodoFim`, `origem`, `idAgenda`, `agora` | — | RF-001 (R-010) |
 
 Regras da casa: filtro desligado é `''` no texto e `0` no numérico; toda
-listagem tem `LIMIT/OFFSET`; uma instrução por escrita; escrita de usuário
-carrega a guarda de persona no próprio `WHERE`.
+listagem tem `LIMIT/OFFSET`; uma instrução por escrita; escrita chamada da
+**tela** carrega a guarda de persona no próprio `WHERE`, com `:VAR_USER`.
+
+**As quatro escritas "por id"** (`sgcEscPedidoReprovacoesLimpar`,
+`sgcEscPedidoEnvio`, `sgcEscComunicacaoInserir`, `sgcEscPedidoCapaInserir`) são
+a exceção registrada no `000`: nascem para ser chamadas de dentro de um
+JAVASCRIPT ou do cron, onde `:VAR_USER` não chega (chamada aninhada não
+propaga a sessão). Recebem `{{usuarioId}}` cru, e quem confere a persona é o JS
+que as chama, **antes** de escrever:
+
+| Escrita | Quem chama | Quem confere a persona |
+|---|---|---|
+| `sgcEscPedidoCapaInserir` | `sgcAgendaProcessar` (004, cron sem sessão) | ninguém: o cron roda com o token do projeto e grava em nome de quem agendou (`criadoPor`) |
+| `sgcEscPedidoReprovacoesLimpar` | `sgcAnaliseSair` (003) | o próprio `sgcAnaliseSair`, por `runQueryMitra` com `:VAR_USER` |
+| `sgcEscPedidoEnvio`, `sgcEscComunicacaoInserir` | `sgcEnvioIndustriaRegistrar` (002) | o próprio JS, no passo 1 |
+
+`sgcEscPedidoCapaInserir` grava as mesmas colunas de `sgcEscPedidoCriar`, com
+`ORIGEM = '{{origem}}'` (`agenda`) e `ID_AGENDA = {{idAgenda}}`, e é
+idempotente pelo `UNIQUE (ID_CARD)`.
 
 ### A guarda de persona, escrita uma vez
 
@@ -148,7 +166,7 @@ AND EXISTS (
     AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
     AND COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
                                WHEN 'ADMIN' THEN 'admin'
-                               WHEN 'RESTRICTED' THEN 'leitura'
+                               WHEN 'RESTRICTED' THEN 'comercial'
                                ELSE 'analista' END) IN (<personas>)
 )
 ```
@@ -202,17 +220,29 @@ WHERE ID_CARD = {{cardId}} AND TRIM('{{motivo}}') <> ''
 -- sgcEscPersonaSalvar (P-13): uma instrução, upsert.
 INSERT INTO SGC_USUARIO_PERSONA (USUARIO_ID, PERSONA, ATUALIZADO_POR, ATUALIZADO_EM)
 SELECT {{usuarioAlvo}}, '{{persona}}', :VAR_USER, '{{agora}}'
-WHERE '{{persona}}' IN ('admin','analista','gestor','diretoria','leitura')
+WHERE '{{persona}}' IN ('admin','analista','gestor','diretoria','comercial')
   AND EXISTS (<guarda de persona: 'admin','diretoria'>)
 ON DUPLICATE KEY UPDATE PERSONA = VALUES(PERSONA), ATUALIZADO_POR = VALUES(ATUALIZADO_POR), ATUALIZADO_EM = VALUES(ATUALIZADO_EM)
 ```
 
-`sgcEscPedidoEnvio` e `sgcEscComunicacaoInserir` são **chamadas pelo
-JAVASCRIPT** `sgcEnvioIndustriaRegistrar` (chamada aninhada) e por isso
-recebem `enviadoPor` como parâmetro, em vez de `:VAR_USER` — a propagação da
-sessão em chamada aninhada não é garantida (a mesma razão do gancho, D-076 da
-lib). A guarda de persona e de fase acontece uma vez, no JS, antes de qualquer
-escrita (D-008).
+### O contrato de `sgcPedidoCarregar` com a 003
+
+Uma execução, três consultas internas, três listas no retorno (fechado com a
+spec 003; nenhuma coluna a mais para a tela não pagar o que não usa):
+
+- `pedido`: todas as colunas de `SGC_PEDIDO` mais `TEC_NOME`, `DIR_NOME`,
+  `CANC_NOME` e `ENVIO_NOME` (lidos de `INT_USER`, para a tela não consultar
+  usuário de novo); `null` quando o card ainda não tem capa.
+- `itens` (003 preenche; a 002 cria a consulta): `ID`, `CODPROD`, `DESCRICAO`,
+  `EMBALAGEM`, `UNIDADE`, `CODEPTO`, `CODSEC`, `UN_POR_CAIXA`,
+  `QT_VENDA_TOTAL`, `QT_VENDA_LICITACAO`, `QT_ESTOQUE`, `QT_TRANSITO`,
+  `QT_SUGERIDA`, `QT_PEDIDA`, `PRECO_CUSTO`, `TIPO_PRECO`, `CURVA_ABC`,
+  `COBERTURA_DIAS`, `COBERTURA_LIMITE`, `COBERTURA_JUSTIFICATIVA`,
+  `OBSERVACAO`, `STATUS` — só os vivos (`STATUS <> 'removido'`).
+- `alertas`: `ID`, `CODPROD`, `TIPO`, `MENSAGEM`, `LIDO`, `LIDO_POR`,
+  `LIDO_EM`, `JUSTIFICATIVA`. O alerta liga ao item por `(ID_CARD, CODPROD)` —
+  **não** existe `ID_ITEM` (a 003 trocou a chave: o upsert em lote não devolve
+  ids e o item pode sair e voltar).
 
 ### As regras ligadas (ganchos)
 
@@ -231,7 +261,8 @@ arquivo):
 ```sql
 SELECT
   CASE
-    WHEN T.PERSONA = 'leitura' OR T.ACESSO = 'READ_ONLY'                            THEN 0
+    WHEN T.PERSONA = 'comercial'                                                    THEN 0
+    WHEN T.ACESSO = 'READ_ONLY'                                                     THEN 0
     WHEN T.ACESSO = 'RESTRICTED' AND T.CRIADO_POR <> {{usuarioId}}                   THEN 0
     WHEN T.PERSONA = 'diretoria' AND T.ORIGEM <> 'diretoria'                         THEN 0
     WHEN T.PAR NOT IN ('analise>tecnica','tecnica>diretoria','tecnica>analise',
@@ -250,7 +281,9 @@ SELECT
     ELSE 1
   END AS PODE,
   CASE
-    WHEN T.PERSONA = 'leitura' OR T.ACESSO = 'READ_ONLY'
+    WHEN T.PERSONA = 'comercial'
+      THEN 'Seu perfil não tem acesso ao quadro de compras.'
+    WHEN T.ACESSO = 'READ_ONLY'
       THEN 'Seu acesso é somente leitura.'
     WHEN T.ACESSO = 'RESTRICTED' AND T.CRIADO_POR <> {{usuarioId}}
       THEN 'Seu acesso permite operar apenas os pedidos que você criou.'
@@ -267,14 +300,14 @@ SELECT
     WHEN T.PAR = 'envio>enviado'
       THEN 'Registre o envio do pedido (plataforma ou e-mail) antes de mover para Enviado para Indústria.'
     WHEN T.PAR = 'analise>tecnica'
-      THEN 'Há pendências na Análise: leia os alertas e justifique os itens antes de enviar para a Aprovação Técnica.'
+      THEN T.PENDENCIAS_MOTIVO
     ELSE ''
   END AS MOTIVO
 FROM (
   SELECT
     COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
                            WHEN 'ADMIN' THEN 'admin'
-                           WHEN 'RESTRICTED' THEN 'leitura'
+                           WHEN 'RESTRICTED' THEN 'comercial'
                            ELSE 'analista' END)                    AS PERSONA,
     COALESCE(IU.ACCESS_LEVEL, 'MEMBER')                            AS ACESSO,
     COALESCE(C.CRIADO_POR, 0)                                      AS CRIADO_POR,
@@ -287,13 +320,16 @@ FROM (
     COALESCE(P.DT_ENVIO, '')                                       AS DT_ENVIO,
     COALESCE(P.NUMPED_WINTHOR, '')                                 AS NUMPED,
     /* ── saída da Análise — bloco reservado à spec 003 ──────────────────────
-       Hoje: alerta não lido. A 003 substitui ESTA subconsulta (e só ela) pela
-       soma de alertas não lidos + itens alertados sem justificativa + itens
-       acima do limite de cobertura sem justificativa + prazo divergente sem
-       justificativa (AL-04, AL-05, AL-06, PZ-03). A tela chama a SF irmã
-       `sgcAnaliseSaidaVerificar` (003) no `antesDeMover` para a mensagem
-       detalhada; aqui basta o número. */
-    (SELECT COUNT(*) FROM SGC_ALERTA A WHERE A.ID_CARD = C.ID AND A.LIDO = FALSE) AS PENDENCIAS
+       Duas colunas, uma subconsulta cada. Hoje: alerta não lido e uma frase
+       genérica. A 003 substitui ESTE bloco (e só ele) pelo corpo de
+       `sgcAnaliseSaidaVerificar` com `{{cardId}} = C.ID`: `PODE = 0` vira
+       `PENDENCIAS = 1` e a coluna `MOTIVO` de lá vira `PENDENCIAS_MOTIVO`
+       aqui — alertas lidos, justificativa de item alertado, cobertura acima do
+       limite, prazo divergente e pelo menos um item com quantidade (AL-04,
+       AL-05, AL-06, PZ-03, R-008). A tela chama a mesma SF pelo
+       `antesDeMover`, então a frase é a mesma nos dois lugares. */
+    (SELECT COUNT(*) FROM SGC_ALERTA A WHERE A.ID_CARD = C.ID AND A.LIDO = FALSE) AS PENDENCIAS,
+    'Há pendências na Análise: leia os alertas e justifique os itens antes de enviar para a Aprovação Técnica.' AS PENDENCIAS_MOTIVO
   FROM KB_CARD C
   LEFT JOIN INT_USER IU              ON IU.ID = {{usuarioId}}
   LEFT JOIN SGC_USUARIO_PERSONA UP   ON UP.USUARIO_ID = {{usuarioId}}
@@ -311,11 +347,13 @@ analista não exclui nem o próprio:
 
 ```sql
 CASE
+  WHEN T.PERSONA = 'comercial'                            THEN 0
   WHEN T.ACESSO = 'READ_ONLY'                             THEN 0
   WHEN T.PERSONA IN ('admin','gestor','diretoria')        THEN 1
   ELSE 0
 END AS PODE,
 CASE
+  WHEN T.PERSONA = 'comercial' THEN 'Seu perfil não tem acesso ao quadro de compras.'
   WHEN T.ACESSO = 'READ_ONLY' THEN 'Seu acesso é somente leitura.'
   WHEN T.PERSONA NOT IN ('admin','gestor','diretoria')
     THEN 'Excluir pedido é da gerência, da diretoria ou do administrador. Para encerrar um pedido, use "Cancelar compra".'
@@ -340,9 +378,11 @@ END AS MOTIVO
    `CORPO`, `ENVIADO_POR`, `ENVIADO_EM` (EN-06 B).
 4. `sgcEscPedidoEnvio` (por id) grava `DT_ENVIO`, `CANAL`, `EMAIL_ENVIO`,
    `NUMPED_WINTHOR`, `ENVIO_OBS`, `ENVIO_POR`, `ENVIO_EM`.
-5. `ID_AGENDA > 0` → chama a escrita da spec 004 que leva a data real ao
-   agendamento (EN-05); ausente o id no mapa, o passo é ignorado e o resultado
-   traz `agendaSincronizada: false` (a 002 não depende da 004 para fechar).
+5. `ID_AGENDA > 0` → `sgcEscAgendaEnvio` (spec 004, id 7458, por id, input
+   `{ idCard, dtEnvio }`) leva a data real ao agendamento, que guarda a
+   planejada original (EN-05 A, R-012); ausente o id no mapa, o passo é
+   ignorado e o resultado traz `agendaSincronizada: false` — a 002 não depende
+   da 004 para fechar.
 6. `kbNotaRegistrar` (SF da lib) grava no histórico "Pedido enviado por e-mail
    para `<contato>`" ou "Pedido enviado pela plataforma do fornecedor".
 
@@ -397,9 +437,9 @@ A cópia para `compras@benenutri.com` é destinatário fixo das dez primeiras
 
 | Tela / rota | Responsabilidade | Componentes reusados | Novos |
 |---|---|---|---|
-| `/quadro` | `KanbanBoard slug="compras"` com `novoCard` ("Novo pedido" → `/pedidos/novo`), `atualizarACadaMs={60000}`, `podeMover`, `antesDeMover`, `podeExcluir`, `acoesExtras`; `abasExtras` são da 003 (o integrador junta) | `KanbanBoard` da lib | `pages/quadro/QuadroPage.tsx` (já existe, ganha as props), `pages/quadro/AcoesDoPedido.tsx` |
+| `/quadro` | `KanbanBoard slug="compras"` com `novoCard` ("Novo pedido" → `/pedidos/novo`), `atualizarACadaMs={60000}`, `podeMover`, `antesDeMover`, `podeExcluir`, `acoesExtras`; `abasExtras` são da 003 (o integrador junta). Persona `comercial` não passa da guarda: `Alert` com "Seu perfil não tem acesso ao quadro de compras." e nada de `KanbanBoard` (RN-021) | `KanbanBoard` da lib, `Alert` | `pages/quadro/QuadroPage.tsx` (já existe, ganha as props), `pages/quadro/AcoesDoPedido.tsx` |
 | `/quadro/admin` | `BoardAdmin`; a rota só renderiza para a persona admin, e quem chega sem permissão vê um `Alert` com o motivo e o caminho de volta | `BoardAdmin` da lib, `Alert` | guarda em `pages/quadro/QuadroAdminPage.tsx` |
-| `/pedidos/novo` | criação manual: fornecedor, filial e período; título e responsável são automáticos | `PageHeader`, `Panel`, `LabelledField`, `SelectMenu` (fornecedor e filial), `Button`, `Alert` | `pages/pedidos/NovoPedidoPage.tsx` |
+| `/pedidos/novo` | criação manual: fornecedor, filial, período e prioridade; título e responsável são automáticos | `PageHeader`, `Panel`, `LabelledField`, `SelectMenu` (fornecedor, filial e prioridade), `DatePicker` (spec 004, UI-03 B — o campo de data de todas as telas), `Button`, `Alert` | `pages/pedidos/NovoPedidoPage.tsx` |
 | `/notificacoes` | feed paginado de responsável novo, pedido movido e mensagem nova | `PageHeader`, `Panel`, `PanelHeader`, `Table`/`Tr`/`Td`/`RowTitle`/`RowMeta`, `Badge`, `Pagination`, `EmptyState` | `pages/notificacoes/NotificacoesPage.tsx` |
 | `/seguranca` | persona por usuário (admin e diretoria) | `PageHeader`, `Panel`, `Toolbar`, `SearchInput`, `Table`, `SelectMenu`, `Pagination`, `Alert` | `pages/seguranca/SegurancaPage.tsx` |
 
@@ -417,6 +457,10 @@ nunca some (RF-032, §8 do design):
 | Registrar envio | `envio` | admin, analista, gestor | diálogo (canal, contato, data, número do pedido, observação) → `sgcEnvioIndustriaRegistrar` → `ctx.recarregar()` |
 | Cancelar compra | toda fase ativa | admin, analista, gestor, diretoria (com a mesma regra de movimento) | diálogo (motivo) → `sgcEscPedidoCancelar` → `kbCardAtualizar` (espelha `motivo_cancelamento`) → nota → `ctx.mover(cancelado)` |
 
+Todo campo de data — período na criação, data do envio — é o `DatePicker` do
+projeto (`src/components/DatePicker.tsx`, spec 004; UI-03 B e a emenda do
+`design.md` §1.4/§9.2). O controle nativo de data não entra em tela.
+
 Os diálogos seguem §9.5: `max-h-[90vh]`, `flex-col`, só o miolo rola, rodapé
 `flex-col-reverse sm:flex-row sm:justify-end`. Sem toast (UI-02 A): o
 resultado aparece pelo `ctx.avisar()` da lib, na faixa de aviso do card.
@@ -427,7 +471,7 @@ Nenhuma delas conhece React nem o transporte — é o que `node --test` executa.
 
 ```ts
 // permissoes.ts — porte fiel de getPermissions (usePersona.ts do p-45547)
-export type Persona = 'admin' | 'analista' | 'gestor' | 'diretoria' | 'leitura';
+export type Persona = 'admin' | 'analista' | 'gestor' | 'diretoria' | 'comercial';
 export type NivelAcesso = 'ADMIN' | 'MEMBER' | 'RESTRICTED' | 'READ_ONLY';
 export const PERSONAS: readonly Persona[];
 /** Linha de `sgcPersonaAtual`; ausente ou inválida → analista (P-02 B). */
@@ -442,8 +486,9 @@ export interface Permissoes {
 export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes;
 ```
 
-| | admin | analista | gestor | diretoria | leitura |
+| | admin | analista | gestor | diretoria | comercial |
 |---|---|---|---|---|---|
+| ver o Quadro, a Agenda e os Fornecedores (P-03) | sim | sim | sim | sim | **não** |
 | criar/editar pedido (P-04) | sim | sim | sim | não | não |
 | aprovação técnica (P-05) | sim | não | sim | não | não |
 | aprovação da diretoria (P-06) | sim | não | não | sim | não |
@@ -453,8 +498,10 @@ export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes;
 | administrar o quadro (P-11 A) | sim | não | não | não | não |
 | ver Segurança (P-13) | sim | não | não | sim | não |
 
+A persona `comercial` é a única com `verQuadro` falso: ela não vê o Quadro, a
+Agenda nem os Fornecedores no menu e a rota a recusa (P-03, R-001).
 `acesso === 'READ_ONLY'` zera tudo menos `verQuadro`; `acesso === 'RESTRICTED'`
-liga `somenteProprios` (P-08 B).
+liga `somenteProprios` (P-08 B) — os dois valem **além** da persona.
 
 ```ts
 // transicoes.ts — a tabela F-03 e o motivo de cada recusa, espelho da SQL ligada
@@ -498,8 +545,9 @@ export function validarEnvio(
 **Criar pedido** (`/pedidos/novo`) — duas chamadas, nunca uma JS aninhada:
 
 1. A tela valida com `validarNovoPedido` e monta o título com `tituloDoPedido`.
-2. `kbCardCriar` (SF da lib, com sessão): `boardId`, `titulo`, `valoresJson`
-   com `fornecedor`, `filial` e `prioridade`, `responsaveisIds` = quem cria.
+2. `api.cardCriar({ boardId, titulo, valores, responsaveisIds })` (transporte da
+   lib sobre `kbCardCriar`, com sessão): `valores` leva `fornecedor`, `filial`
+   e `prioridade` (R-009: a prioridade nasce aqui e só vive no campo).
    Devolve `{ ok, id }`. É o motor que dá ordem, texto de busca, movimento
    inicial e automação de "card criado" — por isso nunca `kbEscCardInserir`.
 3. `sgcEscPedidoCriar` com o `cardId` devolvido grava a capa em `SGC_PEDIDO`.
@@ -507,18 +555,23 @@ export function validarEnvio(
 
 O passo 2 **não** pode virar uma JS do SGC que chame `kbCardCriar` por dentro:
 chamada aninhada não propaga `:VAR_USER` com garantia, e o card nasceria sem
-criador (D-007).
+criador (D-007). O cron da agenda (004) é o caminho espelhado: sem sessão, ele
+chama `kbCardCriar` com `origem: 'sistema'`/`criadoPor` e depois
+`sgcEscPedidoCapaInserir` por id (R-010).
 
 **Mover um pedido** — a mesma regra, três vezes, de propósito:
 
 1. `podeMover` (tela, síncrono): `motivoDeDestino(...)` desabilita o destino
    com o motivo, antes de qualquer clique.
-2. `antesDeMover` (tela, assíncrono, no clique): para `analise → tecnica`
-   chama `sgcAnaliseSaidaVerificar` (003) e devolve a mensagem detalhada; para
-   `analise → tecnica` também chama `sgcEscPedidoReenviar` quando a verificação
-   passa (AT-04, D-009).
+2. `antesDeMover` (tela, assíncrono, no clique): para `analise → tecnica` chama
+   `verificarSaidaAnalise(cardId)` (003), que regera os alertas e consulta
+   `sgcAnaliseSaidaVerificar`; a mensagem de recusa é a mesma do gancho.
 3. `sgcPodeMover` (servidor, o gancho): o motor pergunta antes de gravar.
    Quem chamar `kbCardMover` por fora da tela bate aqui (RF-011).
+4. **Depois** de o movimento `analise → tecnica` dar certo, a tela chama
+   `sgcAnaliseSair` (003), que remove os itens zerados, recalcula o total,
+   chama `sgcEscPedidoReprovacoesLimpar` (002, por id) e registra a nota do
+   resumo (AT-04, R-011, D-009).
 
 **Decidir** (aprovar, reprovar, cancelar): diálogo → escrita SQL guardada →
 `kbNotaRegistrar` → `ctx.mover(fase)`. A escrita vem **antes** do movimento
@@ -537,8 +590,10 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
   - `SGC_FASE`: as 10 chaves de `CENARIO.fases` → `FASE_ID` (o tradutor de que
     todas as regras dependem).
   - `SGC_USUARIO_PERSONA`: `CENARIO.usuarios` = `{ admin: 1, ana: 2, gil: 3, dora: 4, leo: 5 }`
-    → `admin`, `analista`, `gestor`, `diretoria`, `leitura`. O `leo` também é o
-    caso de `READ_ONLY`; um sexto usuário sem linha de persona cobre C-010.
+    → `admin`, `analista`, `gestor`, `diretoria`, `comercial` (o `leo` é o
+    comercial do seed do `develop`); um sexto usuário sem linha de persona cobre
+    C-010. `READ_ONLY` e `RESTRICTED` são testados mudando o `ACCESS_LEVEL` de
+    um usuário existente dentro do smoke (C-008 e C-009), sem mais um seed.
   - `KB_CAMPO`: os 6 campos do quadro, com as opções de `prioridade` e a capa
     por fase (`KB_FASE.CAPA_JSON` com `alertas_pendentes` na `analise` e
     `motivo_cancelamento` no `cancelado`).
@@ -552,7 +607,8 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
     `SGC_COMUNICACAO`, P6 em `cancelado` com motivo. P4 tem 2 responsáveis
     (ana e gil) para o e-mail e as notificações.
 - **`CHECK_INPUT`** (o `sim:check` executa cada SQL com este objeto): acrescentar
-  `usuarioId: '1'`, `cardId: '1'`, `boardId: '1'`, `faseId: '2'`,
+  `usuarioId: '1'`, `cardId: '1'`, `idCard: '1'`, `boardId: '1'`, `faseId: '2'`,
+  `origem: 'agenda'`, `idAgenda: '1'`,
   `usuarioAlvo: '2'`, `persona: 'gestor'`, `agora: '2026-09-15T12:00:00'`,
   `motivo: 'teste'`, `produtos: ''`, `codfornec: '1'`, `fornecedor: 'X'`,
   `codfilial: '1'`, `filial: 'Y'`, `periodoInicio: '2026-08-01'`,
@@ -573,14 +629,16 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 
 | Cenário / regra | Arquivo | O que o `assert` verifica |
 |---|---|---|
-| C-001 | `backend/simulator/smoke/002-quadro.mjs` | `kbCardCriar` + `sgcEscPedidoCriar` como ana: 1 card na fase `analise`, `TITULO = '1 — MATRIZ · NUTRILATINA'`, `CRIADO_POR = 2`, 1 linha em `SGC_PEDIDO` |
+| C-001 | `backend/simulator/smoke/002-quadro.mjs` | `kbCardCriar` + `sgcEscPedidoCriar` como ana: 1 card na fase `analise`, `TITULO = '1 — MATRIZ · NUTRILATINA'`, `CRIADO_POR = 2`, 1 linha em `SGC_PEDIDO` com `ORIGEM = 'manual'` e `valores.prioridade = 'normal'` no card |
+| C-001 (R-010) | `backend/simulator/smoke/002-quadro.mjs` | `sgcEscPedidoCapaInserir({ usuarioId: 2, cardId, origem: 'agenda', idAgenda: 7, … })` grava a capa com `ORIGEM = 'agenda'` e `ID_AGENDA = 7`, sem sessão; chamada duas vezes, continua 1 linha |
 | C-002 | `frontend/tests/pedido.test.mjs` | `validarNovoPedido({codfilial: ''})` → `ok: false` e `erros.filial` contém "filial" |
 | C-003 | `frontend/tests/pedido.test.mjs` | `periodoPadrao(new Date('2026-09-15'))` → `{ inicio: '2026-08-01', fim: '2026-09-15' }` |
 | C-004 | `backend/simulator/smoke/002-quadro.mjs` | `kbCardMover(P1, tecnica)` como ana: `ok: true`, card na fase 2, 1 linha em `KB_MOVIMENTO` |
 | C-005 | `backend/simulator/smoke/002-quadro.mjs` | `sgcPodeMover(ana, P1, diretoria)` → `PODE = 0` e `MOTIVO` igual ao texto de F-04; `kbCardMover` devolve o mesmo motivo e o card não sai da fase 1 |
 | C-006 | `backend/simulator/smoke/002-quadro.mjs` | `kbCardMover(P2, diretoria)` como dora → recusa citando "Aprovação da Diretoria"; `kbCardMover(P3, envio)` como dora → ok |
 | C-007 | `backend/simulator/smoke/002-quadro.mjs` | `kbCardMover` como gil nas fases 5→6 e 6→7: ok nas duas |
-| C-008 | `frontend/tests/transicoes.test.mjs` + smoke | leitura: `motivoDeDestino` devolve texto em 10×10 destinos; `sgcPodeMover(leo, …)` → `PODE = 0` |
+| C-008 | `frontend/tests/transicoes.test.mjs` + smoke | gestor com `ACCESS_LEVEL = READ_ONLY`: `motivoDeDestino` devolve texto em 10×10 destinos e `sgcPodeMover` → `PODE = 0` com "somente leitura" |
+| C-044 | `backend/simulator/smoke/002-quadro.mjs` + `frontend/tests/permissoes.test.mjs` | `permissoesDe('comercial', 'MEMBER').verQuadro` = false; `sgcPodeMover` e `sgcPodeExcluir` com o leo → `PODE = 0` e `MOTIVO` = "Seu perfil não tem acesso ao quadro de compras." |
 | C-009 | `backend/simulator/smoke/002-quadro.mjs` | com `ACCESS_LEVEL = 'RESTRICTED'`: card de outro → `PODE = 0`; card próprio → `PODE = 1` |
 | C-010 | `backend/simulator/smoke/002-quadro.mjs` | usuário 6 (sem linha de persona, `MEMBER`): `sgcPersonaAtual` devolve `analista` e `kbCardMover(P1, tecnica)` passa |
 | C-011 | `backend/simulator/smoke/002-quadro.mjs` | `sgcPodeMover` chamada direta (sem tela) devolve `PODE = 0` e o motivo de C-006; `KB_META` tem os dois ganchos gravados |
@@ -588,7 +646,7 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 | C-013 | `backend/simulator/smoke/002-quadro.mjs` | `sgcEscPedidoTecnicaAprovar` como gil: `TEC_POR = 3`, `TEC_EM` preenchido, `TEC_MOTIVO = ''`; 1 `KB_LOG` de nota com "Aprovado tecnicamente" |
 | C-014 | `backend/simulator/smoke/002-quadro.mjs` | `sgcEscPedidoTecnicaReprovar` com `motivo: ''` → 0 linhas afetadas, `TEC_MOTIVO` continua vazio; `kbCardMover(P2, analise)` recusado |
 | C-015 | `backend/simulator/smoke/002-quadro.mjs` | reprovar com motivo e `produtos: '1024,2088'` → colunas gravadas; `kbCardMover(P2, analise)` passa |
-| C-016 | `backend/simulator/smoke/002-quadro.mjs` | `sgcEscPedidoReenviar` zera `TEC_MOTIVO`, `TEC_PRODUTOS_REPROVADOS` e `DIR_MOTIVO` |
+| C-016 | `backend/simulator/smoke/002-quadro.mjs` | `sgcEscPedidoReprovacoesLimpar({ usuarioId: 2, idCard })` zera `TEC_MOTIVO`, `TEC_PRODUTOS_REPROVADOS` e `DIR_MOTIVO` (quem a chama é o `sgcAnaliseSair` da 003, testado lá) |
 | C-017 | `backend/simulator/smoke/002-quadro.mjs` | `sgcPodeMover(gil, P2, analise)` sem motivo gravado → motivo cita "Reprovar" |
 | C-018 | `backend/simulator/smoke/002-quadro.mjs` | `sgcEscPedidoDiretoriaAprovar` como dora: `DIR_POR = 4`; `kbCardMover(P3, envio)` ok |
 | C-019 | `backend/simulator/smoke/002-quadro.mjs` | depois de reprovar na diretoria, `DIR_MOTIVO` = o texto novo e `TEC_MOTIVO` antigo intacto |
@@ -616,26 +674,27 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 | C-041 | `backend/simulator/smoke/002-quadro.mjs` | `sgcNotificacoesListar` como ana devolve 3 linhas (`responsavel`, `movimento`, `mensagem`) em ordem decrescente e `sgcNotificacoesListarTotal` = 3 |
 | C-042 | `backend/simulator/smoke/002-quadro.mjs` | `sgcEscPersonaSalvar` como admin muda a persona do gil; como ana, 0 linhas |
 | C-043 | `backend/simulator/smoke/002-quadro.mjs` | depois das 4 decisões, `KB_LOG` do card tem 4 eventos `nota` com autor e instante |
-| RN-001 | `frontend/tests/permissoes.test.mjs` | `personaDe(null)` → analista; `{ACCESS_LEVEL:'ADMIN'}` → admin; `{ACCESS_LEVEL:'RESTRICTED'}` → leitura |
+| RN-001 | `frontend/tests/permissoes.test.mjs` | `personaDe(null)` → analista; `{ACCESS_LEVEL:'ADMIN'}` → admin; `{ACCESS_LEVEL:'RESTRICTED'}` → comercial |
 | RN-002 | `frontend/tests/permissoes.test.mjs` | `READ_ONLY` zera as 10 permissões de operação; `RESTRICTED` liga `somenteProprios` |
 | RN-003 | `frontend/tests/transicoes.test.mjs` | a soma dos destinos de `TRANSICOES` é 22 pares: 14 do fluxo e 8 para `cancelado` |
 | RN-004 | `frontend/tests/transicoes.test.mjs` + smoke | `motivoDeDestino(…, 'analise', 'diretoria')` = texto de F-04, igual ao `MOTIVO` da SQL |
-| RN-005 | `frontend/tests/transicoes.test.mjs` | 5 personas × 10 fases: diretoria só livre na fase 3; leitura, nenhuma |
+| RN-005 | `frontend/tests/transicoes.test.mjs` | 5 personas × 10 fases: diretoria só livre na fase 3; comercial, nenhuma |
 | RN-006 | `backend/simulator/smoke/002-quadro.mjs` | destino `cancelado` sem `CANC_MOTIVO` → `PODE = 0` |
 | RN-007 | `backend/simulator/smoke/002-quadro.mjs` | cancelar P1 com pendências: ok |
 | RN-008 | `frontend/tests/transicoes.test.mjs` | fases 9 e 10 sem destino para qualquer persona |
 | RN-009 | `backend/simulator/smoke/002-quadro.mjs` | reprovação sem motivo recusada na escrita e no gancho |
-| RN-010 | `backend/simulator/smoke/002-quadro.mjs` | depois de `sgcEscPedidoReenviar`, os 3 campos vazios |
+| RN-010 | `backend/simulator/smoke/002-quadro.mjs` | depois de `sgcEscPedidoReprovacoesLimpar`, os 3 campos vazios |
 | RN-011 | `backend/simulator/smoke/002-quadro.mjs` | entrar na fase 3 vindo da 2 e da 4: ok; da 1: recusado |
 | RN-012 | `frontend/tests/pedido.test.mjs` | `validarEnvio` recusa contato fora de `contatos` e exige data e número |
 | RN-013 | `backend/simulator/smoke/002-quadro.mjs` | `envio → enviado` com e sem `DT_ENVIO` |
 | RN-014 | `frontend/tests/pedido.test.mjs` | `tituloDoPedido('1 — Matriz', 'Nutrilatina')` = `'1 — MATRIZ · NUTRILATINA'` |
-| RN-015 | `backend/simulator/smoke/002-quadro.mjs` | `sgcPodeExcluir` para as 5 personas: 1,0,1,1,0 |
+| RN-015 | `backend/simulator/smoke/002-quadro.mjs` | `sgcPodeExcluir` para as 5 personas (admin, analista, gestor, diretoria, comercial): 1,0,1,1,0 |
 | RN-016 | `frontend/tests/permissoes.test.mjs` | `administrarQuadro` só para admin |
 | RN-017 | `backend/simulator/smoke/002-quadro.mjs` | `SELECT COUNT(*) FROM KB_CAMPO WHERE OBRIGATORIO = TRUE` = 0 no quadro `compras` |
 | RN-018 | `backend/simulator/smoke/002-quadro.mjs` | `kbCardAtualizar` aceita `alta` e recusa `altíssima`; o pedido nasce `normal` |
 | RN-019 | `backend/simulator/smoke/002-quadro.mjs` | as 7 ações geram 7 registros (`nota` e `movimento`) |
-| RN-020 | `backend/simulator/smoke/002-quadro.mjs` | nas fases 5 a 8 a única recusa possível é de persona (leitura) |
+| RN-020 | `backend/simulator/smoke/002-quadro.mjs` | nas fases 5 a 8 a única recusa possível é de persona (comercial ou diretoria fora da fase dela) |
+| RN-021 | `backend/simulator/smoke/002-quadro.mjs` | ver C-044 |
 | RNF-001 | `backend/simulator/smoke/002-quadro.mjs` | contador de execuções ao abrir o pedido = 2 |
 | RNF-002 | `frontend/tests/pedido.test.mjs` | `ATUALIZAR_A_CADA_MS === 60000` (a pausa com a aba escondida é da lib; verificação manual fecha o visual) |
 | RNF-003 | `backend/simulator/smoke/002-quadro.mjs` | `sgcNotificacoesListar` com `limite: 25` e 60 registros devolve 25 linhas e `…Total` = 60 |
@@ -668,33 +727,35 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 
 **Fornece à 003 (itens e análise):**
 
-- `sgcPedidoCarregar`: a 002 devolve `{ ok, pedido, itens: [], alertas: [] }`; a
-  003 preenche as duas listas **dentro da mesma SF** (RNF-001: abrir card = 2
-  execuções).
-- O bloco `PENDENCIAS` de `sgcPodeMover`: subconsulta única, marcada no código,
-  que a 003 substitui pela contagem completa (AL-04, AL-05, AL-06, PZ-03).
-  A 003 publica também `sgcAnaliseSaidaVerificar` (SQL, `cardId`, devolve
-  `PODE`/`MOTIVO` com a mensagem detalhada), que a 002 chama no `antesDeMover`
-  do destino `tecnica`.
+- `sgcPedidoCarregar`: a 002 monta as três consultas e devolve
+  `{ ok, pedido, itens, alertas }` numa execução, com **as colunas fechadas na
+  seção de contratos** (o alerta liga por `CODPROD`, não por `ID_ITEM`).
+- O bloco `PENDENCIAS`/`PENDENCIAS_MOTIVO` de `sgcPodeMover`: duas subconsultas
+  marcadas no código, que a 003 substitui pelo corpo de
+  `sgcAnaliseSaidaVerificar` (SQL, `cardId`, devolve `PODE`/`MOTIVO`), com
+  `{{cardId}} = C.ID`. A mesma SF é chamada pela tela, dentro de
+  `verificarSaidaAnalise` (003), no `antesDeMover` do destino `tecnica`.
+- `sgcEscPedidoReprovacoesLimpar` (002, id 7256, `{{usuarioId}}` + `{{idCard}}`):
+  quem a chama é o `sgcAnaliseSair` da 003, depois do movimento (AT-04, R-011).
+  `sgcEscPedidoReenviar` **não existe**.
 - As colunas `VL_TOTAL`, `PRAZO_PADRAO`, `PRAZO_ACORDADO` e
   `PRAZO_JUSTIFICATIVA` de `SGC_PEDIDO`, e o campo do quadro
   `alertas_pendentes`: criados aqui, escritos lá.
 - A lista de produtos do diálogo "Reprovar" (técnica) sai dos itens da 003; a
-  002 grava só os códigos em `TEC_PRODUTOS_REPROVADOS`.
+  002 grava só os códigos em `TEC_PRODUTOS_REPROVADOS`. Ao aprovar na diretoria
+  e ao registrar o envio, a 002 chama `sgcEscItemStatusFase` (003, F-07).
 
 **Fornece à 004 (agenda):**
 
-- O formato de `SGC_PEDIDO` com `ORIGEM = 'agenda'` e `ID_AGENDA`, e o contrato
-  de criação: `kbCardCriar` com `origem: 'sistema'` e `criadoPor` (spec 013 da
-  lib), seguido da gravação da capa. Como o cron **não tem sessão**,
-  `sgcEscPedidoCriar` (guardada por `:VAR_USER`) não serve: a 004 publica a sua
-  própria escrita equivalente, recebendo `criadoPor` como parâmetro, e preenche
-  as mesmas colunas.
-- **A 004 precisa expor** uma escrita `sgcEscAgendaRegistrarEnvio` (`cardId` ou
-  `agendaId`, `dtEnvioReal`) que guarde a data planejada original e passe a
-  mostrar a real (EN-05 A). `sgcEnvioIndustriaRegistrar` a chama por id quando
-  `ID_AGENDA > 0`; o passo é opcional e não derruba o envio se o id ainda não
-  existir no mapa.
+- `sgcEscPedidoCapaInserir` (002, id 7260, `{{usuarioId}}`, sem `:VAR_USER`):
+  é a capa do pedido criado pelo cron (R-010). O `sgcAgendaProcessar` chama
+  `kbCardCriar` com `origem: 'sistema'` e `criadoPor` (spec 013 da lib) e, em
+  seguida, esta escrita por id, com `origem: 'agenda'` e `idAgenda`. A tela
+  continua em `sgcEscPedidoCriar` (`:VAR_USER`).
+- **A 002 depende de** `sgcEscAgendaEnvio` (004, id 7458, input
+  `{ idCard, dtEnvio }`): o `sgcEnvioIndustriaRegistrar` a chama por id quando
+  `ID_AGENDA > 0`, e a agenda guarda planejado × real (EN-05 A, R-012). O passo
+  é opcional e não derruba o envio se o id ainda não existir no mapa.
 
 **Do integrador (arquivos compartilhados):**
 
@@ -713,22 +774,23 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 | # | Decisão | Alternativa descartada | Por quê |
 |---|---|---|---|
 | D-001 | A matriz de permissões e a tabela de transições existem duas vezes: `lib/transicoes.ts` (tela) e `sgcPodeMover` (servidor) | uma só, na tela | o motor não conhece persona e só pergunta por SQL (spec 013, D-074); a tela precisa desabilitar o botão **antes** do clique. O teste de 500 combinações é o que impede as duas de divergirem |
-| D-002 | A ordem do `CASE` da SQL é a mesma ordem do `if` da regra pura | cada lado na ordem que ficar melhor | duas respostas diferentes para o mesmo caso ("é leitura" × "transição não existe") confundem mais do que barram |
+| D-002 | A ordem do `CASE` da SQL é a mesma ordem do `if` da regra pura | cada lado na ordem que ficar melhor | duas respostas diferentes para o mesmo caso ("é comercial" × "transição não existe") confundem mais do que barram |
 | D-003 | O gancho recusa `→ cancelado` enquanto o motivo não estiver gravado | confiar no diálogo da tela | é isso que faz "não existe cancelamento silencioso" (CA-02) valer fora da tela, sem o motor precisar conhecer formulário nenhum |
 | D-004 | Os campos do quadro são espelho de mão única (pedido → quadro) | gravar nos dois sentidos | dois donos do mesmo dado divergem; a regra lê sempre o pedido, e o campo do quadro só existe para a capa e a busca não custarem SF por cartão (DS-01 A) |
-| D-005 | O quadro tem 6 campos: os 4 do `000` mais `alertas_pendentes` e `motivo_cancelamento` | só os 4 | C-06 pede os alertas na capa da Análise e CA-04 pede o motivo na capa de Canceladas; sem campo, cada cartão custaria uma consulta |
+| D-005 | O quadro tem 6 campos (confirmados no `000` revisado): `fornecedor`, `filial`, `valor_total`, `prioridade`, `alertas_pendentes`, `motivo_cancelamento` | só os 4 primeiros | C-06 pede os alertas na capa da Análise e CA-04 pede o motivo na capa de Canceladas; sem campo, cada cartão custaria uma consulta |
 | D-006 | Uma automação de e-mail por fase (11 no total) | uma só, sem `faseId` | EM-01 A pede "por fase" justamente para o administrador ajustar o texto de uma etapa sem tocar em código; o custo é 11 linhas no instalador |
 | D-007 | `/pedidos/novo` chama `kbCardCriar` e depois a escrita da capa, da tela | uma JS do SGC que chame `kbCardCriar` por dentro | chamada aninhada não propaga `:VAR_USER` com garantia: o card nasceria sem criador e sem responsável |
 | D-008 | `sgcEnvioIndustriaRegistrar` confere persona e fase **no próprio JS**, e as duas escritas que ele chama recebem `enviadoPor` como parâmetro | `:VAR_USER` nas escritas do envio | a chamada é aninhada (mesma razão de D-076 da lib). A conferência acontece uma vez, antes do e-mail — que é a parte irreversível |
-| D-009 | `sgcEscPedidoReenviar` é chamada no `antesDeMover` do destino `tecnica` | uma ação extra "Enviar para aprovação técnica" | a ação extra obrigaria a desabilitar o "Mover para" normal e inventaria um segundo caminho para o que já é uma transição. Risco assumido: se o motor recusar o movimento depois, as reprovações antigas já terão sido apagadas — texto informativo, não decisão |
-| D-010 | `SGC_PEDIDO.PRIORIDADE` guarda o valor inicial; o valor vivo é o campo do quadro | manter os dois sincronizados | prioridade é o único dos campos que a **pessoa** edita direto no card (C-07 B); sincronizar de volta custaria uma escrita por edição de campo, e o motor não avisa o consumidor quando um campo muda |
+| D-009 | A limpeza das reprovações acontece **depois** do movimento, dentro do `sgcAnaliseSair` da 003, que chama `sgcEscPedidoReprovacoesLimpar` (R-011) | escrever no `antesDeMover`, ou uma ação extra "Enviar para aprovação técnica" | escrever antes apagaria as reprovações mesmo se o motor recusasse o movimento; e a ação extra obrigaria a desabilitar o "Mover para" normal, inventando um segundo caminho para o que já é uma transição. Remover zerados, recalcular o total e limpar reprovação são o mesmo passo do processo — ficam numa chamada só |
+| D-010 | Prioridade vive **só** no campo do quadro; `SGC_PEDIDO` não tem a coluna (R-009) | guardar nas duas pontas e sincronizar | prioridade é o único dos campos que a **pessoa** edita direto no card (C-07 B); sincronizar de volta custaria uma escrita por edição de campo, e o motor não avisa o consumidor quando um campo muda. `/pedidos/novo` passa o valor inicial nos `valores` de `api.cardCriar` |
 | D-011 | Cancelar segue a mesma regra de movimento: quem não move aquele card não o cancela (a diretoria cancela na fase dela) | diretoria cancela de qualquer fase | CA-01 libera a fase de origem, P-07 limita a persona; juntas, cancelar é um movimento como os outros, e o gancho não precisa de exceção |
 | D-012 | Nenhum campo do quadro é obrigatório | marcar os campos da fase como obrigatórios | o motor cobra obrigatório em qualquer direção e barraria cancelar e voltar (F-05 A) |
 | D-013 | A persona é lida uma vez por sessão (`sgcPersonaAtual`) e guardada em memória | consultar a cada tela | teto de 300 execuções/min; a persona muda raramente e a mudança vale na sessão seguinte (C-042) |
 | D-014 | A tela de segurança lista **todos** os usuários ativos da plataforma, com a persona vazia quando não há linha | cadastrar usuário no SGC | P-13: usuários vêm do cadastro da plataforma, sem cadastro próprio |
 | D-015 | As notificações saem de uma SQL sobre `KB_LOG`, `KB_MOVIMENTO` e `KB_MENSAGEM`, restritas aos cards em que a pessoa é responsável | uma tabela de notificações própria | é o feed de UI-07 B sem nenhuma tabela, escrita ou gatilho novo; o custo é uma consulta com `UNION ALL` paginada |
 | D-016 | O corpo do e-mail do pedido é montado na tela e chega pronto ao JS | montar no servidor | a lista de itens é da 003 e já está carregada na tela; montá-la de novo no servidor seria a segunda implementação da mesma tabela |
-| D-017 | A persona `leitura` ocupa o lugar que o SGC antigo dava a `comercial` | trazer `comercial` na onda 1 | o `000` fecha a onda 1 com cinco personas e `comercial` só faz sentido com as solicitações do comercial (onda 3) |
+| D-017 | A quinta persona é `comercial` (P-01, R-001), e ela é a **única** sem acesso ao quadro: fora do menu, fora da rota e recusada no servidor | uma persona `leitura` que vê o quadro sem mover | P-03 é explícito, e quem precisa "ver e não operar" já tem o `READ_ONLY` da plataforma (P-08 B) — duas formas de dizer a mesma coisa é uma a mais |
+| D-018 | As escritas chamadas por id (`…CapaInserir`, `…ReprovacoesLimpar`, `…Envio`, `…ComunicacaoInserir`) recebem `{{usuarioId}}` e não `:VAR_USER` | guardar todas por `:VAR_USER` | chamada aninhada e cron não propagam sessão; a persona é conferida pelo JS que chama, antes de escrever (exceção registrada no `000`, R-007/R-010/R-011) |
 
 ## Riscos
 
@@ -739,6 +801,7 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 | `:VAR_USER` não propagar dentro do JAVASCRIPT do envio | envio recusado para todo mundo | o JS resolve o usuário numa consulta só, no primeiro passo, e devolve `{ ok: false, error: 'Sessão inválida.' }` — falha fechada e visível, nunca envio em nome errado; o smoke prova com os 5 usuários |
 | A 003 mexer no bloco `PENDENCIAS` e quebrar as outras transições | pedido travado na Análise | o bloco é uma subconsulta isolada, com o comentário do contrato; os testes C-004, C-005 e C-025 da 002 continuam valendo depois da troca |
 | Mudança de nome de fase pelo administrador | regra procurando nome | nenhuma regra usa nome: tudo passa por `SGC_FASE.CHAVE` (RF-005), e o smoke renomeia uma fase antes de repetir C-004 |
+| As quatro escritas chamadas por id aceitam qualquer `{{usuarioId}}` | quem chamar a SF direto escreve em nome de outro | elas só existem para cron e JS, e o perfil business pode deixar de liberá-las (R-007, verificação da onda 1); nenhuma delas decide nada — gravam o que o JS já conferiu, e as decisões com regra (aprovar, reprovar, cancelar) continuam guardadas por `:VAR_USER` |
 
 ## Complexity Tracking
 
