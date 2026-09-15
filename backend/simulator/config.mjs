@@ -44,7 +44,7 @@ export const HEALTH_TABLE = 'KB_BOARD';
 //
 // Ordem do sandbox (mesma do README da 000): a 001 lê fornecedor/filial do
 // WinThor (precisa da conexão JDBC já criada), a 002 lê a 001, a 003 lê a 002
-// e a 004 lê a 002 e a 003. add-004..007 ainda são stubs (definitions = []).
+// e a 004 lê a 002 e a 003. Cada add-00N publica as SFs da sua spec.
 export const PUBLISH_ORDER = [
   'add-001-kanban.mjs',
   'add-003-jdbc-winthor.mjs',

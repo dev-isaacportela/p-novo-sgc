@@ -34,7 +34,19 @@ for (const [name, definition] of byName) {
     continue;
   }
   if (!/^\s*(SELECT|WITH)/i.test(definition.code)) {
-    resultados.push({ name, status: 'pulado', detalhe: 'escrita SQL' });
+    // Diferenca que o dialeto esconde: no MySQL, `INSERT ... SELECT <expr> WHERE ...`
+    // sem FROM e erro de sintaxe (precisa de FROM DUAL); o SQLite aceita. O
+    // tradutor apaga o FROM DUAL, entao o unico jeito de pegar isso aqui e olhar
+    // o texto: INSERT com SELECT e WHERE, mas sem nenhum FROM, e bug de producao.
+    // Subconsultas entre parenteses (a guarda EXISTS, por exemplo) saem antes de
+    // olhar: o que importa e o SELECT de fora ter ou nao o seu proprio FROM.
+    let nivelZero = definition.code;
+    for (let i = 0; i < 30 && /\([^()]*\)/.test(nivelZero); i += 1) nivelZero = nivelZero.replace(/\([^()]*\)/g, ' ');
+    const semFrom = /\bINSERT\b/i.test(nivelZero) && /\bSELECT\b/i.test(nivelZero)
+      && /\bWHERE\b/i.test(nivelZero) && !/\bFROM\b/i.test(nivelZero);
+    resultados.push(semFrom
+      ? { name, status: 'FALHOU', detalhe: 'INSERT ... SELECT ... WHERE sem FROM DUAL: quebra no MySQL' }
+      : { name, status: 'pulado', detalhe: 'escrita SQL' });
     continue;
   }
   try {

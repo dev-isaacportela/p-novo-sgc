@@ -70,6 +70,9 @@ test('RN-015 / P-13: excluem pedido admin, gestor e diretoria; veem Segurança a
   // FO-07 / RF-013 da 001: quem parametriza fornecedor; READ_ONLY não salva.
   assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').editarFornecedor), ['admin', 'gestor', 'diretoria']);
   assert.equal(permissoesDe('gestor', 'READ_ONLY').editarFornecedor, false);
+  // D-12: Coberturas é tela de admin e gestor; READ_ONLY continua vendo (só não grava).
+  assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').verCoberturas), ['admin', 'gestor']);
+  assert.equal(permissoesDe('gestor', 'READ_ONLY').verCoberturas, true);
   assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').aprovarTecnica), ['admin', 'gestor']);
   assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').aprovarDiretoria), ['admin', 'diretoria']);
 });

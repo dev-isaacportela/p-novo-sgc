@@ -10,7 +10,7 @@
 // por id, antes e depois do sync trazer os ids reais.
 //
 // Ganchos (regras ligadas do SGC — sgcPodeMover/sgcPodeExcluir em KB_META)
-// entram aqui com a spec 002; por enquanto a instalação é só o motor puro.
+// entram aqui com a spec 002: ligados no entrypoint quando as SFs ja existem (rodar de novo apos o add-005).
 
 import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';

@@ -204,9 +204,14 @@ export default function FornecedorPage() {
         description={<span className="text-[12px] text-ink-secondary">Código {codfornec}</span>}
         actions={<>
           <Button onClick={() => navigate('/fornecedores')}>Voltar</Button>
-          {somenteLeitura ? null : (
-            <Button variant="primary" onClick={salvar} disabled={salvando || carregando}>{salvando ? 'Salvando…' : 'Salvar'}</Button>
-          )}
+          <Button
+            variant="primary"
+            onClick={salvar}
+            disabled={salvando || carregando || somenteLeitura}
+            title={somenteLeitura ? 'O seu perfil não altera a parametrização de fornecedores.' : undefined}
+          >
+            {salvando ? 'Salvando…' : 'Salvar'}
+          </Button>
         </>}
       />
 

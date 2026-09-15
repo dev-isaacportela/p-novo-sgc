@@ -1,8 +1,8 @@
 // Dados simulados do SGC 2 — os 5 usuarios da equipe de compras, o quadro
 // "Compras" e as 10 fases do motor (regra F-01: mesmos nomes e mesma ordem do
 // SGC anterior), mais os dados de cada spec da onda 1, um modulo por spec em
-// seed/00N-*.mjs (hoje so a 002 grava algo: as personas de SGC_USUARIO_PERSONA
-// — as demais chegam stub ate a feature preencher). Nenhum KB_CAMPO nem card
+// seed/00N-*.mjs (personas em SGC_USUARIO_PERSONA so pela 002; fornecedores e
+// filiais so pela 001 — R-017). Nenhum KB_CAMPO nem card
 // aqui: sao dado da 002 (campos do quadro) em diante.
 //
 // O SCHEMA nao esta aqui (sai de setup-backend.mjs — as 16 tabelas SGC_* — mais
