@@ -78,10 +78,18 @@ export function createRunner(db, { resolveById = () => null, onQuery } = {}) {
       runQueryMitra: async ({ sql }) => ({ result: { rows: run(bindParams(sql, input, userId)).map(plain) } }),
       runDmlMitra: async ({ sql }) => { run(bindParams(sql, input, userId)); return { result: { rowsAffected: 1, message: 'ok' } }; },
       runDdlMitra: async ({ sql }) => { run(bindParams(sql, input, userId)); return { result: { message: 'ok' } }; },
+      // Chamada aninhada (SF chamando outra SF por id) NAO propaga :VAR_USER
+      // com garantia na plataforma real (000/README.md, R-013) — e por isso
+      // as "escritas por id" (kbCardCriar em nome de alguem via criadoPor,
+      // sgcEsc* internas) recebem o id de quem grava por PARAMETRO explicito,
+      // nunca via sessao. userId = 0 aqui reproduz essa perda de sessao: sem
+      // isso, uma SF com sessao (ex.: sgcAgendaProcessarManual chamada pela
+      // tela) faria kbCardCriar enxergar sessao propria e nunca cair no ramo
+      // "origem: sistema" que RF-008 da lib e R-010/R-018 do 000 dependem.
       executeServerFunctionMitra: async ({ serverFunctionId, input: entrada }) => {
         const alvo = resolveById(Number(serverFunctionId));
         if (!alvo) throw new Error(`Server function ${serverFunctionId} nao existe no simulador.`);
-        const output = await execute(alvo, entrada || {}, userId);
+        const output = await execute(alvo, entrada || {}, 0);
         return { result: { executionStatus: 'COMPLETED', serverFunctionId, output } };
       },
       sendEmailMitra: async ({ to, subject }) => {
