@@ -86,3 +86,35 @@ export function resumoBo(itens: { STATUS: string }[]): { abertos: number; libera
     liberados: itens.filter((item) => item.STATUS === 'liberado').length,
   };
 }
+
+/* ── CSV de /bo (A-15, R-037): as MESMAS colunas da tabela do painel, sobre
+ *    as linhas já carregadas do filtro atual — zero execução nova. ── */
+
+export interface PainelBoLinha {
+  ID: number; TITULO: string; FORNECEDOR: string; FILIAL: string;
+  CODPROD: number; DESCRICAO: string; QT_PENDENTE: number; VL_PENDENTE: number;
+  CLIENTES_IMPACTADOS: number; DT_PREVISAO_BO: string; STATUS: string;
+}
+
+export const COLUNAS_CSV_BO: string[] = [
+  'Produto', 'Código', 'Pedido', 'Fornecedor', 'Filial',
+  'Pendente', 'Valor', 'Clientes impactados', 'Previsão', 'Status',
+];
+
+/** Vírgula decimal e duas casas — o que o Excel em pt-BR lê sem configurar nada. */
+const valorBr = (valor: number) => valor.toFixed(2).replace('.', ',');
+
+export function linhasCsvBo(linhas: PainelBoLinha[]): (string | number)[][] {
+  return linhas.map((l) => [
+    l.DESCRICAO,
+    l.CODPROD,
+    l.TITULO,
+    l.FORNECEDOR,
+    l.FILIAL,
+    l.QT_PENDENTE,
+    valorBr(l.VL_PENDENTE),
+    l.CLIENTES_IMPACTADOS,
+    l.DT_PREVISAO_BO,
+    l.STATUS,
+  ]);
+}

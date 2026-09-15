@@ -5,13 +5,15 @@
 // predominantemente leitura (RF-015..RF-017/RF-022).
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Download } from 'lucide-react';
 import { linhas, linha, comPadrao } from '@/lib/mitra-api';
 import {
   PageHeader, Panel, Toolbar, SearchInput, SelectMenu, FilterChip, Table, Th, Td, Tr,
-  RowTitle, RowMeta, Code, Status, Dash, TextLink, Pagination, EmptyState,
+  RowTitle, RowMeta, Code, Status, Dash, TextLink, Pagination, EmptyState, Button,
 } from '@/components/page';
+import { baixarCsv, textoCsv } from '@/lib/csv';
 import { moeda, fmtData, hojeIso } from '@/lib/formato';
-import { rotuloSituacaoPrevisao, type SituacaoPrevisao } from '@/lib/bo';
+import { rotuloSituacaoPrevisao, COLUNAS_CSV_BO, linhasCsvBo, type SituacaoPrevisao } from '@/lib/bo';
 
 const LIMITE = 20;
 
@@ -77,6 +79,12 @@ export default function BoPage() {
   const situacaoSelecionada = OPCOES_SITUACAO.find((o) => o.value === situacao && o.value !== '');
   const statusSelecionado = status === '' ? OPCOES_STATUS.find((o) => o.value === '') : undefined;
 
+  // A-15/R-037: exporta a página atual do painel (D-012 — zero execução nova).
+  function exportar() {
+    const nome = `produtos-em-bo-${hoje}.csv`;
+    baixarCsv(nome, textoCsv(COLUNAS_CSV_BO, linhasCsvBo(linhasPainel)));
+  }
+
   return (
     <>
       <PageHeader
@@ -84,6 +92,16 @@ export default function BoPage() {
         title="Produtos em B.O."
         description="Itens que a indústria não confirmou, previsão de liberação e clientes impactados — de todos os pedidos."
         meta={<span><strong>{total.toLocaleString('pt-BR')}</strong> {status === 'aberto' ? 'em aberto' : 'no total'}</span>}
+        actions={
+          <Button
+            onClick={exportar}
+            disabled={carregando || linhasPainel.length === 0}
+            title={linhasPainel.length === 0 ? 'Nada para exportar neste filtro.' : undefined}
+          >
+            <Download aria-hidden />
+            Exportar CSV
+          </Button>
+        }
       />
 
       <Panel>

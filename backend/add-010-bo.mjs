@@ -32,7 +32,7 @@ export const WINTHOR = ['sgcWintClientesImpactados'];
    leva a MESMA guarda sobre ele (A1 da revisão da onda 1).
    ────────────────────────────────────────────────────────────────────────── */
 
-function guarda(personas, quem = ':VAR_USER') {
+function guarda(personas, quem = ':VAR_USER', extra = '') {
   const lista = personas.map((p) => `'${p}'`).join(', ');
   return `EXISTS (
     SELECT 1 FROM INT_USER IU
@@ -43,6 +43,7 @@ function guarda(personas, quem = ':VAR_USER') {
                                  WHEN 'ADMIN' THEN 'admin'
                                  WHEN 'RESTRICTED' THEN 'comercial'
                                  ELSE 'analista' END) IN (${lista})
+      ${extra}
   )`;
 }
 
@@ -51,6 +52,19 @@ const guardaInterna = (personas) => guarda(personas, '{{usuarioId}}');
 
 /** RF-019/RN-009 — marcar, liberar, registrar previsão e anexar é de admin/analista/gestor. */
 const PERSONAS_BO = ['admin', 'analista', 'gestor'];
+
+// A-6 (revisão onda 2): sgcEscBoPrevisaoInserir/sgcEscPedidoPrevisaoBo/
+// sgcEscBoDocumentoInserir são chamadas DIRETO da tela só com guarda(persona)
+// — sem checar fase nem dono, um analista gravava previsão num card fora de
+// Faturamento/B.O. e um RESTRICTED gravava em card alheio. Mesma condição de
+// pedidoEmBo (JS acima) e a mesma junção SGC_FASE→KB_FASE de lá, aqui em SQL,
+// dentro do EXISTS da guarda (reusa o alias IU já filtrado por `quem`).
+const guardaFaseEDono = (idCardExpr, quem = ':VAR_USER') => `AND EXISTS (
+        SELECT 1 FROM KB_CARD C
+        JOIN SGC_FASE F ON F.BOARD_ID = C.BOARD_ID AND F.FASE_ID = C.FASE_ID AND F.CHAVE IN ('faturamento', 'bo')
+        WHERE C.ID = ${idCardExpr}
+          AND (COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'RESTRICTED' OR C.CRIADO_POR = ${quem})
+      )`;
 
 /* ─────────────── leituras — WinThor (Oracle) ─────────────── */
 
@@ -176,12 +190,12 @@ WHERE ID_CARD = {{idCard}} AND CODPROD IN ({{codprods}}) AND STATUS <> 'removido
 const SQL_BO_PREVISAO_INSERIR = `INSERT INTO SGC_BO_PREVISAO (ID_CARD, DT_PREVISAO, OBSERVACAO, REGISTRADO_POR, REGISTRADO_EM)
 SELECT {{idCard}}, '{{dtPrevisao}}', '{{observacao}}', :VAR_USER, '{{registradoEm}}'
 FROM DUAL
-WHERE ${guarda(PERSONAS_BO)}`;
+WHERE ${guarda(PERSONAS_BO, ':VAR_USER', guardaFaseEDono('{{idCard}}'))}`;
 
 // RN-004/C-005: sempre zera ALERTA_BO_EM — registrar previsão é, por
 // definição, reiniciar a cobrança. Não há parâmetro para isso não acontecer.
 const SQL_PEDIDO_PREVISAO_BO = `UPDATE SGC_PEDIDO SET DT_PREVISAO_BO = '{{dtPrevisao}}', ALERTA_BO_EM = ''
-WHERE ID_CARD = {{idCard}} AND ${guarda(PERSONAS_BO)}`;
+WHERE ID_CARD = {{idCard}} AND ${guarda(PERSONAS_BO, ':VAR_USER', guardaFaseEDono('{{idCard}}'))}`;
 
 // R-040: ENDERECO, o mesmo nome e tipo de SGC_FORNECEDOR_DOCUMENTO.ENDERECO (001).
 // RN-011: tipo diferente de 'carta_falta' é gravado como 'outro' — normalizado
@@ -189,7 +203,7 @@ WHERE ID_CARD = {{idCard}} AND ${guarda(PERSONAS_BO)}`;
 const SQL_BO_DOCUMENTO_INSERIR = `INSERT INTO SGC_BO_DOCUMENTO (ID_CARD, TIPO, NOME_ARQUIVO, ENDERECO, ENVIADO_POR, ENVIADO_EM)
 SELECT {{idCard}}, CASE WHEN '{{tipo}}' = 'carta_falta' THEN 'carta_falta' ELSE 'outro' END, '{{nomeArquivo}}', '{{endereco}}', :VAR_USER, '{{enviadoEm}}'
 FROM DUAL
-WHERE ${guarda(PERSONAS_BO)}`;
+WHERE ${guarda(PERSONAS_BO, ':VAR_USER', guardaFaseEDono('{{idCard}}'))}`;
 
 const SQL_PEDIDO_ALERTA_BO = `UPDATE SGC_PEDIDO SET ALERTA_BO_EM = '{{alertaEm}}'
 WHERE ID_CARD = {{idCard}} AND ${guardaInterna(PERSONAS_BO)}`;
@@ -267,7 +281,14 @@ async function consultar(sql) { return linhasDe(await runQueryMitra({ projectId,
 async function chamar(nome, entrada) {
   const id = SGC_IDS[nome];
   if (!id) throw new Error('Server function sem id no mapa: ' + nome);
-  return desembrulhar(await executeServerFunctionMitra({ projectId, serverFunctionId: Number(id), input: entrada || {} }));
+  const resposta = await executeServerFunctionMitra({ projectId, serverFunctionId: Number(id), input: entrada || {} });
+  // D-15: resposta com executionStatus FAILED nao lanca sozinha — sem isso o
+  // chamador (ex.: sgcBoMonitorar) segue como se a escrita tivesse ido.
+  const resultado = (resposta && resposta.result) || resposta;
+  if (resultado && resultado.executionStatus === 'FAILED') {
+    throw new Error((resultado && resultado.error) || ('Falha em ' + nome + '.'));
+  }
+  return desembrulhar(resposta);
 }
 function inteiro(valor) { const n = Number(valor); return Number.isFinite(n) ? Math.trunc(n) : 0; }
 function numero(valor) { const n = Number(valor); return Number.isFinite(n) ? n : 0; }
@@ -495,6 +516,16 @@ for (const linha of loteCards) {
       await chamar('kbNotaRegistrar', { cardId: idCard, texto: textoAviso, usuarioId: quemId });
     } catch (e) { /* nota é acessória */ }
     await chamar('sgcEscPedidoAlertaBo', { idCard: idCard, alertaEm: hoje, usuarioId: quemId });
+    // A-2: sgcEscPedidoAlertaBo é guardada pela persona do responsável (QUEM)
+    // — 0 linhas casadas volta COMPLETED, não FAILED (chamar só lança em
+    // FAILED de verdade). Releio a linha e só conto o que releu; o que não
+    // gravou (responsável sem persona operante) vai para erros[], mesmo
+    // padrão do 'gravada' em add-008-notas-fiscais.mjs.
+    const pedidoGravado = await consultar("SELECT ALERTA_BO_EM FROM SGC_PEDIDO WHERE ID_CARD = " + idCard);
+    if (!pedidoGravado[0] || String(pedidoGravado[0].ALERTA_BO_EM) !== hoje) {
+      erros.push({ idCard: idCard, erro: 'responsável sem persona operante para registrar o alerta de B.O.' });
+      continue;
+    }
     avisados += 1;
     resultados.push({ idCard: idCard, abertos: abertos });
   } catch (erro) {

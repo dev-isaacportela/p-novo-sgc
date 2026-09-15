@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   situacaoDaPrevisao, rotuloSituacaoPrevisao, validarMarcacaoBo, textoAvisoBo, resumoBo,
+  COLUNAS_CSV_BO, linhasCsvBo,
 } from '../src/lib/bo.ts';
 import { menuParaPersona, permissoesDe } from '../src/lib/permissoes.ts';
 
@@ -81,4 +82,21 @@ test('C-013: o menu do comercial tem exatamente 1 item, o do painel de B.O. (cob
   const menu = menuParaPersona(permissoesDe('comercial', 'MEMBER'));
   assert.equal(menu.length, 1);
   assert.equal(menu[0].to, '/bo');
+});
+
+test('A-15 (revisão onda 2): linhasCsvBo — as colunas do painel de /bo, valor em vírgula decimal (R-037)', () => {
+  const linha = {
+    ID: 1, TITULO: 'BENENUTRI MATRIZ · NESTLÉ', FORNECEDOR: 'Nestlé', FILIAL: 'Benenutri Matriz',
+    CODPROD: 5201, DESCRICAO: 'COMPOSTO LACTEO SEM LACTOSE 400 G', QT_PENDENTE: 40, VL_PENDENTE: 760,
+    CLIENTES_IMPACTADOS: 4, DT_PREVISAO_BO: '2026-09-13', STATUS: 'aberto',
+  };
+  assert.deepEqual(COLUNAS_CSV_BO, [
+    'Produto', 'Código', 'Pedido', 'Fornecedor', 'Filial',
+    'Pendente', 'Valor', 'Clientes impactados', 'Previsão', 'Status',
+  ]);
+  assert.deepEqual(linhasCsvBo([linha]), [[
+    'COMPOSTO LACTEO SEM LACTOSE 400 G', 5201, 'BENENUTRI MATRIZ · NESTLÉ', 'Nestlé', 'Benenutri Matriz',
+    40, '760,00', 4, '2026-09-13', 'aberto',
+  ]]);
+  assert.deepEqual(linhasCsvBo([]), []);
 });
