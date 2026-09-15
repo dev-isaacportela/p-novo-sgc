@@ -324,10 +324,10 @@ Consultas Oracle no smoke provam contagem > 0.
 
 | Rota | Tela | Persona | Spec |
 |---|---|---|---|
-| `/notas-fiscais` | sugestões (Pedido · Fornecedor · Fase · NF · Score · Status · Validar / Ver / Recusar) + busca híbrida por número | admin, analista, gestor; diretoria lê | 005 |
+| `/notas-fiscais` | fila de sugestões (Pedido · Fornecedor · NF · Valor · Pontuação · Situação · Validar / Recusar), filtro por situação e fornecedor, busca na fila por número/fornecedor/pedido; a busca híbrida no WinThor (`sgcWintNfBuscar`) é do diálogo "Registrar NF" da aba do card | admin, analista, gestor; diretoria lê | 005 |
 | `/faturamentos-pendentes` | total, filtros 0 contato / 3 / 5 / +5 dias úteis, busca, exportar CSV, Registrar contato, Enviar cobrança | idem | 005 |
 | `/nfs-em-atraso` | notas vencidas dos cards em Enviado e Trânsito: total e valor, faixas até 3 / 4–7 / +7 dias, busca, CSV, "Sincronizar com o WinThor" | idem | 006 |
-| `/bo` | painel consolidado dos produtos em B.O. (previsão, clientes impactados, card) | todas, inclusive comercial | 007 |
+| `/bo` | painel consolidado dos produtos em B.O. (previsão, clientes impactados, card), filtros por previsão e status, busca, exportar CSV (R-037) | todas, inclusive comercial | 007 |
 | card | abas Notas fiscais (005), Recebimento (006), B.O. (007) | conforme R-028 | — |
 
 Menu (`AdminLayout`, base S2): grupo **Fiscal** (Notas fiscais, Faturamentos pendentes, NFs em atraso)
@@ -358,3 +358,41 @@ e **Produtos em B.O.** no grupo Compras. Capa do card: etiqueta "Faturamento pen
 | R-047 | **Espelho da capa pelo cron**: `kbCardAtualizar` grava a lista de responsáveis e o prazo que recebe — sem eles, apaga. O cron da 005 lê título, responsáveis (`KB_CARD_RESPONSAVEL`, na ordem) e prazo do card e reenvia os quatro campos junto de `valoresJson`, o mesmo que `atualizarCapaDoQuadro` (`abas/capa-do-quadro.ts`) faz na tela. |
 | R-048 | **Campo do quadro `faturamento`**: definido em `CAMPOS_008` exportado pelo `add-008` (texto, `noCard: true`, idempotente por chave, criado pelo `isEntrypoint()` do `add-008` na plataforma); a base insere o campo no seed (`KB_CAMPO`, a partir de `CAMPOS_008`) e o integrador o acrescenta à `CAPA_POR_FASE` de `enviado`, `transito`, `faturamento` e `bo` no `add-005`. |
 | R-049 | **Sem `contagem` nas abas da onda 2**: `AbaExtra.contagem` é síncrona e lê só `card.valores`; como não há campo do quadro para "notas pendentes" nem "itens de B.O. abertos", as abas Notas fiscais, Recebimento e B.O. não declaram `contagem` (a de Alertas continua, sobre `alertas_pendentes`). |
+
+## Revisão adversarial da onda 2 (2026-09-15) e dívidas abertas
+
+Revisão feita sobre `develop` depois da S4 (integração das três features), com o código nas mãos; quatro achados foram provados executando as SFs reais no simulador. Os achados altos e médios foram corrigidos nas branches `fix/005-revisao`, `fix/006-revisao` e `fix/007-revisao` (os do integrador direto em `develop`) e mergeados antes da `release/onda-2`. O ensaio no navegador (S4) achou mais um (B-1).
+
+**Corrigido antes da release**
+
+| Id | O que era | Como ficou |
+|---|---|---|
+| B-1 | `sgcNfsEmAtraso` não devolvia `SITUACAO`; a tela rotulava toda nota vencida como "Sem prazo parametrizado". | Coluna na listagem; o smoke C-015 exige `SITUACAO = atrasada` em toda linha. |
+| A-12 | `MOTIVOS.conclusaoNf` trazia a frase com `N` literal, que nunca sai do servidor; a de B.O. não existia. | As frases com contagem são só do servidor (`pendencias-conclusao-{nf,bo}.sql`); `MOTIVOS` fica com `transito` e `boEntrada`, conferidos caractere a caractere pelo smoke 002. |
+| A-13 | O teste das 500 combinações aceitava qualquer `PODE` nos 4 pares "só do servidor". | Afirma o resultado dos dois estados (sem e com item de B.O. aberto); R-044 emendada. |
+| A-14 | Ramos `if/else` "pendente de S4" vivos nos smokes 006/007: sem o gancho composto, os testes passariam pelo `else`. | Apagados; C-003, C-008, RN-008, C-010 e C-019 exigem o gancho composto e `sgcEscAvisoInserir`. |
+| A-16 | 000 dizia `sgcFaturamentoMonitorar 0 0 11`; o código e o plan da 005 usam `0 2 11` (não disputar o minuto com `sgcNfDetectar`). | 000 corrigido. |
+| A-17 | Comentário do `App.tsx` dizia que as telas da onda 2 eram stub. | Reescrito. |
+| A-15 | R-037 listava `/bo` entre os consumidores de `lib/csv.ts` sem exportação; a tabela de telas dava a `/notas-fiscais` "busca híbrida" que é do diálogo da aba. | `/bo` ganha "Exportar CSV" (fix/007); a linha de `/notas-fiscais` no 000 descreve o que existe. |
+
+**Aberto — verificar no sandbox na primeira publicação**
+
+| Id | O que é | Onde |
+|---|---|---|
+| R-023 | `sgcEscAvisoInserir` é chamada só por id e não tem guarda de persona (idempotência por `CHAVE`); se o perfil business executá-la direto pelo SDK, sai do perfil, como o R-007. | `add-008-notas-fiscais.mjs`, `add-002-perfil-acesso.mjs` |
+| D-20 | `sgcRecebimentoSincronizar` chama `kbCardMover` com `movidoPor` + `origem: 'sistema'` também no caminho COM sessão (botões "Verificar entrada" e "Sincronizar"); a lib 1.4.0 ignora os dois quando há sessão, então o movimento sai em nome de quem clicou e passa pelo gancho. O simulador força `userId = 0` (D-04) e não reproduz. | `add-009-transito.mjs`, `abas/Recebimento.tsx`, `NfsAtrasoPage.tsx` |
+
+**Aberto — dívida de código (sem risco funcional hoje)**
+
+| Id | O que é | Onde |
+|---|---|---|
+| D-16 | `lib/nf.ts` exporta 8 funções e `lib/bo.ts` 4 que nenhuma tela consome — só os testes. O "espelho declarado" do JS do backend não é verificado por nada e já divergiu (`resultadoDeQuantidade` compara a quantidade da nota, o backend a acumulada; `casarItem` sobe EAN para maiúsculas, o backend não). Ou as telas passam a usá-las, ou saem. | `frontend/src/lib/{nf,bo}.ts`, `tests/{nf,bo}.test.mjs`, `add-008` |
+| D-17 | `CHECK_INPUT` continua um objeto só e agora com chaves duplicadas (`status`, `faixa` em 005 e 006/007): o `sim:check` exercita um valor por chave (cresce o D-09). | `simulator/config.mjs` |
+| D-18 | SFs publicadas sem consumidor na tela: `sgcContatosListar`, `sgcBoItensCard`, `sgcBoPrevisoesCard`, `sgcBoDocumentosCard` (as abas usam `sgcNfListar`/`sgcBoCarregar`). Só o smoke as chama. | `add-008`, `add-010` |
+| D-19 | As escritas internas da onda 2 confiam no JS para fase e RESTRICTED — só a persona está na SQL (padrão herdado da onda 1). Com o perfil business liberando tudo, cada `sgcEsc*` interna é um caminho paralelo ao JS; A-3 e A-6 foram as duas instâncias com consequência e estão corrigidas. Solução de fundo depende do R-007. | ESCRITAS de `add-008`/`add-010`, `add-002` |
+| D-22 | `sgcFaturamentoMonitorar` pede 30 pendentes à listagem (que inclui a fase `bo`) e depois pula os `bo`: com muitos pedidos em B.O. o lote se esgota antes de alertar quem precisa. | `add-008` |
+| D-23 | Data-hora: tela e cron gravam `CRIADO_EM` em UTC (`toISOString`), a lib mostra em hora local e as telas do SGC (`/notificacoes`, contatos, previsões) mostram o texto cru — o mesmo evento aparece 18:40 no card e 21:40 no feed. `fmtDataHora` precisa converter (ou tudo grava local). | `lib/formato.ts`, `NotificacoesPage.tsx`, `add-008/009/010` |
+| D-24 | Espelho da capa: a tela usa `hojeIso()` (local) e o cron `dia()` (UTC) para contar dias úteis — perto da meia-noite a frase pode diferir por 1 dia. | `abas/NotasFiscais.tsx`, `add-008` |
+| D-25 | O histórico (`KB_LOG`/`KB_MOVIMENTO`) não distingue "pelo sistema em nome de X" de "X fez": o cron da 006 move e a 005 atualiza a capa com `atualizadoPor`/`movidoPor` do responsável. | lib `kbCardMover`/`kbCardAtualizar` (spec 014), telas de histórico |
+| D-26 | Anexar documento de B.O. (upload pelo `uploadFilePublicMitra`) e a busca híbrida do diálogo "Registrar NF" não foram ensaiados no navegador (o pane não abre seletor de arquivo); cobertos só pelo smoke (C-006 da 007) e pela SF `sgcWintNfBuscar` no `sim:check`. Ensaiar no sandbox (T-092/T-093 da 007). | `abas/bo-dialogos.tsx`, `abas/nf-dialogos.tsx` |
+| D-27 | `sim:check` devolve 0 linhas para `sgcNfsRecebimentoCard`/`sgcNfsRecebimentoPendente` com o `CHECK_INPUT` atual (cobre só a sintaxe); o smoke 006 é quem prova o conteúdo. | `simulator/config.mjs` |
