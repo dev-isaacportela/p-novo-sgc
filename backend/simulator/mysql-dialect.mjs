@@ -23,7 +23,10 @@
 //   TO_CHAR(data, formato)             so DD/MM/YYYY e YYYY-MM-DD como formato de saida
 //   TRUNC(data)                        data sem hora (YYYY-MM-DD); TRUNC(numero) e Math.trunc
 //   SYSDATE                            -> datetime('now') (reescrita textual)
+//   SYSDATE +/- N  e  TRUNC(SYSDATE) +/- N   -> N DIAS, nao N unidades numericas
+//   <data> - SYSDATE / - TRUNC(SYSDATE)      -> diferenca em dias (JULIANDAY)
 //   FROM DUAL                          -> removido (reescrita textual)
+//   ON DUPLICATE KEY UPDATE / VALUES(COL)    -> ON CONFLICT DO UPDATE SET / excluded.COL
 //   WHERE ROWNUM <= N / AND ROWNUM <= N -> remove a condicao, acrescenta LIMIT N no fim
 // ponytail: ROWNUM so cobre a forma solta "<= numero" (sem parenteses, sem
 // combinar com OFFSET/paginacao, sem ROWNUM > N); combinacao mais complexa
@@ -289,11 +292,32 @@ export function toSqlite(sql) {
     // SUBSTRING(x, 1, 10) -> substr; SQLite aceita substr, nao SUBSTRING.
     out = out.replace(/\bSUBSTRING\s*\(/gi, 'substr(');
 
+    // Upsert do MySQL -> upsert do SQLite. Sem alvo de conflito: SQLite aceita
+    // omiti-lo na ultima (aqui, unica) clausula ON CONFLICT, e quem decide e o
+    // UNIQUE da tabela — que e exatamente o que o ON DUPLICATE KEY usa.
+    // VALUES(COL) (o valor que a linha traria) vira excluded.COL; a forma
+    // `VALUES (1, 2)` do INSERT nao casa, porque o grupo exige UM identificador.
+    out = out.replace(/\bON\s+DUPLICATE\s+KEY\s+UPDATE\b/gi, 'ON CONFLICT DO UPDATE SET');
+    out = out.replace(/\bVALUES\s*\(\s*([A-Za-z_]\w*)\s*\)/gi, (_, coluna) => `excluded.${coluna}`);
+
     // Booleanos: as colunas viram INTEGER no schema traduzido.
     out = out.replace(/\bIS\s+TRUE\b/gi, '= 1').replace(/\bIS\s+FALSE\b/gi, '= 0');
     out = out.replace(/(?<![.\w])TRUE(?![\w])/gi, '1').replace(/(?<![.\w])FALSE(?![\w])/gi, '0');
 
     /* ── Oracle / WinThor ── */
+
+    // Aritmetica de data do Oracle, ANTES da troca de SYSDATE: `data + N` soma
+    // N DIAS (no SQLite somaria numero), e `dataA - dataB` devolve a diferenca
+    // em dias fracionarios. Cobre as duas formas que o WinThor usa nas
+    // consultas de lote (spec 003); outra forma nao e traduzida.
+    out = out.replace(/\bTRUNC\s*\(\s*SYSDATE\s*\)\s*([+-])\s*(\d+(?:\.\d+)?)/gi,
+      (_, sinal, dias) => `date('now', '${sinal}${dias} days')`);
+    out = out.replace(/\bSYSDATE\b\s*([+-])\s*(\d+(?:\.\d+)?)/gi,
+      (_, sinal, dias) => `datetime('now', '${sinal}${dias} days')`);
+    out = out.replace(/([A-Za-z_][\w.]*)\s*-\s*TRUNC\s*\(\s*SYSDATE\s*\)/gi,
+      (_, coluna) => `(JULIANDAY(${coluna}) - JULIANDAY('now', 'start of day'))`);
+    out = out.replace(/([A-Za-z_][\w.]*)\s*-\s*SYSDATE\b/gi,
+      (_, coluna) => `(JULIANDAY(${coluna}) - JULIANDAY('now'))`);
 
     // SYSDATE -> datetime('now'); FROM DUAL -> nada (SELECT sem FROM e valido no SQLite).
     out = out.replace(/\bSYSDATE\b/gi, "datetime('now')");
