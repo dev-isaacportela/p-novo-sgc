@@ -595,7 +595,7 @@ WHERE IU.ID = :VAR_USER LIMIT 1`);
         let agendaSincronizada = false;
         if (inteiro(ctx.ID_AGENDA) > 0 && IDS.sgcEscAgendaEnvio) {
           try {
-            await escrever('sgcEscAgendaEnvio', { idCard: cardId, dtEnvio });
+            await escrever('sgcEscAgendaEnvio', { idCard: cardId, dtEnvio, usuarioId: inteiro(ctx.USUARIO_ID) });
             agendaSincronizada = true;
           } catch (erro) {
             agendaSincronizada = false;

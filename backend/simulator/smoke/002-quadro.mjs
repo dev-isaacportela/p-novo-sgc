@@ -363,7 +363,7 @@ export async function suite(ctx) {
     assert.equal(Number(db.prepare('SELECT COUNT(*) AS N FROM SGC_COMUNICACAO WHERE ID_CARD = ?').get(P4).N), 0);
   });
 
-  await teste('C-027 / C-031: envio por e-mail sai para o contato + compras@benenutri.com, grava a comunicacao e a capa do envio; sem agenda de origem, agendaSincronizada false', async () => {
+  await teste('C-027: envio por e-mail sai para o contato + compras@benenutri.com, grava a comunicacao e a capa do envio; sem agenda de origem, agendaSincronizada false', async () => {
     const antesEmails = emails.length;
     const resultado = await chamar('sgcEnvioIndustriaRegistrar', {
       cardId: P4, canal: 'email', para: 'pedidos@nutrilatina.com.br',
@@ -404,6 +404,29 @@ export async function suite(ctx) {
     assert.equal(comunicacoes.length, 1);
     assert.equal(comunicacoes[0].TIPO, 'plataforma');
     assert.match(comunicacoes[0].PARA, /portal\.nutrilatina/);
+  });
+
+  await teste('C-031 (EN-05 / R-012): envio de pedido nascido da agenda grava a data real e preserva a planejada em SGC_AGENDA — sgcEscAgendaEnvio por id recebe o usuarioId de quem enviou', async () => {
+    const card = await criarPedido();
+    emFase(card, 'envio');
+    const agenda = db.prepare(`INSERT INTO SGC_AGENDA (CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, DATA_ANALISE, PERIODO_INICIO, PERIODO_FIM,
+      ATIVO, PROCESSADO_EM, ID_CARD_GERADO, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM)
+      VALUES (?, ?, ?, ?, '2026-09-10', '2026-07-27', '2026-09-10', 1, ?, ?, ?, ?, ?)`)
+      .run(CAPA.codfornec, CAPA.fornecedor, CAPA.codfilial, CAPA.filial, AGORA, card, U.ana, AGORA, AGORA);
+    const idAgenda = Number(agenda.lastInsertRowid);
+    db.prepare("UPDATE SGC_PEDIDO SET ID_AGENDA = ?, ORIGEM = 'agenda' WHERE ID_CARD = ?").run(idAgenda, card);
+
+    const resultado = await chamar('sgcEnvioIndustriaRegistrar', {
+      cardId: card, canal: 'plataforma', para: 'https://portal.nutrilatina.com.br/pedidos',
+      assunto: '', corpo: '', dtEnvio: '2026-09-15', numped: '445566', obs: '',
+    }, U.ana);
+    assert.equal(resultado.ok, true, resultado.error);
+    assert.equal(resultado.agendaSincronizada, true, 'a guarda da 004 exige o usuarioId de quem enviou');
+    const linha = db.prepare('SELECT * FROM SGC_AGENDA WHERE ID = ?').get(idAgenda);
+    assert.equal(linha.DATA_ENVIO_REAL, '2026-09-15');
+    assert.equal(linha.DATA_ANALISE, '2026-09-15', 'a data da analise passa a ser a real');
+    assert.equal(linha.DATA_PLANEJADA_ORIGINAL, '2026-09-10', 'a planejada fica guardada');
+    db.prepare('DELETE FROM SGC_AGENDA WHERE ID = ?').run(idAgenda); // banco compartilhado: a 004 conta as agendas do seed
   });
 
   // A1 (revisão adversarial): o perfil business libera TODAS as server
