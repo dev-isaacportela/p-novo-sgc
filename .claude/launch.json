@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "frontend", "--", "--port", "5179", "--strictPort"],
       "port": 5179
+    },
+    {
+      "name": "frontend-simlib",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend", "--", "--mode", "simlib", "--port", "5179", "--strictPort"],
+      "port": 5179
     }
   ]
 }
