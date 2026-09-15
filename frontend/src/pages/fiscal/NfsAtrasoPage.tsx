@@ -95,7 +95,7 @@ export default function NfsAtrasoPage() {
     try {
       const resposta = await acao('sgcRecebimentoSincronizar', { cardId: 0 });
       if (resposta.ok !== true) {
-        setErro(String(resposta.error || 'A sincronização não foi concluída.'));
+        setErro(String(resposta.erro || 'A sincronização não foi concluída.'));
         return;
       }
       const atualizadas = Number(resposta.recebidas) || 0;
@@ -115,6 +115,19 @@ export default function NfsAtrasoPage() {
   function exportar() {
     const nome = `nfs-em-atraso-${hojeIso()}.csv`;
     baixarCsv(nome, textoCsv(COLUNAS_CSV_ATRASO, linhasCsv(notas)));
+  }
+
+  if (!sessao) return <EmptyState title="Carregando..." />;
+
+  // A-8 da revisão: sem porteiro de rota, o endereço direto lia a lista
+  // mesmo fora do menu (RN-012/R-028) — mesmo padrão de QuadroPage/SegurancaPage.
+  if (!sessao.permissoes.verNfsAtraso) {
+    return (
+      <>
+        <PageHeader module="Fiscal" title="NFs em atraso" />
+        <Alert tone="error">Seu perfil não tem acesso às notas fiscais em atraso.</Alert>
+      </>
+    );
   }
 
   return (

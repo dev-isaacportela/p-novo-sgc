@@ -80,11 +80,10 @@ export default function AbaRecebimento(ctx: ExtensaoContexto) {
     setSincronizando(true);
     setErro('');
     setConfirmacao('');
-    const faseAntes = ctx.card.faseId;
     try {
       const resposta = await acao('sgcRecebimentoSincronizar', { cardId });
       if (resposta.ok !== true) {
-        setErro(String(resposta.error || 'A verificação não foi concluída.'));
+        setErro(String(resposta.erro || 'A verificação não foi concluída.'));
         return;
       }
       const atualizadas = Number(resposta.recebidas) || 0;
@@ -95,7 +94,7 @@ export default function AbaRecebimento(ctx: ExtensaoContexto) {
       setCarregando(true);
       setRecarga((atual) => atual + 1);
       // O movimento é do servidor; a tela só reflete quando ele aconteceu.
-      if (Number(resposta.movidos) > 0 || faseAntes !== ctx.card.faseId) await ctx.recarregar();
+      if (Number(resposta.movidos) > 0) await ctx.recarregar();
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : 'Não foi possível falar com o WinThor.');
     } finally {
