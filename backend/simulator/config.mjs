@@ -100,5 +100,7 @@ export const CHECK_INPUT = {
   // e 90005 é a nota do seed 006 que tem entrada confirmada no PCNFENT.
   faixa: '', idNf: '1', numnotas: '90005', dtRecebimento: '2026-09-01',
   alertaEm: '2026-09-15T12:00:00', numtransent: '0', chavenfe: '',
-  // spec 007 (produtos em B.O.): a 007 preenche quando publicar.
+  // spec 007 (produtos em B.O.): dias entra sem aspas em sgcWintClientesImpactados
+  // (TRUNC(SYSDATE) - {{dias}}) — sem valor, o sim:check quebra por sintaxe.
+  dias: '60', status: '',
 };
