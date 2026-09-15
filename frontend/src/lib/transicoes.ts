@@ -64,6 +64,7 @@ export const MOTIVOS: Readonly<Record<string, string>> = {
   // gancho na faixa de aviso do card.
   transito: 'Vincule ao menos uma nota fiscal ao pedido antes de mover para Em Trânsito para BN.',
   conclusaoNf: 'Decida as N conferências de nota fiscal pendentes antes de concluir o pedido.',
+  boEntrada: 'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.',
 };
 
 const permitida = (origem: ChaveFase, destino: ChaveFase) =>

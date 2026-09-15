@@ -42,7 +42,9 @@ const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', im
 function fragmentoDePendencias(arquivo) {
   const corpo = readFileSync(new URL(`./sql/${arquivo}`, import.meta.url), 'utf8')
     .split('\n').filter((linha) => !linha.trimStart().startsWith('--')).join('\n').trim();
-  return `${corpo.split(/\n(?=COALESCE\()/).map((coluna) => coluna.trim()).join(',\n')},`;
+  // A vírgula entre as colunas e a final são daqui: fragmento que já venha com
+  // vírgula no fim de uma coluna não a duplica.
+  return `${corpo.split(/\n(?=COALESCE\()/).map((coluna) => coluna.trim().replace(/,$/, '')).join(',\n')},`;
 }
 
 // Saída da Análise (spec 003, RF-022/RN-012): PENDENCIAS e PENDENCIAS_MOTIVO —
@@ -53,6 +55,15 @@ const SQL_PENDENCIAS = fragmentoDePendencias('pendencias-analise.sql');
 // conferência de nota sem decisão (RN-011).
 const SQL_PENDENCIAS_NF = fragmentoDePendencias('pendencias-transito.sql')
   + '\n' + fragmentoDePendencias('pendencias-conclusao-nf.sql');
+// Onda 2, spec 007 (R-030): entrar em B.O. exige ≥ 1 item marcado (RN-003) e
+// a conclusão exige zero item de B.O. em aberto (RN-008); os ramos de MOTIVO
+// vêm depois dos da NF (R-044).
+const SQL_PENDENCIAS_BO = fragmentoDePendencias('pendencias-bo-entrada.sql')
+  + '\n' + fragmentoDePendencias('pendencias-conclusao-bo.sql');
+// Onda 2, R-023: o quarto ramo do feed de notificações (avisos de processo),
+// de backend/sql/notificacoes-avisos.sql (spec 005), sem as linhas de comentário.
+const SQL_AVISOS = readFileSync(new URL('./sql/notificacoes-avisos.sql', import.meta.url), 'utf8')
+  .split('\n').filter((linha) => !linha.trimStart().startsWith('--')).join('\n').trim();
 
 /* ─────────────── o quadro: slug, fases, campos, automações ─────────────── */
 
@@ -104,6 +115,11 @@ export const CAMPOS = [
 /** Capa por fase (KB_FASE.CAPA_JSON): o que aquela fase acrescenta aos fixos. */
 export const CAPA_POR_FASE = {
   analise: ['alertas_pendentes'],
+  // R-048 (spec 005): a linha de faturamento na capa, escrita pela tela e pelo cron.
+  enviado: ['faturamento'],
+  transito: ['faturamento'],
+  faturamento: ['faturamento'],
+  bo: ['faturamento'],
   cancelado: ['motivo_cancelamento'],
 };
 
@@ -221,6 +237,7 @@ const M = {
   // Onda 2, spec 005 (R-030/R-046): a trava é só do servidor; `transicoes.ts`
   // recebe os mesmos textos em MOTIVOS, sem ramo novo em `motivoDeDestino`.
   transito: 'Vincule ao menos uma nota fiscal ao pedido antes de mover para Em Trânsito para BN.',
+  boEntrada: 'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.',
 };
 
 /* ─────────────── preâmbulo das JAVASCRIPT desta spec ─────────────── */
@@ -680,7 +697,9 @@ function notificacoesUniao() {
   JOIN KB_CARD CD ON CD.ID = G.CARD_ID AND CD.EXCLUIDO_EM IS NULL
   JOIN KB_CARD_RESPONSAVEL R ON R.CARD_ID = G.CARD_ID AND R.USUARIO_ID = :VAR_USER
   LEFT JOIN INT_USER IU ON IU.ID = G.USUARIO_ID
-  WHERE G.EXCLUIDO_EM IS NULL AND COALESCE(G.USUARIO_ID, 0) <> :VAR_USER`;
+  WHERE G.EXCLUIDO_EM IS NULL AND COALESCE(G.USUARIO_ID, 0) <> :VAR_USER
+  UNION ALL
+  ${SQL_AVISOS}`;
 }
 
 /**
@@ -708,7 +727,7 @@ function contextoDoCard({ comDestino = true, comPendencias = true } = {}) {
   // PENDENCIAS_NF(_MOTIVO), de backend/sql/pendencias-transito.sql e
   // pendencias-conclusao-nf.sql. A 007 acrescenta aqui o par
   // PENDENCIAS_BO_ABERTOS/PENDENCIAS_BO_MOTIVO.
-  const pendencias = comPendencias ? `${SQL_PENDENCIAS}\n${SQL_PENDENCIAS_NF}` : '';
+  const pendencias = comPendencias ? `${SQL_PENDENCIAS}\n${SQL_PENDENCIAS_NF}\n${SQL_PENDENCIAS_BO}` : '';
   const juncaoDestino = comDestino
     ? 'LEFT JOIN SGC_FASE FD              ON FD.BOARD_ID = {{boardId}} AND FD.FASE_ID = {{faseId}}'
     : '';
@@ -749,6 +768,8 @@ function sqlPodeMover() {
     WHEN T.PAR = 'analise>tecnica'    AND T.PENDENCIAS > 0                        THEN 0
     WHEN T.PAR = 'enviado>transito'   AND T.PENDENCIAS_TRANSITO > 0               THEN 0
     WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_NF > 0 THEN 0
+    WHEN T.PAR = 'faturamento>bo'     AND T.PENDENCIAS_BO_ENTRADA > 0             THEN 0
+    WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_BO_ABERTOS > 0 THEN 0
     ELSE 1
   END`;
   // R-020 / C-06: o contrato da lib exige MOTIVO vazio quando PODE = 1 (a regra
@@ -780,6 +801,10 @@ function sqlPodeMover() {
       THEN T.PENDENCIAS_TRANSITO_MOTIVO
     WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_NF > 0
       THEN T.PENDENCIAS_NF_MOTIVO
+    WHEN T.PAR = 'faturamento>bo' AND T.PENDENCIAS_BO_ENTRADA > 0
+      THEN '${M.boEntrada}'
+    WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_BO_ABERTOS > 0
+      THEN T.PENDENCIAS_BO_MOTIVO
     ELSE ''
   END END`;
   return `SELECT

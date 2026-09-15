@@ -19,6 +19,7 @@ const ROTULO: Record<string, { texto: string; tom: 'neutral' | 'accent' | 'atten
   responsavel: { texto: 'Responsável', tom: 'accent' },
   movimento: { texto: 'Etapa', tom: 'neutral' },
   mensagem: { texto: 'Mensagem', tom: 'attention' },
+  aviso: { texto: 'Aviso', tom: 'attention' },
 };
 
 interface Notificacao {

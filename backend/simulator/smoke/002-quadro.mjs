@@ -704,7 +704,13 @@ export async function suite(ctx) {
     };
     const personas = [['admin', U.admin], ['analista', U.ana], ['gestor', U.gil], ['diretoria', U.dora], ['comercial', U.leo]];
 
+    // R-046 (onda 2): quatro pares são decididos SÓ no servidor (nota vinculada,
+    // item em B.O., conferência e B.O. pendentes) — a tela libera e o gancho
+    // decide pelo dado. Neles, quando a tela libera, o servidor pode recusar,
+    // mas nunca sem motivo (R-020); o resto continua caractere a caractere.
+    const SO_SERVIDOR = new Set(['enviado>transito', 'faturamento>bo', 'faturamento>concluido', 'bo>concluido']);
     let comparadas = 0;
+    let decididasNoServidor = 0;
     for (const origem of CHAVES_FASE) {
       emFase(card, origem);
       for (const destino of CHAVES_FASE) {
@@ -712,12 +718,20 @@ export async function suite(ctx) {
           const tela = motivoDeDestino(persona, 'MEMBER', origem, destino, estado);
           const servidor = await podeMover(usuarioId, card, destino);
           const podeNaTela = tela === null;
-          assert.equal(Number(servidor.PODE) === 1, podeNaTela, `${persona} ${origem}>${destino}: tela ${tela} x servidor ${servidor.PODE}`);
-          assert.equal(servidor.MOTIVO, tela === null ? '' : tela, `${persona} ${origem}>${destino}`);
+          if (podeNaTela && SO_SERVIDOR.has(`${origem}>${destino}`)) {
+            if (Number(servidor.PODE) === 1) assert.equal(servidor.MOTIVO, '', `${persona} ${origem}>${destino}: liberado com motivo`);
+            else assert.notEqual(servidor.MOTIVO, '', `${persona} ${origem}>${destino}: recusado sem motivo`);
+            decididasNoServidor += 1;
+          } else {
+            assert.equal(Number(servidor.PODE) === 1, podeNaTela, `${persona} ${origem}>${destino}: tela ${tela} x servidor ${servidor.PODE}`);
+            assert.equal(servidor.MOTIVO, tela === null ? '' : tela, `${persona} ${origem}>${destino}`);
+          }
           comparadas += 1;
         }
       }
     }
     assert.equal(comparadas, 500);
+    // 4 pares x 3 personas que a tela libera (admin, analista, gestor).
+    assert.equal(decididasNoServidor, 12);
   });
 }

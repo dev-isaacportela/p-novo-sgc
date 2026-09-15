@@ -5,7 +5,7 @@
 -- coluna PENDENCIAS_BO_ABERTOS (contagem de itens em aberto)
 COALESCE((
   SELECT COUNT(*) FROM SGC_BO_ITEM B WHERE B.ID_CARD = C.ID AND B.STATUS = 'aberto'
-), 0) AS PENDENCIAS_BO_ABERTOS,
+), 0) AS PENDENCIAS_BO_ABERTOS
 
 -- coluna PENDENCIAS_BO_MOTIVO (a frase, com a contagem e o plural certo; ''
 -- quando não há pendência — nunca "Resolva os 0 itens")

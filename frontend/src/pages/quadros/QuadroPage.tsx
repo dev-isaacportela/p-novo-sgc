@@ -12,7 +12,7 @@
 import * as React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { KanbanBoard } from '@benenutri/mitra-kanban';
-import type { AbaExtra, Card, Fase } from '@benenutri/mitra-kanban';
+import type { AbaExtra, Card, ExtensaoContexto, Fase } from '@benenutri/mitra-kanban';
 
 import { acao, linhas } from '@/lib/mitra-api';
 import { usePersona } from '@/lib/persona';
@@ -24,6 +24,9 @@ import AcoesDoPedido, { type MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
 import { PedidoProvider } from '@/pages/quadros/abas/PedidoProvider';
 import AbaItens from '@/pages/quadros/abas/Itens';
 import AbaAlertas from '@/pages/quadros/abas/Alertas';
+import AbaNotasFiscais from '@/pages/quadros/abas/NotasFiscais';
+import AbaRecebimento from '@/pages/quadros/abas/Recebimento';
+import AbaBo from '@/pages/quadros/abas/Bo';
 import { verificarSaidaAnalise } from '@/pages/quadros/abas/verificar-saida';
 
 /** Tradutor `KB_FASE.ID` ↔ `SGC_FASE.CHAVE` (RF-005: nenhuma regra usa nome nem id). */
@@ -145,6 +148,9 @@ export default function QuadroPage() {
   // ponytail: a capa é carregada duas vezes (este componente e o provider),
   // 3 execuções por card aberto em vez das 2 do RNF-001; unificar quando o
   // provider expuser a capa crua para o AcoesDoPedido.
+  // Onda 2 (R-029, R-049): Notas fiscais (005), Recebimento (006) e B.O. (007),
+  // cada uma com UMA execução ao abrir e sem `contagem` — não há campo do
+  // quadro para notas pendentes nem para itens de B.O. em aberto.
   const abasExtras: AbaExtra[] = React.useMemo(() => [
     { id: 'itens', rotulo: 'Itens', render: (ctx) => <AbaItens {...ctx} /> },
     {
@@ -153,7 +159,12 @@ export default function QuadroPage() {
       contagem: (card) => Number(card.valores.alertas_pendentes) || undefined,
       render: (ctx) => <AbaAlertas {...ctx} />,
     },
-  ], []);
+    { id: 'notas-fiscais', rotulo: 'Notas fiscais', render: (ctx) => <AbaNotasFiscais {...ctx} /> },
+    { id: 'recebimento', rotulo: 'Recebimento', render: (ctx) => <AbaRecebimento {...ctx} /> },
+    ...(sessao
+      ? [{ id: 'bo', rotulo: 'B.O.', render: (ctx: ExtensaoContexto) => <AbaBo {...ctx} fases={fases} sessao={sessao} /> }]
+      : []),
+  ], [fases, sessao]);
 
   if (!sessao) return <EmptyState title="Carregando o quadro..." />;
 
