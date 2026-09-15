@@ -252,3 +252,84 @@ Revisão feita sobre `develop` depois da integração das quatro features, com o
 | D-13 | `DATA_ENVIO_REAL VARCHAR(19)` guarda `AAAA-MM-DD` (10 caracteres). Convenção; não mexer no setup. | `setup-backend.mjs`, `add-007` |
 | D-14 | Texto de carregamento com Tailwind solto repetido nas abas Itens e Alertas, em vez de um primitivo de `page.tsx`. | `abas/Itens.tsx`, `abas/Alertas.tsx` |
 | — | Seed da 003 cria cards sem `VALORES_JSON`; `alertas_pendentes` e `motivo_cancelamento` (campos do quadro) continuam editáveis no formulário da lib. | `simulator/seed/003-itens.mjs`, `add-005` |
+
+## Onda 2 — contrato (2026-09-15)
+
+Nada foi publicado na plataforma ainda (decisão do usuário: o sandbox só recebe o projeto quando as
+ondas terminarem). Por isso a onda 2 **edita o `CREATE TABLE` das tabelas da onda 1** em vez de usar
+`ALTER TABLE`, e a lib pode ganhar uma versão nova sem migração em produção.
+
+### Specs
+
+| Spec | Assunto | Regras (`regras.md`) | Origem no p-45547 |
+|---|---|---|---|
+| `005-notas-fiscais-e-faturamento` | detecção automática de NF de entrada (cron 30 min), registro híbrido pelo número, conferência NF × pedido (uma ocorrência por comparação, inclusive conforme), faturamento medido em valor e quantidade, cobrança do faturamento pendente (dias úteis 3 / 5 / +5, contatos, e-mail manual) | O2-01, O2-02, O2-03, O2-07 | 009 inteira, 010 HU-5 |
+| `006-transito-e-recebimento` | previsão de recebimento por nota (prazo do fornecedor), sincronização com o WinThor a cada 2 h, alerta de atraso uma vez por dia por nota, Trânsito → Faturamento automático com 100 % recebido, painel de NFs em atraso, regra de conclusão | O2-04, O2-05 | 010 HU-1..HU-4 |
+| `007-produtos-em-bo` | itens indisponíveis com previsão de liberação, carta de falta, clientes impactados nos últimos 60 dias, painel consolidado visível a todas as personas, alerta diário enquanto o card estiver em B.O. | O2-06 | `add-bo-fase-produtos.mjs` (SFs 418–426) |
+
+Ordem lógica: 005 → 006 → 007 (trânsito e B.O. leem as NFs da 005). Na prática as três rodam
+em paralelo sobre este contrato; as abas do card e os blocos do gancho são ligados pelo integrador.
+
+### Decisões da onda 2 (R-021..R-034)
+
+| Id | Decisão |
+|---|---|
+| R-021 | **Movimento por processo (lib 1.4.0, spec 014 da lib)**: `kbCardMover` ganha `movidoPor` (int) e `origem: 'sistema'`, que só valem sem sessão — a mesma premissa de `kbCardCriar` na 013. Nesse ramo não passa pelo gancho `podeMover` (a regra ligada é sobre pessoas) nem pela RN-004 (sair de fase final), mas valida obrigatórios, condição de entrada e roda as automações de `card_movido` com `origem` `sistema` em `KB_MOVIMENTO`. Única consumidora na onda 2: o cron da 006 (Trânsito → Faturamento). Até o usuário publicar a 1.4.0, os dois lados usam a lib local por `npm link` (a dependência continua `^1.3.0` no `package.json`; vira `^1.4.0` na release). |
+| R-022 | **B.O. é fase do próprio pedido** (F-01), sem card filho (o legado criava um card filho por `ID_CARD_PAI`). Entra só de Faturamento e sai para Faturamento ou Concluídas — os pares já existem em `PARES` (002) e em `transicoes.ts`. Item em B.O. é `SGC_PEDIDO_ITEM.STATUS = 'bo'` (valor novo) mais uma linha em `SGC_BO_ITEM`. |
+| R-023 | **Avisos de processo** (faturamento pendente, NF atrasada, NF recebida, previsão de B.O. atingida) vão para uma tabela só, `SGC_AVISO`, gravada por `sgcEscAvisoInserir` (005) chamada **por id** pelos crons das três specs. Cron não tem sessão nem persona: a guarda dessa escrita é só a idempotência (`CHAVE` única por tipo + card + dia). Risco aceito e registrado: quem chamar por id consegue, no máximo, enfileirar um aviso; se o sandbox provar que chamada por id dispensa o perfil (R-007), ela sai do perfil business. O feed `/notificacoes` ganha o ramo `SGC_AVISO` na `notificacoesUniao()` (integrador, S4) a partir de `backend/sql/notificacoes-avisos.sql` da 005: aviso para `PARA_USUARIO_ID = :VAR_USER`, ou para os responsáveis do card quando `PARA_USUARIO_ID = 0`, ou para a persona em `PARA_PERSONA` (`gestor` no alerta consolidado de 5 dias). Além do aviso, todo cron registra `kbNotaRegistrar` no card. |
+| R-024 | **Faixas de id e scripts**: 005 → 75xx (`add-008-notas-fiscais.mjs`), 006 → 76xx (`add-009-transito.mjs`), 007 → 77xx (`add-010-bo.mjs`); leituras/JS em x01–x30, escritas em x50–x79. `PUBLISH_ORDER` cresce nessa ordem; `add-002` continua por último e fora dele. |
+| R-025 | **Dias úteis** = segunda a sexta, sem feriados (D-4/E-2 do legado). Uma implementação só de cada lado, criada na base (S2) a partir do plan da 005: `backend/lib/dias-uteis.mjs` (fragmentos SQL MySQL que também rodam no dialeto do simulador: `diasUteisEntre(colInicio, colFim)` e `somarDiasUteis(col, n)`) e `frontend/src/lib/dias-uteis.ts` (puro, testado) — 006 importa, não reimplementa. Conferência de referência: 2026-08-24 (segunda) + 15 dias úteis = 2026-09-14. |
+| R-026 | **Tabelas da onda 2** (todas no `setup-backend.mjs` pela base): `SGC_NF`, `SGC_NF_ITEM`, `SGC_NF_OCORRENCIA`, `SGC_NF_SUGESTAO`, `SGC_CONTATO_FATURAMENTO` (005); `SGC_BO_ITEM`, `SGC_BO_PREVISAO`, `SGC_BO_DOCUMENTO` (007); `SGC_AVISO` (005, compartilhada). `SGC_PEDIDO` ganha `DT_PRIMEIRO_FATURAMENTO`, `VL_FATURADO`, `PERC_FATURADO_VALOR`, `PERC_FATURADO_QTD`, `ALERTA_FATURAMENTO_NIVEL` (0/3/5), `ALERTA_FATURAMENTO_EM` (005) e `DT_PREVISAO_BO`, `ALERTA_BO_EM` (007) — no `CREATE`, sem `ALTER`. Modelo abaixo. |
+| R-027 | **WinThor no simulador**: `schema-winthor.mjs` (integrador) ganha `PCNFENT` (`NUMTRANSENT`, `NUMNOTA`, `SERIE`, `CODFORNEC`, `CODFILIAL`, `DTEMISSAO`, `DTENT`, `DTCANCEL`, `VLTOTAL`, `CHAVENFE`, `PRAZO`, `ESPECIE`) e `PCLANC` (`NUMTRANSENT`, `NUMNOTA`, `CODFORNEC`, `DTEMISSAO`, `DTVENC`, `VALOR`, `DUPLIC`, `NUMPARCELAMENTO`); `PCMOV` ganha `NUMTRANSENT`, `NUMNOTA`, `SERIE`, `NUMLOTE`, `DATAVALIDADE`; `PCPRODUT` ganha `CODFAB`, `CODAUXILIAR` (EAN). `PCDADOSXML` fica fora (o EAN vem de `CODAUXILIAR`). Linhas: a 005 semeia as entradas (`PCNFENT`, `PCMOV` com `CODOPER = 'E'`, `PCLANC`); a 007 semeia só vendas (`CODOPER = 'S'`) dos últimos 60 dias com `CODCLI` distintos, sem tocar as linhas da 003 (R-017 vale aqui). |
+| R-028 | **Personas na onda 2**: NF, faturamento e trânsito são operados por admin, analista e gestor; diretoria vê; comercial não vê. B.O.: o painel `/bo` é visível a **todas** as personas (O2-06, inclusive comercial); marcar item, registrar previsão e carta de falta é de admin, analista e gestor. `RESTRICTED` só os próprios cards; `READ_ONLY` não opera. Chaves novas em `lib/permissoes.ts` (base, S2): `verNotasFiscais`, `operarNf`, `verFaturamentoPendente`, `registrarContato`, `verNfsAtraso`, `verBo`, `operarBo`. |
+| R-029 | **Abas do card**: 005 entrega `AbaNotasFiscais` (sugestões, NFs vinculadas, ocorrências com decisão, contatos e cobrança), 006 entrega `AbaRecebimento` (previsão e status por nota, "Verificar entrada no WinThor"), 007 entrega `AbaBo` (itens, previsões, carta de falta, clientes impactados). Todas `AbaExtra` da lib recebendo o `ExtensaoContexto`, ligadas em `abasExtras` do `QuadroPage` pelo integrador (S4). Ação de fase (marcar B.O., validar NF) vive dentro da aba e usa `ctx.mover`/`ctx.recarregar`; `AcoesDoPedido` (002) não muda. |
+| R-030 | **Gancho `sgcPodeMover`** ganha três blocos, fragmentos SQL entregues em `backend/sql/` e compostos pelo integrador (o mesmo padrão de `pendencias-analise.sql`): `enviado>transito` exige ≥ 1 NF vinculada (`pendencias-transito.sql`, 005; RN-1 da 010); `faturamento>bo` exige ≥ 1 item marcado em B.O. (`pendencias-bo-entrada.sql`, 007); `faturamento>concluido` e `bo>concluido` exigem zero ocorrência de NF com decisão pendente (`pendencias-conclusao-nf.sql`, 005) e zero item de B.O. em aberto (`pendencias-conclusao-bo.sql`, 007). `transicoes.ts` (tela) espelha com os mesmos textos; os textos novos entram em `MOTIVOS`/`M` pelo integrador, e o teste de 500 combinações (RNF-005 da 002) continua valendo. |
+| R-031 | **Trânsito → Faturamento**: automático pelo cron `sgcRecebimentoSincronizar` (006) via `kbCardMover` com `origem: 'sistema'` e `movidoPor` = primeiro responsável do card (ou o criador), quando 100 % das NFs vinculadas têm `DT_RECEBIMENTO`; o movimento manual continua permitido sem exigência (a pendência de NF é na entrada em Trânsito). NF cancelada no WinThor (`DTCANCEL`) não conta como recebida. |
+| R-032 | **Faturamento**: NF só conta quando entrou no WinThor (`PCNFENT`, D-2); o registro híbrido (número + fornecedor) busca a nota **sem** exigir entrada (`sgcWintNfBuscar`) e o recebimento continua dependendo de `DTENT`. Percentual em valor e em quantidade; 100 % em valor encerra o monitoramento. Preço: delta 0 → `conforme`, até 1 % → `atencao`, acima → `divergente`; item não pedido, quantidade maior, validade curta (120 dias da emissão, ou `VALIDADE_MINIMA_DIAS` do fornecedor) e prazo divergente (parcelas de `PCLANC`, fallback `PCNFENT.PRAZO`) são `conforme`/`divergente`. Divergência não bloqueia o vínculo. Nenhum vínculo sem confirmação humana; NF já vinculada a qualquer card não é sugerida de novo. |
+| R-033 | **E-mails**: nenhum e-mail automático ao fornecedor (D-9). A cobrança manual sai por `sgcCobrancaEnviar` (005, JS, `sendEmailMitra` com cópia fixa compras@), grava `SGC_COMUNICACAO` (`TIPO = 'cobranca'`) e `SGC_CONTATO_FATURAMENTO`. |
+| R-034 | **Carta de falta** e outros documentos do B.O. sobem pelo mesmo transporte dos documentos do fornecedor (001) e ficam em `SGC_BO_DOCUMENTO`. |
+
+### Modelo de dados da onda 2
+
+| Tabela | Conteúdo | Spec |
+|---|---|---|
+| `SGC_NF` (N:1 card, `UNIQUE (ID_CARD, NUMNOTA, SERIE)`) | `ID_CARD`, `NUMNOTA`, `SERIE`, `CHAVENFE`, `NUMTRANSENT` (WinThor), `CODFORNEC`, `CODFILIAL`, `DT_EMISSAO`, `DT_ENTRADA` (`PCNFENT.DTENT` na vinculação), `DT_RECEBIMENTO` (006: entrada consolidada; nasce igual a `DT_ENTRADA` quando a NF já entrou), `VL_TOTAL`, `PRAZO_PARCELAS` (`"28/35/42"`), `ORIGEM` (`automatica`/`hibrida`/`manual`), `ALERTA_ATRASO_EM` (006), `VINCULADO_POR`, `VINCULADO_EM` | 005 (+006) |
+| `SGC_NF_ITEM` (N:1 NF, `UNIQUE (ID_NF, CODPROD, NUMLOTE)`) | `ID_NF`, `ID_CARD`, `CODPROD`, `CODFAB`, `EAN`, `DESCRICAO`, `QT_FATURADA`, `PRECO_FATURADO`, `NUMLOTE`, `DT_VALIDADE`, `CASADO_POR` (`codprod`/`codfab`/`ean`/`nenhum`) | 005 |
+| `SGC_NF_OCORRENCIA` (N:1 NF) | `ID_NF`, `ID_CARD`, `CODPROD` (0 = regra do pedido), `TIPO` (`item_nao_pedido`, `validade_curta`, `preco_divergente`, `qtd_maior`, `prazo_divergente`, `valor_total_divergente`, `percentual_faturado`), `RESULTADO` (`conforme`/`atencao`/`divergente`), `VALOR_ESPERADO`, `VALOR_ENCONTRADO`, `DELTA_PERC`, `DECISAO` (`pendente`/`aceito`/`recusado`), `JUSTIFICATIVA`, `DECIDIDO_POR`, `DECIDIDO_EM`, `CRIADO_EM` | 005 |
+| `SGC_NF_SUGESTAO` (`UNIQUE (CHAVENFE, ID_CARD)`) | `CHAVENFE`, `NUMTRANSENT`, `NUMNOTA`, `SERIE`, `CODFORNEC`, `CODFILIAL`, `VL_TOTAL`, `DT_EMISSAO`, `DT_ENTRADA`, `ID_CARD`, `NUMPED_WINTHOR`, `ORIGEM` (`pedido`/`heuristica`), `SCORE` (0–100), `STATUS` (`sugerida`/`validada`/`recusada`/`ignorada`), `MOTIVO`, `DECIDIDO_POR`, `DECIDIDO_EM`, `CRIADO_EM` | 005 |
+| `SGC_CONTATO_FATURAMENTO` (N:1 card) | `ID_CARD`, `DT_CONTATO`, `CANAL` (`email`/`telefone`/`whatsapp`/`portal`), `RESUMO`, `PREVISAO_FATURAMENTO`, `REGISTRADO_POR`, `CRIADO_EM` | 005 |
+| `SGC_AVISO` (`UNIQUE (CHAVE)`) | `ID_CARD`, `TIPO` (`faturamento_3`, `faturamento_5`, `faturamento_diario`, `nf_atrasada`, `nf_recebida`, `bo_previsao`), `CHAVE` (`tipo:card:AAAA-MM-DD[:nf]`), `PARA_USUARIO_ID` (0 = responsáveis do card), `PARA_PERSONA` (`''` ou `gestor`), `TEXTO`, `CRIADO_EM` | 005 (todas gravam por id) |
+| `SGC_BO_ITEM` (N:1 card, `UNIQUE (ID_CARD, CODPROD)`) | `ID_CARD`, `CODPROD`, `DESCRICAO`, `QT_PENDENTE`, `OBSERVACAO`, `STATUS` (`aberto`/`liberado`/`cancelado`), `CLIENTES_IMPACTADOS`, `QT_VENDIDA_60D` (foto do WinThor ao marcar), `CRIADO_POR`, `CRIADO_EM`, `RESOLVIDO_POR`, `RESOLVIDO_EM` | 007 |
+| `SGC_BO_PREVISAO` (N:1 card) | `ID_CARD`, `DT_PREVISAO`, `OBSERVACAO`, `REGISTRADO_POR`, `REGISTRADO_EM` — cada previsão nova reinicia o alerta (`SGC_PEDIDO.DT_PREVISAO_BO` espelha a última) | 007 |
+| `SGC_BO_DOCUMENTO` (N:1 card) | `ID_CARD`, `TIPO` (`carta_falta`/`outro`), `NOME_ARQUIVO`, `URL`, `ENVIADO_POR`, `ENVIADO_EM` | 007 |
+
+Campo do quadro novo: `faturamento` (texto, capa: `R$ 72.000 (60 %) · saldo R$ 48.000`), criado pelo
+`add-008` idempotente por chave, atualizado por `sgcEscPedidoFaturamento` junto das colunas de
+`SGC_PEDIDO`. `alertas_pendentes` continua da 003.
+
+### Server functions da onda 2 (nomes definitivos nos plans; estes são fixos)
+
+| Spec | Leitura / JS | Escrita (SQL) | Crons (UTC) |
+|---|---|---|---|
+| 005 | `sgcWintNfEntradas` (candidatas por `NUMPED` e por fornecedor + filial + emissão ≥ envio), `sgcWintNfItens`, `sgcWintNfParcelas`, `sgcWintNfBuscar` (híbrido, sem exigir entrada), `sgcNfSugestoesListar`/`Total`, `sgcNfListar` (do card, com itens e ocorrências numa execução), `sgcFaturamentoPendenteListar`/`Total`, `sgcContatosListar`, `sgcNfDetectar` (JS, cron), `sgcNfVincular` (JS: grava NF + itens, roda as 7 regras, recalcula faturamento, nota), `sgcOcorrenciaDecidir` (JS: aceitar/recusar, "aceitar conformes" em lote), `sgcFaturamentoMonitorar` (JS, cron), `sgcCobrancaEnviar` (JS) | `sgcEscNfInserir`, `sgcEscNfItemInserir`, `sgcEscOcorrenciaInserir`, `sgcEscOcorrenciaDecidir`, `sgcEscSugestaoInserir`, `sgcEscSugestaoDecidir`, `sgcEscContatoInserir`, `sgcEscPedidoFaturamento`, `sgcEscPedidoAlertaFaturamento`, `sgcEscAvisoInserir` | `sgcNfDetectar` `0 */30 * * * *`; `sgcFaturamentoMonitorar` `0 0 11 * * *` |
+| 006 | `sgcNfsRecebimentoCard` (previsão e status por nota: `recebida`, `atrasada`, `em_transito`, `dentro_prazo`, `sem_prazo`), `sgcNfsRecebimentoPendente`, `sgcNfsEmAtraso`/`Total`, `sgcWintNfEntradasConfirmadas` (por `NUMTRANSENT`/`NUMNOTA` + fornecedor, `DTENT` não nulo, `DTCANCEL` nulo), `sgcRecebimentoSincronizar` (JS: cron e "Verificar entrada" por `cardId`) | `sgcEscNfRecebimento`, `sgcEscNfAlertaAtraso` (por id, `{{usuarioId}}` do responsável) | `sgcRecebimentoSincronizar` `0 25 6-20/2 * * *` |
+| 007 | `sgcBoItensCard`, `sgcBoPainel`/`Total` (todos os cards em `bo`), `sgcBoPrevisoesCard`, `sgcBoDocumentosCard`, `sgcWintClientesImpactados` (`PCMOV` `CODOPER = 'S'`, 60 dias, por lista de `CODPROD`), `sgcBoMarcar` (JS: marca itens, foto dos clientes impactados, status `bo` no item), `sgcBoMonitorar` (JS, cron) | `sgcEscBoItemInserir`, `sgcEscBoItemResolver`, `sgcEscBoPrevisaoInserir`, `sgcEscBoDocumentoInserir`, `sgcEscPedidoPrevisaoBo`, `sgcEscItemStatusBo` (item do pedido → `bo` e volta) | `sgcBoMonitorar` `0 5 11 * * *` |
+
+Quem chama o quê: tela → SQL guardada por `:VAR_USER`; JS (vínculo, decisão, cron) → escritas por
+id com `{{usuarioId}}` e a guarda de persona única (R-013) — no cron, `{{usuarioId}}` é o responsável
+do card (ou o criador) e a persona conferida é a dele; `sgcEscAvisoInserir` é a exceção (R-023).
+Consultas Oracle no smoke provam contagem > 0.
+
+### Telas da onda 2
+
+| Rota | Tela | Persona | Spec |
+|---|---|---|---|
+| `/notas-fiscais` | sugestões (Pedido · Fornecedor · Fase · NF · Score · Status · Validar / Ver / Recusar) + busca híbrida por número | admin, analista, gestor; diretoria lê | 005 |
+| `/faturamentos-pendentes` | total, filtros 0 contato / 3 / 5 / +5 dias úteis, busca, exportar CSV, Registrar contato, Enviar cobrança | idem | 005 |
+| `/nfs-em-atraso` | notas vencidas dos cards em Enviado e Trânsito: total e valor, faixas até 3 / 4–7 / +7 dias, busca, CSV, "Sincronizar com o WinThor" | idem | 006 |
+| `/bo` | painel consolidado dos produtos em B.O. (previsão, clientes impactados, card) | todas, inclusive comercial | 007 |
+| card | abas Notas fiscais (005), Recebimento (006), B.O. (007) | conforme R-028 | — |
+
+Menu (`AdminLayout`, base S2): grupo **Fiscal** (Notas fiscais, Faturamentos pendentes, NFs em atraso)
+e **Produtos em B.O.** no grupo Compras. Capa do card: etiqueta "Faturamento pendente" a partir de 3 dias
+úteis vem do campo `faturamento` e de `ALERTA_FATURAMENTO_NIVEL` na capa da 002 (o integrador liga).
