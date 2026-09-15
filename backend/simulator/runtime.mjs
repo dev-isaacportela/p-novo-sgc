@@ -56,8 +56,12 @@ const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
  * @param db            DatabaseSync (node:sqlite) com registerMysqlFunctions aplicado
  * @param resolveById   (id) => definition | null — usado quando uma funcao
  *                      JAVASCRIPT chama outra por `executeServerFunctionMitra`
+ * @param onEmail       ({ to, subject, body }) => void — recebe cada e-mail que
+ *                      o codigo publicado mandaria. Sem ele, o e-mail so aparece
+ *                      no console; com ele, o smoke confere destinatario,
+ *                      assunto e CORPO (spec 002, C-032..C-034).
  */
-export function createRunner(db, { resolveById = () => null, onQuery } = {}) {
+export function createRunner(db, { resolveById = () => null, onQuery, onEmail } = {}) {
   const run = (sql) => {
     const translated = toSqlite(sql);
     if (onQuery) onQuery(translated, sql);
@@ -84,9 +88,10 @@ export function createRunner(db, { resolveById = () => null, onQuery } = {}) {
         const output = await execute(alvo, entrada || {}, userId);
         return { result: { executionStatus: 'COMPLETED', serverFunctionId, output } };
       },
-      sendEmailMitra: async ({ to, subject }) => {
+      sendEmailMitra: async ({ to, subject, body }) => {
         const destinatarios = [].concat(to ?? []);
-        console.log(`[simulador] e-mail simulado -> ${destinatarios.join(', ')} | ${subject}`);
+        if (onEmail) onEmail({ to: destinatarios, subject: String(subject ?? ''), body: String(body ?? '') });
+        else console.log(`[simulador] e-mail simulado -> ${destinatarios.join(', ')} | ${subject}`);
         return { result: { message: 'simulado', recipientCount: destinatarios.length } };
       },
     };

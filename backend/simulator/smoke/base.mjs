@@ -38,7 +38,14 @@ export async function abrirContexto() {
     const definicao = byName.get(nome);
     if (definicao) byId.set(id, definicao);
   }
-  const execute = createRunner(db, { resolveById: (id) => byId.get(id) ?? null });
+  // Os e-mails que o codigo publicado mandaria ficam numa lista, em vez de
+  // so no console: e assim que o smoke confere destinatario, assunto e corpo
+  // das automacoes de fase (spec 002, C-032..C-034).
+  const emails = [];
+  const execute = createRunner(db, {
+    resolveById: (id) => byId.get(id) ?? null,
+    onEmail: (email) => emails.push(email),
+  });
 
   const U = CENARIO.usuarios;
   const chamar = (nome, input = {}, userId = U.admin) => {
@@ -61,7 +68,7 @@ export async function abrirContexto() {
   };
 
   return {
-    db, byName, overridden, byId, execute, chamar, teste, U,
+    db, byName, overridden, byId, execute, chamar, teste, U, emails,
     contagem: () => feitos,
     fechar: () => db.close(),
   };

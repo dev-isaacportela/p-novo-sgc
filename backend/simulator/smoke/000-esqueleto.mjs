@@ -13,7 +13,13 @@ export async function suite(ctx) {
   const { db, byName, overridden, byId, chamar, teste, U } = ctx;
 
   await teste('S0-001: add-001-kanban.mjs carrega ESCRITAS.length + PUBLICAS.length server functions com os ids do mapa deste projeto', async () => {
-    assert.equal(byName.size, ESCRITAS.length + PUBLICAS.length);
+    // Igualdade não serve mais: cada spec da onda 1 acrescenta as suas sgc*
+    // ao mesmo `byName`. O que o esqueleto garante é que NENHUMA função da lib
+    // ficou de fora nem foi redefinida por um add-00N do projeto.
+    for (const definicao of [...ESCRITAS, ...PUBLICAS]) {
+      assert.ok(byName.has(definicao.name), `${definicao.name} da lib nao foi carregada`);
+    }
+    assert.ok(byName.size >= ESCRITAS.length + PUBLICAS.length);
     assert.equal(overridden.length, 0);
     for (const definicao of byName.values()) assert.ok(!definicao.code.includes('__KB_IDS__'), `${definicao.name} ficou com o marcador de ids`);
     // byId agora resolve TODO nome publicado (ids-do-mapa.mjs), nao so as kbEsc*.
@@ -46,7 +52,11 @@ export async function suite(ctx) {
     assert.equal(comoAna.souAdmin, false);
   });
 
-  await teste('S0-004: kbCardCriar (Ana) cria card na fase "analise" com KB_MOVIMENTO de entrada; kbCardMover para "tecnica" funciona; kbCardsListar devolve 1 card', async () => {
+  await teste('S0-004: kbCardCriar (Ana) cria card na fase "analise" com KB_MOVIMENTO de entrada; kbCardMover para "tecnica" funciona; kbCardsListar devolve 1 card a mais', async () => {
+    // O seed da spec 002 ja traz pedidos: o que se conta e o DELTA deste card.
+    const antes = await chamar('kbCardsListar', {
+      boardId: CENARIO.boardCompras, faseId: 0, busca: '', responsavelId: 0, incluirConcluidos: 0, limite: 50, offset: 0,
+    }, U.ana);
     const criado = await chamar('kbCardCriar', {
       boardId: CENARIO.boardCompras, titulo: 'Pedido de teste do esqueleto', valoresJson: '{}', responsavelId: 0, prazo: '',
     }, U.ana);
@@ -62,12 +72,13 @@ export async function suite(ctx) {
     assert.equal(movido.ok, true, movido.error);
 
     const lista = await chamar('kbCardsListar', {
-      boardId: CENARIO.boardCompras, faseId: 0, busca: '', responsavelId: 0, incluirConcluidos: 0, limite: 20, offset: 0,
+      boardId: CENARIO.boardCompras, faseId: 0, busca: '', responsavelId: 0, incluirConcluidos: 0, limite: 50, offset: 0,
     }, U.ana);
     assert.equal(lista.ok, true, lista.error);
-    assert.equal(lista.total, 1);
-    assert.equal(lista.cards.length, 1);
-    assert.equal(lista.cards[0].faseId, CENARIO.fases.tecnica);
+    assert.equal(lista.total, antes.total + 1);
+    const meu = lista.cards.find((card) => card.id === criado.id);
+    assert.ok(meu, 'o card criado deveria estar na listagem');
+    assert.equal(meu.faseId, CENARIO.fases.tecnica);
   });
 
   await teste('S0-005: shims Oracle (NVL, TO_DATE, TO_CHAR, TRUNC(SYSDATE), FROM DUAL, WHERE ROWNUM <= 2) traduzem e rodam com o resultado esperado', async () => {
