@@ -13,7 +13,11 @@ export async function suite(ctx) {
   const { db, byName, overridden, byId, chamar, teste, U } = ctx;
 
   await teste('S0-001: add-001-kanban.mjs carrega ESCRITAS.length + PUBLICAS.length server functions com os ids do mapa deste projeto', async () => {
-    assert.equal(byName.size, ESCRITAS.length + PUBLICAS.length);
+    // >= , nao ===: a partir da onda 1 os add-004..007 deixam de ser stub e
+    // somam as proprias SFs a byName (PUBLISH_ORDER inteiro, nao so a lib).
+    // O que este teste prova continua valendo — a lib publicou pelo menos as
+    // suas — sem travar toda feature nova nesse total exato.
+    assert.ok(byName.size >= ESCRITAS.length + PUBLICAS.length, `esperado >= ${ESCRITAS.length + PUBLICAS.length}, veio ${byName.size}`);
     assert.equal(overridden.length, 0);
     for (const definicao of byName.values()) assert.ok(!definicao.code.includes('__KB_IDS__'), `${definicao.name} ficou com o marcador de ids`);
     // byId agora resolve TODO nome publicado (ids-do-mapa.mjs), nao so as kbEsc*.
