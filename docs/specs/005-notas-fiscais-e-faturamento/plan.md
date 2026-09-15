@@ -21,7 +21,7 @@
 
 - **Frontend:** React 19 · Vite 7 · Tailwind 4 · react-router 7 · `mitra-interactions-sdk`
 - **Backend:** tabelas e Server Functions na plataforma Mitra, provisionadas por `backend/*.mjs` com `mitra-sdk`; leitura do WinThor por JDBC Oracle (`jdbcId` resolvido por nome no `isEntrypoint()`)
-- **Reuso identificado:** `@benenutri/mitra-kanban` (`abasExtras`, `ExtensaoContexto`, `kbNotaRegistrar`, `kbCardAtualizar`); `page.tsx` (`Panel`, `PanelHeader`, `Toolbar`, `SearchInput`, `SelectMenu`, `Table`/`Th`/`Td` com `numeric`, `RowTitle`, `RowMeta`, `Status`, `Badge`, `Code`, `Dash`, `Alert`, `EmptyState`, `Pagination`, `Dialog`, `Field`); `lib/formato.ts`; `lib/prazo-pagamento.ts` (003) para as parcelas; `abas/capa-do-quadro.ts` (003) para o espelho do cartão; `sgcEscComunicacaoInserir` (002) para registrar a cobrança; `DatePicker` (004)
+- **Reuso identificado:** `@benenutri/mitra-kanban` 1.4.0 (`abasExtras`, `ExtensaoContexto`, `kbNotaRegistrar`, `kbCardAtualizar` — com `atualizadoPor`/`origem: 'sistema'` no caminho sem sessão, R-042); `page.tsx` (`Panel`, `PanelHeader`, `Toolbar`, `SearchInput`, `SelectMenu`, `Table`/`Th`/`Td` com `numeric`, `RowTitle`, `RowMeta`, `Status`, `Badge`, `Code`, `Dash`, `Alert`, `EmptyState`, `Pagination`, `Dialog`, `Field`); `lib/formato.ts`; `lib/prazo-pagamento.ts` (003) para as parcelas; `abas/capa-do-quadro.ts` (003) para o espelho do cartão; `sgcEscComunicacaoInserir` (002) para registrar a cobrança; `DatePicker` (004)
 - **Dependência nova:** nenhuma
 
 ## Modelo de dados
@@ -89,7 +89,7 @@ uma consulta o que já está vinculado em qualquer card (RN-010).
 `STATUS VARCHAR(20) DEFAULT 'sugerida'` (`sugerida` \| `validada` \| `recusada` \| `ignorada`),
 `MOTIVO VARCHAR(400)`, `DECIDIDO_POR INT`, `DECIDIDO_EM VARCHAR(19)`, `CRIADO_EM VARCHAR(19)`.
 `UNIQUE KEY UK_SGC_NF_SUGESTAO (CHAVENFE, ID_CARD)` (do 000) **e**
-`UNIQUE KEY UK_SGC_NF_SUGESTAO_NOTA (ID_CARD, CODFORNEC, NUMNOTA, SERIE)` — ver *Pedidos ao 000*:
+`UNIQUE KEY UK_SGC_NF_SUGESTAO_NOTA (ID_CARD, CODFORNEC, NUMNOTA, SERIE)` (aceito pelo 000, R-043):
 `CHAVENFE` é vazia em nota sem XML, e sem a segunda chave a rodada de 30 em 30 minutos
 duplicaria a sugestão dessas notas.
 
@@ -133,7 +133,7 @@ faturamentos pendentes mostra no lugar do aviso (R-041).
 ## Contratos de backend
 
 Tudo em `backend/add-008-notas-fiscais.mjs`, que exporta `definitions`. Ids locais **7501–7515**
-(leitura e JS) e **7550–7560** (escrita), faixa 75xx do R-024. Filtro desligado é `''` no texto e
+(leitura e JS) e **7550–7559** (escrita), faixa 75xx do R-024. Filtro desligado é `''` no texto e
 `0` no número; `dataEnvio` desligada é `'1900-01-01'` (nunca `''`: quebraria o `TO_DATE`).
 
 ### Leituras — WinThor (Oracle, `jdbcId` resolvido por nome)
@@ -399,9 +399,9 @@ persona dele que a guarda confere.
   (`sgcWintNfParcelas`), os itens do pedido e a validade mínima do fornecedor. Grava a nota
   (`sgcEscNfInserir` — recusa a nota já vinculada em qualquer card e devolve o erro), os itens em
   um lote (`sgcEscNfItemInserir`), roda as **sete** regras e grava as ocorrências em um lote
-  (`sgcEscOcorrenciaInserir`), recalcula o faturamento (`sgcEscPedidoFaturamento`), atualiza a
-  capa (`sgcEscPedidoFaturamentoCapa`) e registra a nota do histórico. São **6 execuções
-  aninhadas**, quaisquer que sejam os itens (D-002).
+  (`sgcEscOcorrenciaInserir`), recalcula o faturamento (`sgcEscPedidoFaturamento`) e registra a
+  nota do histórico. São **5 execuções aninhadas**, quaisquer que sejam os itens (D-002). Devolve
+  `percValor`, `percQtd` e `saldo` para a **tela** espelhar a capa (D-003).
 - **`sgcOcorrenciaDecidir`** — persona igual à do vínculo; `recusado` exige justificativa de 10
   caracteres (RF-012); `modo: 'conformes'` decide de uma vez todas as conformes pendentes do
   card, `individual` decide uma. Uma execução de `sgcEscOcorrenciaDecidir` nos dois casos, mais
@@ -413,8 +413,9 @@ persona dele que a guarda confere.
   corrigiu); 100 % → nível 0, capa limpa, sem aviso (RF-020); `DIAS_UTEIS < 3` → nada; `>= 3` →
   nível 3 ou 5 e, se `ALERTA_FATURAMENTO_EM` já é de hoje, pula (RN-009). Grava o aviso aos responsáveis (`faturamento_3`, `faturamento_5` ou
   `faturamento_diario`, `PARA_USUARIO_ID = 0`), e no nível 5 um segundo aviso com
-  `PARA_PERSONA = 'gestor'`; depois `sgcEscPedidoAlertaFaturamento`,
-  `sgcEscPedidoFaturamentoCapa` e `kbNotaRegistrar`. **Não** envia e-mail (RN-014) e **não**
+  `PARA_PERSONA = 'gestor'`; depois `sgcEscPedidoAlertaFaturamento`, o espelho da capa por
+  `kbCardAtualizar` (SF da lib, por id, com `atualizadoPor` = responsável do card e
+  `origem: 'sistema'` — R-042) e `kbNotaRegistrar`. **Não** envia e-mail (RN-014) e **não**
   consulta o ERP (RNF-003).
 - **`sgcCobrancaEnviar`** — persona igual à do vínculo; `sendEmailMitra` com o contato escolhido
   mais a cópia fixa `compras@benenutri.com`, sem duplicar o destinatário (EM-02); grava a
@@ -434,7 +435,6 @@ persona dele que a guarda confere.
 | `sgcEscSugestaoDecidir` | `:VAR_USER` + persona | `id`, `status`, `motivo`, `decididoEm` | `UPDATE SGC_NF_SUGESTAO SET STATUS, MOTIVO, DECIDIDO_POR = :VAR_USER, DECIDIDO_EM WHERE ID = {{id}} AND STATUS = 'sugerida' AND <guarda>` | RF-024 |
 | `sgcEscContatoInserir` | `:VAR_USER` + persona | `cardId`, `dtContato`, `canal`, `resumo`, `previsao`, `criadoEm` | `INSERT … SELECT … FROM DUAL WHERE TRIM('{{resumo}}') <> '' AND <guarda>` | RF-022 |
 | `sgcEscPedidoFaturamento` | `{{usuarioId}}` | `idCard`, `usuarioId`, `agora` | `UPDATE SGC_PEDIDO` com as quatro medidas **somadas no próprio banco** | RF-016 |
-| `sgcEscPedidoFaturamentoCapa` | `{{usuarioId}}` | `idCard`, `texto`, `usuarioId` | `UPDATE KB_CARD SET VALORES_JSON = JSON_SET(…, '$.faturamento', '{{texto}}')` | RF-017 |
 | `sgcEscPedidoAlertaFaturamento` | `{{usuarioId}}` | `idCard`, `nivel`, `alertaEm`, `usuarioId` | `UPDATE SGC_PEDIDO SET ALERTA_FATURAMENTO_NIVEL, ALERTA_FATURAMENTO_EM` | RF-019, RF-020 |
 | `sgcEscAvisoInserir` | **nenhuma** (R-023) | `idCard`, `tipo`, `chave`, `paraUsuarioId`, `paraPersona`, `texto`, `criadoEm` | `INSERT … SELECT … FROM DUAL WHERE NOT EXISTS (mesma CHAVE)` | RF-021, RN-009 |
 
@@ -488,15 +488,22 @@ WHERE P.ID_CARD = {{idCard}} AND {{usuarioId}} > 0
   AND <guarda de persona sobre {{usuarioId}}>
 ```
 
-E a capa do cartão, que o cron também precisa escrever e não pode passar por `kbCardAtualizar`
-(a SF da lib exige sessão):
+### O espelho da capa — `kbCardAtualizar` nos dois caminhos (R-042)
 
-```sql
-UPDATE KB_CARD
-SET VALORES_JSON = JSON_SET(COALESCE(NULLIF(VALORES_JSON, ''), '{}'), '$.faturamento', '{{texto}}')
-WHERE ID = {{idCard}} AND EXCLUIDO_EM IS NULL AND {{usuarioId}} > 0
-  AND <guarda de persona sobre {{usuarioId}}>
-```
+O SGC **não escreve em `KB_CARD`**: o campo `faturamento` do quadro é gravado pela SF da lib, como
+`valor_total` e `alertas_pendentes` já são.
+
+- **Com sessão** (validar NF, decidir ocorrência): a **tela** chama `atualizarCapaDoQuadro(card,
+  { faturamento })` de `frontend/src/pages/quadros/abas/capa-do-quadro.ts` (módulo da 003,
+  reusado sem alteração), logo depois do `ok` do JS e só quando o texto mudou (`capaMudou`).
+- **Sem sessão** (cron `sgcFaturamentoMonitorar`): a lib 1.4.0 aceita `kbCardAtualizar` com
+  `atualizadoPor` (int) e `origem: 'sistema'`, que **só valem sem sessão** — mesma premissa de
+  `kbCardCriar` (013) e de `kbCardMover` (R-021). O cron chama **por id**, com `atualizadoPor` =
+  primeiro responsável do card, ou o criador, e `valoresJson = { faturamento }`.
+
+O texto é sempre o de `textoDaCapaFaturamento()` (`lib/faturamento.ts`, RN-013), calculado num
+lugar só: no caminho de tela a partir do retorno do JS, no caminho de cron dentro do próprio
+cron, com os mesmos números que a listagem devolveu.
 
 ### Fragmentos entregues às outras specs e ao integrador
 
@@ -580,9 +587,9 @@ no `TEXTO`. O integrador acrescenta a linha em `ROTULO`.
 | 7506 | `sgcNfSugestoesListarTotal` | 7555 | `sgcEscSugestaoDecidir` |
 | 7507 | `sgcNfListar` | 7556 | `sgcEscContatoInserir` |
 | 7508 | `sgcFaturamentoPendenteListar` | 7557 | `sgcEscPedidoFaturamento` |
-| 7509 | `sgcFaturamentoPendenteListarTotal` | 7558 | `sgcEscPedidoFaturamentoCapa` |
-| 7510 | `sgcContatosListar` | 7559 | `sgcEscPedidoAlertaFaturamento` |
-| 7511 | `sgcNfDetectar` | 7560 | `sgcEscAvisoInserir` |
+| 7509 | `sgcFaturamentoPendenteListarTotal` | 7558 | `sgcEscPedidoAlertaFaturamento` |
+| 7510 | `sgcContatosListar` | 7559 | `sgcEscAvisoInserir` |
+| 7511 | `sgcNfDetectar` | | |
 | 7512 | `sgcNfVincular` | | |
 | 7513 | `sgcOcorrenciaDecidir` | | |
 | 7514 | `sgcFaturamentoMonitorar` | | |
@@ -642,15 +649,19 @@ Desenho (`design.md` §8, §9.1, §9.4, §9.5):
    `sgcEscSugestaoDecidir` com `validada` e recarrega a aba. Se a nota não estiver no ERP, a
    pessoa usa "Registrar pelo número": `sgcWintNfBuscar` pré-preenche e o mesmo `sgcNfVincular`
    grava, com `origem: 'hibrida'` (ou `'manual'` quando nem no ERP ela existe).
-4. `sgcNfVincular` grava nota, itens e ocorrências, recalcula o faturamento e a capa. A aba
-   recarrega com uma chamada de `sgcNfListar`.
+4. `sgcNfVincular` grava nota, itens e ocorrências e recalcula o faturamento; devolve os
+   percentuais e o saldo. A tela espelha a capa com `atualizarCapaDoQuadro(card, { faturamento })`
+   — uma chamada de `kbCardAtualizar`, e só quando o texto mudou — e recarrega a aba com uma
+   chamada de `sgcNfListar`.
 5. A compradora decide as ocorrências: "Aceitar todos os conformes" (`modo: 'conformes'`) ou uma
    a uma; recusar abre o diálogo de justificativa. Enquanto houver pendente, concluir o pedido é
    recusado pelo gancho do servidor.
 6. Mover para "Em Trânsito para BN" sem nota é recusado pelo gancho, com o texto do fragmento; a
    lib mostra o motivo na faixa de aviso do card.
 7. Todo dia às 11h UTC `sgcFaturamentoMonitorar` roda: quem passou de 3 e de 5 dias úteis ganha
-   aviso, nível e etiqueta na capa; acima de 5, uma vez por dia; 100 % em valor encerra.
+   aviso, nível e a etiqueta na capa (`kbCardAtualizar` por id, com `atualizadoPor` e
+   `origem: 'sistema'`); acima de 5, uma vez por dia; 100 % em valor encerra; pedido em B.O.
+   é pulado (R-041).
 8. Em `/faturamentos-pendentes` o gestor filtra, busca, exporta, registra contato
    (`sgcEscContatoInserir`, `:VAR_USER`) e envia cobrança (`sgcCobrancaEnviar`, seguido de
    `sgcEscContatoInserir` pela tela).
@@ -800,11 +811,10 @@ por isso nenhum dos nomes repetidos muda de valor aqui).
   SQLite é o operador `%`, e `FLOOR` depende de flag de compilação, por isso vira função
   registrada, como o `CEIL` já é);
 - **`DATE_ADD(col, INTERVAL <expressão> DAY)`** — hoje a reescrita só reconhece literal inteiro
-  (`INTERVAL 30 DAY`); precisa aceitar uma expressão entre parênteses para o `somarDiasUteis`;
-- **`JSON_SET`** — existe nos dois (MySQL nativo, SQLite `json_set`), só conferir que o
-  `mapOutsideStrings` não toca no caminho `'$.faturamento'`.
+  (`INTERVAL 30 DAY`); precisa aceitar uma expressão entre parênteses para o `somarDiasUteis`.
 
-Os três são **pedidos ao integrador** em `backend/simulator/mysql-dialect.mjs`.
+Os dois são **pedidos ao integrador** em `backend/simulator/mysql-dialect.mjs`. Nenhuma função de
+JSON é usada: o campo do quadro é escrito pela lib (R-042).
 
 ## Testes
 
@@ -828,7 +838,7 @@ Os três são **pedidos ao integrador** em `backend/simulator/mysql-dialect.mjs`
 | C-016 | `smoke/…` | recusar com 9 caracteres devolve `ok: false` citando a justificativa; com 10, grava `DECISAO = 'recusado'`, `DECIDIDO_POR` e `DECIDIDO_EM`; `SGC_NF` do card continua com 1 linha nos dois casos |
 | C-017 | `smoke/…` | `sgcPodeMover` de `enviado` para `transito` no card `semNota` devolve `PODE = 0` e o `MOTIVO` exato do fragmento; no `enviadoComPedido` com 1 nota, `PODE = 1` e `MOTIVO` vazio |
 | C-018 | `smoke/…` | `sgcPodeMover` para `concluido` com 3 ocorrências pendentes → `PODE = 0` e `MOTIVO` contendo "3 conferências"; decididas as três, `PODE = 1`; o mesmo par saindo de `bo` |
-| C-019 | `tests/faturamento.test.mjs` + `smoke/…` | `textoDaCapaFaturamento` devolve `R$ 72.000,00 (60 %) · saldo R$ 48.000,00`; depois do vínculo, `KB_CARD.VALORES_JSON` do card tem esse texto na chave `faturamento` e `DT_PRIMEIRO_FATURAMENTO` é `2026-09-11` |
+| C-019 | `tests/faturamento.test.mjs` + `smoke/…` | `textoDaCapaFaturamento` devolve `R$ 72.000,00 (60 %) · saldo R$ 48.000,00`; depois do vínculo, `DT_PRIMEIRO_FATURAMENTO` é `2026-09-11`; o espelho da capa é provado **pelos dois caminhos**: `kbCardAtualizar` com sessão (`valoresJson = { faturamento }`) e, na rodada do cron, `kbCardAtualizar` por id com `atualizadoPor` + `origem: 'sistema'` — nos dois, `KB_CARD.VALORES_JSON` do card passa a ter o texto na chave `faturamento` |
 | C-020 | `smoke/…` | `sgcFaturamentoMonitorar` sobre o card `cemPorCento` devolve `encerrados: 1`, zera `ALERTA_FATURAMENTO_NIVEL`, não cria aviso e o card some de `sgcFaturamentoPendenteListar` |
 | C-021 | `smoke/…` | a rodada cria 1 `SGC_AVISO` `faturamento_3` para `enviadoComPedido` com "3 dias úteis" e o fornecedor no `TEXTO`, `PARA_USUARIO_ID = 0`, nível 3 gravado e 1 nota no histórico |
 | C-022 | `smoke/…` | a rodada cria 2 avisos para `enviadoSemPedido` (`faturamento_5` com `PARA_USUARIO_ID = 0` e outro com `PARA_PERSONA = 'gestor'`) e nível 5 |
@@ -864,8 +874,14 @@ Os três são **pedidos ao integrador** em `backend/simulator/mysql-dialect.mjs`
 
 **Consome da 001 (fornecedores):** `SGC_FORNECEDOR.VALIDADE_MINIMA_DIAS` (RN-005) e os contatos
 de `SGC_FORNECEDOR_LINHA_CONTATO` por `sgcFornecedorCarregar`, para a cobrança escolher o
-destinatário entre os cadastrados (EN-02 A). Pede ao seed da 001 uma linha:
-`VALIDADE_MINIMA_DIAS = 180` no fornecedor 1042.
+destinatário entre os cadastrados (EN-02 A). O seed da 001 ganha `VALIDADE_MINIMA_DIAS = 180` no
+fornecedor 1042 (C-011) — **pela base**, dona única do cadastro de fornecedores no simulador
+(R-017); não é task desta spec.
+
+**Consome da lib (`@benenutri/mitra-kanban` 1.4.0):** `kbCardAtualizar` com `atualizadoPor` (int)
+e `origem: 'sistema'`, que só valem sem sessão — é assim que o cron espelha o campo `faturamento`
+na capa (R-042). Contrato, como o `kbCardMover` do R-021: até a 1.4.0 sair, os dois lados usam a
+lib local por `npm link`.
 
 **Consome da 002 (quadro):** `SGC_PEDIDO` (`VL_TOTAL`, `DT_ENVIO`, `NUMPED_WINTHOR`,
 `EMAIL_ENVIO`, `PRAZO_ACORDADO`, `CODFORNEC`, `CODFILIAL`, `CRIADO_POR`); `SGC_FASE` pelas
@@ -915,12 +931,12 @@ degrada sem a 007: sem linhas em `SGC_BO_ITEM`, `QT_BO_ABERTO` é 0 e `DT_PREVIS
 |---|---|---|---|
 | D-001 | `sgcWintNfEntradas` devolve **uma linha por item** e a pontuação é calculada no JS por `pontuarSugestao()` | Agregar a cobertura no próprio SQL (`LISTAGG`/`COUNT` por NF), como o legado fazia por card | Uma consulta por fornecedor, e não por card (RNF-002), exige comparar a mesma nota com vários pedidos — o que só dá para fazer depois de ter os itens. De quebra, a fórmula de pontuação vira função pura testável, em vez de SQL Oracle que nenhum teste alcança |
 | D-002 | O vínculo é **um lote de itens e um lote de ocorrências**, não uma escrita por linha | Uma execução por item e por ocorrência | Uma nota de 20 itens gera 83 registros; a 83 execuções o teto de 300/min do projeto vai embora com duas validações. O lote usa o mesmo `SELECT … UNION ALL` dentro de derivada da 003, que cabe a guarda de persona |
-| D-003 | A capa do cartão é escrita por `kbCardAtualizar` (lib) no caminho de tela e por `sgcEscPedidoFaturamentoCapa` (`JSON_SET`) no caminho de cron | Só `kbCardAtualizar`; ou só a escrita SQL | `kbCardAtualizar` recusa sem sessão (`Sessão inválida`), e o cron não tem nenhuma. A escrita SQL é cirúrgica (uma chave do JSON) e não mexe em título, responsáveis nem prazo. `ponytail:` ela não atualiza `TEXTO_BUSCA`, então o texto do faturamento não entra na busca do quadro — se um dia precisar, o caminho é a lib ganhar uma escrita de campo |
+| D-003 | A capa do cartão é escrita **sempre por `kbCardAtualizar`** (lib): pela tela quando há sessão (`capa-do-quadro.ts` da 003, reusado) e por id, com `atualizadoPor` + `origem: 'sistema'`, no cron (R-042) | Uma `sgcEsc*` do SGC escrevendo `KB_CARD.VALORES_JSON` com `JSON_SET` | Decisão do 000 (R-042): o SGC não escreve na tabela da lib. Escrita própria no `VALORES_JSON` deixaria `TEXTO_BUSCA` defasado e criaria um segundo dono do card; a lib 1.4.0 já abre o caminho sem sessão que o cron precisa, com a mesma premissa de `kbCardCriar`/`kbCardMover` |
 | D-004 | O monitoramento cobre `enviado`, `transito` **e** `faturamento` | As duas fases do legado (Enviado e Trânsito) | No SGC 2 o card entra em Faturamento quando 100 % das notas foram **recebidas** (R-031), o que não é 100 % faturado: parar de cobrar ali deixaria o saldo sem dono |
 | D-005 | O contato da cobrança é gravado **pela tela** (`sgcEscContatoInserir`, `:VAR_USER`), logo depois do `ok` de `sgcCobrancaEnviar` | `sgcCobrancaEnviar` gravar o contato por id | Uma escrita por id guardada só por `{{usuarioId}}` deixa qualquer usuário atribuir um contato a outra pessoa (achado A1). Como o clique é da tela, o `:VAR_USER` está ali: é o mesmo padrão de `api.cardCriar` → `sgcEscPedidoCriar` da 002. Se a tela morrer no meio, o pior caso é um e-mail enviado sem o contato registrado — o e-mail já ficou em `SGC_COMUNICACAO` |
 | D-006 | A ocorrência guarda **dados** (`TIPO`, `RESULTADO`, esperado, encontrado, delta), não a frase | Coluna `DESCRICAO` com o texto pronto, como no legado | Texto pronto no banco envelhece: mudar uma palavra exigiria migração de dados, e a mesma regra passaria a ter duas redações. `textoDaOcorrencia()` monta na tela e é testável |
-| D-007 | `item_nao_pedido` é o tipo do **casamento**, com os três resultados (`conforme` quando casou por código, `atencao` por código de fábrica/EAN, `divergente` quando não casou) | Criar um tipo `casamento_item` | O 000 fechou os sete tipos; um oitavo tipo é mudança de contrato para ganhar só clareza de nome. Registrado em *Pedidos ao 000* como renomeação opcional |
-| D-008 | O `sgcNfDetectar` grava aviso do tipo `nf_sugerida` | Cron sem aviso, só com a nota no histórico | R-023 manda todo cron gravar aviso e nota; nenhum dos seis tipos do 000 cobre sugestão, então o tipo entra como oitavo valor da coluna (ela é `VARCHAR`, a lista do 000 é enumeração de uso). Sem ele, a sugestão só aparece para quem abre `/notas-fiscais` |
+| D-007 | `item_nao_pedido` é o tipo do **casamento**, com os três resultados (`conforme` quando casou por código, `atencao` por código de fábrica/EAN, `divergente` quando não casou) | Criar um tipo `casamento_item` | O 000 fechou os sete tipos e **recusou** a renomeação (R-043): um oitavo tipo seria mudança de contrato para ganhar só clareza de nome |
+| D-008 | O `sgcNfDetectar` grava aviso do tipo `nf_sugerida` | Cron sem aviso, só com a nota no histórico | R-023 manda todo cron gravar aviso e nota; nenhum dos seis tipos do 000 cobria sugestão, e o 000 **aceitou** `nf_sugerida` como oitavo (R-043). Sem ele, a sugestão só apareceria para quem abre `/notas-fiscais` |
 | D-009 | A recusa de mover (Trânsito e conclusão) é **só do servidor**; `transicoes.ts` ganha os textos em `MOTIVOS` mas nenhum ramo novo em `motivoDeDestino` | Espelhar a trava na tela, como o resto da matriz | O espelho síncrono precisaria da contagem de notas e de ocorrências em cada cartão do quadro — uma SF por cartão (proibido) ou dois campos novos no quadro. Quem recusa é o gancho, e a lib já mostra o motivo na faixa de aviso do card. O teste de 500 combinações (RNF-005 da 002) continua valendo sem alteração |
 | D-010 | Dias úteis por aritmética de `DATEDIFF`/`FLOOR`/`MOD`/`LEAST` a partir de uma segunda-feira fixa | A tabela de lookup `MID('01234444…')` + `WEEKDAY` do legado | `WEEKDAY` e `MID` seriam dois shims novos no simulador e a string de 40 caracteres é ilegível; a aritmética usa quatro funções comuns, é a mesma nos dois lados e casa com a conferência do R-025 |
 | D-011 | A aba carrega **tudo** numa SF (`sgcNfListar`), inclusive contatos | Uma SF por bloco (sugestões, notas, ocorrências, contatos) | RNF-001 e o teto de 300/min: abrir um card já custa `kbCardDetalhe` + `sgcPedidoCarregar`; uma terceira execução é o limite, quatro não |
@@ -935,28 +951,23 @@ degrada sem a 007: sem linhas em `SGC_BO_ITEM`, `QT_BO_ABERTO` é 0 e `DT_PREVIS
 |---|---|---|
 | `IN ({{numpeds}})` com muitos pedidos estoura `ORA-01795` (1.000 itens) | a rodada de detecção falha no fornecedor grande | o lote é de 30 cards e a lista é por grupo (fornecedor + filial): chegar a 1.000 números exigiria 1.000 pedidos abertos do mesmo fornecedor. O JS ainda assim fatia em 500, como a 003 faz com `codprods` |
 | Nota com 2.000 linhas de item na consulta por fornecedor | truncamento silencioso do `ROWNUM <= 2000` | o corte é por emissão decrescente, então o que cai é o mais antigo (já fora da janela útil); o retorno traz a contagem e a rodada registra "consulta truncada" nos erros |
-| `JSON_SET` não existir ou recusar `TEXT` no MySQL da plataforma | a etiqueta da capa não aparece pelo cron | verificação no sandbox junto com D-03 da onda 1; plano B é a lib ganhar uma escrita de campo do card (`kbEscCardValorGravar`), que é onde isso deveria morar |
+| A lib 1.4.0 (`kbCardAtualizar` com `atualizadoPor` + `origem: 'sistema'`) não estar publicada quando esta spec for implementada | a etiqueta da capa não aparece pelo caminho do cron (o de tela funciona) | é contrato, como o `kbCardMover` do R-021: os dois lados usam a lib local por `npm link` até a publicação. O cron protege a chamada com `try/catch` — capa que não espelha não derruba o aviso, que é a parte que não pode faltar |
 | Escrita guardada recusada devolve 0 linhas e nenhum erro (D-03 da onda 1) | a tela acredita que gravou o contato ou a decisão | as ações desta spec passam por JS que relê e devolve a contagem (`decididas`, `pendentes`, `itens`), então a tela compara o esperado com o obtido em vez de confiar no silêncio |
 | O fornecedor emite a nota com `CODPROD` próprio e sem `CODFAB` nem EAN cadastrados | tudo vira `item_nao_pedido` divergente | é o comportamento correto (o item realmente não é identificável), e a ocorrência traz o código encontrado para o cadastro ser corrigido; C-009 fixa isso como esperado |
 | Duas rodadas do cron em paralelo (rodada longa + a seguinte) | aviso ou sugestão duplicada | `UNIQUE (CHAVE)` em `SGC_AVISO` e as duas chaves de `SGC_NF_SUGESTAO` recusam a segunda escrita; nenhuma delas depende de "ler antes de gravar" |
 
-## Pedidos ao 000
+## Pedidos ao 000 — respondidos (R-042, R-043)
 
-1. **`SGC_NF_SUGESTAO`** — acrescentar `UNIQUE KEY (ID_CARD, CODFORNEC, NUMNOTA, SERIE)` ao lado
-   do `UNIQUE (CHAVENFE, ID_CARD)` do R-026: `CHAVENFE` vem vazia em nota sem XML, e sem a segunda
-   chave a rodada de 30 em 30 minutos duplicaria a sugestão dessas notas.
-2. **`SGC_AVISO.TIPO`** — incluir `nf_sugerida` na lista do R-023 (a coluna é `VARCHAR`; o pedido
-   é de contrato, não de schema), para o cron de detecção cumprir "todo cron grava aviso".
-3. **`SGC_NF_OCORRENCIA.TIPO`** — opcional: renomear `item_nao_pedido` para `casamento_item`,
-   já que o tipo cobre também o casamento conforme (D-007). Sem a renomeação, nada quebra.
-4. **`sgcCobrancaEnviar`** — confirmar que a gravação de `SGC_CONTATO_FATURAMENTO` fica na tela
-   (`:VAR_USER`) e não dentro do JS, como o R-033 sugere (D-005). A comunicação continua sendo
-   gravada pelo JS, por `sgcEscComunicacaoInserir` da 002.
-5. **Escrita em `KB_CARD.VALORES_JSON`** — confirmar que uma `sgcEsc*` pode atualizar a chave
-   `faturamento` do JSON de valores do card com `JSON_SET` no caminho sem sessão (D-003), ou
-   decidir que a lib ganha `kbEscCardValorGravar` na 1.4.0.
-6. **Seed da 001** — `VALIDADE_MINIMA_DIAS = 180` no fornecedor 1042, para C-011 ter os dois
-   lados da regra.
+Os seis pedidos desta spec foram decididos pelo 000; nada fica em aberto.
+
+| # | Pedido | Decisão | Onde entrou |
+|---|---|---|---|
+| 1 | `UNIQUE (ID_CARD, CODFORNEC, NUMNOTA, SERIE)` em `SGC_NF_SUGESTAO` | **aceito** | *Modelo de dados*, T-001 |
+| 2 | `nf_sugerida` nos tipos de `SGC_AVISO` | **aceito** | *Modelo de dados*, D-008, T-018 |
+| 3 | renomear `item_nao_pedido` para `casamento_item` | **recusado** — o tipo fica com esse nome | D-007 |
+| 4 | o contato da cobrança é gravado pela tela | **aceito** — o JS grava só `SGC_COMUNICACAO` | D-005, T-020, T-045 |
+| 5 | escrita própria em `KB_CARD.VALORES_JSON` | **mudado (R-042)** — o SGC não escreve em `KB_CARD`: com sessão, a tela chama `kbCardAtualizar` por `capa-do-quadro.ts`; sem sessão, o cron chama `kbCardAtualizar` por id com `atualizadoPor` e `origem: 'sistema'` (lib 1.4.0). `sgcEscPedidoFaturamentoCapa` e o `JSON_SET` saíram | *O espelho da capa*, D-003, T-012, T-019, T-046 |
+| 6 | `VALIDADE_MINIMA_DIAS = 180` no fornecedor 1042 | **aceito** — feito **pela base** (R-017), não é task desta spec | *Dependências entre specs* |
 
 ## Complexity Tracking
 
