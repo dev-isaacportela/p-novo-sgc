@@ -12,7 +12,7 @@
 | Backend escrito local, executado no sandbox | sim | muda só `backend/add-006-itens.mjs` (novo); as colunas novas entram no `setup-backend.mjs` **pelo integrador** (arquivo compartilhado). Nada do `mitra-sdk` roda da máquina local |
 | Migrations append-only | sim | nada em `backend/migrations/`; o DDL vive no `setup-backend.mjs` e a migration é gerada pelo sandbox |
 | Leitura e escrita por Server Function | sim | nenhum `listRecords`/`patchRecord`: as abas usam `linhas()`/`acao()` de `src/lib/mitra-api.ts`; escrita de usuário é SF SQL guardada por `:VAR_USER` |
-| Simulador cobre a feature | sim | `simulator/seed/003-itens.mjs` com 2 fornecedores, 3 filiais, 20 produtos, lotes a vencer, excesso em outra filial e clientes públicos; `sim:check` roda as 7 SQL de leitura com contagem > 0 |
+| Simulador cobre a feature | sim | `simulator/seed/003-itens.mjs` só insere linhas (produtos, vendas, lotes, excesso, clientes públicos) sobre os fornecedores e filiais da 001 e as personas da 002; o DDL das `PC*` é do integrador; `sim:check` roda as 7 SQL de leitura com contagem > 0 |
 | Testes automatizados obrigatórios | sim | 22 cenários e 14 regras mapeados em `backend/simulator/smoke/003-itens.mjs` e em `frontend/tests/{compras,prazo-pagamento,cobertura}.test.mjs` |
 | Design tokens, sem cor literal | sim | tabela, `Status`, `Code`, `Dash` e diálogo do `page.tsx`; zero hex, zero `style={{}}`, zero classe Tailwind solta na página |
 | Simplicidade | sim | nenhuma dependência nova; a regra de compra é função pura em `src/lib/`; upsert em lote no lugar de uma escrita por item (D-006) |
@@ -312,18 +312,22 @@ normalizados pela regra pura (`normalizarPrazo`, D-005): "28/35/42 dias" e "28/3
 mesma string antes de chegarem ao banco, então igualdade de texto no servidor = igualdade de
 parcelas na tela, sem duas regras diferentes.
 
-**Como a 002 incorpora** (o integrador liga): a `sgcPodeMover` mantém a sua subconsulta
-`PENDENCIAS`, e é esta spec que a preenche — com **as mesmas condições** do bloco `A` acima,
-sobre `SGC_ALERTA`, `SGC_PEDIDO_ITEM` e `SGC_PEDIDO`, só valendo saindo de `analise` para
-`tecnica`:
+**Como a 002 incorpora** (o integrador liga): a `sgcPodeMover` já reserva a esta spec o bloco de
+duas colunas `PENDENCIAS`/`PENDENCIAS_MOTIVO`, uma subconsulta cada, sobre `C.ID`; o resto da
+SQL não muda. O contrato é o da 002 (`002-quadro-de-compras/plan.md`): **`PENDENCIAS` é
+contagem** — `> 0` barra —, e `PENDENCIAS_MOTIVO` é a frase mostrada; os aliases de fase são
+`FO` (origem) e `FD` (destino), e o par chega pronto em `T.PAR`:
 
 ```sql
-WHEN FA.CHAVE = 'analise' AND FD.CHAVE = 'tecnica' AND PENDENCIAS.PODE = 0
-  THEN 0   -- e o MOTIVO vem de PENDENCIAS.MOTIVO
+WHEN T.PAR = 'analise>tecnica' AND T.PENDENCIAS > 0 THEN 0   -- PODE
+WHEN T.PAR = 'analise>tecnica' THEN T.PENDENCIAS_MOTIVO      -- MOTIVO
 ```
 
-`PENDENCIAS` é o mesmo corpo de `sgcAnaliseSaidaVerificar` com `{{cardId}}` trocado por `C.ID`.
-Uma regra, dois lugares: se as condições mudarem, mudam nos dois no mesmo commit.
+A 003 troca as duas subconsultas provisórias (hoje: alerta não lido e uma frase genérica) pelo
+corpo de `sgcAnaliseSaidaVerificar` com `{{cardId}}` = `C.ID`: o `PODE` de lá entra invertido
+(`CASE WHEN … THEN 1 ELSE 0 END` como contagem de pendências) e a coluna `MOTIVO` vira
+`PENDENCIAS_MOTIVO`. Uma regra, dois lugares: se as condições mudarem, mudam nos dois no mesmo
+commit.
 
 `FA` é a fase atual do card e `FD` a de destino, ambas resolvidas por `SGC_FASE.CHAVE`
 (nunca por id nem por nome). Cancelar (`FD.CHAVE = 'cancelado'`) não entra neste ramo.
@@ -336,9 +340,9 @@ Uma regra, dois lugares: se as condições mudarem, mudam nos dois no mesmo comm
 | `sgcAlertasGerar` | JAVASCRIPT | `cardId` | `{ ok, total, naoLidos }` | RF-014, RF-015, RF-016 |
 | `sgcAnaliseSair` | JAVASCRIPT | `cardId` | `{ ok, erro?, itens, removidos, total }` | RF-022, RF-024, RF-025, AT-04 |
 
-As três leem a persona por `runQueryMitra` com `:VAR_USER`
-(`SELECT PERSONA FROM SGC_USUARIO_PERSONA WHERE USUARIO_ID = :VAR_USER`, sem linha = `analista`,
-P-02 B) e chamam as escritas **por id**, passando `usuarioId` explícito: `:VAR_USER` não vale
+As três resolvem a persona por `runQueryMitra` com `:VAR_USER` usando **o mesmo mapa** da guarda
+SQL da 002 (`ACCESS_LEVEL` → `ADMIN` admin, `RESTRICTED` comercial, resto analista; `READ_ONLY`
+não opera) e chamam as escritas **por id**, passando `usuarioId` explícito: `:VAR_USER` não vale
 em chamada aninhada.
 
 - **`sgcItensGravar`** — recusa persona fora de `admin`/`analista`/`gestor` e pedido fora da
@@ -355,7 +359,7 @@ em chamada aninhada.
   recalcular antes de barrar); (2) `sgcAnaliseSaidaVerificar` — `PODE = 0` devolve
   `{ ok: false, erro: MOTIVO }` e **nada** é gravado; (3) com `PODE = 1`,
   `sgcEscItemRemoverZerados` → `sgcEscPedidoTotal` → `sgcEscPedidoReprovacoesLimpar` (SF da 002,
-  SQL com `{{usuarioId}}` e `{{idCard}}`, **sem** `:VAR_USER`, porque a chamada é aninhada — a
+  SQL com `{{usuarioId}}` e `{{idCard}}` apenas, **sem** `:VAR_USER`, porque a chamada é aninhada — a
   persona já foi conferida aqui por `runQueryMitra` com `:VAR_USER` antes de qualquer escrita) →
   `kbNotaRegistrar` (SF da lib, com `usuarioId`, que só é aceito sem sessão — e a chamada
   aninhada não tem sessão) com o texto do resumo (AN-10 A):
@@ -368,26 +372,36 @@ em chamada aninhada.
 | Nome | Guarda | Entrada | Instrução | Atende |
 |---|---|---|---|---|
 | `sgcEscItemGravar` | `usuarioId` (só chamada por `sgcItensGravar`) | `idCard`, `linhas`, `usuarioId`, `atualizadoEm` | `INSERT INTO SGC_PEDIDO_ITEM (...) VALUES {{linhas}} ON DUPLICATE KEY UPDATE` de tudo que a compradora edita e do que a análise recalcula | RF-012 |
-| `sgcEscItemRemover` | `:VAR_USER` | `idCard`, `codprod`, `atualizadoEm` | `UPDATE … SET STATUS='removido'` | RF-011 |
+| `sgcEscItemRemover` | `:VAR_USER` + guarda `admin`/`analista`/`gestor` | `idCard`, `codprod`, `atualizadoEm` | `UPDATE … SET STATUS='removido'` | RF-011 |
 | `sgcEscItemRemoverZerados` | `usuarioId` | `idCard`, `usuarioId`, `atualizadoEm` | `UPDATE … SET STATUS='removido' WHERE STATUS='montagem' AND QT_PEDIDA <= 0` | RF-024 |
-| `sgcEscItemStatusFase` | `usuarioId` | `idCard`, `status`, `usuarioId`, `atualizadoEm` | `UPDATE … SET STATUS='{{status}}' WHERE ID_CARD={{idCard}} AND STATUS <> 'removido'` | RF-026 |
+| `sgcEscItemStatusFase` | `:VAR_USER` + guarda `admin`/`analista`/`gestor`/`diretoria` | `idCard`, `status`, `atualizadoEm` | `UPDATE … SET STATUS='{{status}}' WHERE ID_CARD={{idCard}} AND STATUS <> 'removido'` | RF-026 |
 | `sgcEscAlertaInserir` | `usuarioId` | `linhas` | `INSERT INTO SGC_ALERTA (ID_CARD, CODPROD, TIPO, CHAVE, MENSAGEM, LIDO, CRIADO_EM) VALUES {{linhas}} ON DUPLICATE KEY UPDATE MENSAGEM = VALUES(MENSAGEM)` | RF-016 |
 | `sgcEscAlertaRemoverObsoletos` | `usuarioId` | `idCard`, `chaves` | `DELETE FROM SGC_ALERTA WHERE ID_CARD={{idCard}} AND CHAVE NOT IN ({{chaves}})` | RF-016 |
-| `sgcEscAlertaLer` | `:VAR_USER` | `idCard`, `id` (0 = todos), `lidoEm` | `UPDATE SGC_ALERTA SET LIDO=1, LIDO_POR=:VAR_USER, LIDO_EM='{{lidoEm}}' WHERE ID_CARD={{idCard}} AND LIDO=0 AND ({{id}}=0 OR ID={{id}})` | RF-017 |
-| `sgcEscAlertaJustificar` | `:VAR_USER` | `idCard`, `codprod`, `justificativa` | `UPDATE SGC_ALERTA SET JUSTIFICATIVA='{{justificativa}}' WHERE ID_CARD={{idCard}} AND CODPROD={{codprod}}` (todos os alertas do item de uma vez) | RF-018 |
-| `sgcEscCoberturaGravar` | `:VAR_USER` + persona `admin`/`gestor` | `nivel`, `codigo`, `descricao`, `limiteDias`, `atualizadoEm` | `INSERT … SELECT … FROM SGC_USUARIO_PERSONA … ON DUPLICATE KEY UPDATE` | RF-027 |
-| `sgcEscCoberturaExcluir` | `:VAR_USER` + persona `admin`/`gestor` | `id`, `atualizadoEm` | `UPDATE SGC_COBERTURA SET ATIVO=0 …` | RF-027 |
-| `sgcEscPedidoPrazo` | `:VAR_USER` + persona `admin`/`analista`/`gestor` | `idCard`, `prazoPadrao`, `prazoAcordado`, `prazoJustificativa` | `UPDATE SGC_PEDIDO SET PRAZO_PADRAO=…, PRAZO_ACORDADO=…, PRAZO_JUSTIFICATIVA=… WHERE ID_CARD={{idCard}}` | RF-019, RF-020 |
+| `sgcEscAlertaLer` | `:VAR_USER` + guarda `admin`/`analista`/`gestor` | `idCard`, `id` (0 = todos), `lidoEm` | `UPDATE SGC_ALERTA SET LIDO=1, LIDO_POR=:VAR_USER, LIDO_EM='{{lidoEm}}' WHERE ID_CARD={{idCard}} AND LIDO=0 AND ({{id}}=0 OR ID={{id}})` | RF-017 |
+| `sgcEscAlertaJustificar` | `:VAR_USER` + guarda `admin`/`analista`/`gestor` | `idCard`, `codprod`, `justificativa` | `UPDATE SGC_ALERTA SET JUSTIFICATIVA='{{justificativa}}' WHERE ID_CARD={{idCard}} AND CODPROD={{codprod}}` (todos os alertas do item de uma vez) | RF-018 |
+| `sgcEscCoberturaGravar` | `:VAR_USER` + guarda `admin`/`gestor` | `nivel`, `codigo`, `descricao`, `limiteDias`, `atualizadoEm` | `INSERT … SELECT … WHERE EXISTS (<guarda>) ON DUPLICATE KEY UPDATE` | RF-027 |
+| `sgcEscCoberturaExcluir` | `:VAR_USER` + guarda `admin`/`gestor` | `id`, `atualizadoEm` | `UPDATE SGC_COBERTURA SET ATIVO=0 …` | RF-027 |
+| `sgcEscPedidoPrazo` | `:VAR_USER` + guarda `admin`/`analista`/`gestor` | `idCard`, `prazoPadrao`, `prazoAcordado`, `prazoJustificativa` | `UPDATE SGC_PEDIDO SET PRAZO_PADRAO=…, PRAZO_ACORDADO=…, PRAZO_JUSTIFICATIVA=… WHERE ID_CARD={{idCard}}` | RF-019, RF-020 |
 | `sgcEscPedidoTotal` | `usuarioId` | `idCard` | `UPDATE SGC_PEDIDO P SET P.VL_TOTAL = (SELECT COALESCE(SUM(I.QT_PEDIDA*I.PRECO_CUSTO),0) FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD=P.ID_CARD AND I.STATUS<>'removido') WHERE P.ID_CARD={{idCard}}` | RF-013 |
 
 As `sgcEsc*` ficam no **perfil business**, como as `kbEsc*` da lib (R-007) — verificar no
 sandbox se chamada aninhada dispensa o perfil.
 
-Idioma das guardas de persona (P-02 B: sem linha, `analista`; P-12: confere no SQL):
+A guarda de persona é **a mesma** das escritas da 002 (`002-quadro-de-compras/plan.md`, seção
+"A guarda de persona, escrita uma vez"), copiada literalmente, trocando só a lista de personas
+(B-03). Nenhuma escrita desta spec escreve a sua própria versão:
 
 ```sql
-AND COALESCE((SELECT PE.PERSONA FROM SGC_USUARIO_PERSONA PE WHERE PE.USUARIO_ID = :VAR_USER), 'analista')
-    IN ('admin', 'analista', 'gestor')
+AND EXISTS (
+  SELECT 1 FROM INT_USER IU
+  LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
+  WHERE IU.ID = :VAR_USER
+    AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
+    AND COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
+                               WHEN 'ADMIN' THEN 'admin'
+                               WHEN 'RESTRICTED' THEN 'comercial'
+                               ELSE 'analista' END) IN (<personas>)
+)
 ```
 
 O total nunca chega como parâmetro: `sgcEscPedidoTotal` soma no próprio banco, então a capa,
@@ -464,11 +478,13 @@ Desenho (design.md §8, §9.1, §9.5):
    e `sgcCoberturaListar`; `montarItens()` calcula sugestão, arredondamento, curva, cobertura e
    limite; nada é gravado ainda.
 3. A compradora ajusta quantidades, custos, tipo de preço e observações. As alterações se
-   acumulam na tela; "Salvar" chama `sgcItensGravar` uma vez com o conjunto alterado. O retorno
-   traz o total; se ele mudou, a tela chama `kbCardAtualizar` com `valor_total` para o cartão do
-   quadro (a segunda execução do RNF-001).
-4. Ao salvar, a tela chama `sgcAlertasGerar` (AL-03). A contagem de não lidos alimenta o campo
-   `alertas_pendentes` do quadro e a `contagem` da aba Alertas.
+   acumulam na tela; "Salvar" chama `sgcItensGravar` **uma** vez com o conjunto alterado, que
+   devolve o total recalculado.
+4. Ainda no salvar, a tela chama `sgcAlertasGerar` (AL-03), que devolve a contagem de não lidos.
+   Se o total ou essa contagem mudaram, a tela chama **`kbCardAtualizar` uma vez** com
+   `valoresJson = { valor_total, alertas_pendentes }` — os dois campos do quadro na mesma
+   execução. São as três chamadas do RNF-001, independentes do número de itens. É esse campo que
+   alimenta o cartão do quadro (C-06) e a `contagem` da aba Alertas.
 5. Aba **Alertas**: "Marcar como lido" (`sgcEscAlertaLer`) e "Justificar" por item
    (`sgcEscAlertaJustificar`, um `UPDATE` para todos os alertas daquele produto).
 6. Bloco de prazo, na aba Itens: o padrão vem das faixas do fornecedor (001) pelo valor do
@@ -483,8 +499,9 @@ Desenho (design.md §8, §9.1, §9.5):
 8. O motor, ao mover, consulta a regra ligada `sgcPodeMover` (002), cuja subconsulta
    `PENDENCIAS` repete estas mesmas condições no servidor: quem chamar por fora da tela recebe
    a mesma recusa.
-9. Quando a diretoria aprova e quando o pedido entra em Enviado, a 002 chama
-   `sgcEscItemStatusFase` com `aprovado` e `enviado` (F-07).
+9. Quando a diretoria aprova e quando o pedido é enviado, **a tela da 002** chama
+   `sgcEscItemStatusFase` com `aprovado` e `enviado` (F-07) — é escrita de tela, com
+   `:VAR_USER` e a guarda de persona, como qualquer outra ação do card.
 
 ## Regras puras
 
@@ -547,8 +564,9 @@ export function acimaDoLimite(coberturaDias: number | null, limiteDias: number):
 ### `frontend/src/lib/prazo-pagamento.ts`
 
 ```ts
-export function parcelasDoPrazo(texto: unknown): number[];        // "28/35/42 dias" → [28,35,42]; "à vista" → [0]
-export function textoDeParcelas(dias: number[]): string;          // [28,35,42] → "28/35/42"
+export function parcelasDoPrazo(texto: unknown): number[];        // "28/35/42 dias" → [28,35,42]; "à vista" → [0]; sem número → []
+export function textoDeParcelas(dias: number[]): string;          // [28,35,42] → "28/35/42"; lista vazia → ""
+export function parcelasValidas(texto: unknown): boolean;         // true quando há ao menos uma parcela em dias inteiros ≥ 0
 export function normalizarPrazo(texto: unknown): string;          // parcelas quando há número; senão o texto aparado em maiúsculas (D-005)
 export function prazoMedioDias(texto: unknown): number | null;    // média simples, uma casa
 export function compararPrazo(padrao: unknown, acordado: unknown): ComparacaoPrazo;
@@ -556,13 +574,20 @@ export function validarPrazoMontagem(e: { padrao: unknown; acordado: unknown; ju
 // mensagem do bloqueio ou null. Fonte única do formulário e da trava (PZ-02, PZ-03).
 ```
 
+Este módulo é o **dono único** da regra de parcelas no projeto (C-10): a 001 importa
+`parcelasDoPrazo`, `textoDeParcelas` e `parcelasValidas` daqui para validar e formatar o
+`PARCELAS` (`"30/60/90"`) da faixa do fornecedor, e apaga as suas cópias. Por isso as três são
+puras, sem nada de pedido: texto entra, número sai.
+
 ## Simulador
 
 ### Tabelas `PC*` (SQLite, mesmos nomes e colunas do Oracle)
 
-O `schema.mjs` do simulador é compartilhado com a 001 (`PCFORNEC`, `PCFILIAL`) — **pedir ao
-integrador**. Colunas necessárias por esta spec (o DDL do `p-45547` está defasado e não tem
-`OBS2`, `QTVENDMES*`, `CODATV1` nem as tabelas de lote, D-010):
+O DDL das `PC*` é **do integrador**, em `backend/simulator/schema-winthor.mjs` — união das
+colunas que a 001 e a 003 usam (B-05). Esta spec não cria tabela nenhuma no simulador: o
+`seed/003-itens.mjs` só **insere linhas**. As colunas que estas consultas exigem (o DDL do
+`p-45547` está defasado e não tem `OBS2`, `QTVENDMES*`, `CODATV1` nem as tabelas de lote,
+D-010):
 
 | Tabela | Colunas |
 |---|---|
@@ -571,8 +596,8 @@ integrador**. Colunas necessárias por esta spec (o DDL do `p-45547` está defas
 | `PCESTTRANSITO` | `ID`, `CODPROD`, `CODFILIAL`, `QTTRANSITO`, `DTPREVISTA` |
 | `PCMOV` | `NUMTRANSITEM`, `CODPROD`, `CODFILIAL`, `CODCLI`, `CODOPER`, `DTMOV`, `QT`, `PUNIT`, `NUMPED` |
 | `PCCLIENT` | `CODCLI`, `CLIENTE`, `TIPOFJ`, `CODATV1` |
-| `PCFILIAL` | `CODIGO`, `RAZAOSOCIAL` (compartilhada com a 001) |
-| `PCFORNEC` | `CODFORNEC`, `FORNECEDOR` (compartilhada com a 001) |
+| `PCFILIAL` | `CODIGO`, `RAZAOSOCIAL` — **linhas da 001**: `1` Benenutri Matriz, `2` Benenutri Filial Norte, `3` Benenutri Filial Sul (mais o `99`, que as consultas descartam) |
+| `PCFORNEC` | `CODFORNEC`, `FORNECEDOR` — **linhas da 001**: 1015 Fresenius Kabi e 1042 Nestlé (ativos), 1088 Danone (inativo) |
 | `PCDEPTO`, `PCSECAO` | `CODEPTO`/`CODSEC`, `DESCRICAO` — alimentam o seletor da tela de coberturas |
 | `PCLOTE` | `ID`, `CODPROD`, `CODFILIAL`, `NUMLOTE`, `DTVALIDADE` |
 | `PCESTENDLOTE` | `CODPROD`, `NUMLOTE`, `MODULO`, `RUA`, `NUMERO`, `APTO`, `TIPOENDER`, `QT` |
@@ -582,9 +607,13 @@ integrador**. Colunas necessárias por esta spec (o DDL do `p-45547` está defas
 
 ### Seed — `backend/simulator/seed/003-itens.mjs`
 
-- **2 fornecedores**: 101 (Indústria Alfa, 20 produtos) e 102 (Indústria Beta, 4 produtos).
-- **3 filiais**: 1 (Matriz, a do pedido), 2 (Filial Sul), 3 (Filial Norte).
-- **20 produtos do fornecedor 101**, `CODPROD` 5001…5020: 1 com `OBS2 = 'INATIVO'` e 1 com
+Só **linhas**, nenhuma tabela e nenhum fornecedor ou filial próprio: os dois fornecedores
+(**1015** Fresenius Kabi, com os 20 produtos, e **1042** Nestlé, com 4) e as três filiais
+(**1** Benenutri Matriz, a do pedido; **2** Benenutri Filial Norte; **3** Benenutri Filial Sul)
+vêm do `seed/001-fornecedores.mjs` (B-05, B-06). As personas vêm do `seed/002-quadro.mjs`, dono
+único de `SGC_USUARIO_PERSONA` (B-07).
+
+- **20 produtos do fornecedor 1015**, `CODPROD` 5001…5020: 1 com `OBS2 = 'INATIVO'` e 1 com
   `CODEPTO = 4` (provam o recorte de RN-011 e o C-001, que espera 18 linhas); departamentos 2 e 3,
   seções 21 e 31; embalagens "CX 12", "CAIXA COM 24", "FRASCO 100 ML".
 - **Vendas (`PCMOV`)** no período 01/08–14/09/2026 desenhadas para os números da spec: 5001 com
@@ -593,22 +622,22 @@ integrador**. Colunas necessárias por esta spec (o DDL do `p-45547` está defas
   40 dias com 30 pedidos; 5005…5009 com valor de venda 500/250/150/70/30 para a curva ABC.
 - **Clientes públicos**: 2 clientes com `CODATV1` 12 e 20 e 1 privado com `CODATV1` 1; parte da
   venda do 5001 sai por eles para provar a coluna de licitação e a inclusão na venda total.
-- **Lote a vencer**: 5001, lote `L2026A`, 30 unidades na **filial 2**, `DTVALIDADE` = hoje + 60;
-  e um lote de controle com hoje + 120 (não deve alertar).
+- **Lote a vencer**: 5001, lote `L2026A`, 30 unidades na **filial 2 (Benenutri Filial Norte)**,
+  `DTVALIDADE` = hoje + 60; e um lote de controle com hoje + 120 (não deve alertar).
 - **Excesso em outra filial**: 5001 na filial 2 com `QTEST` 300 e `QTVENDMES+1+2` = 270
   (100 dias); e um de controle com 79 dias (não deve alertar).
-- **`PCPEDIDO`**: dois pedidos do fornecedor 101 com `PRAZO1/2/3` = 28/35/42.
+- **`PCPEDIDO`**: dois pedidos do fornecedor 1015 com `PRAZO1/2/3` = 28/35/42.
 - **`CUSTO_PRODUTOS`**: 5001 com 12 unidades por caixa; 5010 sem linha (cai na embalagem).
 - **`SGC_COBERTURA`**: departamento 2 = 60 dias, produto 5001 = 20 dias (C-008).
-- **Pedidos do SGC**: 1 card na fase `analise` com os 20 itens do fornecedor 101, 1 card com
+- **Pedidos do SGC**: 1 card na fase `analise` com os 20 itens do fornecedor 1015, 1 card com
   todos os itens zerados (C-017) e 1 card pronto para sair (C-018).
-- `CENARIO.usuarios = { admin: 1, ana: 2, gil: 3, dora: 4, leo: 5 }` — `ana` analista,
-  `gil` gestor, `dora` diretoria, `leo` **comercial** (P-01: a quinta persona é `comercial`, e
-  ela não vê o quadro); personas gravadas em `SGC_USUARIO_PERSONA`.
+- Usuários: os do `CENARIO` da 002 — `{ admin: 1, ana: 2, gil: 3, dora: 4, leo: 5 }`, com `ana`
+  analista, `gil` gestor, `dora` diretoria e `leo` comercial (P-01). O seed da 003 **não** grava
+  `SGC_USUARIO_PERSONA` (B-07); só os usa nos asserts.
 
 ### `CHECK_INPUT`
 
-Acrescentar em `backend/simulator/config.mjs` (arquivo do integrador): `codfornec: '101'`,
+Acrescentar em `backend/simulator/config.mjs` (arquivo do integrador): `codfornec: '1015'`,
 `codfilial: '1'`, `dataInicio: '2026-08-01'`, `dataFim: '2026-09-14'`, `codprods: '5001,5002'`,
 `codprod: '0'`, `diasValidade: '90'`, `diasEstoque: '80'`, `nivel: ''`. `cardId`, `busca`,
 `limite` e `offset` já existem. O `sim:check` pula escrita e JAVASCRIPT, então nenhuma tupla de
@@ -625,7 +654,7 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 
 | Cenário / regra | Arquivo | O que o `assert` verifica |
 |---|---|---|
-| C-001 | `smoke/003-itens.mjs` | `sgcWintAnaliseMontagem` com 101/1/01-08–14-09 devolve **18** linhas (> 0), nenhuma com `CODEPTO` 4 ou 7 |
+| C-001 | `smoke/003-itens.mjs` | `sgcWintAnaliseMontagem` com 1015/1/01-08–14-09 devolve **18** linhas (> 0), nenhuma com `CODEPTO` 4 ou 7 |
 | C-002 | `tests/compras.test.mjs` | `sugestaoDeCompra(18, 5, 2, 1.5)` → 21 |
 | C-003 | `tests/compras.test.mjs` | `sugestaoDeCompra(6, 0, 0, 1.5)` → 10 |
 | C-004 | `tests/compras.test.mjs` | `arredondarPorCaixa(21, 12)` → 24; `arredondarPorCaixa(21, 1)` → 21 |
@@ -635,7 +664,7 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 | C-008 | `tests/cobertura.test.mjs` | limites [departamento 2 = 60, sku 5001 = 20] → 5001 = 20 (`nivel: 'sku'`), 5002 = 60, 7001 = 35 (`nivel: 'padrao'`) |
 | C-009 | `smoke/003-itens.mjs` | `sgcWintBuscarProduto` com `busca: 'creme'` devolve ≥ 1 e ≤ 20 linhas, nenhuma inativa; com `codprod: 5001` devolve exatamente 1 |
 | C-010 | `smoke/003-itens.mjs` | `sgcItensGravar` com 9 itens num `itensJson` devolve `{ itens: 9 }`; `SELECT` traz as 9 quantidades; `SGC_PEDIDO.VL_TOTAL` = soma esperada |
-| C-011 | `smoke/003-itens.mjs` | `sgcWintLotesAVencer` devolve > 0 linhas; `sgcAlertasGerar` cria 1 alerta `vencimento` do 5001 com "60" e "Filial Sul" na mensagem |
+| C-011 | `smoke/003-itens.mjs` | `sgcWintLotesAVencer` devolve > 0 linhas; `sgcAlertasGerar` cria 1 alerta `vencimento` do 5001 com "60" e "Benenutri Filial Norte" na mensagem (ou comparando por `CODFILIAL` 2) |
 | C-012 | `smoke/003-itens.mjs` | `sgcWintExcessoOutrasFiliais` devolve > 0 linhas; o alerta `excesso` traz `DIAS_ESTOQUE` 100 |
 | C-013 | `smoke/003-itens.mjs` | com 2 alertas não lidos, `PODE = 0` e `MOTIVO` contém "2 alertas"; depois de `sgcEscAlertaLer` com `id: 0`, a condição sai da frente |
 | C-014 | `smoke/003-itens.mjs` | item alertado com `QT_PEDIDA` 30 sem justificativa → `PODE = 0` com a descrição do produto no `MOTIVO`; `sgcEscAlertaJustificar` libera |
@@ -683,9 +712,10 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 - `sgcPodeMover` — mantém a subconsulta `PENDENCIAS`, que esta spec preenche com as mesmas
   condições de `sgcAnaliseSaidaVerificar`, no ramo `analise → tecnica` (bloco pronto na seção
   de contratos).
-- `sgcEscPedidoReprovacoesLimpar` — SQL da 002 com `{{usuarioId}}` e `{{idCard}}`, **sem**
-  `:VAR_USER` (a chamada é aninhada). Chamada por id **só** pelo `sgcAnaliseSair`, que confere a
-  persona por `runQueryMitra` com `:VAR_USER` antes de escrever (AT-04).
+- `sgcEscPedidoReprovacoesLimpar` — SQL da 002 com `{{usuarioId}}` e `{{idCard}}`, **só esses
+  dois** (sem `agora`, R-01) e **sem** `:VAR_USER`, porque a chamada é aninhada. Chamada por id
+  **só** pelo `sgcAnaliseSair`, que confere a persona por `runQueryMitra` com `:VAR_USER` antes
+  de escrever (AT-04).
 - A página `/quadro` liga as abas (`abasExtras`), envolve o `KanbanBoard` no `PedidoProvider` e
   chama `verificarSaidaAnalise` (isto é, `sgcAnaliseSair`) no `antesDeMover` de
   `analise → tecnica`, antes de `ctx.mover`.
@@ -699,10 +729,13 @@ que a 002 usa no envio. `PCFORNEC`/`PCFILIAL` no simulador são compartilhadas c
 
 - `sgcAnaliseSaidaVerificar` (para a 002 e para o `antesDeMover`);
 - `SGC_PEDIDO.VL_TOTAL` e o campo `valor_total` do quadro, atualizados a cada gravação de itens;
-- `sgcEscItemStatusFase` (a 002 chama ao aprovar na diretoria e ao enviar — F-07);
+- `sgcEscItemStatusFase` — escrita de **tela** (`:VAR_USER`, guarda `admin`/`analista`/`gestor`/`diretoria` mais `ACCESS_LEVEL <> 'READ_ONLY'`), input `{ idCard, status, atualizadoEm }`, sem `usuarioId`: a tela da 002 a chama depois da aprovação da diretoria (`'aprovado'`) e depois do envio (`'enviado'`) — F-07;
 - `SGC_PEDIDO_ITEM` como fonte da tabela de itens do e-mail à indústria (EN-02, 002), já sem os
   zerados;
-- `SGC_COBERTURA` como base da parametrização por curva ABC da onda 4.
+- `SGC_COBERTURA` como base da parametrização por curva ABC da onda 4;
+- `lib/prazo-pagamento.ts` (`parcelasDoPrazo`, `textoDeParcelas`, `parcelasValidas`) — **a 001 é
+  consumidora** (C-10): valida e formata o `PARCELAS` da faixa do fornecedor importando daqui e
+  remove as suas duplicatas.
 
 ## Decisões
 
@@ -717,7 +750,7 @@ que a 002 usa no envio. `PCFORNEC`/`PCFILIAL` no simulador são compartilhadas c
 | D-007 | `SGC_ALERTA` aponta para o item por `CODPROD` (com `ID_CARD`), não por `ID_ITEM` | `ID_ITEM` como no rascunho do 000 | O upsert em lote não devolve ids; e o item pode ser removido e readicionado, o que invalidaria o `ID_ITEM` mas não o produto |
 | D-008 | A justificativa de AL-05 mora em `SGC_ALERTA.JUSTIFICATIVA` e é gravada para todos os alertas do produto numa instrução; `SGC_PEDIDO_ITEM.OBSERVACAO` continua sendo a nota livre que vai no e-mail | Usar a observação do item como justificativa (legado) | Separa "por que comprei mesmo assim" de "o que a indústria precisa saber", sem custar execução extra |
 | D-009 | O cancelamento não consulta `sgcAnaliseSaidaVerificar`: o ramo da `sgcPodeMover` só existe para o destino `tecnica` | Verificar sempre e abrir exceção | CA-03 é explícito, e exceção dentro da regra é o tipo de coisa que se esquece de testar |
-| D-010 | O `schema.mjs` do simulador ganha as `PC*` com as colunas que estas consultas usam, inclusive as três tabelas de lote | Reaproveitar o DDL do `p-45547` | O DDL de lá está declaradamente defasado (não tem `OBS2`, `QTVENDMES*`, `CODATV1`, `PCESTENDLOTE`, `PCLOTEEND`): a mesma SQL da produção não rodaria |
+| D-010 | O `schema-winthor.mjs` do integrador ganha as `PC*` com as colunas que estas consultas usam, inclusive as três tabelas de lote; o seed da 003 só insere linhas | Reaproveitar o DDL do `p-45547`, ou cada spec criar as suas `PC*` | O DDL de lá está declaradamente defasado (não tem `OBS2`, `QTVENDMES*`, `CODATV1`, `PCESTENDLOTE`, `PCLOTEEND`): a mesma SQL da produção não rodaria. E duas specs criando a mesma tabela dariam esquema diferente conforme a ordem do seed (B-05) |
 | D-011 | Tela própria `/coberturas`, para admin e gestor | Dentro de `/fornecedores/:id` | Os quatro níveis (fornecedor, departamento, seção, SKU) não cabem numa tela de fornecedor, e `/fornecedores` é arquivo da 001 — pôr a parametrização lá criaria dono compartilhado sem necessidade |
 | D-012 | "Ao menos um item com quantidade" entra como quinta condição de saída, **nova** em relação ao p-45547 | Manter as quatro do legado | Sem ela, um pedido com tudo zerado sairia da Análise e chegaria à indústria com a tabela vazia (EN-02 remove os zerados) |
 | D-013 | `sgcAnaliseSair` é uma SF JavaScript nova e é **o** passo do `antesDeMover` em `analise → tecnica`: verifica, arruma e só então a tela move | A tela chamar as escritas em sequência, ou arrumar depois do movimento | Verificação e limpeza precisam acontecer juntas e antes do movimento: o motor só move o que já está arrumado, e uma aba fechada no meio não deixa o pedido pela metade (revisão do coordenador, R-011) |
