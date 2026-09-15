@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.e2b/
+backend/migrations/SKILL.md
+
+# o simulador vai para a equipe: é onde os testes do backend rodam. Só o banco gerado fica de fora.
+backend/simulator/data/
+
+# arquivos enviados pelo simulador local (anexos de pedido, documentos de fornecedor)
+uploads/
+backend/simulator/uploads/
