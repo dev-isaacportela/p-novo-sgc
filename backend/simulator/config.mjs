@@ -65,6 +65,7 @@ export const MAP_IDS = 'SERVER_FUNCTIONS';
 export const CHECK_INPUT = {
   busca: '', limite: '20', offset: '0',
   // spec 001 (fornecedores):
+  codfornec: '0', codfilial: '', ativo: '0',
   // spec 002 (quadro de compras):
   // spec 003 (itens do pedido):
   // spec 004 (agenda de análises):
