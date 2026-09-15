@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS SGC_AGENDA_PARTICIPANTE (
 - Tipos alinhados com `SGC_PEDIDO` e `SGC_FORNECEDOR` (C-14 da revisão cruzada): `CODFORNEC INT`, `CODFILIAL VARCHAR(10)`, `FORNECEDOR VARCHAR(200)`, `FILIAL VARCHAR(200)` — os mesmos valores viajam entre as três tabelas.
 - `RECORRENCIA` guarda `nenhuma` | `semanal` | `quinzenal` | `mensal` em minúsculas (nomes novos, sem compatibilidade com o `FREQUENCIA` em caixa alta do p-45547).
 - Situação **não é coluna**: sai de `ATIVO`, `PROCESSADO_EM` e `DATA_ANALISE` (RN-005). Gravar situação seria um quarto lugar para desincronizar.
-- `DATA_ENVIO_REAL` e `DATA_PLANEJADA_ORIGINAL` existem por EN-05/RN-012 e só são escritas pelo envio da spec 002; as duas são data (`VARCHAR(10)`), porque o `dtEnvio` que a 002 manda é `'AAAA-MM-DD'` (C-12).
+- `DATA_ENVIO_REAL` e `DATA_PLANEJADA_ORIGINAL` existem por EN-05/RN-012 e só são escritas pelo envio da spec 002; as duas são data (`AAAA-MM-DD`), porque o `dtEnvio` que a 002 manda é `'AAAA-MM-DD'` (C-12).
+- D-13 (revisão adversarial): `backend/setup-backend.mjs` grava `DATA_ENVIO_REAL` como `VARCHAR(19)` (convenção de instante), não `VARCHAR(10)` como este documento descrevia — divergência entre plan e DDL real, não entre DDL e código: `sgcEscAgendaEnvio` sempre grava os 10 caracteres de `dtEnvio`, então o valor cabe sem truncar e sem hora nenhuma sobrando. Registrado aqui para o integrador decidir se estreita a coluna num ajuste futuro; não é bloqueante e `setup-backend.mjs` não foi tocado por esta correção.
 - Datas em `VARCHAR(10)` (`AAAA-MM-DD`) e instantes em `VARCHAR(19)` (`AAAA-MM-DDTHH:MM:SS`), preenchidos no código. Sem `FOREIGN KEY`, por convenção do projeto.
 - Índices: nenhum novo — o volume esperado (milhares de linhas) é lido sempre com `LIMIT/OFFSET` e filtro por data.
 

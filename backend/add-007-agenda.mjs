@@ -49,25 +49,33 @@ function filtrarIds(mapaCompleto) {
   return saida;
 }
 
-/* ─────────────── guarda de persona (R-013 do 000, literal da 002) ─────────────── */
-
-const guardaPersona = (personas) => `AND EXISTS (
+/* ─────────────── guarda de persona (R-013 do 000, literal da 002) ───────────────
+ *
+ * `quem` é `:VAR_USER` nas escritas chamadas direto da tela (sessão de
+ * verdade) e `{{usuarioId}}` nas quatro escritas internas (A1 da revisão):
+ * cron e chamada aninhada não carregam `:VAR_USER` (runtime.mjs, R-013), então
+ * cada uma recebe explícito quem está processando — o cron passa o
+ * CRIADO_POR da própria agenda, sgcEnvioIndustriaRegistrar (002) passa quem
+ * está logado — e a guarda confere a persona dessa pessoa, não de ninguém.
+ */
+const guardaPersona = (quem, personas) => `AND EXISTS (
     SELECT 1 FROM INT_USER IU
     LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
-    WHERE IU.ID = :VAR_USER
+    WHERE IU.ID = ${quem}
       AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
       AND COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
                                  WHEN 'ADMIN' THEN 'admin'
                                  WHEN 'RESTRICTED' THEN 'comercial'
                                  ELSE 'analista' END) IN (${personas})
   )`;
+const PERSONAS_AGENDA = "'admin','analista','gestor'";
 
 /* ─────────────── leituras (SQL) ─────────────── */
 
 const COLUNAS_AGENDA = `A.ID, A.CODFORNEC, A.FORNECEDOR, A.CODFILIAL, A.FILIAL, A.DATA_ANALISE,
   A.PERIODO_INICIO, A.PERIODO_FIM, A.RECORRENCIA, A.DATA_LIMITE_RECORRENCIA, A.OBSERVACAO, A.ATIVO,
   A.PROCESSADO_EM, A.ID_CARD_GERADO, A.DATA_ENVIO_REAL, A.DATA_PLANEJADA_ORIGINAL, A.CANCELADO_EM,
-  A.CRIADO_POR, CU.NOME AS CRIADOR_NOME,
+  A.CRIADO_POR, A.CRIADO_EM, CU.NOME AS CRIADOR_NOME,
   GROUP_CONCAT(P.USUARIO_ID ORDER BY P.ID SEPARATOR ',') AS PARTICIPANTES_IDS,
   GROUP_CONCAT(PU.NOME ORDER BY P.ID SEPARATOR ', ') AS PARTICIPANTES_NOMES`;
 
@@ -198,7 +206,12 @@ async function processarAgendamento(linha, boardId, quando) {
     agora: quando,
   });
 
-  await escrever(IDS.sgcEscAgendaProcessada, { id: inteiro(linha.ID), idCard: cardId, processadoEm: quando });
+  // A1 da revisão: as quatro escritas internas conferem persona por
+  // {{usuarioId}} (nenhuma sessão chega aqui, ver runtime.mjs) — quem
+  // agendou tinha uma das personas aceitas quando gravou, então o cron
+  // repassa o CRIADO_POR da própria agenda como "quem está processando".
+  var quemProcessa = inteiro(linha.CRIADO_POR);
+  await escrever(IDS.sgcEscAgendaProcessada, { id: inteiro(linha.ID), idCard: cardId, processadoEm: quando, usuarioId: quemProcessa });
 
   var proxima = proximaOcorrencia(linha.DATA_ANALISE, linha.RECORRENCIA, linha.DATA_LIMITE_RECORRENCIA);
   if (proxima) {
@@ -214,16 +227,17 @@ async function processarAgendamento(linha, boardId, quando) {
       recorrencia: linha.RECORRENCIA,
       dataLimiteRecorrencia: linha.DATA_LIMITE_RECORRENCIA || '',
       observacao: linha.OBSERVACAO || '',
-      criadoPor: inteiro(linha.CRIADO_POR),
+      criadoPor: quemProcessa,
       criadoEm: quando,
+      usuarioId: quemProcessa,
     });
     if (inteiro(linha.QT_PARTICIPANTES) > 0) {
       var nova = await query(
-        "SELECT ID FROM SGC_AGENDA WHERE CRIADO_POR = " + inteiro(linha.CRIADO_POR) + " AND CRIADO_EM = '" + quando + "' ORDER BY ID DESC LIMIT 1"
+        "SELECT ID FROM SGC_AGENDA WHERE CRIADO_POR = " + quemProcessa + " AND CRIADO_EM = '" + quando + "' ORDER BY ID DESC LIMIT 1"
       );
       if (nova[0]) {
         await escrever(IDS.sgcEscAgendaParticipanteCopiar, {
-          idOrigem: inteiro(linha.ID), idNova: inteiro(nova[0].ID), criadoEm: quando,
+          idOrigem: inteiro(linha.ID), idNova: inteiro(nova[0].ID), criadoEm: quando, usuarioId: quemProcessa,
         });
       }
     }
@@ -370,8 +384,9 @@ GROUP BY A.ID`,
     description: 'RF-001/RF-017/RN-015 - novo agendamento; exige fornecedor ativo e persona admin/analista/gestor.',
     code: `INSERT INTO SGC_AGENDA (CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, DATA_ANALISE, PERIODO_INICIO, PERIODO_FIM, RECORRENCIA, DATA_LIMITE_RECORRENCIA, OBSERVACAO, ATIVO, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM)
 SELECT {{codfornec}}, '{{fornecedor}}', '{{codfilial}}', '{{filial}}', '{{dataAnalise}}', '{{periodoInicio}}', '{{periodoFim}}', '{{recorrencia}}', NULLIF('{{dataLimiteRecorrencia}}', ''), NULLIF('{{observacao}}', ''), TRUE, :VAR_USER, '{{criadoEm}}', '{{criadoEm}}'
+FROM DUAL
 WHERE EXISTS (SELECT 1 FROM SGC_FORNECEDOR F WHERE F.CODFORNEC = {{codfornec}} AND F.ATIVO = TRUE)
-  ${guardaPersona("'admin','analista','gestor'")}`,
+  ${guardaPersona(':VAR_USER', PERSONAS_AGENDA)}`,
   },
   {
     name: 'sgcEscAgendaAtualizar',
@@ -383,7 +398,7 @@ WHERE EXISTS (SELECT 1 FROM SGC_FORNECEDOR F WHERE F.CODFORNEC = {{codfornec}} A
   RECORRENCIA = '{{recorrencia}}', DATA_LIMITE_RECORRENCIA = NULLIF('{{dataLimiteRecorrencia}}', ''),
   OBSERVACAO = NULLIF('{{observacao}}', ''), ATUALIZADO_EM = '{{atualizadoEm}}'
 WHERE ID = {{id}} AND PROCESSADO_EM IS NULL AND ATIVO = TRUE
-  ${guardaPersona("'admin','analista','gestor'")}`,
+  ${guardaPersona(':VAR_USER', PERSONAS_AGENDA)}`,
   },
   {
     name: 'sgcEscAgendaCancelar',
@@ -391,7 +406,7 @@ WHERE ID = {{id}} AND PROCESSADO_EM IS NULL AND ATIVO = TRUE
     description: 'RF-013/RF-017/RN-004 - marca cancelado (nunca apaga); só não processado e ainda ativo; persona admin/gestor/diretoria.',
     code: `UPDATE SGC_AGENDA SET ATIVO = FALSE, CANCELADO_EM = '{{canceladoEm}}', CANCELADO_POR = :VAR_USER, ATUALIZADO_EM = '{{canceladoEm}}'
 WHERE ID = {{id}} AND PROCESSADO_EM IS NULL AND ATIVO = TRUE
-  ${guardaPersona("'admin','gestor','diretoria'")}`,
+  ${guardaPersona(':VAR_USER', "'admin','gestor','diretoria'")}`,
   },
   {
     name: 'sgcEscAgendaParticipanteLimpar',
@@ -400,7 +415,7 @@ WHERE ID = {{id}} AND PROCESSADO_EM IS NULL AND ATIVO = TRUE
     code: `DELETE FROM SGC_AGENDA_PARTICIPANTE
 WHERE ID_AGENDA = {{idAgenda}}
   AND EXISTS (SELECT 1 FROM SGC_AGENDA A WHERE A.ID = {{idAgenda}} AND A.PROCESSADO_EM IS NULL AND A.ATIVO = TRUE)
-  ${guardaPersona("'admin','analista','gestor'")}`,
+  ${guardaPersona(':VAR_USER', PERSONAS_AGENDA)}`,
   },
   {
     name: 'sgcEscAgendaParticipanteInserir',
@@ -408,41 +423,52 @@ WHERE ID_AGENDA = {{idAgenda}}
     description: 'RF-005 - insere um participante (uma instrução por pessoa, chamada em lote pela tela depois do limpar).',
     code: `INSERT INTO SGC_AGENDA_PARTICIPANTE (ID_AGENDA, USUARIO_ID, CRIADO_EM)
 SELECT {{idAgenda}}, {{usuarioId}}, '{{criadoEm}}'
+FROM DUAL
 WHERE EXISTS (SELECT 1 FROM SGC_AGENDA A WHERE A.ID = {{idAgenda}} AND A.PROCESSADO_EM IS NULL AND A.ATIVO = TRUE)
-  ${guardaPersona("'admin','analista','gestor'")}`,
+  ${guardaPersona(':VAR_USER', PERSONAS_AGENDA)}`,
   },
 
-  /* ── escritas internas (sem sessão), chamadas por id do cron/manual ── */
+  /* ── escritas internas (sem sessão), chamadas por id do cron/manual —
+   * guardadas por {{usuarioId}} explícito (A1 da revisão), não :VAR_USER:
+   * nenhuma sessão chega até aqui (runtime.mjs força userId=0 em chamada
+   * aninhada), então sem a guarda o perfil business — que libera todas as
+   * SFs — deixava qualquer usuário (inclusive comercial) chamá-las direto. ── */
   {
     name: 'sgcEscAgendaProcessada',
     type: 'SQL',
-    description: 'RF-008/RF-010/RN-007 - marca o agendamento como processado; AND PROCESSADO_EM IS NULL é a primeira trava de idempotência.',
+    description: 'RF-008/RF-010/RN-007 - marca o agendamento como processado; AND PROCESSADO_EM IS NULL é a primeira trava de idempotência. Persona de {{usuarioId}} (quem processa), não :VAR_USER.',
     code: `UPDATE SGC_AGENDA SET PROCESSADO_EM = '{{processadoEm}}', ID_CARD_GERADO = {{idCard}}, ATUALIZADO_EM = '{{processadoEm}}'
-WHERE ID = {{id}} AND PROCESSADO_EM IS NULL`,
+WHERE ID = {{id}} AND PROCESSADO_EM IS NULL
+  ${guardaPersona('{{usuarioId}}', PERSONAS_AGENDA)}`,
   },
   {
     name: 'sgcEscAgendaProximaInserir',
     type: 'SQL',
-    description: 'RF-009 - cria a ocorrência seguinte da recorrência, com o período já recalculado (RN-008).',
+    description: 'RF-009 - cria a ocorrência seguinte da recorrência, com o período já recalculado (RN-008). Persona de {{usuarioId}}.',
     code: `INSERT INTO SGC_AGENDA (CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, DATA_ANALISE, PERIODO_INICIO, PERIODO_FIM, RECORRENCIA, DATA_LIMITE_RECORRENCIA, OBSERVACAO, ATIVO, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM)
-VALUES ({{codfornec}}, '{{fornecedor}}', '{{codfilial}}', '{{filial}}', '{{dataAnalise}}', '{{periodoInicio}}', '{{periodoFim}}', '{{recorrencia}}', NULLIF('{{dataLimiteRecorrencia}}', ''), NULLIF('{{observacao}}', ''), TRUE, {{criadoPor}}, '{{criadoEm}}', '{{criadoEm}}')`,
+SELECT {{codfornec}}, '{{fornecedor}}', '{{codfilial}}', '{{filial}}', '{{dataAnalise}}', '{{periodoInicio}}', '{{periodoFim}}', '{{recorrencia}}', NULLIF('{{dataLimiteRecorrencia}}', ''), NULLIF('{{observacao}}', ''), TRUE, {{criadoPor}}, '{{criadoEm}}', '{{criadoEm}}'
+FROM DUAL
+WHERE 1 = 1
+  ${guardaPersona('{{usuarioId}}', PERSONAS_AGENDA)}`,
   },
   {
     name: 'sgcEscAgendaParticipanteCopiar',
     type: 'SQL',
-    description: 'RF-009/C-017 - copia os participantes do agendamento de origem para a ocorrência seguinte, numa instrução.',
+    description: 'RF-009/C-017 - copia os participantes do agendamento de origem para a ocorrência seguinte, numa instrução. Persona de {{usuarioId}}.',
     code: `INSERT INTO SGC_AGENDA_PARTICIPANTE (ID_AGENDA, USUARIO_ID, CRIADO_EM)
-SELECT {{idNova}}, USUARIO_ID, '{{criadoEm}}' FROM SGC_AGENDA_PARTICIPANTE WHERE ID_AGENDA = {{idOrigem}}`,
+SELECT {{idNova}}, USUARIO_ID, '{{criadoEm}}' FROM SGC_AGENDA_PARTICIPANTE WHERE ID_AGENDA = {{idOrigem}}
+  ${guardaPersona('{{usuarioId}}', PERSONAS_AGENDA)}`,
   },
   {
     name: 'sgcEscAgendaEnvio',
     type: 'SQL',
-    description: 'RF-016/RN-012 - o envio do pedido (spec 002, sgcEnvioIndustriaRegistrar) sincroniza a agenda: grava a data real, guarda a planejada original só na primeira vez que ela difere, e a data da análise passa a ser a real.',
+    description: 'RF-016/RN-012 - o envio do pedido (spec 002, sgcEnvioIndustriaRegistrar) sincroniza a agenda: grava a data real, guarda a planejada original só na primeira vez que ela difere, e a data da análise passa a ser a real. Persona de {{usuarioId}} (quem registrou o envio), mesma lista.',
     code: `UPDATE SGC_AGENDA SET
   DATA_PLANEJADA_ORIGINAL = CASE WHEN DATA_PLANEJADA_ORIGINAL IS NULL AND DATA_ANALISE <> '{{dtEnvio}}' THEN DATA_ANALISE ELSE DATA_PLANEJADA_ORIGINAL END,
   DATA_ENVIO_REAL = '{{dtEnvio}}',
   DATA_ANALISE = '{{dtEnvio}}'
-WHERE ID_CARD_GERADO = {{idCard}}`,
+WHERE ID_CARD_GERADO = {{idCard}}
+  ${guardaPersona('{{usuarioId}}', PERSONAS_AGENDA)}`,
   },
 ];
 
