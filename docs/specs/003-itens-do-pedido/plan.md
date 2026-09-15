@@ -312,14 +312,18 @@ normalizados pela regra pura (`normalizarPrazo`, D-005): "28/35/42 dias" e "28/3
 mesma string antes de chegarem ao banco, então igualdade de texto no servidor = igualdade de
 parcelas na tela, sem duas regras diferentes.
 
-**Como a 002 incorpora** (o integrador liga): em `sgcPodeMover`, acrescentar ao `CASE` de
-`PODE`/`MOTIVO`, antes do `ELSE`, o bloco que só vale saindo de `analise` para `tecnica`:
+**Como a 002 incorpora** (o integrador liga): a `sgcPodeMover` mantém a sua subconsulta
+`PENDENCIAS`, e é esta spec que a preenche — com **as mesmas condições** do bloco `A` acima,
+sobre `SGC_ALERTA`, `SGC_PEDIDO_ITEM` e `SGC_PEDIDO`, só valendo saindo de `analise` para
+`tecnica`:
 
 ```sql
-WHEN FA.CHAVE = 'analise' AND FD.CHAVE = 'tecnica'
-     AND (SELECT V.PODE FROM ( <corpo de sgcAnaliseSaidaVerificar com {{cardId}} = C.ID> ) V) = 0
-  THEN 0   -- e o MOTIVO correspondente vem do mesmo subselect, coluna MOTIVO
+WHEN FA.CHAVE = 'analise' AND FD.CHAVE = 'tecnica' AND PENDENCIAS.PODE = 0
+  THEN 0   -- e o MOTIVO vem de PENDENCIAS.MOTIVO
 ```
+
+`PENDENCIAS` é o mesmo corpo de `sgcAnaliseSaidaVerificar` com `{{cardId}}` trocado por `C.ID`.
+Uma regra, dois lugares: se as condições mudarem, mudam nos dois no mesmo commit.
 
 `FA` é a fase atual do card e `FD` a de destino, ambas resolvidas por `SGC_FASE.CHAVE`
 (nunca por id nem por nome). Cancelar (`FD.CHAVE = 'cancelado'`) não entra neste ramo.
@@ -330,7 +334,7 @@ WHEN FA.CHAVE = 'analise' AND FD.CHAVE = 'tecnica'
 |---|---|---|---|---|
 | `sgcItensGravar` | JAVASCRIPT | `cardId`, `itensJson` (JSON dos itens alterados) | `{ ok, itens, total, erro? }` | RF-012, RF-013 |
 | `sgcAlertasGerar` | JAVASCRIPT | `cardId` | `{ ok, total, naoLidos }` | RF-014, RF-015, RF-016 |
-| `sgcAnaliseSair` | JAVASCRIPT | `cardId` | `{ ok, itens, removidos, total }` | RF-024, RF-025, AT-04 |
+| `sgcAnaliseSair` | JAVASCRIPT | `cardId` | `{ ok, erro?, itens, removidos, total }` | RF-022, RF-024, RF-025, AT-04 |
 
 As três leem a persona por `runQueryMitra` com `:VAR_USER`
 (`SELECT PERSONA FROM SGC_USUARIO_PERSONA WHERE USUARIO_ID = :VAR_USER`, sem linha = `analista`,
@@ -346,11 +350,18 @@ em chamada aninhada.
   por alerta; chama `sgcEscAlertaInserir` (upsert em lote, preserva `LIDO` e `JUSTIFICATIVA`) e
   `sgcEscAlertaRemoverObsoletos` com a lista de chaves vivas; devolve a contagem de não lidos,
   que a tela espelha no campo `alertas_pendentes` do quadro.
-- **`sgcAnaliseSair`** — chamado pela tela logo depois de o movimento `analise → tecnica`
-  dar certo: `sgcEscItemRemoverZerados` → `sgcEscPedidoTotal` → `sgcEscPedidoReprovacoesLimpar`
-  (SF da 002) → `kbNotaRegistrar` (SF da lib, com `usuarioId`, que só é aceito sem sessão — e a
-  chamada aninhada não tem sessão) com o texto do resumo (AN-10 A):
+- **`sgcAnaliseSair`** — é **o** passo do `antesDeMover` em `analise → tecnica`: a tela o chama
+  e só depois chama `ctx.mover(faseId)`. Faz, nesta ordem: (1) `sgcAlertasGerar` (AL-03 manda
+  recalcular antes de barrar); (2) `sgcAnaliseSaidaVerificar` — `PODE = 0` devolve
+  `{ ok: false, erro: MOTIVO }` e **nada** é gravado; (3) com `PODE = 1`,
+  `sgcEscItemRemoverZerados` → `sgcEscPedidoTotal` → `sgcEscPedidoReprovacoesLimpar` (SF da 002,
+  SQL com `{{usuarioId}}` e `{{idCard}}`, **sem** `:VAR_USER`, porque a chamada é aninhada — a
+  persona já foi conferida aqui por `runQueryMitra` com `:VAR_USER` antes de qualquer escrita) →
+  `kbNotaRegistrar` (SF da lib, com `usuarioId`, que só é aceito sem sessão — e a chamada
+  aninhada não tem sessão) com o texto do resumo (AN-10 A):
   `"Pedido enviado para a aprovação técnica com 8 itens (R$ 12.480,00). 2 itens justificados por alerta, 1 por cobertura acima do limite. 12 itens zerados foram removidos."`
+  A limpeza acontece antes do movimento de propósito: o motor só move o que já está arrumado, e
+  uma aba fechada no meio não deixa o pedido pela metade.
 
 ### Escritas SQL (uma instrução por SF)
 
@@ -368,6 +379,9 @@ em chamada aninhada.
 | `sgcEscCoberturaExcluir` | `:VAR_USER` + persona `admin`/`gestor` | `id`, `atualizadoEm` | `UPDATE SGC_COBERTURA SET ATIVO=0 …` | RF-027 |
 | `sgcEscPedidoPrazo` | `:VAR_USER` + persona `admin`/`analista`/`gestor` | `idCard`, `prazoPadrao`, `prazoAcordado`, `prazoJustificativa` | `UPDATE SGC_PEDIDO SET PRAZO_PADRAO=…, PRAZO_ACORDADO=…, PRAZO_JUSTIFICATIVA=… WHERE ID_CARD={{idCard}}` | RF-019, RF-020 |
 | `sgcEscPedidoTotal` | `usuarioId` | `idCard` | `UPDATE SGC_PEDIDO P SET P.VL_TOTAL = (SELECT COALESCE(SUM(I.QT_PEDIDA*I.PRECO_CUSTO),0) FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD=P.ID_CARD AND I.STATUS<>'removido') WHERE P.ID_CARD={{idCard}}` | RF-013 |
+
+As `sgcEsc*` ficam no **perfil business**, como as `kbEsc*` da lib (R-007) — verificar no
+sandbox se chamada aninhada dispensa o perfil.
 
 Idioma das guardas de persona (P-02 B: sem linha, `analista`; P-12: confere no SQL):
 
@@ -414,7 +428,7 @@ Arquivos:
 | `frontend/src/pages/quadro/abas/Itens.tsx` | `AbaItens(ctx: ExtensaoContexto)` — tabela, busca/adição, diálogos de justificativa, bloco de prazo |
 | `frontend/src/pages/quadro/abas/Alertas.tsx` | `AbaAlertas(ctx: ExtensaoContexto)` |
 | `frontend/src/pages/quadro/abas/pedido-contexto.tsx` | `PedidoProvider` + `usePedido()`: guarda capa, itens e alertas do card aberto (uma consulta por abertura) e expõe `recarregar()` — ver D-003 |
-| `frontend/src/pages/quadro/abas/verificar-saida.ts` | `verificarSaidaAnalise(cardId)` para o `antesDeMover` do `/quadro` (regera alertas e consulta `sgcAnaliseSaidaVerificar`, AL-03) |
+| `frontend/src/pages/quadro/abas/verificar-saida.ts` | `verificarSaidaAnalise(cardId)` para o `antesDeMover` do `/quadro`: uma chamada de `sgcAnaliseSair`, que verifica e arruma antes de a tela mover |
 | `frontend/src/pages/coberturas/CoberturasPage.tsx` | tela de limites |
 | `frontend/src/lib/compras.ts`, `cobertura.ts`, `prazo-pagamento.ts` | regra pura |
 | `frontend/src/lib/server-functions.ts` | bloco 73xx (nomes e ids locais) |
@@ -430,11 +444,15 @@ Desenho (design.md §8, §9.1, §9.5):
   remover.
 - **Diálogos** de justificativa (alerta, cobertura, prazo): `max-h-[90vh]`, só o miolo rola,
   rodapé `flex-col-reverse` no mobile; o `Textarea` mostra o contador quando o mínimo é 10.
+- **Campo de data**: nenhuma tela desta spec tem um — o período de vendas é da tela de criação
+  do pedido (002). Se aparecer, é o `src/components/DatePicker.tsx` da 004 (UI-03 B), nunca o
+  controle nativo.
 - **Sem toast** (UI-02 A): confirmação é "Salvo às HH:MM" na faixa do painel e `Alert` no fluxo
   para erro; a recusa do movimento aparece na faixa de aviso do card (a lib já desenha).
-- **Aba sem permissão não é renderizada** (§9.4): `leitura` vê as abas, mas todos os controles
-  de escrita ficam **desabilitados** (nunca escondidos) — é a regra do anti-padrão "botão
-  escondido por falta de permissão".
+- **Permissão** (§9.4): a persona `comercial` não vê o quadro (P-03), então não chega às abas.
+  Quem tem acesso `READ_ONLY` da plataforma (P-08 B) vê as duas abas com todos os controles de
+  escrita **desabilitados**, nunca escondidos — é a regra do anti-padrão "botão escondido por
+  falta de permissão".
 
 ## Fluxo
 
@@ -457,12 +475,14 @@ Desenho (design.md §8, §9.1, §9.5):
    pedido; não havendo faixa, `sgcWintPrazoPagamento` sugere a condição praticada no ERP. Os
    dois lados e a justificativa são gravados normalizados por `sgcEscPedidoPrazo`.
 7. "Mover para → Aprovação Técnica". O `antesDeMover` do `/quadro` chama
-   `verificarSaidaAnalise(cardId)`: regera os alertas e consulta `sgcAnaliseSaidaVerificar`.
-   `PODE = 0` devolve `{ ok: false, erro: MOTIVO }` e nada é gravado. O mesmo predicado roda
-   de novo no servidor, dentro da `sgcPodeMover` ligada em `KB_META` — quem chamar por fora da
-   tela recebe a mesma recusa.
-8. Movimento aceito: a tela chama `sgcAnaliseSair` — zerados removidos, total recalculado,
-   reprovações limpas (AT-04) e resumo no histórico (AN-10 A).
+   `verificarSaidaAnalise(cardId)`, que é uma chamada de `sgcAnaliseSair`: regera os alertas,
+   consulta `sgcAnaliseSaidaVerificar` e, `PODE = 0`, devolve `{ ok: false, erro: MOTIVO }` sem
+   gravar nada. Com `PODE = 1`, a mesma execução remove os zerados, recalcula o total, limpa as
+   reprovações (AT-04) e escreve o resumo no histórico (AN-10 A) — e só então a tela chama
+   `ctx.mover(faseId)`.
+8. O motor, ao mover, consulta a regra ligada `sgcPodeMover` (002), cuja subconsulta
+   `PENDENCIAS` repete estas mesmas condições no servidor: quem chamar por fora da tela recebe
+   a mesma recusa.
 9. Quando a diretoria aprova e quando o pedido entra em Enviado, a 002 chama
    `sgcEscItemStatusFase` com `aprovado` e `enviado` (F-07).
 
@@ -583,7 +603,8 @@ integrador**. Colunas necessárias por esta spec (o DDL do `p-45547` está defas
 - **Pedidos do SGC**: 1 card na fase `analise` com os 20 itens do fornecedor 101, 1 card com
   todos os itens zerados (C-017) e 1 card pronto para sair (C-018).
 - `CENARIO.usuarios = { admin: 1, ana: 2, gil: 3, dora: 4, leo: 5 }` — `ana` analista,
-  `gil` gestor, `dora` diretoria, `leo` leitura; personas gravadas em `SGC_USUARIO_PERSONA`.
+  `gil` gestor, `dora` diretoria, `leo` **comercial** (P-01: a quinta persona é `comercial`, e
+  ela não vê o quadro); personas gravadas em `SGC_USUARIO_PERSONA`.
 
 ### `CHECK_INPUT`
 
@@ -621,7 +642,7 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 | C-015 | `tests/prazo-pagamento.test.mjs` + `smoke/003-itens.mjs` | `compararPrazo('30/60','28/35/42')` → `{ iguais: false, diferencaDias: -10, exigeJustificativa: true }`; gravado com justificativa de 9 caracteres, `PODE = 0`; com 10, `PODE = 1` |
 | C-016 | `tests/prazo-pagamento.test.mjs` | `compararPrazo('30 dias','à vista')` → parcelas `[30]` × `[0]`, `exigeJustificativa: true` |
 | C-017 | `smoke/003-itens.mjs` | card com 3 itens zerados → `PODE = 0` e `MOTIVO` contém "pelo menos um item" |
-| C-018 | `smoke/003-itens.mjs` | `sgcAnaliseSair` num card com 20 itens (8 com quantidade) → `{ removidos: 12 }`, restam 8 com `STATUS <> 'removido'`, `VL_TOTAL` recalculado e 1 registro de nota no histórico com "8 itens" |
+| C-018 | `smoke/003-itens.mjs` | `sgcAnaliseSair` num card com 20 itens (8 com quantidade) → `{ ok: true, removidos: 12 }`, restam 8 com `STATUS <> 'removido'`, `VL_TOTAL` recalculado e 1 registro de nota no histórico com "8 itens"; no card com alerta não lido, `{ ok: false }` e **nada** gravado (os 20 itens continuam vivos) |
 | C-019 | `smoke/003-itens.mjs` | `sgcPodeMover` (002) para a fase `cancelado` devolve `PODE = 1` com os mesmos 2 alertas não lidos e nenhum item |
 | C-020 | `smoke/003-itens.mjs` | `sgcEscCoberturaGravar` como `gil` (gestor) grava e `sgcCoberturaListar` devolve o limite 20 do 5001; como `ana` (analista) não grava nada |
 | C-021 | `smoke/003-itens.mjs` | gravar `TIPO_PRECO` `especial` em 1 de 3 itens → `SELECT` conta 1 especial e 2 `padrao` |
@@ -659,12 +680,15 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
   `TIPO_PRECO`, `CURVA_ABC`, `COBERTURA_DIAS`, `COBERTURA_LIMITE`, `COBERTURA_JUSTIFICATIVA`,
   `OBSERVACAO`, `STATUS`) e **os alertas** (`ID`, `CODPROD`, `TIPO`, `MENSAGEM`, `LIDO`,
   `LIDO_POR`, `LIDO_EM`, `JUSTIFICATIVA`), numa execução só.
-- `sgcPodeMover` — incorpora `sgcAnaliseSaidaVerificar` como subconsulta no ramo
-  `analise → tecnica` (bloco pronto na seção de contratos).
-- `sgcEscPedidoReprovacoesLimpar` — chamada por `sgcAnaliseSair` (AT-04). Se a 002 não a tiver,
-  ela nasce lá, não aqui.
+- `sgcPodeMover` — mantém a subconsulta `PENDENCIAS`, que esta spec preenche com as mesmas
+  condições de `sgcAnaliseSaidaVerificar`, no ramo `analise → tecnica` (bloco pronto na seção
+  de contratos).
+- `sgcEscPedidoReprovacoesLimpar` — SQL da 002 com `{{usuarioId}}` e `{{idCard}}`, **sem**
+  `:VAR_USER` (a chamada é aninhada). Chamada por id **só** pelo `sgcAnaliseSair`, que confere a
+  persona por `runQueryMitra` com `:VAR_USER` antes de escrever (AT-04).
 - A página `/quadro` liga as abas (`abasExtras`), envolve o `KanbanBoard` no `PedidoProvider` e
-  chama `verificarSaidaAnalise` no `antesDeMover`.
+  chama `verificarSaidaAnalise` (isto é, `sgcAnaliseSair`) no `antesDeMover` de
+  `analise → tecnica`, antes de `ctx.mover`.
 - Campo do quadro `alertas_pendentes` (número) — criado pelo `add-005` da 002.
 
 **Consome da 001 (fornecedores):** `SGC_FORNECEDOR_FAIXA_PRAZO` (faixa de valor → opções de
@@ -696,7 +720,7 @@ que a 002 usa no envio. `PCFORNEC`/`PCFILIAL` no simulador são compartilhadas c
 | D-010 | O `schema.mjs` do simulador ganha as `PC*` com as colunas que estas consultas usam, inclusive as três tabelas de lote | Reaproveitar o DDL do `p-45547` | O DDL de lá está declaradamente defasado (não tem `OBS2`, `QTVENDMES*`, `CODATV1`, `PCESTENDLOTE`, `PCLOTEEND`): a mesma SQL da produção não rodaria |
 | D-011 | Tela própria `/coberturas`, para admin e gestor | Dentro de `/fornecedores/:id` | Os quatro níveis (fornecedor, departamento, seção, SKU) não cabem numa tela de fornecedor, e `/fornecedores` é arquivo da 001 — pôr a parametrização lá criaria dono compartilhado sem necessidade |
 | D-012 | "Ao menos um item com quantidade" entra como quinta condição de saída, **nova** em relação ao p-45547 | Manter as quatro do legado | Sem ela, um pedido com tudo zerado sairia da Análise e chegaria à indústria com a tabela vazia (EN-02 remove os zerados) |
-| D-013 | `sgcAnaliseSair` é uma SF JavaScript nova (a visão geral previa só duas JS nesta spec) | A tela chamar as três escritas em sequência | Remoção de zerados, recálculo e nota no histórico precisam acontecer juntos; três chamadas do navegador deixam o pedido pela metade se a aba fechar no meio |
+| D-013 | `sgcAnaliseSair` é uma SF JavaScript nova e é **o** passo do `antesDeMover` em `analise → tecnica`: verifica, arruma e só então a tela move | A tela chamar as escritas em sequência, ou arrumar depois do movimento | Verificação e limpeza precisam acontecer juntas e antes do movimento: o motor só move o que já está arrumado, e uma aba fechada no meio não deixa o pedido pela metade (revisão do coordenador, R-011) |
 | D-014 | A análise não é gravada sozinha: montar a lista só grava quando a compradora salva | Persistir a análise ao abrir | Abrir o card não pode escrever (RNF-002) nem sujar o pedido de quem só foi olhar |
 
 ## Riscos
@@ -708,6 +732,7 @@ que a 002 usa no envio. `PCFORNEC`/`PCFILIAL` no simulador são compartilhadas c
 | A integração `gestao-de-custos` não existir no sandbox no dia | unidades por caixa caem para a embalagem | o fallback já é a embalagem (RN-002); a tela mostra a origem do número no `title` da célula |
 | `sgcPedidoCarregar` (002) não devolver itens e alertas | as abas passariam a carregar sozinhas e dobrariam as execuções | contrato listado em *Dependências*; o smoke da 002 cobre as colunas |
 | Regeneração de alertas apagar leitura/justificativa | a compradora relê tudo a cada gravação | `UNIQUE (ID_CARD, CHAVE)` + `ON DUPLICATE KEY UPDATE` só da mensagem; C-013 testa |
+| `sgcAnaliseSair` arruma o pedido e o movimento seguinte é recusado pela persona (`sgcPodeMover`) | zerados removidos e nota escrita sem o pedido ter mudado de fase | o `podeMover` síncrono da tela já desabilita o destino para quem não pode mover, com a mesma regra da SQL ligada: o `antesDeMover` só roda em destino habilitado. Nenhuma das escritas é destrutiva (zerado vira `removido`, a nota é histórico) |
 
 ## Complexity Tracking
 

@@ -34,7 +34,10 @@ pedido só sai da Análise quando tudo que exigia leitura ou justificativa foi t
 | gestor (gerência de compras) | o mesmo do analista, e conferir na aprovação técnica o que foi justificado | diária |
 | diretoria | ver a lista, o total e as justificativas antes de aprovar | semanal |
 | admin (TI) | manter os limites de cobertura por fornecedor, departamento, seção e produto | eventual |
-| leitura | consultar a lista e os alertas, sem alterar nada | eventual |
+| quem tem acesso somente-leitura | consultar a lista e os alertas, sem alterar nada | eventual |
+
+O perfil **comercial** não aparece nesta tabela de propósito: ele não vê o quadro nem os
+pedidos, e portanto não usa nada desta feature.
 
 ## Cenários
 
