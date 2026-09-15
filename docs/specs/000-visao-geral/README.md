@@ -211,3 +211,44 @@ integrador.
 
 Formulário público; migração de dados do p-45547; integrações TOTVS/Comercial 360 além
 do que a onda cita; reuniões internas sem fornecedor; curva ABC na cobertura (onda 4).
+
+## Revisão adversarial da onda 1 (2026-09-15) e dívidas abertas
+
+Revisão feita sobre `develop` depois da integração das quatro features, com o código nas mãos (não a spec). Seis achados de risco (A1–A6) foram corrigidos nas branches `fix/00N-revisao` e mergeados antes da `release/onda-1`; o que ficou está listado aqui para não se perder.
+
+**Corrigido antes da release**
+
+| Id | O que era | Como ficou |
+|---|---|---|
+| A1 | Escritas `sgcEsc*` chamadas por id (002, 003, 004) sem guarda de persona: o perfil business libera todas as SFs, então qualquer usuário podia chamá-las direto pelo SDK. | Toda escrita por id leva a mesma guarda da 002 sobre `{{usuarioId}}` (R-013); os JS passam `usuarioId` em cada chamada, inclusive `sgcEnvioIndustriaRegistrar` → `sgcEscAgendaEnvio` (C-031 provado no smoke). |
+| A2 | `RESTRICTED` não conferido nas escritas por id da 003 (podia gravar item de pedido alheio). | `pedidoEmAnalise(cardId, usuarioId)` exige `CRIADO_POR = usuário` para RESTRICTED; a aba Itens espelha o servidor no `podeEditar`. |
+| A3 | `NovoPedidoPage` e `DialogoEnvio` liam `sgcFornecedorCarregar` (uma linha) com `linhas()` e perdiam filiais e contatos. | Passaram a `acao()`, lendo o objeto (filiais e contatos aparecem). |
+| A4 | `verificarSaidaAnalise` lia `resposta.error`, mas o contrato devolve `erro`: a saída da Análise mostrava frase genérica. | Lê `erro` e devolve a mensagem real de cada condição de RN-012. |
+| A5 | `AgendaDialogo` localizava a agenda pelo índice na página e sobrescrevia os participantes de outra agenda ao paginar. | Localiza por `CRIADO_EM`. |
+| A6 | `INSERT … SELECT … WHERE` sem `FROM DUAL` em 10 escritas (001, 003, 004): roda no SQLite, quebra no MySQL. | Corrigidas; o `sim:check` acusa qualquer nova (`INSERT ... SELECT ... WHERE sem FROM DUAL`). |
+| D-07 | `kbNotaRegistrar` sem `try/catch` no `sgcAnaliseSair`. | Nota que falha não derruba a saída da Análise. |
+| D-10 | Comentários defasados pela integração (stubs, "só a 002 grava", worktree). | Apagados ou reescritos. |
+| D-11 | `FornecedorPage` escondia o botão Salvar sem permissão. | Desabilitado com o motivo no `title` (RF-032/C-040). |
+| D-12 | Gestor `READ_ONLY` perdia o item Coberturas do menu. | `verCoberturas` (admin, gestor) não é zerado por READ_ONLY. |
+
+**Aberto — verificar no sandbox na primeira publicação**
+
+| Id | O que é | Onde |
+|---|---|---|
+| D-03 | Escrita SQL guardada recusada devolve 0 linhas e nenhum erro: a tela acredita que gravou (aprovar, reprovar, cancelar, criar pedido, salvar persona e cobertura). Depende de saber o que a plataforma devolve para um `UPDATE` de 0 linhas; com isso o `acao()` passa a acusar "nada foi gravado". | `lib/mitra-api.ts`, `AcoesDoPedido.tsx`, `NovoPedidoPage.tsx`, `SegurancaPage.tsx`, `CoberturasPage.tsx` |
+| D-04 | Sessão em chamada aninhada: o simulador força `userId = 0`, então `kbCardCriar` sempre cai em `origem: 'sistema'`. Se a plataforma propagar a sessão, o `sgcAgendaProcessarManual` cria o card em nome de quem clicou, não de quem agendou (RN-009 da 004). | `simulator/runtime.mjs`, `add-007-agenda.mjs`, `smoke/004-agenda.mjs` |
+| R-007 | Se `sgcEsc*` chamadas só por id executarem para o usuário business direto pelo SDK, elas saem do perfil (`add-002`). | `add-002-perfil-acesso.mjs` |
+
+**Aberto — dívida de código (sem risco funcional hoje)**
+
+| Id | O que é | Onde |
+|---|---|---|
+| D-01 | Abrir card custa 3 execuções (RNF-001 pede 2): `QuadroPage` e `PedidoProvider` carregam a capa cada um. Marcado com `ponytail:`. | `QuadroPage.tsx`, `abas/PedidoProvider.tsx` |
+| D-02 | `sgcPersonaAtual` fora do cache de `lib/persona.ts` em `PedidoProvider`, `CoberturasPage` e `AgendaPage` (a Agenda refaz a cada filtro). | idem |
+| D-05 | `escrever()` do add-005/add-007 não desembrulha `output` em string; o `chamar()` do add-006 desembrulha. Uniformizar num helper de `lib/`. | `add-005`, `add-006`, `add-007` |
+| D-06 | `sgcAlertasGerar` aceita `usuarioId` do input como identidade quando `:VAR_USER` não resolve. Só alcançável sem sessão; fechar antes de liberar `criadoPor` em produção. | `add-006-itens.mjs` |
+| D-08 | `sgcAnaliseSair` grava (zerados, total, reprovações) antes de a tela chamar `ctx.mover`; movimento recusado depois deixa o pedido já alterado. Assumido (D-013 da 003). | `add-006`, `QuadroPage.tsx` |
+| D-09 | `CHECK_INPUT` é um objeto só (vale a última chave), então o `sim:check` nunca exercita o ramo "filtro desligado" da 001. Cobertura menor, não erro. | `simulator/config.mjs` |
+| D-13 | `DATA_ENVIO_REAL VARCHAR(19)` guarda `AAAA-MM-DD` (10 caracteres). Convenção; não mexer no setup. | `setup-backend.mjs`, `add-007` |
+| D-14 | Texto de carregamento com Tailwind solto repetido nas abas Itens e Alertas, em vez de um primitivo de `page.tsx`. | `abas/Itens.tsx`, `abas/Alertas.tsx` |
+| — | Seed da 003 cria cards sem `VALORES_JSON`; `alertas_pendentes` e `motivo_cancelamento` (campos do quadro) continuam editáveis no formulário da lib. | `simulator/seed/003-itens.mjs`, `add-005` |

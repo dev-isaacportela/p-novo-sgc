@@ -26,8 +26,8 @@ const PERSONA_POR_CHAVE = { admin: 'admin', ana: 'analista', gil: 'gestor', dora
 /** C-010: uma pessoa sem linha de persona age como analista. */
 export const USUARIO_SEM_PERSONA = { email: 'paula@sgc.local', nome: 'Paula Sem Persona', accessLevel: 'MEMBER' };
 
-const FORNECEDOR = { codfornec: 1015, nome: 'Nutrilatina' };
-const FILIAL = { codfilial: '1', nome: '1 — Matriz' };
+const FORNECEDOR = { codfornec: 1015, nome: 'Fresenius Kabi' }; // o mesmo cadastro do seed da 001 (R-017)
+const FILIAL = { codfilial: '1', nome: 'Benenutri Matriz' };
 
 /** RN-014 — "FILIAL · FORNECEDOR", em maiúsculas. Espelha `tituloDoPedido` da tela. */
 const titulo = (filial, fornecedor) => `${filial.toUpperCase()} · ${fornecedor.toUpperCase()}`;
