@@ -68,4 +68,5 @@ export const CHECK_INPUT = {
   // spec 002 (quadro de compras):
   // spec 003 (itens do pedido):
   // spec 004 (agenda de análises):
+  codfornec: '0', codfilial: '', dataInicio: '', dataFim: '', situacao: '', hoje: '2026-09-15', id: '1', idAgenda: '1',
 };
