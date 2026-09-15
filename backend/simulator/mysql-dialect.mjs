@@ -289,6 +289,16 @@ export function toSqlite(sql) {
     // SUBSTRING(x, 1, 10) -> substr; SQLite aceita substr, nao SUBSTRING.
     out = out.replace(/\bSUBSTRING\s*\(/gi, 'substr(');
 
+    // Upsert (spec 002, sgcEscPersonaSalvar): INSERT ... ON DUPLICATE KEY
+    // UPDATE C = VALUES(C) -> ON CONFLICT DO UPDATE SET C = excluded.C. O alvo
+    // do conflito e omitido de proposito: o SQLite o dispensa quando o INSERT
+    // vem de um SELECT com WHERE, que e a forma de toda escrita guardada daqui.
+    // O VALUES(x) so e trocado DEPOIS do marcador, para nao pegar o VALUES de
+    // um INSERT comum.
+    out = out.replace(/\bON\s+DUPLICATE\s+KEY\s+UPDATE\b([\s\S]*)$/i, (_, atribuicoes) => (
+      ` ON CONFLICT DO UPDATE SET ${atribuicoes.replace(/\bVALUES\s*\(\s*([A-Za-z_][\w]*)\s*\)/gi, 'excluded.$1')}`
+    ));
+
     // Booleanos: as colunas viram INTEGER no schema traduzido.
     out = out.replace(/\bIS\s+TRUE\b/gi, '= 1').replace(/\bIS\s+FALSE\b/gi, '= 0');
     out = out.replace(/(?<![.\w])TRUE(?![\w])/gi, '1').replace(/(?<![.\w])FALSE(?![\w])/gi, '0');
