@@ -4,8 +4,60 @@
 // Datas sempre como texto ISO (`AAAA-MM-DD`): nunca `Date` viajando, nunca
 // fuso decidindo o dia.
 
+import type { EstadoPedido } from './transicoes';
+
 export const PRIORIDADES = ['normal', 'alta', 'urgente'] as const;
 export type Prioridade = (typeof PRIORIDADES)[number];
+
+/** A capa do pedido como `sgcPedidoCarregar` a devolve (colunas de SGC_PEDIDO, UPPERCASE). */
+export interface PedidoCapa {
+  ID_CARD: number;
+  CODFORNEC?: number;
+  FORNECEDOR?: string;
+  CODFILIAL?: string;
+  FILIAL?: string;
+  PERIODO_INICIO?: string;
+  PERIODO_FIM?: string;
+  VL_TOTAL?: number;
+  TEC_POR?: number | null;
+  TEC_EM?: string;
+  TEC_MOTIVO?: string;
+  TEC_PRODUTOS_REPROVADOS?: string;
+  TEC_NOME?: string;
+  DIR_POR?: number | null;
+  DIR_EM?: string;
+  DIR_MOTIVO?: string;
+  DIR_NOME?: string;
+  DT_ENVIO?: string;
+  CANAL?: string;
+  EMAIL_ENVIO?: string;
+  NUMPED_WINTHOR?: string;
+  ENVIO_OBS?: string;
+  ENVIO_EM?: string;
+  ENVIO_NOME?: string;
+  CANC_MOTIVO?: string;
+  CANC_EM?: string;
+  CANC_NOME?: string;
+  ORIGEM?: string;
+  ID_AGENDA?: number;
+  CRIADO_POR?: number;
+}
+
+const preenchido = (valor: unknown) => String(valor ?? '').trim() !== '';
+
+/**
+ * O que `motivoDeDestino` precisa saber do pedido. Capa ainda não carregada
+ * fecha tudo o que depende de motivo: menor privilégio enquanto a tela não sabe.
+ */
+export function estadoDoPedido(capa: PedidoCapa | null | undefined, souCriador: boolean): EstadoPedido {
+  return {
+    souCriador,
+    temMotivoCancelamento: preenchido(capa?.CANC_MOTIVO),
+    temMotivoTecnico: preenchido(capa?.TEC_MOTIVO),
+    temMotivoDiretoria: preenchido(capa?.DIR_MOTIVO),
+    envioRegistrado: preenchido(capa?.DT_ENVIO) && preenchido(capa?.NUMPED_WINTHOR),
+  };
+}
 
 /** AN-11 — a sugestão de período de vendas são os últimos 45 dias. */
 export const PERIODO_PADRAO_DIAS = 45;
