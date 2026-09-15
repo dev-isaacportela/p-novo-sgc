@@ -1,12 +1,15 @@
 // Schema do projeto — SGC 2 (Sistema de Gestão de Compras da Benenutri).
 //
-// Todo o DDL SGC_* da onda 1 (specs 001-004), tabela por tabela — cada uma num
-// template literal proprio comecando pela frase de criacao idempotente, sem
-// repetir a frase com parentese em comentario: e assim que o simulador local
-// le o DDL por texto (backend/simulator/schema.mjs), sem executar este
-// arquivo. Coluna nova em tabela ja existente e upgrade aditivo no add-NNN que
-// a introduzir e, tambem, no CREATE aqui (quem instala do zero e o simulador
-// acompanham) — nunca ALTER escondido, nunca DROP, nunca RENAME.
+// Todo o DDL SGC_* das ondas 1 (specs 001-004) e 2 (specs 005-007), tabela por
+// tabela — cada uma num template literal proprio comecando pela frase de
+// criacao idempotente, sem repetir a frase com parentese em comentario: e
+// assim que o simulador local le o DDL por texto (backend/simulator/schema.mjs),
+// sem executar este arquivo. Coluna nova em tabela ja existente e upgrade
+// aditivo no add-NNN que a introduzir e, tambem, no CREATE aqui (quem instala
+// do zero e o simulador acompanham) — nunca ALTER escondido, nunca DROP, nunca
+// RENAME. Excecao da onda 2 (R-026 do 000): nada foi publicado ainda, entao as
+// colunas novas de SGC_PEDIDO entraram direto no CREATE existente, sem gerar
+// ALTER nenhum.
 //
 // Convencoes do 000 (docs/specs/000-visao-geral/README.md): colunas em
 // UPPERCASE; datas em VARCHAR(10), carimbos em VARCHAR(19), preenchidos no
@@ -86,6 +89,14 @@ const DDL_002 = [
     CRIADO_POR INT,
     CRIADO_EM VARCHAR(19),
     ATUALIZADO_EM VARCHAR(19),
+    DT_PRIMEIRO_FATURAMENTO VARCHAR(10),
+    VL_FATURADO DECIMAL(15,2) DEFAULT 0,
+    PERC_FATURADO_VALOR DECIMAL(9,4) DEFAULT 0,
+    PERC_FATURADO_QTD DECIMAL(9,4) DEFAULT 0,
+    ALERTA_FATURAMENTO_NIVEL INT DEFAULT 0,
+    ALERTA_FATURAMENTO_EM VARCHAR(19),
+    DT_PREVISAO_BO VARCHAR(10),
+    ALERTA_BO_EM VARCHAR(10),
     UNIQUE KEY UK_SGC_PEDIDO_CARD (ID_CARD)
   )`,
 
@@ -289,7 +300,171 @@ const DDL_004 = [
   )`,
 ];
 
-export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004];
+// spec 005 — notas fiscais e faturamento (onda 2, R-026). SGC_AVISO é
+// compartilhada: 005, 006 e 007 gravam por id (R-023).
+const DDL_005 = [
+  `CREATE TABLE IF NOT EXISTS SGC_NF (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    NUMNOTA INT NOT NULL,
+    SERIE VARCHAR(10),
+    CHAVENFE VARCHAR(50),
+    NUMTRANSENT INT,
+    CODFORNEC INT,
+    CODFILIAL VARCHAR(10),
+    DT_EMISSAO VARCHAR(10),
+    DT_ENTRADA VARCHAR(10),
+    DT_RECEBIMENTO VARCHAR(10),
+    VL_TOTAL DECIMAL(15,2),
+    PRAZO_PARCELAS VARCHAR(120),
+    ORIGEM VARCHAR(20),
+    ALERTA_ATRASO_EM VARCHAR(19),
+    VINCULADO_POR INT,
+    VINCULADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_NF (ID_CARD, NUMNOTA, SERIE),
+    INDEX IX_SGC_NF_CARD (ID_CARD),
+    INDEX IX_SGC_NF_NOTA (CODFORNEC, NUMNOTA)
+  )`,
+
+  // Sem coluna de texto: a frase da ocorrência é montada na tela (D-006 do plan da 005).
+  `CREATE TABLE IF NOT EXISTS SGC_NF_ITEM (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_NF INT NOT NULL,
+    ID_CARD INT NOT NULL,
+    CODPROD INT NOT NULL,
+    CODFAB VARCHAR(60),
+    EAN VARCHAR(20),
+    DESCRICAO VARCHAR(200),
+    QT_FATURADA DECIMAL(15,3),
+    PRECO_FATURADO DECIMAL(15,4),
+    NUMLOTE VARCHAR(30),
+    DT_VALIDADE VARCHAR(10),
+    CASADO_POR VARCHAR(10),
+    UNIQUE KEY UK_SGC_NF_ITEM (ID_NF, CODPROD, NUMLOTE),
+    INDEX IX_SGC_NF_ITEM_CARD (ID_CARD)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS SGC_NF_OCORRENCIA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_NF INT NOT NULL,
+    ID_CARD INT NOT NULL,
+    CODPROD INT NOT NULL,
+    TIPO VARCHAR(30),
+    RESULTADO VARCHAR(20),
+    VALOR_ESPERADO VARCHAR(100),
+    VALOR_ENCONTRADO VARCHAR(100),
+    DELTA_PERC DECIMAL(9,4),
+    DECISAO VARCHAR(20) DEFAULT 'pendente',
+    JUSTIFICATIVA VARCHAR(500),
+    DECIDIDO_POR INT,
+    DECIDIDO_EM VARCHAR(19),
+    CRIADO_EM VARCHAR(19),
+    INDEX IX_SGC_NF_OCORRENCIA_CARD (ID_CARD, DECISAO),
+    INDEX IX_SGC_NF_OCORRENCIA_NF (ID_NF)
+  )`,
+
+  // UNIQUE só por (ID_CARD, CODFORNEC, NUMNOTA, SERIE) — R-043: CHAVENFE pode
+  // vir vazia (nota sem XML) e duas assim colidiriam entre si no mesmo card.
+  `CREATE TABLE IF NOT EXISTS SGC_NF_SUGESTAO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    CHAVENFE VARCHAR(50),
+    NUMTRANSENT INT,
+    NUMNOTA INT,
+    SERIE VARCHAR(10),
+    CODFORNEC INT,
+    CODFILIAL VARCHAR(10),
+    VL_TOTAL DECIMAL(15,2),
+    DT_EMISSAO VARCHAR(10),
+    DT_ENTRADA VARCHAR(10),
+    ID_CARD INT,
+    NUMPED_WINTHOR VARCHAR(30),
+    ORIGEM VARCHAR(20),
+    SCORE INT,
+    STATUS VARCHAR(20) DEFAULT 'sugerida',
+    MOTIVO VARCHAR(400),
+    DECIDIDO_POR INT,
+    DECIDIDO_EM VARCHAR(19),
+    CRIADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_NF_SUGESTAO (ID_CARD, CODFORNEC, NUMNOTA, SERIE),
+    INDEX IX_SGC_NF_SUGESTAO_STATUS (STATUS, SCORE)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS SGC_CONTATO_FATURAMENTO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    DT_CONTATO VARCHAR(19),
+    CANAL VARCHAR(20),
+    RESUMO VARCHAR(1000),
+    PREVISAO_FATURAMENTO VARCHAR(10),
+    REGISTRADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    INDEX IX_SGC_CONTATO_CARD (ID_CARD, ID)
+  )`,
+
+  // CHAVE é a única guarda desta escrita: gravada por id, sem sessão, pelos
+  // crons das três specs da onda 2 (R-023). 005 grava nf_sugerida/
+  // faturamento_3/faturamento_5/faturamento_diario; 006 grava nf_atrasada/
+  // nf_recebida; 007 grava bo_previsao.
+  `CREATE TABLE IF NOT EXISTS SGC_AVISO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    TIPO VARCHAR(30),
+    CHAVE VARCHAR(120) NOT NULL,
+    PARA_USUARIO_ID INT DEFAULT 0,
+    PARA_PERSONA VARCHAR(20),
+    TEXTO VARCHAR(500),
+    CRIADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_AVISO (CHAVE),
+    INDEX IX_SGC_AVISO_CARD (ID_CARD, ID)
+  )`,
+];
+
+// spec 007 — produtos em B.O. (onda 2, R-026). B.O. é fase do próprio pedido
+// (R-022): sem card filho, item liga por (ID_CARD, CODPROD).
+const DDL_007 = [
+  `CREATE TABLE IF NOT EXISTS SGC_BO_ITEM (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    CODPROD INT NOT NULL,
+    DESCRICAO VARCHAR(200),
+    QT_PENDENTE DECIMAL(15,3),
+    OBSERVACAO VARCHAR(500),
+    STATUS VARCHAR(20) DEFAULT 'aberto',
+    CLIENTES_IMPACTADOS INT DEFAULT 0,
+    QT_VENDIDA_60D DECIMAL(15,3) DEFAULT 0,
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    RESOLVIDO_POR INT,
+    RESOLVIDO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_BO_ITEM (ID_CARD, CODPROD),
+    INDEX IX_SGC_BO_ITEM_CARD (ID_CARD, STATUS)
+  )`,
+
+  // Append-only; a vigente é espelhada em SGC_PEDIDO.DT_PREVISAO_BO.
+  `CREATE TABLE IF NOT EXISTS SGC_BO_PREVISAO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    DT_PREVISAO VARCHAR(10) NOT NULL,
+    OBSERVACAO VARCHAR(500),
+    REGISTRADO_POR INT,
+    REGISTRADO_EM VARCHAR(19),
+    INDEX IX_SGC_BO_PREVISAO_CARD (ID_CARD, ID)
+  )`,
+
+  // ENDERECO: mesmo nome e mesmo tipo de SGC_FORNECEDOR_DOCUMENTO.ENDERECO (R-040) — não URL.
+  `CREATE TABLE IF NOT EXISTS SGC_BO_DOCUMENTO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_CARD INT NOT NULL,
+    TIPO VARCHAR(20) DEFAULT 'carta_falta',
+    NOME_ARQUIVO VARCHAR(255),
+    ENDERECO VARCHAR(700),
+    ENVIADO_POR INT,
+    ENVIADO_EM VARCHAR(19),
+    INDEX IX_SGC_BO_DOCUMENTO_CARD (ID_CARD, ID)
+  )`,
+];
+
+export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
