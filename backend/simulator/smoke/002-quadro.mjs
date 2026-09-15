@@ -64,6 +64,13 @@ export async function suite(ctx) {
     db.prepare(`UPDATE SGC_PEDIDO SET PRAZO_PADRAO = '30/60', PRAZO_ACORDADO = '30/60' WHERE ID_CARD = ?`).run(criado.id);
     db.prepare(`INSERT INTO SGC_PEDIDO_ITEM (ID_CARD, CODPROD, DESCRICAO, QT_PEDIDA, PRECO_CUSTO, STATUS, COBERTURA_DIAS, COBERTURA_LIMITE, CRIADO_EM, ATUALIZADO_EM)
       VALUES (?, 1, 'ITEM DE TESTE', 1, 1, 'montagem', 0, 35, ?, ?)`).run(criado.id, AGORA, AGORA);
+    // R-044 (onda 2): o gancho ganhou os blocos de NF (005) e de B.O. (007),
+    // então o pedido "montado" desta suíte nasce também com 1 nota vinculada e
+    // nenhuma conferência pendente — senão `enviado>transito` e as duas
+    // conclusões sairiam recusadas nas 500 combinações de RNF-005.
+    db.prepare(`INSERT INTO SGC_NF (ID_CARD, NUMNOTA, SERIE, CODFORNEC, CODFILIAL, DT_EMISSAO, DT_ENTRADA, DT_RECEBIMENTO, VL_TOTAL, ORIGEM, VINCULADO_POR, VINCULADO_EM)
+      VALUES (?, ?, '1', ?, ?, '2026-09-11', '2026-09-14', '2026-09-14', 0, 'manual', ?, ?)`)
+      .run(criado.id, 60000 + criado.id, CAPA.codfornec, CAPA.codfilial, usuarioId, AGORA);
     return criado.id;
   }
 

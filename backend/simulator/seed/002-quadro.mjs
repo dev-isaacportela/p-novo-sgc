@@ -158,4 +158,11 @@ export function seed002Extras(db, cards = null) {
     (CARD_ID, TIPO, NOME, URL, TAMANHO, USUARIO_ID, AUTOR_NOME, CRIADO_EM) VALUES (?, 'link', ?, ?, 0, 2, 'Ana Analista', ?)`);
   inserirAnexo.run(p5, 'Pedido 998877.pdf', 'https://arquivos.local/pedido-998877.pdf', agora);
   inserirAnexo.run(p5, 'Tabela de precos.xlsx', 'https://arquivos.local/tabela-precos.xlsx', agora);
+
+  // Onda 2 (R-030/R-044): entrar em Trânsito exige ao menos uma nota vinculada.
+  // O P5 é o pedido "Enviado para Indústria" desta suíte e é dele que os testes
+  // de movimentação nas fases 5–8 partem — sem a nota, o gancho da 005 passaria
+  // a recusar `enviado>transito` e o teste falaria de NF sem querer.
+  db.prepare(`INSERT INTO SGC_NF (ID_CARD, NUMNOTA, SERIE, CODFORNEC, CODFILIAL, DT_EMISSAO, DT_ENTRADA, DT_RECEBIMENTO, VL_TOTAL, ORIGEM, VINCULADO_POR, VINCULADO_EM)
+    VALUES (?, 60001, '1', 1015, '1', '2026-09-11', '2026-09-14', '2026-09-14', 0, 'manual', 2, ?)`).run(p5, agora);
 }

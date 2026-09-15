@@ -89,7 +89,11 @@ export const CHECK_INPUT = {
   nivel: '',
   // spec 004 (agenda de análises):
   situacao: '', hoje: '2026-09-15', id: '1',
-  // spec 005 (notas fiscais e faturamento): a 005 preenche quando publicar.
+  // spec 005 (notas fiscais e faturamento): só os parâmetros das 9 leituras SQL.
+  // codfornec/codfilial/cardId/busca/limite/offset já vêm da 002 e da 003 com
+  // valores que servem aqui (D-09: o objeto é um só e a última chave ganha).
+  numnota: '7001', serie: '', numpeds: '998901', dataEnvio: '2026-08-01',
+  status: '', faixa: '',
   // spec 006 (trânsito e recebimento): a 006 preenche quando publicar.
   // spec 007 (produtos em B.O.): a 007 preenche quando publicar.
 };
