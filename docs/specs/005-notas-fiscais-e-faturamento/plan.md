@@ -400,15 +400,21 @@ persona dele que a guarda confere.
 - **`sgcNfListar`** — a UMA execução da aba (RNF-001): capa do pedido, sugestões pendentes do
   card, notas vinculadas, itens das notas, ocorrências e contatos, em seis `SELECT` dentro da
   mesma execução. Não escreve nada e não consulta o ERP.
-- **`sgcNfDetectar`** — (1) lê até **30** cards monitorados (`enviado`, `transito`,
-  `faturamento`, com `DT_ENVIO` e `PERC_FATURADO_VALOR < 100`), com `CODFORNEC`, `CODFILIAL`,
-  `DT_ENVIO`, `NUMPED_WINTHOR`, `VL_TOTAL`, `VL_FATURADO` e o responsável; (2) agrupa por
+- **`sgcNfDetectar`** — (1) lê até **30** cards monitorados (as MESMAS quatro fases da listagem
+  de pendentes — `enviado`, `transito`, `faturamento` e `bo` —, com `DT_ENVIO` e
+  `PERC_FATURADO_VALOR < 100`), com `CODFORNEC`, `CODFILIAL`,
+  `DT_ENVIO`, `NUMPED_WINTHOR`, `VL_TOTAL`, `VL_FATURADO` e o responsável (na ordem de
+  `KB_CARD_RESPONSAVEL.ORDEM`, a mesma da lib); (2) agrupa por
   `CODFORNEC|CODFILIAL` e, **por grupo**, faz UMA chamada a `sgcWintNfEntradas` com a menor
-  `DT_ENVIO` do grupo e a lista de `NUMPED` dele (RNF-002); (3) descarta, com uma consulta só a
-  `SGC_NF`, as notas já vinculadas em qualquer card (RN-010); (4) agrupa as linhas por nota e,
+  `DT_ENVIO` do grupo e a lista de `NUMPED` dele (RNF-002); (3) descarta, com uma consulta só,
+  as notas já vinculadas em qualquer card (RN-010) **e as que já têm sugestão para aquele card**
+  — reprocessar a sugestão existente não grava nada, mas repetiria a nota do histórico a cada
+  rodada; (4) agrupa as linhas por nota e,
   para cada card do grupo, pontua por `pontuarSugestao()` — nota cujo `NUMPED` é o do card sai
   com 100 e origem `pedido`; (5) sugere a nota **ao card de maior pontuação** e grava por
-  `sgcEscSugestaoInserir`; (6) grava o aviso `nf_sugerida` (uma vez por card por dia) e a nota do
+  `sgcEscSugestaoInserir`; a escrita é por id e guardada pela persona do responsável, então a
+  sugestão é **relida** depois — o contador só soma o que gravou e o que não gravou vai a
+  `erros[]`; (6) grava o aviso `nf_sugerida` (uma vez por card por dia) e a nota do
   histórico por `kbNotaRegistrar`, ambos em `try/catch` (D-07 da onda 1: nota que falha não
   derruba a rodada). Erro de um grupo é acumulado e não derruba os outros (RNF-006).
 - **`sgcNfVincular`** — persona `admin`/`analista`/`gestor`, `ACCESS_LEVEL <> 'READ_ONLY'`, e
@@ -429,18 +435,24 @@ persona dele que a guarda confere.
   100 % com nível ainda aceso; para cada: **`FASE = 'bo'` → pula sem avisar** (R-041: o aviso
   diário do B.O. é da 007, e dois avisos por dia sobre o mesmo pedido foi o defeito que o legado
   corrigiu); 100 % → nível 0, capa limpa, sem aviso (RF-020); `DIAS_UTEIS < 3` → nada; `>= 3` →
-  nível 3 ou 5 e, se `ALERTA_FATURAMENTO_EM` já é de hoje, pula (RN-009). Grava o aviso aos responsáveis (`faturamento_3`, `faturamento_5` ou
-  `faturamento_diario`, `PARA_USUARIO_ID = 0`), e no nível 5 um segundo aviso com
-  `PARA_PERSONA = 'gestor'` e a `CHAVE` com o sufixo `:gestor`; depois
-  `sgcEscPedidoAlertaFaturamento`, o espelho da capa e `kbNotaRegistrar`. **Não** envia e-mail
-  (RN-014) e **não** consulta o ERP (RNF-003).
+  nível 3 ou 5 e, se `ALERTA_FATURAMENTO_EM` já é de hoje, pula (RN-009). A ordem é: espelho da
+  capa, **`sgcEscPedidoAlertaFaturamento`**, o aviso aos responsáveis (`faturamento_3`,
+  `faturamento_5` ou `faturamento_diario`, `PARA_USUARIO_ID = 0`), no nível 5 um segundo aviso com
+  `PARA_PERSONA = 'gestor'` e a `CHAVE` com o sufixo `:gestor`, e `kbNotaRegistrar`. A marca do
+  alerta vem **antes do aviso e vale de porteiro**: ela é escrita por id, guardada pela persona do
+  responsável, e uma escrita que casa 0 linhas volta `COMPLETED` — então o cron **relê**
+  `ALERTA_FATURAMENTO_NIVEL`/`_EM` e só conta (e só avisa) o que releu; o resto vai a `erros[]`
+  com o `card` e o motivo. Sem isso, o aviso nasceria todo dia sem nunca ser marcado. **Não**
+  envia e-mail (RN-014) e **não** consulta o ERP (RNF-003).
 
   O espelho da capa é `kbCardAtualizar` (SF da lib, por id, com `atualizadoPor` = primeiro
   responsável do card ou o criador, e `origem: 'sistema'` — R-042), e **reenvia os quatro campos**:
   `titulo`, `responsaveisIds`, `prazo` e `valoresJson`. A SF da lib grava a lista de responsáveis e
   o prazo que recebe — sem eles, **apaga** (R-047) —, então o cron lê antes, numa consulta, o
   título e o prazo de `KB_CARD` e os responsáveis de `KB_CARD_RESPONSAVEL` **na ordem**
-  (`ORDER BY ID`), e devolve tudo junto. É o mesmo que `atualizarCapaDoQuadro`
+  (`ORDER BY ORDEM, ID` — a MESMA da lib, que regrava `ORDEM` pela posição da lista que recebe:
+  por `ID`, o cron reordenaria os responsáveis de um card reordenado na tela e trocaria quem
+  processa nas 006/007), e devolve tudo junto. É o mesmo que `atualizarCapaDoQuadro`
   (`abas/capa-do-quadro.ts`) faz na tela. A chamada vai em `try/catch`: capa que não espelha não
   derruba o aviso.
 - **`sgcCobrancaEnviar`** — persona igual à do vínculo; `sendEmailMitra` com o contato escolhido
@@ -1020,7 +1032,7 @@ só fornece o ícone (G-7) — as duas rotas desta spec entram lá, pelo integra
 | D-001 | `sgcWintNfEntradas` devolve **uma linha por item** e a pontuação é calculada no JS por `pontuarSugestao()` | Agregar a cobertura no próprio SQL (`LISTAGG`/`COUNT` por NF), como o legado fazia por card | Uma consulta por fornecedor, e não por card (RNF-002), exige comparar a mesma nota com vários pedidos — o que só dá para fazer depois de ter os itens. De quebra, a fórmula de pontuação vira função pura testável, em vez de SQL Oracle que nenhum teste alcança |
 | D-002 | O vínculo é **um lote de itens e um lote de ocorrências**, não uma escrita por linha | Uma execução por item e por ocorrência | Uma nota de 20 itens gera 83 registros; a 83 execuções o teto de 300/min do projeto vai embora com duas validações. O lote usa o mesmo `SELECT … UNION ALL` dentro de derivada da 003, que cabe a guarda de persona |
 | D-003 | A capa do cartão é escrita **sempre por `kbCardAtualizar`** (lib): pela tela quando há sessão (`capa-do-quadro.ts` da 003, reusado) e por id, com `atualizadoPor` + `origem: 'sistema'`, no cron (R-042) | Uma `sgcEsc*` do SGC escrevendo `KB_CARD.VALORES_JSON` com `JSON_SET` | Decisão do 000 (R-042): o SGC não escreve na tabela da lib. Escrita própria no `VALORES_JSON` deixaria `TEXTO_BUSCA` defasado e criaria um segundo dono do card; a lib 1.4.0 já abre o caminho sem sessão que o cron precisa, com a mesma premissa de `kbCardCriar`/`kbCardMover` |
-| D-004 | O monitoramento cobre `enviado`, `transito` **e** `faturamento` | As duas fases do legado (Enviado e Trânsito) | No SGC 2 o card entra em Faturamento quando 100 % das notas foram **recebidas** (R-031), o que não é 100 % faturado: parar de cobrar ali deixaria o saldo sem dono |
+| D-004 | O monitoramento cobre `enviado`, `transito`, `faturamento` **e** `bo` | As duas fases do legado (Enviado e Trânsito) | No SGC 2 o card entra em Faturamento quando 100 % das notas foram **recebidas** (R-031), o que não é 100 % faturado: parar de cobrar ali deixaria o saldo sem dono. O `bo` entra na LISTAGEM e na DETECÇÃO (o saldo e a nota no ERP continuam existindo); R-041 tira dele só o **aviso** diário do cron de faturamento |
 | D-005 | O contato da cobrança é gravado **pela tela** (`sgcEscContatoInserir`, `:VAR_USER`), logo depois do `ok` de `sgcCobrancaEnviar` | `sgcCobrancaEnviar` gravar o contato por id | Uma escrita por id guardada só por `{{usuarioId}}` deixa qualquer usuário atribuir um contato a outra pessoa (achado A1). Como o clique é da tela, o `:VAR_USER` está ali: é o mesmo padrão de `api.cardCriar` → `sgcEscPedidoCriar` da 002. Se a tela morrer no meio, o pior caso é um e-mail enviado sem o contato registrado — o e-mail já ficou em `SGC_COMUNICACAO` |
 | D-006 | A ocorrência guarda **dados** (`TIPO`, `RESULTADO`, esperado, encontrado, delta), não a frase | Coluna `DESCRICAO` com o texto pronto, como no legado | Texto pronto no banco envelhece: mudar uma palavra exigiria migração de dados, e a mesma regra passaria a ter duas redações. `textoDaOcorrencia()` monta na tela e é testável |
 | D-007 | `item_nao_pedido` é o tipo do **casamento**, com os três resultados (`conforme` quando casou por código, `atencao` por código de fábrica/EAN, `divergente` quando não casou) | Criar um tipo `casamento_item` | O 000 fechou os sete tipos e **recusou** a renomeação (R-043): um oitavo tipo seria mudança de contrato para ganhar só clareza de nome |

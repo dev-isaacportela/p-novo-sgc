@@ -97,6 +97,29 @@ export async function suite(ctx) {
       CARDS_005.enviadoComPedido, 'nf_sugerida') > 0, 'aviso nf_sugerida do cron');
   });
 
+  await teste('A-10 (revisão onda 2): o pedido em Produtos em B.O. entra na DETECCAO e recebe a sugestao da 7007 — R-041 tira do `bo` o aviso diario de faturamento, nao a busca de nota no ERP', async () => {
+    const sugeridas = todos('SELECT * FROM SGC_NF_SUGESTAO WHERE ID_CARD = ?', CARDS_005.emBo);
+    assert.equal(sugeridas.length, 1, 'a deteccao varria so enviado/transito/faturamento');
+    assert.equal(Number(sugeridas[0].NUMNOTA), 7007);
+    assert.equal(sugeridas[0].ORIGEM, 'pedido', 'casada pelo NUMPED 998909');
+    assert.equal(Number(sugeridas[0].SCORE), 100);
+  });
+
+  await teste('A-1 (revisão onda 2): a segunda rodada de deteccao nao reprocessa sugestao que ja existe — 0 sugestoes novas, 0 avisos novos e 0 notas novas no historico (o INSERT era idempotente, kbNotaRegistrar nao)', async () => {
+    const sugestoesAntes = conta(`SELECT COUNT(*) AS N FROM SGC_NF_SUGESTAO WHERE ID_CARD IN (${idsDoSeed})`);
+    const avisosAntes = conta(`SELECT COUNT(*) AS N FROM SGC_AVISO WHERE ID_CARD IN (${idsDoSeed})`);
+    const notasAntes = conta(`SELECT COUNT(*) AS N FROM KB_LOG WHERE CARD_ID IN (${idsDoSeed}) AND EVENTO = 'nota'`);
+
+    const segunda = await chamar('sgcNfDetectar', {}, 0);
+    assert.equal(segunda.ok, true);
+    assert.deepEqual(segunda.erros, []);
+    assert.equal(segunda.sugestoes, 0, 'o contador soma so o insert real');
+    assert.equal(conta(`SELECT COUNT(*) AS N FROM SGC_NF_SUGESTAO WHERE ID_CARD IN (${idsDoSeed})`), sugestoesAntes);
+    assert.equal(conta(`SELECT COUNT(*) AS N FROM SGC_AVISO WHERE ID_CARD IN (${idsDoSeed})`), avisosAntes);
+    assert.equal(conta(`SELECT COUNT(*) AS N FROM KB_LOG WHERE CARD_ID IN (${idsDoSeed}) AND EVENTO = 'nota'`),
+      notasAntes, 'a nota do historico so nasce com a sugestao');
+  });
+
   await teste('C-004 / RN-015: sgcWintNfEntradas do 1015 traz linhas (> 0) e nenhuma delas e a 7003 cancelada, mesmo ela tendo o NUMPED do pedido', async () => {
     const candidatas = linhas(await chamar('sgcWintNfEntradas', {
       codfornec: 1015, codfilial: '1', dataEnvio: '2026-01-01', numpeds: '998901',
@@ -347,7 +370,10 @@ export async function suite(ctx) {
     // C-028 / R-041: o pedido em B.O. tem o aviso diario da 007 — a rodada de
     // faturamento nao cria nenhum para ele, mas ele CONTINUA na lista.
     assert.ok(primeira.pulados >= 1);
-    assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_AVISO WHERE ID_CARD = ?', CARDS_005.emBo), 0);
+    // Só os avisos de FATURAMENTO: depois do A-10 o card em B.O. entra na
+    // detecção e pode ter um `nf_sugerida`, que é de outra rotina.
+    assert.equal(conta("SELECT COUNT(*) AS N FROM SGC_AVISO WHERE ID_CARD = ? AND TIPO LIKE 'faturamento%'",
+      CARDS_005.emBo), 0);
     const emBo = pendentes.filter((l) => Number(l.ID_CARD) === CARDS_005.emBo)[0];
     assert.ok(emBo, 'o pedido em B.O. continua na lista de faturamentos pendentes');
     assert.ok(emBo.DT_PREVISAO_BO, 'com a previsao de liberacao');
@@ -376,6 +402,62 @@ export async function suite(ctx) {
     // C-019 pelo caminho do CRON: kbCardAtualizar por id, com atualizadoPor e origem sistema.
     assert.match(JSON.parse(cardDe(CARDS_005.atrasadoNove).VALORES_JSON).faturamento || '',
       /Faturamento pendente · 9 dias úteis/, 'a capa do cartao recebe a linha de faturamento pelo cron');
+  });
+
+  await teste('A-9 (revisão onda 2): o cron reenvia os responsaveis na ordem de KB_CARD_RESPONSAVEL.ORDEM — por R.ID, o kbCardAtualizar do espelho da capa regravaria ORDEM = posicao e trocaria "quem processa" nas 006/007', async () => {
+    const card = CARDS_005.enviadoComPedido;
+    const ordenados = () => todos('SELECT USUARIO_ID FROM KB_CARD_RESPONSAVEL WHERE CARD_ID = ? ORDER BY ORDEM, ID', card)
+      .map((linha) => Number(linha.USUARIO_ID));
+    assert.deepEqual(ordenados(), [U.ana, U.gil], 'o seed grava ana e depois gil');
+
+    // Montagem de cenário: alguém reordenou na tela — gil passa a ser o
+    // primeiro sem que o ID das linhas mude. E a capa precisa MUDAR, senão o
+    // espelho nem chama a lib.
+    db.prepare('UPDATE KB_CARD_RESPONSAVEL SET ORDEM = 2 WHERE CARD_ID = ? AND USUARIO_ID = ?').run(card, U.ana);
+    db.prepare('UPDATE KB_CARD_RESPONSAVEL SET ORDEM = 1 WHERE CARD_ID = ? AND USUARIO_ID = ?').run(card, U.gil);
+    const valores = JSON.parse(cardDe(card).VALORES_JSON || '{}');
+    delete valores.faturamento;
+    db.prepare('UPDATE KB_CARD SET VALORES_JSON = ? WHERE ID = ?').run(JSON.stringify(valores), card);
+    assert.deepEqual(ordenados(), [U.gil, U.ana]);
+
+    const rodada = await chamar('sgcFaturamentoMonitorar', {}, 0);
+    assert.equal(rodada.ok, true);
+    assert.deepEqual(rodada.erros, []);
+    assert.ok(JSON.parse(cardDe(card).VALORES_JSON).faturamento, 'o espelho da capa rodou de verdade');
+    assert.deepEqual(ordenados(), [U.gil, U.ana], 'a ordem dos responsaveis sobrevive ao cron');
+
+    db.prepare('UPDATE KB_CARD_RESPONSAVEL SET ORDEM = 1 WHERE CARD_ID = ? AND USUARIO_ID = ?').run(card, U.ana);
+    db.prepare('UPDATE KB_CARD_RESPONSAVEL SET ORDEM = 2 WHERE CARD_ID = ? AND USUARIO_ID = ?').run(card, U.gil);
+  });
+
+  await teste('A-2 (revisão onda 2): pedido cujo 1º responsavel e o comercial nao conta como avisado — a escrita por id guardada pela persona casa 0 linhas e volta COMPLETED; entra em erros[] e ALERTA_FATURAMENTO_NIVEL/_EM ficam como estavam', async () => {
+    const card = CARDS_005.faturamentoParcial;
+    const antes = pedidoDe(card);
+    const avisosAntes = conta('SELECT COUNT(*) AS N FROM SGC_AVISO WHERE ID_CARD = ?', card);
+
+    // Montagem de cenário: leo (comercial) vira o único responsável e a marca
+    // do dia sai, para o cron olhar este card de novo.
+    db.prepare('DELETE FROM KB_CARD_RESPONSAVEL WHERE CARD_ID = ?').run(card);
+    db.prepare('INSERT INTO KB_CARD_RESPONSAVEL (CARD_ID, USUARIO_ID, ORDEM) VALUES (?, ?, 1)').run(card, U.leo);
+    db.prepare("UPDATE SGC_PEDIDO SET ALERTA_FATURAMENTO_NIVEL = 0, ALERTA_FATURAMENTO_EM = '' WHERE ID_CARD = ?").run(card);
+
+    const rodada = await chamar('sgcFaturamentoMonitorar', {}, 0);
+    assert.equal(rodada.ok, true);
+    assert.equal(rodada.avisos, 0, 'nada foi gravado, nada e contado como aviso');
+    const meus = rodada.erros.filter((erro) => Number(erro.card) === card);
+    assert.equal(meus.length, 1, 'o card sem persona operante aparece em erros[]');
+    assert.match(meus[0].erro, /persona operante/);
+
+    const depois = pedidoDe(card);
+    assert.equal(Number(depois.ALERTA_FATURAMENTO_NIVEL), 0, 'o nivel continua como estava');
+    assert.equal(String(depois.ALERTA_FATURAMENTO_EM || ''), '', 'e a data do ultimo aviso tambem');
+    assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_AVISO WHERE ID_CARD = ?', card), avisosAntes,
+      'sem a marca, o aviso nao nasce — senao repetiria todo dia');
+
+    db.prepare('DELETE FROM KB_CARD_RESPONSAVEL WHERE CARD_ID = ?').run(card);
+    db.prepare('INSERT INTO KB_CARD_RESPONSAVEL (CARD_ID, USUARIO_ID, ORDEM) VALUES (?, ?, 1)').run(card, U.ana);
+    db.prepare('UPDATE SGC_PEDIDO SET ALERTA_FATURAMENTO_NIVEL = ?, ALERTA_FATURAMENTO_EM = ? WHERE ID_CARD = ?')
+      .run(antes.ALERTA_FATURAMENTO_NIVEL, antes.ALERTA_FATURAMENTO_EM, card);
   });
 
   /* ─────────── T-088 — contatos, cobrança e a lista consolidada ─────────── */
@@ -521,6 +603,37 @@ export async function suite(ctx) {
     }, U.leo);
     assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_CONTATO_FATURAMENTO WHERE ID_CARD = ?', card), antes,
       'a guarda de persona recusa a escrita do comercial');
+  });
+
+  /* ─────────── revisão da onda 2 — escape e escopo da decisão ─────────── */
+
+  await teste("A-11 (revisão onda 2): justificativa com apostrofo grava com UMA aspa — texto() dobrava a aspa ANTES de o runtime dobrar de novo, e SANT'ANNA virava SANT''ANNA no banco", async () => {
+    const card = CARDS_005.validade1042;
+    const alvo = ocorrenciasDe(card).filter((o) => o.DECISAO === 'pendente')[0];
+    assert.ok(alvo, 'o card tem conferencia pendente para decidir');
+    const justificativa = "Lote da SANT'ANNA recusado pelo comprador.";
+
+    const decidida = await chamar('sgcOcorrenciaDecidir', {
+      cardId: card, idOcorrencia: Number(alvo.ID), modo: 'individual',
+      decisao: 'recusado', justificativa,
+    }, U.ana);
+    assert.equal(decidida.ok, true, decidida.erro);
+    assert.equal(um('SELECT JUSTIFICATIVA FROM SGC_NF_OCORRENCIA WHERE ID = ?', Number(alvo.ID)).JUSTIFICATIVA,
+      justificativa, 'o parametro escalar vai cru: quem dobra a aspa e o runtime');
+  });
+
+  await teste('A-3 (revisão onda 2): sgcEscOcorrenciaDecidir com id 0 FORA do modo "conformes" nao decide nada — os dois ramos eram independentes e id 0 + modo individual decidia todas as pendentes do card, ate as divergentes e sem justificativa', async () => {
+    const card = CARDS_005.validade1042;
+    const pendentesAntes = ocorrenciasDe(card).filter((o) => o.DECISAO === 'pendente').map((o) => Number(o.ID));
+    assert.ok(pendentesAntes.length > 0, 'o card ainda tem conferencias pendentes');
+
+    await chamar('sgcEscOcorrenciaDecidir', {
+      cardId: card, id: 0, modo: 'individual', decisao: 'aceito',
+      justificativa: '', usuarioId: U.ana, decididoEm: '2026-09-15T10:00:00',
+    }, U.ana);
+
+    assert.deepEqual(ocorrenciasDe(card).filter((o) => o.DECISAO === 'pendente').map((o) => Number(o.ID)),
+      pendentesAntes, 'nenhuma linha foi decidida');
   });
 
   await teste('RN-001 / RF-018: o fragmento SQL de dias uteis conta 15 dias uteis entre 24/08/2026 e 14/09/2026 — a mesma conferencia do R-025, agora dentro da SQL desta spec', async () => {

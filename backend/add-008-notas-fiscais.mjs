@@ -292,13 +292,13 @@ WHERE ${guardaInterna()}`,
   {
     name: 'sgcEscOcorrenciaDecidir',
     interna: true,
-    resumo: 'RF-011/RF-012 - aceita ou recusa conferencias numa instrucao: id > 0 decide uma, id = 0 com modo "conformes" decide todas as conformes pendentes do card. Params: cardId, id, modo, decisao, justificativa, usuarioId, decididoEm',
+    resumo: 'RF-011/RF-012 - aceita ou recusa conferencias numa instrucao: id > 0 decide uma, id = 0 com modo "conformes" decide todas as conformes pendentes do card. Os dois ramos sao EXCLUDENTES (A-3): id = 0 fora do modo "conformes" nao decide nada. Params: cardId, id, modo, decisao, justificativa, usuarioId, decididoEm',
     code: `UPDATE SGC_NF_OCORRENCIA SET
   DECISAO = '{{decisao}}', JUSTIFICATIVA = '{{justificativa}}',
   DECIDIDO_POR = {{usuarioId}}, DECIDIDO_EM = '{{decididoEm}}'
 WHERE ID_CARD = {{cardId}} AND DECISAO = 'pendente'
-  AND ({{id}} = 0 OR ID = {{id}})
-  AND ('{{modo}}' <> 'conformes' OR RESULTADO = 'conforme')
+  AND (({{id}} > 0 AND ID = {{id}})
+       OR ('{{modo}}' = 'conformes' AND RESULTADO = 'conforme'))
   AND '{{decisao}}' IN ('aceito', 'recusado')
   AND ${guardaInterna()}`,
   },
@@ -413,20 +413,31 @@ function linhasDe(resposta) {
   return [];
 }
 async function consultar(sql) { return linhasDe(await runQueryMitra({ projectId, sql })); }
+// D-15: chamada aninhada que FALHA volta com executionStatus 'FAILED' e um
+// output vazio — sem esta conferencia o chamador segue como se tivesse gravado.
 async function chamar(nome, entrada) {
   const id = SGC_IDS[nome];
   if (!id) throw new Error('Server function sem id no mapa: ' + nome);
-  return desembrulhar(await executeServerFunctionMitra({ projectId, serverFunctionId: Number(id), input: entrada || {} }));
+  const resposta = await executeServerFunctionMitra({ projectId, serverFunctionId: Number(id), input: entrada || {} });
+  const resultado = (resposta && resposta.result) || resposta;
+  if (resultado && resultado.executionStatus === 'FAILED') {
+    throw new Error('Falha em ' + nome + ': ' + (resultado.error || 'sem detalhe'));
+  }
+  return desembrulhar(resposta);
 }
 function inteiro(valor) { const n = Number(valor); return Number.isFinite(n) ? Math.trunc(n) : 0; }
 function numero(valor) { const n = Number(valor); return Number.isFinite(n) ? n : 0; }
-// Aspa simples dobrada e caractere de controle fora: o texto do ERP entra num
-// fragmento SELECT, entao o escape e aqui.
+// A-11: caractere de controle fora e teto de tamanho — e SO isso. O valor que
+// sai daqui para um parametro escalar entre aspas e escapado pelo RUNTIME;
+// dobrar a aspa aqui tambem gravaria SANT''ANNA no banco.
 function texto(valor, teto) {
   return String(valor === null || valor === undefined ? '' : valor)
-    .replace(/[\\u0000-\\u001f]/g, ' ').slice(0, teto || 200).replace(/'/g, "''");
+    .replace(/[\\u0000-\\u001f]/g, ' ').slice(0, teto || 200);
 }
-function aspas(valor, teto) { return "'" + texto(valor, teto) + "'"; }
+// A aspa e dobrada AQUI, e so aqui: aspas() monta o fragmento de lote(), que
+// chega ao SQL por um marcador SEM aspas ao redor e, portanto, sem o escape do
+// runtime. O mesmo vale para o valor concatenado a mao dentro de uma consulta.
+function aspas(valor, teto) { return "'" + texto(valor, teto).replace(/'/g, "''") + "'"; }
 // A1: o lote vai como derivada SELECT ... UNION ALL SELECT ... (e nao VALUES),
 // que e a unica forma de pendurar o WHERE da guarda numa execucao so.
 function lote(colunas, linhas) {
@@ -584,7 +595,7 @@ if (!numnota) return { ok: false, erro: 'Informe o numero da nota fiscal.' };
 const jaVinculada = (await consultar(
   'SELECT N.ID_CARD, C.TITULO FROM SGC_NF N LEFT JOIN KB_CARD C ON C.ID = N.ID_CARD'
   + ' WHERE N.CODFORNEC = ' + codfornec + ' AND N.NUMNOTA = ' + numnota
-  + " AND COALESCE(N.SERIE, '') = '" + serie + "' LIMIT 1"))[0];
+  + " AND COALESCE(N.SERIE, '') = " + aspas(serie, 10) + ' LIMIT 1'))[0];
 if (jaVinculada) {
   return { ok: false, erro: 'A nota ' + numnota + ' ja esta vinculada ao pedido '
     + String(jaVinculada.TITULO || jaVinculada.ID_CARD) + '.' };
@@ -636,7 +647,7 @@ await chamar('sgcEscNfInserir', {
 });
 const gravada = (await consultar(
   'SELECT ID FROM SGC_NF WHERE ID_CARD = ' + cardId + ' AND NUMNOTA = ' + numnota
-  + " AND COALESCE(SERIE, '') = '" + serie + "' LIMIT 1"))[0];
+  + " AND COALESCE(SERIE, '') = " + aspas(serie, 10) + ' LIMIT 1'))[0];
 if (!gravada) return { ok: false, erro: 'A nota nao foi gravada: confira o seu perfil de acesso.' };
 const idNf = inteiro(gravada.ID);
 
@@ -828,13 +839,18 @@ const cards = await consultar(
   'SELECT C.ID AS ID_CARD, C.TITULO, P.CODFORNEC, P.CODFILIAL, P.DT_ENVIO,'
   + " COALESCE(P.NUMPED_WINTHOR, '') AS NUMPED, COALESCE(P.VL_TOTAL, 0) AS VL_TOTAL,"
   + ' COALESCE(P.VL_FATURADO, 0) AS VL_FATURADO, COALESCE(P.FORNECEDOR, \\'\\') AS FORNECEDOR,'
-  + ' COALESCE((SELECT R.USUARIO_ID FROM KB_CARD_RESPONSAVEL R WHERE R.CARD_ID = C.ID ORDER BY R.ID LIMIT 1),'
+  // A-9: a ordem dos responsaveis e ORDEM, ID — a mesma da lib. Por ID, o cron
+  // trocaria "quem processa" de card reordenado na tela.
+  + ' COALESCE((SELECT R.USUARIO_ID FROM KB_CARD_RESPONSAVEL R WHERE R.CARD_ID = C.ID ORDER BY R.ORDEM, R.ID LIMIT 1),'
   + '          COALESCE(C.CRIADO_POR, 0)) AS RESPONSAVEL'
   + ' FROM KB_CARD C'
   + ' JOIN SGC_PEDIDO P ON P.ID_CARD = C.ID'
   + ' JOIN SGC_FASE F ON F.BOARD_ID = C.BOARD_ID AND F.FASE_ID = C.FASE_ID'
   + ' WHERE C.EXCLUIDO_EM IS NULL'
-  + "   AND F.CHAVE IN ('enviado', 'transito', 'faturamento')"
+  // A-10: R-041 tira da fase bo o AVISO diario, nao a DETECCAO — o pedido em B.O.
+  // continua com saldo a faturar e a nota dele existe no ERP como a de qualquer
+  // outro. As quatro fases sao as mesmas da listagem de pendentes (FASES_NF).
+  + "   AND F.CHAVE IN ('" + FASES_NF.join("', '") + "')"
   + "   AND COALESCE(P.DT_ENVIO, '') <> ''"
   + '   AND COALESCE(P.PERC_FATURADO_VALOR, 0) < 100'
   + ' ORDER BY P.DT_ENVIO, C.ID LIMIT 30');
@@ -879,10 +895,22 @@ for (const chave of Object.keys(grupos)) {
       notas[id].itens.push(linha);
     }
 
-    // RN-010: uma consulta so descarta o que ja esta vinculado em qualquer card.
-    const vinculadas = await consultar(
-      'SELECT NUMNOTA, COALESCE(SERIE, \\'\\') AS SERIE FROM SGC_NF WHERE CODFORNEC = ' + grupo.codfornec);
-    const jaVinculadas = vinculadas.map(function (v) { return inteiro(v.NUMNOTA) + '|' + String(v.SERIE || ''); });
+    // RN-010 + A-1: UMA consulta traz o que ja esta vinculado em qualquer card
+    // (ID_CARD 0) e o que ja foi sugerido a cada card. Sem a segunda metade, a
+    // sugestao que ja existe era reprocessada toda rodada: o INSERT e
+    // idempotente, mas kbNotaRegistrar nao (+3 notas por rodada, 48 por dia) e
+    // o contador somava o no-op.
+    const existentes = await consultar(
+      'SELECT 0 AS ID_CARD, NUMNOTA, COALESCE(SERIE, \\'\\') AS SERIE FROM SGC_NF WHERE CODFORNEC = ' + grupo.codfornec
+      + ' UNION ALL'
+      + ' SELECT ID_CARD, NUMNOTA, COALESCE(SERIE, \\'\\') AS SERIE FROM SGC_NF_SUGESTAO WHERE CODFORNEC = ' + grupo.codfornec);
+    const jaVinculadas = [];
+    const jaSugeridas = [];
+    for (const existente of existentes) {
+      const chaveNota = inteiro(existente.NUMNOTA) + '|' + String(existente.SERIE || '');
+      if (inteiro(existente.ID_CARD) === 0) jaVinculadas.push(chaveNota);
+      else jaSugeridas.push(inteiro(existente.ID_CARD) + '|' + chaveNota);
+    }
 
     // Itens de todos os cards do grupo, numa consulta.
     const idsDoGrupo = grupo.cards.map(function (c) { return inteiro(c.ID_CARD); }).join(', ');
@@ -921,6 +949,9 @@ for (const chave of Object.keys(grupos)) {
         }
       }
       if (!melhor) continue;
+      // A-1: a sugestao deste card para esta nota ja existe — nada a fazer.
+      // A mesma chave do NOT EXISTS de sgcEscSugestaoInserir.
+      if (jaSugeridas.indexOf(inteiro(melhor.card.ID_CARD) + '|' + id) !== -1) continue;
 
       const responsavel = inteiro(melhor.card.RESPONSAVEL);
       await chamar('sgcEscSugestaoInserir', {
@@ -931,6 +962,19 @@ for (const chave of Object.keys(grupos)) {
         origem: melhor.origem, score: melhor.score, motivo: texto(melhor.motivo, 400),
         usuarioId: responsavel, criadoEm: agora(),
       });
+      // A-1/A-2: escrita por id guardada pela persona do responsavel casa 0
+      // linhas e volta COMPLETED. Le de volta e conta SO o que gravou; o resto
+      // vai para erros[], senao o cron relata sugestao que nao existe.
+      const gravada = (await consultar(
+        'SELECT ID FROM SGC_NF_SUGESTAO WHERE ID_CARD = ' + inteiro(melhor.card.ID_CARD)
+        + ' AND CODFORNEC = ' + grupo.codfornec + ' AND NUMNOTA = ' + nota.NUMNOTA
+        + ' AND COALESCE(SERIE, \\'\\') = ' + aspas(nota.SERIE, 10) + ' LIMIT 1'))[0];
+      if (!gravada) {
+        erros.push({ grupo: chave, card: inteiro(melhor.card.ID_CARD), numnota: nota.NUMNOTA,
+          erro: 'A sugestao nao foi gravada: o primeiro responsavel do card nao tem persona operante (admin, analista ou gestor).' });
+        continue;
+      }
+      jaSugeridas.push(inteiro(melhor.card.ID_CARD) + '|' + id);
       sugestoes += 1;
 
       // R-023/D-008: todo cron grava aviso e nota; nenhum dos dois derruba a rodada.
@@ -1000,10 +1044,13 @@ let pulados = 0;
 async function espelharCapa(cardId, faturamento) {
   const card = (await consultar(
     "SELECT C.TITULO, COALESCE(C.PRAZO, '') AS PRAZO,"
-    + " COALESCE((SELECT GROUP_CONCAT(R.USUARIO_ID ORDER BY R.ID SEPARATOR ',') FROM KB_CARD_RESPONSAVEL R"
+    // A-9: ORDEM, ID — a MESMA ordem em que a lib le e regrava a lista. Por ID,
+    // o kbCardAtualizar do cron reescreveria ORDEM = posicao e reordenaria os
+    // responsaveis do card, trocando "quem processa" nas 006/007.
+    + " COALESCE((SELECT GROUP_CONCAT(R.USUARIO_ID ORDER BY R.ORDEM, R.ID SEPARATOR ',') FROM KB_CARD_RESPONSAVEL R"
     + '   WHERE R.CARD_ID = C.ID), \\'\\') AS RESPONSAVEIS,'
     + ' COALESCE(C.VALORES_JSON, \\'{}\\') AS VALORES_JSON,'
-    + ' COALESCE((SELECT R2.USUARIO_ID FROM KB_CARD_RESPONSAVEL R2 WHERE R2.CARD_ID = C.ID ORDER BY R2.ID LIMIT 1),'
+    + ' COALESCE((SELECT R2.USUARIO_ID FROM KB_CARD_RESPONSAVEL R2 WHERE R2.CARD_ID = C.ID ORDER BY R2.ORDEM, R2.ID LIMIT 1),'
     + '          COALESCE(C.CRIADO_POR, 0)) AS QUEM'
     + ' FROM KB_CARD C WHERE C.ID = ' + inteiro(cardId)))[0];
   if (!card) return 0;
@@ -1018,12 +1065,29 @@ async function espelharCapa(cardId, faturamento) {
   return inteiro(card.QUEM);
 }
 
+// A-2: sgcEscPedidoAlertaFaturamento e escrita POR ID guardada pela persona do
+// responsavel (R-013). Quando ele nao tem persona operante, a instrucao casa 0
+// linhas e volta COMPLETED — o cron contava sucesso sem gravar nada, o pedido
+// ficava com o nivel antigo e o aviso repetia todo dia. Le a marca de volta e
+// so conta o que releu; o resto vai a erros[] com o card e o motivo.
+const SEM_PERSONA = 'A marca do alerta nao foi gravada: o primeiro responsavel do card nao tem persona operante (admin, analista ou gestor).';
+async function marcaGravada(cardId, nivel, alertaEm) {
+  const linha = (await consultar(
+    'SELECT COALESCE(ALERTA_FATURAMENTO_NIVEL, 0) AS NIVEL,'
+    + " COALESCE(ALERTA_FATURAMENTO_EM, '') AS EM FROM SGC_PEDIDO WHERE ID_CARD = " + inteiro(cardId)))[0];
+  return !!linha && inteiro(linha.NIVEL) === inteiro(nivel) && String(linha.EM || '') === String(alertaEm);
+}
+
 for (const linha of encerrar) {
   try {
     const quem = await espelharCapa(inteiro(linha.ID_CARD), '');
     await chamar('sgcEscPedidoAlertaFaturamento', {
       idCard: inteiro(linha.ID_CARD), nivelAlerta: 0, alertaEm: '', usuarioId: quem,
     });
+    if (!await marcaGravada(inteiro(linha.ID_CARD), 0, '')) {
+      erros.push({ card: inteiro(linha.ID_CARD), erro: SEM_PERSONA });
+      continue;
+    }
     encerrados += 1;
   } catch (erro) {
     erros.push({ card: inteiro(linha.ID_CARD), erro: (erro && erro.message) || String(erro) });
@@ -1050,6 +1114,19 @@ for (const pedido of pendentes) {
     const tipo = diasUteis > 5 ? 'faturamento_diario' : (nivel === 5 ? 'faturamento_5' : 'faturamento_3');
     const frase = 'Pedido de ' + String(pedido.FORNECEDOR || '') + ' sem faturamento completo ha '
       + diasUteis + ' dias uteis (saldo ' + moeda(saldo) + ').';
+
+    // A-2: a MARCA do escalonamento vem antes do aviso e vale de porteiro. Sem
+    // ela gravada, o aviso nasceria hoje e de novo amanha — todo dia, para
+    // sempre —, e o cron ainda relataria o pedido como avisado.
+    const alertaEm = agora();
+    await chamar('sgcEscPedidoAlertaFaturamento', {
+      idCard: cardId, nivelAlerta: nivel, alertaEm: alertaEm, usuarioId: responsavel,
+    });
+    if (!await marcaGravada(cardId, nivel, alertaEm)) {
+      erros.push({ card: cardId, erro: SEM_PERSONA });
+      continue;
+    }
+
     await chamar('sgcEscAvisoInserir', {
       idCard: cardId, tipo: tipo, chave: tipo + ':' + cardId + ':' + hoje,
       paraUsuarioId: 0, paraPersona: '', texto: texto(frase, 500), criadoEm: agora(),
@@ -1062,9 +1139,6 @@ for (const pedido of pendentes) {
       });
       avisos += 1;
     }
-    await chamar('sgcEscPedidoAlertaFaturamento', {
-      idCard: cardId, nivelAlerta: nivel, alertaEm: agora(), usuarioId: responsavel,
-    });
     try {
       await chamar('kbNotaRegistrar', { cardId: cardId, usuarioId: responsavel, texto: frase });
     } catch (e) { /* nota e acessoria */ }

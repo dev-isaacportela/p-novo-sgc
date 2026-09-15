@@ -106,6 +106,19 @@ export default function FaturamentosPendentesPage() {
     baixarCsv(`faturamentos-pendentes-${hojeIso()}.csv`, textoCsv(cabecalho, corpo));
   }
 
+  // A-8 / R-028: sem porteiro, o comercial digitava `/faturamentos-pendentes` e
+  // lia a lista inteira — o item some do menu, mas a rota não é do menu. Mesma
+  // recusa de SegurancaPage e QuadroPage, com a permissão de `permissoes.ts`.
+  if (!sessao) return <EmptyState title="Carregando..." />;
+  if (!sessao.permissoes.verFaturamentoPendente) {
+    return (
+      <>
+        <PageHeader module="Fiscal" title="Faturamentos pendentes" />
+        <Alert tone="error">Seu perfil não tem acesso aos faturamentos pendentes.</Alert>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHeader

@@ -129,6 +129,19 @@ export default function NotasFiscaisPage() {
   const fornecedorFiltrado = fornecedores.find((f) => f.value === codfornec);
   const statusFiltrado = OPCOES_STATUS.find((o) => o.value === status && o.value !== '');
 
+  // A-8 / R-028: sem porteiro, o comercial digitava `/notas-fiscais` e lia a
+  // fila inteira — o item some do menu, mas a rota não é do menu. Mesma recusa
+  // de SegurancaPage e QuadroPage, com a permissão da matriz de `permissoes.ts`.
+  if (!sessao) return <EmptyState title="Carregando..." />;
+  if (!sessao.permissoes.verNotasFiscais) {
+    return (
+      <>
+        <PageHeader module="Fiscal" title="Notas fiscais" />
+        <Alert tone="error">Seu perfil não tem acesso às notas fiscais.</Alert>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHeader

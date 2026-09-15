@@ -15,6 +15,8 @@ import {
 import { DatePicker } from '@/components/DatePicker';
 import { acao, linhas } from '@/lib/mitra-api';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
+import { CANAIS_CONTATO } from '@/lib/nf';
+import { resumoDaCobranca } from '@/lib/faturamento';
 
 /* ─────────────── o que `sgcNfListar` devolve ─────────────── */
 
@@ -61,13 +63,10 @@ export const MINIMO_JUSTIFICATIVA = 10;
 
 const agora = () => new Date().toISOString().slice(0, 19);
 
-const CANAIS = [
-  { value: 'email', label: 'E-mail' },
-  { value: 'telefone', label: 'Telefone' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'portal', label: 'Portal do fornecedor' },
-  { value: 'outro', label: 'Outro' },
-];
+// R-026: a lista é fechada e mora em `lib/nf.ts`, junto do teste que a compara
+// com o `IN` de `sgcEscContatoInserir`. Um canal a mais aqui (era o caso de
+// "outro") é contato que a escrita recusa em silêncio (D-03).
+const CANAIS = [...CANAIS_CONTATO];
 
 /* ─────────────── registrar a nota pelo número (RF-005, O2-07) ─────────────── */
 
@@ -427,6 +426,15 @@ export function DialogoCobranca({
         setErro(String(resposta.erro ?? 'Não foi possível enviar a cobrança.'));
         return;
       }
+      // A-4 / R-043: a cobrança enviada vira contato no histórico. Fica AQUI,
+      // e não no `aoEnviar` de cada tela, porque o diálogo é o mesmo nas duas
+      // (a aba do pedido e /faturamentos-pendentes) — e o JS não grava contato
+      // de propósito (D-005: quem grava é a tela, com `:VAR_USER`).
+      const quando = agora();
+      await acao('sgcEscContatoInserir', {
+        cardId: pedido.ID_CARD, dtContato: quando, canalContato: 'email',
+        resumo: resumoDaCobranca(assunto.trim(), para.trim()), previsao: '', criadoEm: quando,
+      });
       await aoEnviar(para.trim());
       onOpenChange(false);
     } catch (falha) {

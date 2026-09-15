@@ -11,7 +11,7 @@ import {
   TOLERANCIA_PRECO, VALIDADE_MINIMA_PADRAO_DIAS,
   pontuarSugestao, casarItem, resultadoDoCasamento, classificarDelta,
   diasDeValidade, resultadoDeValidade, resultadoDeQuantidade, resultadoDePrazo,
-  textoDaOcorrencia,
+  textoDaOcorrencia, CANAIS_CONTATO,
 } from '../src/lib/nf.ts';
 
 // O pedido `enviadoSemPedido` do seed: cinco itens, 5.000,00, enviado em
@@ -175,4 +175,18 @@ test('C-009: a frase da conferência é montada na tela a partir do que o servid
     textoDaOcorrencia({ TIPO: 'prazo_divergente', RESULTADO: 'divergente', VALOR_ESPERADO: '28/35/42', VALOR_ENCONTRADO: '30/60' }),
     /prazo da nota 30\/60 contra 28\/35\/42 acordado no pedido/,
   );
+});
+
+// Espelho LITERAL do `IN` de `sgcEscContatoInserir` (add-008-notas-fiscais.mjs):
+//   AND '{{canalContato}}' IN ('email', 'telefone', 'whatsapp', 'portal')
+// Mudou um lado, muda o outro — é a única ligação entre a tela e a escrita.
+const CANAIS_DA_ESCRITA = ['email', 'telefone', 'whatsapp', 'portal'];
+
+test("A-5 (revisão onda 2): todo canal do diálogo de contato está no IN de sgcEscContatoInserir — a tela oferecia 'outro', que a escrita recusa sem aviso nenhum (D-03)", () => {
+  for (const canal of CANAIS_CONTATO) {
+    assert.ok(CANAIS_DA_ESCRITA.includes(canal.value), `o canal ${canal.value} não existe no IN da escrita`);
+    assert.ok(canal.label, `o canal ${canal.value} precisa de rótulo`);
+  }
+  assert.equal(CANAIS_CONTATO.length, CANAIS_DA_ESCRITA.length,
+    'R-026: a lista é fechada nos dois lados — a tela não pode esconder um canal que a escrita aceita');
 });

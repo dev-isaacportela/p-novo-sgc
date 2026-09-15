@@ -16,6 +16,19 @@ import { parcelasDoPrazo, textoDeParcelas } from './prazo-pagamento.ts';
 export type Resultado = 'conforme' | 'atencao' | 'divergente';
 export type CasadoPor = 'codprod' | 'codfab' | 'ean' | 'nenhum';
 
+/**
+ * RF-022 / R-026 — os canais de contato com a indústria, na ordem da tela, e a
+ * lista é FECHADA: `sgcEscContatoInserir` tem exatamente estes quatro no `IN`
+ * do `WHERE`, e canal fora dele é contato que some sem aviso nenhum (D-03).
+ * Os dois lados são comparados em `frontend/tests/nf.test.mjs`.
+ */
+export const CANAIS_CONTATO: readonly { value: string; label: string }[] = [
+  { value: 'email', label: 'E-mail' },
+  { value: 'telefone', label: 'Telefone' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'portal', label: 'Portal do fornecedor' },
+];
+
 /** RN-004: até 1 % de diferença é atenção; acima, divergente (R-032). */
 export const TOLERANCIA_PRECO = 0.01;
 /** RN-005: o padrão, usado só quando o fornecedor não tem mínimo cadastrado. */
