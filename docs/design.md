@@ -88,6 +88,9 @@ Cada ausência abaixo é uma decisão, não um esquecimento:
 - **Sem date picker.** Data é `<input type="date">` nativo: o calendário do
   sistema já traz teclado, leitor de tela e formato local prontos, e
   reescrevê-lo custaria mais do que a consistência visual ganharia.
+  **Emenda SGC 2 (UI-03 B, 2026-09-15):** neste projeto o campo de data é o
+  `DatePicker` próprio (`src/components/DatePicker.tsx`, spec 004), sobre os
+  tokens, com teclado e ARIA completos; `<input type="date">` não entra em tela.
 - **Sem CSS-in-JS, sem CSS Modules.** Tailwind + um arquivo de tokens.
 - **Sem biblioteca de toast.** Aviso é `Alert` no fluxo da tela, onde a ação
   aconteceu, e não some sozinho.
@@ -937,7 +940,8 @@ Vale para toda tabela operacional:
   ficou na barra é escolha visível do usuário. O painel não é `modal`: abrir um
   `SelectMenu` de dentro dele leva o foco para outro portal, e o padrão do
   Radix fecharia o painel junto — por isso o `onFocusOutside` é barrado.
-- **Data continua no controle nativo** (`<input type="date">`).
+- **Data usa o `DatePicker` do projeto** (emenda SGC 2, UI-03 B, spec 004); o
+  controle nativo saiu.
 
 ### 9.3 Combobox — três armadilhas que já custaram caro
 

@@ -22,9 +22,9 @@ export const USUARIOS = [
   { nome: 'Ana Analista', email: 'ana@sgc.local', accessLevel: 'MEMBER' },
   { nome: 'Gil Gestor', email: 'gil@sgc.local', accessLevel: 'MEMBER' },
   { nome: 'Dora Diretora', email: 'dora@sgc.local', accessLevel: 'MEMBER' },
-  { nome: 'Leo Leitura', email: 'leo@sgc.local', accessLevel: 'MEMBER' },
+  { nome: 'Leo Comercial', email: 'leo@sgc.local', accessLevel: 'MEMBER' },
 ];
-// Persona (analista/gestor/diretoria/leitura) e dado do SGC (SGC_USUARIO_PERSONA,
+// Persona (analista/gestor/diretoria/comercial) e dado do SGC (SGC_USUARIO_PERSONA,
 // spec 002); nao resolvida, o motor trata como analista. Aqui so o cadastro em INT_USER.
 
 // As 10 fases do quadro de compras, na ordem do funil (onda 1; regra F-01:
