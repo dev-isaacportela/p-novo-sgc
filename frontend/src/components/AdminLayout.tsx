@@ -10,39 +10,30 @@ import * as React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Bell, CalendarClock, Gauge, KanbanSquare, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
-  PlusCircle, ShieldCheck, Truck, X,
+  PlusCircle, ShieldCheck, Truck, X, type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { clearSession } from '@/lib/mitra-auth';
+import { menuParaPersona, type ItemDeMenu } from '@/lib/permissoes';
+import { limparPersona, usePersona } from '@/lib/persona';
 import { SessaoContext, type Sessao } from '@/lib/sessao';
 import { BRAND_GREEN, Monogram, Wordmark } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
-// Sem regra de persona aqui ainda (P-03, spec 002): todo mundo vê os sete
-// itens até a 002 filtrar por permissoesDe(persona, acesso).verQuadro.
-const MENU = [
-  {
-    grupo: 'Compras',
-    itens: [
-      { to: '/quadro', label: 'Quadro de compras', Icone: KanbanSquare },
-      { to: '/pedidos/novo', label: 'Novo pedido', Icone: PlusCircle },
-      { to: '/agenda', label: 'Agenda', Icone: CalendarClock },
-      { to: '/notificacoes', label: 'Notificações', Icone: Bell },
-    ],
-  },
-  {
-    grupo: 'Cadastros',
-    itens: [
-      { to: '/fornecedores', label: 'Fornecedores', Icone: Truck },
-      { to: '/coberturas', label: 'Coberturas', Icone: Gauge },
-    ],
-  },
-  {
-    grupo: 'Administração',
-    itens: [{ to: '/seguranca', label: 'Segurança', Icone: ShieldCheck }],
-  },
-];
+// O que cada pessoa vê é regra de permissão (P-03, spec 002 T-040): vem de
+// menuParaPersona; aqui só o ícone de cada rota. Comercial fica com zero itens.
+const ICONES: Record<string, LucideIcon> = {
+  '/quadro': KanbanSquare, '/pedidos/novo': PlusCircle, '/agenda': CalendarClock, '/notificacoes': Bell,
+  '/fornecedores': Truck, '/coberturas': Gauge, '/seguranca': ShieldCheck,
+};
+
+function agruparMenu(itens: ItemDeMenu[]) {
+  return [...new Set(itens.map((i) => i.grupo))].map((grupo) => ({
+    grupo,
+    itens: itens.filter((i) => i.grupo === grupo).map((i) => ({ ...i, Icone: ICONES[i.to] ?? KanbanSquare })),
+  }));
+}
 
 const CHAVE_RECOLHIDO = 'sgc-menu-recolhido';
 
@@ -79,7 +70,14 @@ export default function AdminLayout({ usuario }: { usuario: Sessao }) {
     .map((parte) => parte[0]?.toUpperCase())
     .join('');
 
+  const sessaoPersona = usePersona();
+  const grupos = React.useMemo(
+    () => agruparMenu(sessaoPersona ? menuParaPersona(sessaoPersona.permissoes) : []),
+    [sessaoPersona],
+  );
+
   function sair() {
+    limparPersona();
     clearSession();
     navigate('/login', { replace: true });
     window.location.reload();
@@ -102,7 +100,7 @@ export default function AdminLayout({ usuario }: { usuario: Sessao }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-2">
-        {MENU.map((grupo) => (
+        {grupos.map((grupo) => (
           <div key={grupo.grupo} className="mb-4">
             {fechado ? (
               <div className="mx-auto mb-2 h-px w-6 bg-rule-row" aria-hidden />

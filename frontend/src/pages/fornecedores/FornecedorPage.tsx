@@ -2,13 +2,12 @@
 // (sgcFornecedorCarregar, RNF-002); "Salvar" valida com lib/fornecedor.ts
 // antes de chamar sgcFornecedorSalvar (mesmas mensagens do servidor, D-009).
 //
-// Modo leitura da analista (RF-013, C-003 — verificação manual): a persona
-// atual (sgcPersonaAtual) é da spec 002, ainda não publicada neste worktree;
-// esta tela não desabilita campos por antecipação. A regra que quebra
-// produção continua garantida — o servidor recusa e devolve o motivo em
-// Alert — mas falta a UI proativa de somente-leitura até a 002 chegar
-// (pendência registrada no relatório da 001).
+// Modo leitura (RF-013, C-003): quem não tem `editarFornecedor` (analista,
+// acesso READ_ONLY) vê tudo e não salva — o botão some e um aviso explica. A
+// regra que quebra produção continua no servidor: sgcFornecedorSalvar recusa
+// e devolve o motivo em Alert.
 import { useCallback, useEffect, useState } from 'react';
+import { usePersona } from '@/lib/persona';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { acao, linhas as linhasSf } from '@/lib/mitra-api';
@@ -194,6 +193,8 @@ export default function FornecedorPage() {
   const sla = slaEfetivo({ analise: form.slaAnaliseDias, faturamento: form.slaFaturamentoDias });
   const hoje = hojeIso();
   const filiaisDisponiveis = filiaisErp.filter((f) => !filiais.some((x) => x.codfilial === f.CODFILIAL));
+  const sessaoPersona = usePersona();
+  const somenteLeitura = sessaoPersona ? !sessaoPersona.permissoes.editarFornecedor : false;
 
   return (
     <>
@@ -203,10 +204,13 @@ export default function FornecedorPage() {
         description={<span className="text-[12px] text-ink-secondary">Código {codfornec}</span>}
         actions={<>
           <Button onClick={() => navigate('/fornecedores')}>Voltar</Button>
-          <Button variant="primary" onClick={salvar} disabled={salvando || carregando}>{salvando ? 'Salvando…' : 'Salvar'}</Button>
+          {somenteLeitura ? null : (
+            <Button variant="primary" onClick={salvar} disabled={salvando || carregando}>{salvando ? 'Salvando…' : 'Salvar'}</Button>
+          )}
         </>}
       />
 
+      {somenteLeitura ? <Alert tone="info">Consulta apenas: o seu perfil não altera a parametrização de fornecedores.</Alert> : null}
       {erro ? <Alert tone="error">{erro}</Alert> : null}
       {salvoEm ? <Alert tone="success">{`Salvo às ${salvoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}</Alert> : null}
       {novo && !carregando ? <Alert tone="info">Fornecedor sem parametrização ainda — os campos abaixo começam em branco.</Alert> : null}

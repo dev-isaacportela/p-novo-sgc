@@ -50,6 +50,8 @@ export interface Permissoes {
   excluirPedido: boolean;
   administrarQuadro: boolean;
   verSeguranca: boolean;
+  /** FO-07 / RF-013 da 001: admin, gestor e diretoria parametrizam fornecedor; analista só lê. */
+  editarFornecedor: boolean;
   somenteProprios: boolean;
   somenteLeitura: boolean;
   // Consumidas pela spec 004 (B-02): a agenda não tem matriz própria.
@@ -62,31 +64,31 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
   admin: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: true,
     cancelar: true, registrarEnvio: true, excluirPedido: true, administrarQuadro: true, verSeguranca: true,
-    agendar: true, cancelarAgendamento: true,
+    editarFornecedor: true, agendar: true, cancelarAgendamento: true,
   },
   analista: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: false, aprovarDiretoria: false,
     cancelar: true, registrarEnvio: true, excluirPedido: false, administrarQuadro: false, verSeguranca: false,
-    agendar: true, cancelarAgendamento: false,
+    editarFornecedor: false, agendar: true, cancelarAgendamento: false,
   },
   gestor: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: false,
     cancelar: true, registrarEnvio: true, excluirPedido: true, administrarQuadro: false, verSeguranca: false,
-    agendar: true, cancelarAgendamento: true,
+    editarFornecedor: true, agendar: true, cancelarAgendamento: true,
   },
   diretoria: {
     // CA-01 + P-07: a diretoria cancela, mas só na fase dela — quem cobra a
     // fase é `motivoDeDestino`/`sgcPodeMover`, porque cancelar é um movimento.
     verQuadro: true, criarPedido: false, editarPedido: false, aprovarTecnica: false, aprovarDiretoria: true,
     cancelar: true, registrarEnvio: false, excluirPedido: true, administrarQuadro: false, verSeguranca: true,
-    agendar: false, cancelarAgendamento: true,
+    editarFornecedor: true, agendar: false, cancelarAgendamento: true,
   },
   comercial: {
     // D-017: a única persona sem acesso ao quadro — fora do menu, fora da rota
     // e recusada no servidor (P-03, R-001, RN-021).
     verQuadro: false, criarPedido: false, editarPedido: false, aprovarTecnica: false, aprovarDiretoria: false,
     cancelar: false, registrarEnvio: false, excluirPedido: false, administrarQuadro: false, verSeguranca: false,
-    agendar: false, cancelarAgendamento: false,
+    editarFornecedor: false, agendar: false, cancelarAgendamento: false,
   },
 };
 
@@ -106,6 +108,7 @@ export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes 
     excluirPedido: operar(base.excluirPedido),
     administrarQuadro: operar(base.administrarQuadro),
     verSeguranca: base.verSeguranca,
+    editarFornecedor: operar(base.editarFornecedor),
     agendar: operar(base.agendar),
     cancelarAgendamento: operar(base.cancelarAgendamento),
     somenteProprios: acesso === 'RESTRICTED',

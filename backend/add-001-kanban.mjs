@@ -32,7 +32,18 @@ if (isEntrypoint()) {
     token: process.env.MITRA_TOKEN,
     integrationURL: process.env.MITRA_BASE_URL_INTEGRATIONS,
   });
-  const resultado = await instalar({ sdk, projectId: Number(process.env.MITRA_PROJECT_ID), mapaFrontend: MAPA });
+  const projectId = Number(process.env.MITRA_PROJECT_ID);
+  // Regras ligadas do SGC 2 (spec 002, T-010): instalar({ ganchos }) resolve os
+  // nomes para id e recusa nome inexistente. Na primeira rodada do sandbox as
+  // sgcPodeMover/sgcPodeExcluir ainda nao existem (nascem no add-005): instala
+  // sem ganchos e avisa; rode este script DE NOVO depois do add-005 (idempotente).
+  const GANCHOS = { podeMover: 'sgcPodeMover', podeExcluir: 'sgcPodeExcluir' };
+  const existentes = new Set(((await sdk.listServerFunctionsMitra({ projectId })).result ?? []).map((f) => f.name));
+  const faltam = Object.values(GANCHOS).filter((nome) => !existentes.has(nome));
+  const ganchos = faltam.length ? undefined : GANCHOS;
+  const resultado = await instalar({ sdk, projectId, mapaFrontend: MAPA, ganchos });
   console.log(`Pronto: motor ${resultado.versao}, ${Object.keys(resultado.funcoes).length} server functions.`);
+  if (faltam.length) console.log(`AVISO: ganchos NAO ligados (faltam ${faltam.join(', ')}). Rode o add-005 e depois este script de novo.`);
+  else console.log('Ganchos ligados: podeMover -> sgcPodeMover, podeExcluir -> sgcPodeExcluir.');
   console.log('Rode `node sync-server-function-map.mjs` para levar os ids ao frontend.');
 }
