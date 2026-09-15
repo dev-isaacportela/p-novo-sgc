@@ -88,10 +88,9 @@ uma consulta o que já está vinculado em qualquer card (RN-010).
 `ORIGEM VARCHAR(20)` (`pedido` \| `heuristica`), `SCORE INT`,
 `STATUS VARCHAR(20) DEFAULT 'sugerida'` (`sugerida` \| `validada` \| `recusada` \| `ignorada`),
 `MOTIVO VARCHAR(400)`, `DECIDIDO_POR INT`, `DECIDIDO_EM VARCHAR(19)`, `CRIADO_EM VARCHAR(19)`.
-`UNIQUE KEY UK_SGC_NF_SUGESTAO (CHAVENFE, ID_CARD)` (do 000) **e**
-`UNIQUE KEY UK_SGC_NF_SUGESTAO_NOTA (ID_CARD, CODFORNEC, NUMNOTA, SERIE)` (aceito pelo 000, R-043):
-`CHAVENFE` é vazia em nota sem XML, e sem a segunda chave a rodada de 30 em 30 minutos
-duplicaria a sugestão dessas notas.
+`UNIQUE KEY UK_SGC_NF_SUGESTAO (ID_CARD, CODFORNEC, NUMNOTA, SERIE)` — **uma só** (R-043): a
+`UNIQUE (CHAVENFE, ID_CARD)` do rascunho do 000 saiu, porque `CHAVENFE` vem vazia em nota sem XML
+e duas notas assim colidiriam entre si no mesmo card. `INDEX IX_SGC_NF_SUGESTAO_STATUS (STATUS, SCORE)`.
 
 ### `SGC_CONTATO_FATURAMENTO` (N:1 `KB_CARD`)
 
@@ -107,10 +106,21 @@ duplicaria a sugestão dessas notas.
 (`''` ou `gestor`), `TEXTO VARCHAR(500)`, `CRIADO_EM VARCHAR(19)`.
 `UNIQUE KEY UK_SGC_AVISO (CHAVE)`, `INDEX IX_SGC_AVISO_CARD (ID_CARD, ID)`.
 
-`CHAVE` é `tipo:card:AAAA-MM-DD[:nf]` — é ela, e só ela, que impede dois avisos iguais no mesmo
+`CHAVE` é `tipo:card:AAAA-MM-DD[:nf|:persona]` — é ela, e só ela, que impede dois avisos iguais no mesmo
 dia (RN-009) e que faz da escrita a exceção sem guarda de persona do R-023.
 Tipos gravados por esta spec: `nf_sugerida`, `faturamento_3`, `faturamento_5`,
 `faturamento_diario`. Os outros (`nf_atrasada`, `nf_recebida`, `bo_previsao`) são da 006 e da 007.
+
+As chaves escritas aqui, uma por linha, para não haver dúvida no nível 5 — onde o cron grava
+**dois** avisos no mesmo dia para o mesmo card e as chaves colidiriam sem o sufixo:
+
+| Aviso | `CHAVE` |
+|---|---|
+| sugestão nova no card | `nf_sugerida:<card>:<AAAA-MM-DD>` |
+| 3 dias úteis, aos responsáveis | `faturamento_3:<card>:<AAAA-MM-DD>` |
+| 5 dias úteis, aos responsáveis | `faturamento_5:<card>:<AAAA-MM-DD>` |
+| 5 dias úteis, à persona gestor | `faturamento_5:<card>:<AAAA-MM-DD>:gestor` |
+| acima de 5, aos responsáveis | `faturamento_diario:<card>:<AAAA-MM-DD>` |
 
 ### Colunas novas em `SGC_PEDIDO` (R-026, no `CREATE`)
 
@@ -278,15 +288,17 @@ envio". Conferência do R-025: `somarDiasUteis('2026-08-24', 15)` → `2026-09-1
 
 | Nome | Entrada | Saída | Atende |
 |---|---|---|---|
-| `sgcNfSugestoesListar` | `status` (''), `codfornec` (0), `busca` (''), `limite` (50), `offset` (0) | `ID, ID_CARD, CARD_TITULO, FASE, FORNECEDOR, FILIAL, VL_PEDIDO, NUMNOTA, SERIE, CHAVENFE, NUMTRANSENT, DT_EMISSAO, DT_ENTRADA, VL_TOTAL, ORIGEM, SCORE, STATUS, MOTIVO, NUMPED_WINTHOR, DECIDIDO_POR, DECIDIDO_NOME, DECIDIDO_EM, CRIADO_EM` | RF-024 |
+| `sgcNfSugestoesListar` | `status` (''), `codfornec` (0), `busca` (''), `hoje` (''), `limite` (50), `offset` (0) | `ID, ID_CARD, CARD_TITULO, FASE, FORNECEDOR, FILIAL, VL_PEDIDO, NUMNOTA, SERIE, CHAVENFE, NUMTRANSENT, DT_EMISSAO, DT_ENTRADA, VL_TOTAL, ORIGEM, SCORE, STATUS, MOTIVO, NUMPED_WINTHOR, DECIDIDO_POR, DECIDIDO_NOME, DECIDIDO_EM, CRIADO_EM` | RF-024 |
 | `sgcNfSugestoesListarTotal` | os mesmos filtros | `TOTAL` | RF-024, RNF-005 |
-| `sgcFaturamentoPendenteListar` | `faixa` (''), `busca` (''), `limite` (50), `offset` (0) | `ID_CARD, TITULO, FASE, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, NUMPED, DT_ENVIO, EMAIL_ENVIO, VL_TOTAL, VL_FATURADO, PERC_VALOR, PERC_QTD, DT_PRIMEIRO_FATURAMENTO, ALERTA_NIVEL, DIAS_UTEIS, QT_CONTATOS, DT_ULTIMO_CONTATO, ULTIMO_CONTATO_POR, DT_PREVISAO_BO, QT_BO_ABERTO` | RF-025, C-028 |
+| `sgcFaturamentoPendenteListar` | `faixa` (''), `busca` (''), `hoje` (''), `limite` (50), `offset` (0) | `ID_CARD, TITULO, FASE, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, NUMPED, DT_ENVIO, EMAIL_ENVIO, VL_TOTAL, VL_FATURADO, PERC_VALOR, PERC_QTD, DT_PRIMEIRO_FATURAMENTO, ALERTA_NIVEL, DIAS_UTEIS, QT_CONTATOS, DT_ULTIMO_CONTATO, ULTIMO_CONTATO_POR, DT_PREVISAO_BO, QT_BO_ABERTO` | RF-025, C-028 |
 | `sgcFaturamentoPendenteListarTotal` | os mesmos filtros | `TOTAL` | RF-025, RNF-005 |
 | `sgcContatosListar` | `cardId` (0), `limite` (50), `offset` (0) | `ID, DT_CONTATO, CANAL, RESUMO, PREVISAO_FATURAMENTO, REGISTRADO_POR, REGISTRADO_NOME` | RF-022 |
 
 **`sgcNfSugestoesListar`** — a sugestão some da fila quando a nota já foi vinculada em qualquer
 card (RN-010), sem precisar de rotina de limpeza; o filtro só vale para o que ainda está
-`sugerida`, para a auditoria do que foi validado/recusado continuar legível:
+`sugerida`, para a auditoria do que foi validado/recusado continuar legível. `hoje` entra como em
+`sgcFaturamentoPendenteListar` (G-5), no recorte "sugerida hoje" que a tela usa no rótulo do dia:
+`COALESCE(NULLIF('{{hoje}}', ''), CURDATE())`.
 
 ```sql
 SELECT S.ID, S.ID_CARD, C.TITULO AS CARD_TITULO, COALESCE(F.CHAVE, '') AS FASE,
@@ -315,9 +327,15 @@ ORDER BY S.SCORE DESC, S.CRIADO_EM DESC, S.ID DESC
 LIMIT {{limite}} OFFSET {{offset}}
 ```
 
-**`sgcFaturamentoPendenteListar`** — `<DIAS>` é `diasUteisEntre('P.DT_ENVIO', 'CURDATE()')` do
-`backend/lib/dias-uteis.mjs`; as faixas do R-025 não se sobrepõem, então o total da tela é a soma
-dos filtros mais os pedidos com menos de 3 dias úteis:
+A coluna `DE_HOJE` (`CASE WHEN SUBSTR(S.CRIADO_EM, 1, 10) = COALESCE(NULLIF('{{hoje}}', ''), CURDATE())
+THEN 1 ELSE 0 END`) acompanha cada linha: é o que a tela usa para marcar "sugerida hoje" sem fazer
+conta de data no navegador, e é o que torna o teste determinístico (G-5).
+
+**`sgcFaturamentoPendenteListar`** — `<DIAS>` é
+`diasUteisEntre('P.DT_ENVIO', "COALESCE(NULLIF('{{hoje}}', ''), CURDATE())")` do
+`backend/lib/dias-uteis.mjs`: em produção a tela manda `hoje: ''` e vale o relógio do banco; no
+smoke o teste passa a data e a contagem fica determinística (G-5). As faixas do R-025 não se
+sobrepõem, então o total da tela é a soma dos filtros mais os pedidos com menos de 3 dias úteis:
 
 ```sql
 SELECT C.ID AS ID_CARD, C.TITULO, F.CHAVE AS FASE,
@@ -369,7 +387,7 @@ diário da 007 e não pode receber dois no mesmo dia (R-041, D-014). Por isso a 
 | `sgcNfDetectar` | JAVASCRIPT, cron `0 */30 * * * *` | — | `{ ok, cards, grupos, sugestoes, erros }` | RF-001..RF-004 |
 | `sgcNfVincular` | JAVASCRIPT | `cardId`, `idSugestao` (0), `numnota`, `serie`, `codfornec`, `codfilial`, `origem`, `itensJson` ('') | `{ ok, erro?, idNf, itens, ocorrencias: { conforme, atencao, divergente }, percValor, percQtd }` | RF-005..RF-013, RF-016 |
 | `sgcOcorrenciaDecidir` | JAVASCRIPT | `cardId`, `idOcorrencia` (0), `modo` (`individual`\|`conformes`), `decisao`, `justificativa` ('') | `{ ok, erro?, decididas, pendentes }` | RF-011, RF-012 |
-| `sgcFaturamentoMonitorar` | JAVASCRIPT, cron `0 0 11 * * *` | — | `{ ok, pendentes, avisos, encerrados, erros }` | RF-018..RF-021 |
+| `sgcFaturamentoMonitorar` | JAVASCRIPT, cron `0 2 11 * * *` | — | `{ ok, pendentes, avisos, encerrados, erros }` | RF-018..RF-021 |
 | `sgcCobrancaEnviar` | JAVASCRIPT | `cardId`, `para`, `assunto`, `corpo` | `{ ok, erro?, destinatarios, comunicacaoId }` | RF-023 |
 
 As seis usam o mesmo preâmbulo do `add-005` (`query`, `escrever`, `agora`, `limpar`, `esc`,
@@ -413,10 +431,18 @@ persona dele que a guarda confere.
   corrigiu); 100 % → nível 0, capa limpa, sem aviso (RF-020); `DIAS_UTEIS < 3` → nada; `>= 3` →
   nível 3 ou 5 e, se `ALERTA_FATURAMENTO_EM` já é de hoje, pula (RN-009). Grava o aviso aos responsáveis (`faturamento_3`, `faturamento_5` ou
   `faturamento_diario`, `PARA_USUARIO_ID = 0`), e no nível 5 um segundo aviso com
-  `PARA_PERSONA = 'gestor'`; depois `sgcEscPedidoAlertaFaturamento`, o espelho da capa por
-  `kbCardAtualizar` (SF da lib, por id, com `atualizadoPor` = responsável do card e
-  `origem: 'sistema'` — R-042) e `kbNotaRegistrar`. **Não** envia e-mail (RN-014) e **não**
-  consulta o ERP (RNF-003).
+  `PARA_PERSONA = 'gestor'` e a `CHAVE` com o sufixo `:gestor`; depois
+  `sgcEscPedidoAlertaFaturamento`, o espelho da capa e `kbNotaRegistrar`. **Não** envia e-mail
+  (RN-014) e **não** consulta o ERP (RNF-003).
+
+  O espelho da capa é `kbCardAtualizar` (SF da lib, por id, com `atualizadoPor` = primeiro
+  responsável do card ou o criador, e `origem: 'sistema'` — R-042), e **reenvia os quatro campos**:
+  `titulo`, `responsaveisIds`, `prazo` e `valoresJson`. A SF da lib grava a lista de responsáveis e
+  o prazo que recebe — sem eles, **apaga** (R-047) —, então o cron lê antes, numa consulta, o
+  título e o prazo de `KB_CARD` e os responsáveis de `KB_CARD_RESPONSAVEL` **na ordem**
+  (`ORDER BY ID`), e devolve tudo junto. É o mesmo que `atualizarCapaDoQuadro`
+  (`abas/capa-do-quadro.ts`) faz na tela. A chamada vai em `try/catch`: capa que não espelha não
+  derruba o aviso.
 - **`sgcCobrancaEnviar`** — persona igual à do vínculo; `sendEmailMitra` com o contato escolhido
   mais a cópia fixa `compras@benenutri.com`, sem duplicar o destinatário (EM-02); grava a
   comunicação por `sgcEscComunicacaoInserir` (SF da 002, por id, `tipo = 'cobranca'`) e a nota do
@@ -428,14 +454,14 @@ persona dele que a guarda confere.
 | Nome | Guarda | Entrada | Instrução | Atende |
 |---|---|---|---|---|
 | `sgcEscNfInserir` | `{{usuarioId}}` | `cardId`, `numnota`, `serie`, `chavenfe`, `numtransent`, `codfornec`, `codfilial`, `dtEmissao`, `dtEntrada`, `vlTotal`, `prazoParcelas`, `origem`, `usuarioId`, `agora` | `INSERT … SELECT … FROM DUAL WHERE NOT EXISTS (nota já vinculada) AND <guarda>` | RF-006, RN-010 |
-| `sgcEscNfItemInserir` | `{{usuarioId}}` | `linhas` (fragmento `SELECT … UNION ALL`), `usuarioId` | `INSERT INTO SGC_NF_ITEM (…) SELECT * FROM ({{linhas}}) LOTE WHERE <guarda> ON DUPLICATE KEY UPDATE` | RF-006 |
-| `sgcEscOcorrenciaInserir` | `{{usuarioId}}` | `linhas`, `usuarioId` | idem, sobre `SGC_NF_OCORRENCIA` | RF-006 |
+| `sgcEscNfItemInserir` | `{{usuarioId}}` | `linhas` (fragmento `SELECT … UNION ALL`), `usuarioId` | `INSERT INTO SGC_NF_ITEM (…) SELECT * FROM ({{linhas}}) LOTE WHERE <guarda> ON DUPLICATE KEY UPDATE` (a tabela tem `UNIQUE (ID_NF, CODPROD, NUMLOTE)`) | RF-006 |
+| `sgcEscOcorrenciaInserir` | `{{usuarioId}}` | `linhas`, `usuarioId` | idem, sobre `SGC_NF_OCORRENCIA`, **sem** `ON DUPLICATE KEY UPDATE`: a tabela não tem chave única (uma NF revalidada geraria ocorrência nova, e é isso que se quer) | RF-006 |
 | `sgcEscOcorrenciaDecidir` | `{{usuarioId}}` | `cardId`, `id` (0 = lote), `modo`, `decisao`, `justificativa`, `usuarioId`, `decididoEm` | `UPDATE … SET DECISAO, JUSTIFICATIVA, DECIDIDO_POR, DECIDIDO_EM WHERE ID_CARD = … AND DECISAO = 'pendente' AND ({{id}} = 0 OR ID = {{id}}) AND ('{{modo}}' <> 'conformes' OR RESULTADO = 'conforme') AND <guarda>` | RF-011, RF-012 |
 | `sgcEscSugestaoInserir` | `{{usuarioId}}` | `chavenfe`, `numtransent`, `numnota`, `serie`, `codfornec`, `codfilial`, `vlTotal`, `dtEmissao`, `dtEntrada`, `cardId`, `numped`, `origem`, `score`, `motivo`, `usuarioId`, `criadoEm` | `INSERT … SELECT … FROM DUAL WHERE NOT EXISTS (mesma sugestão) AND NOT EXISTS (nota já vinculada) AND <guarda>` | RF-001, RF-003 |
 | `sgcEscSugestaoDecidir` | `:VAR_USER` + persona | `id`, `status`, `motivo`, `decididoEm` | `UPDATE SGC_NF_SUGESTAO SET STATUS, MOTIVO, DECIDIDO_POR = :VAR_USER, DECIDIDO_EM WHERE ID = {{id}} AND STATUS = 'sugerida' AND <guarda>` | RF-024 |
-| `sgcEscContatoInserir` | `:VAR_USER` + persona | `cardId`, `dtContato`, `canal`, `resumo`, `previsao`, `criadoEm` | `INSERT … SELECT … FROM DUAL WHERE TRIM('{{resumo}}') <> '' AND <guarda>` | RF-022 |
+| `sgcEscContatoInserir` | `:VAR_USER` + persona | `cardId`, `dtContato`, `canalContato`, `resumo`, `previsao`, `criadoEm` | `INSERT … SELECT … FROM DUAL WHERE TRIM('{{resumo}}') <> '' AND <guarda>` | RF-022 |
 | `sgcEscPedidoFaturamento` | `{{usuarioId}}` | `idCard`, `usuarioId`, `agora` | `UPDATE SGC_PEDIDO` com as quatro medidas **somadas no próprio banco** | RF-016 |
-| `sgcEscPedidoAlertaFaturamento` | `{{usuarioId}}` | `idCard`, `nivel`, `alertaEm`, `usuarioId` | `UPDATE SGC_PEDIDO SET ALERTA_FATURAMENTO_NIVEL, ALERTA_FATURAMENTO_EM` | RF-019, RF-020 |
+| `sgcEscPedidoAlertaFaturamento` | `{{usuarioId}}` | `idCard`, `nivelAlerta`, `alertaEm`, `usuarioId` | `UPDATE SGC_PEDIDO SET ALERTA_FATURAMENTO_NIVEL, ALERTA_FATURAMENTO_EM` | RF-019, RF-020 |
 | `sgcEscAvisoInserir` | **nenhuma** (R-023) | `idCard`, `tipo`, `chave`, `paraUsuarioId`, `paraPersona`, `texto`, `criadoEm` | `INSERT … SELECT … FROM DUAL WHERE NOT EXISTS (mesma CHAVE)` | RF-021, RN-009 |
 
 `sgcEscAvisoInserir` é a única escrita desta spec chamada **por outras duas**: a 006 grava
@@ -488,6 +514,28 @@ WHERE P.ID_CARD = {{idCard}} AND {{usuarioId}} > 0
   AND <guarda de persona sobre {{usuarioId}}>
 ```
 
+### O campo do quadro `faturamento` (R-048)
+
+Quem **cria** o campo é esta spec. O `add-008` exporta a lista, no mesmo formato do `CAMPOS` do
+`add-005`, e a cria de forma idempotente por chave no `isEntrypoint()`:
+
+```js
+export const CAMPOS_008 = [
+  { chave: 'faturamento', label: 'Faturamento', tipo: 'texto', noCard: true },
+];
+```
+
+`noCard: true` porque o valor aparece **na capa do cartão**, não no formulário do card — é texto
+calculado, ninguém digita. Nenhum campo desta spec é obrigatório nem tem `FASE_ID` (RN-017 da 002:
+o motor cobraria obrigatório em qualquer direção e barraria cancelar e voltar).
+
+Os dois lados que esta spec não toca:
+
+- **base (S2)**: o seed insere o campo em `KB_CAMPO` **a partir de `CAMPOS_008`** (importando do
+  `add-008`, como o `seed/002-quadro.mjs` já faz com `CAMPOS` do `add-005`) — uma fonte só;
+- **integrador (S4)**: acrescenta `faturamento` à `CAPA_POR_FASE` do `add-005` nas fases
+  `enviado`, `transito`, `faturamento` e `bo`.
+
 ### O espelho da capa — `kbCardAtualizar` nos dois caminhos (R-042)
 
 O SGC **não escreve em `KB_CARD`**: o campo `faturamento` do quadro é gravado pela SF da lib, como
@@ -499,7 +547,10 @@ O SGC **não escreve em `KB_CARD`**: o campo `faturamento` do quadro é gravado 
 - **Sem sessão** (cron `sgcFaturamentoMonitorar`): a lib 1.4.0 aceita `kbCardAtualizar` com
   `atualizadoPor` (int) e `origem: 'sistema'`, que **só valem sem sessão** — mesma premissa de
   `kbCardCriar` (013) e de `kbCardMover` (R-021). O cron chama **por id**, com `atualizadoPor` =
-  primeiro responsável do card, ou o criador, e `valoresJson = { faturamento }`.
+  primeiro responsável do card, ou o criador, e envia **os quatro campos**: `titulo`,
+  `responsaveisIds` (lista `"2,3"`, na ordem de `KB_CARD_RESPONSAVEL`), `prazo` e
+  `valoresJson = { faturamento }` — `kbCardAtualizar` apaga responsáveis e prazo que não recebe
+  (R-047).
 
 O texto é sempre o de `textoDaCapaFaturamento()` (`lib/faturamento.ts`, RN-013), calculado num
 lugar só: no caminho de tela a partir do retorno do JS, no caminho de cron dentro do próprio
@@ -540,12 +591,20 @@ COALESCE((SELECT CASE WHEN COUNT(*) = 0 THEN ''
 O que o integrador acrescenta ao `CASE` do `sqlPodeMover` (mesma ordem em `PODE` e em `MOTIVO`):
 
 ```sql
-WHEN T.PAR = 'enviado>transito'     AND T.PENDENCIAS_TRANSITO > 0 THEN 0
-WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_NF > 0 THEN 0
--- e, no MOTIVO:
-WHEN T.PAR = 'enviado>transito'     THEN T.PENDENCIAS_TRANSITO_MOTIVO
-WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') THEN T.PENDENCIAS_NF_MOTIVO
+-- no PODE:
+WHEN T.PAR = 'enviado>transito'                         AND T.PENDENCIAS_TRANSITO > 0 THEN 0
+WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_NF > 0       THEN 0
+-- no MOTIVO: cada ramo repete a SUA condição, e os dois de conclusão são encadeados
+-- NF -> B.O. (o segundo é da 007), para PODE = 0 nunca sair com motivo vazio (R-020, R-044):
+WHEN T.PAR = 'enviado>transito'                         AND T.PENDENCIAS_TRANSITO > 0 THEN T.PENDENCIAS_TRANSITO_MOTIVO
+WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_NF > 0       THEN T.PENDENCIAS_NF_MOTIVO
+WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_BO_ABERTOS > 0 THEN T.PENDENCIAS_BO_MOTIVO
 ```
+
+A ordem entre os dois últimos é a da 007 (ela entrega o par `PENDENCIAS_BO_ABERTOS`/
+`PENDENCIAS_BO_MOTIVO`): com ocorrência de NF pendente **e** item de B.O. aberto, a frase mostrada
+é a da NF, e a do B.O. aparece quando só ela sobra. Sem a condição repetida no `MOTIVO`, um
+`faturamento>bo` recusado por outro ramo cairia neste e mostraria a frase errada.
 
 **`backend/sql/notificacoes-avisos.sql`** (R-023) — o quarto ramo de `notificacoesUniao()`, com as
 seis colunas do contrato da 002 (`TIPO, CARD_ID, TITULO, QUEM, TEXTO, QUANDO`):
@@ -607,7 +666,7 @@ Arquivos:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `frontend/src/pages/quadros/abas/NotasFiscais.tsx` | `AbaNotasFiscais(ctx: ExtensaoContexto)` — uma chamada de `sgcNfListar` por abertura |
+| `frontend/src/pages/quadros/abas/NotasFiscais.tsx` | `AbaNotasFiscais(ctx: ExtensaoContexto)` — uma chamada de `sgcNfListar` por abertura; a aba **não** declara `contagem` (R-049: `AbaExtra.contagem` é síncrona e lê só `card.valores`, e não há campo do quadro para "notas pendentes") |
 | `frontend/src/pages/quadros/abas/nf-dialogos.tsx` | os quatro diálogos da aba (registrar, decidir, contato, cobrança) |
 | `frontend/src/pages/notas-fiscais/NotasFiscaisPage.tsx` | fila de sugestões |
 | `frontend/src/pages/faturamentos/FaturamentosPendentesPage.tsx` | lista de faturamentos pendentes |
@@ -623,7 +682,8 @@ Desenho (`design.md` §8, §9.1, §9.4, §9.5):
   descrição, `RowMeta` para lote e validade; quantidades, preços e percentuais com `numeric`;
   sem zebra; coluna sem dado é `Dash()`, nunca `0` nem `R$ 0,00`.
 - **Resultado da conferência** é `Status` com rótulo **escrito**, nunca só cor: `conforme`
-  (`tone="success"`), `atencao` (`tone="attention"`), `divergente` (`tone="danger"`); a decisão é
+  (`tone="live"`), `atencao` (`tone="attention"`), `divergente` (`tone="alert"`) — os quatro tons
+  que o `Status` do `page.tsx` aceita são `live | off | attention | alert`; a decisão é
   um segundo `Status` (`pendente`/`aceito`/`recusado`). Score da sugestão é número com `numeric`,
   acompanhado do motivo em `RowMeta` — nunca uma barra colorida sozinha.
 - **Agrupamento** das ocorrências por item (o legado provou que 20 itens × 4 regras vira parede):
@@ -658,7 +718,8 @@ Desenho (`design.md` §8, §9.1, §9.4, §9.5):
    recusado pelo gancho do servidor.
 6. Mover para "Em Trânsito para BN" sem nota é recusado pelo gancho, com o texto do fragmento; a
    lib mostra o motivo na faixa de aviso do card.
-7. Todo dia às 11h UTC `sgcFaturamentoMonitorar` roda: quem passou de 3 e de 5 dias úteis ganha
+7. Todo dia às 11h02 UTC (8h02 de Brasília; dois minutos depois do cron diário da 007, para os
+   dois não disputarem o mesmo minuto do agendador — G-2) `sgcFaturamentoMonitorar` roda: quem passou de 3 e de 5 dias úteis ganha
    aviso, nível e a etiqueta na capa (`kbCardAtualizar` por id, com `atualizadoPor` e
    `origem: 'sistema'`); acima de 5, uma vez por dia; 100 % em valor encerra; pedido em B.O.
    é pulado (R-041).
@@ -749,7 +810,7 @@ filiais (1 Matriz, 2 Norte, 3 Sul) vêm do `seed/001`; personas (`admin` 1, `ana
 
 | Card | Fase | Pedido | Para quê |
 |---|---|---|---|
-| `enviadoComPedido` | `enviado` | 1015/filial 1, `NUMPED_WINTHOR` 998877, `DT_ENVIO` = hoje − 3 dias úteis, `VL_TOTAL` 120.000,00, 5 itens somando 2.000 un | C-001, C-017, C-021 |
+| `enviadoComPedido` | `enviado` | 1015/filial 1, `NUMPED_WINTHOR` **998901**, `DT_ENVIO` = hoje − 3 dias úteis, `VL_TOTAL` 120.000,00, 5 itens somando 2.000 un | C-001, C-017, C-021 |
 | `enviadoSemPedido` | `enviado` | 1015/filial 1, sem `NUMPED_WINTHOR`, `DT_ENVIO` = hoje − 5 dias úteis, 5 itens (5001…5005) | C-002, C-022 |
 | `faturamentoParcial` | `faturamento` | 1015/filial 1, `DT_ENVIO` = hoje − 3 dias úteis, `VL_TOTAL` 120.000,00 em 2.000 un, com a NF 7001 já vinculada (72.000,00 / 1.200 un) e 1 contato | C-014, C-019, C-024, C-026 |
 | `conferencias` | `faturamento` | 1015/filial 1, `DT_ENVIO` = hoje − 4 dias úteis, 3 itens a 10,0000 / 20,0000 / 30,0000 e a NF 7002 pronta para validar | C-007, C-010, C-011, C-012, C-015, C-016, C-018, C-026 |
@@ -758,7 +819,8 @@ filiais (1 Matriz, 2 Norte, 3 Sul) vêm do `seed/001`; personas (`admin` 1, `ana
 | `semNota2` | `enviado` | 1042/filial 2, `DT_ENVIO` = hoje − 2 dias úteis, sem nota e sem contato | C-026 (sem contato) |
 | `atrasadoNove` | `transito` | 1015/filial 1, `DT_ENVIO` = hoje − 9 dias úteis, 1 contato registrado | C-023, C-026 |
 | `cemPorCento` | `faturamento` | 1015/filial 1, `VL_TOTAL` 50.000,00 com NF de 50.000,00 e `ALERTA_FATURAMENTO_NIVEL` 5 | C-020 |
-| `emBo` | `bo` | 1015/filial 1, `DT_ENVIO` = hoje − 7 dias úteis, `VL_TOTAL` 30.000,00 sem nota | C-028 |
+| `emBo` | `bo` | 1015/filial 1, `DT_ENVIO` = hoje − 7 dias úteis, `VL_TOTAL` 30.000,00 sem nota, **`DT_PREVISAO_BO` = hoje + 10 dias** e **2 linhas em `SGC_BO_ITEM` com `STATUS = 'aberto'`** (produtos 5006 e 5007) — sem elas, C-028 não teria o que provar na listagem | C-028 |
+| `validade1042` | `faturamento` | **1042**/filial 1, `DT_ENVIO` = hoje − 3 dias úteis, 2 itens (5001 e 5002) e a NF 7006 pronta para validar | C-011 (fornecedor com mínimo de 180 dias) |
 
 As datas de envio são calculadas pelo `somarDiasUteisData` de `backend/lib/dias-uteis.mjs` a
 partir de hoje, para os níveis do cron serem determinísticos em qualquer dia em que o smoke rode.
@@ -767,40 +829,59 @@ partir de hoje, para os níveis do cron serem determinísticos em qualquer dia e
 
 | Nota | Situação | Para quê |
 |---|---|---|
-| 7001 · série 1 · `NUMTRANSENT` 9001 | emissão 11/09/2026, entrada 14/09/2026, 72.000,00, `NUMPED` 998877, 3 itens, duplicatas em 28/35/42 dias | C-001, C-007, C-013, C-014 |
-| 7002 · série 1 · `NUMTRANSENT` 9002 | emissão = envio + 3 dias, sem `NUMPED`, 4 dos 5 produtos do `enviadoSemPedido`, valor dentro do saldo; itens com preço 10,0000 / 20,1600 / 30,4500, um lote válido até 01/02/2027 e outro até 01/12/2026, um item com `QT` 120 contra 100 pedidas e outro com 60 contra 100 | C-002, C-008, C-009, C-010, C-011, C-012 |
-| 7003 · `NUMTRANSENT` 9003 | `DTCANCEL` preenchida | C-004 |
-| 7004 · `NUMTRANSENT` 9004 | entrada normal, **já vinculada** ao card `notaDeOutro` | C-003 |
-| 7005 · `NUMTRANSENT` 9005 | emissão 13/09/2026, **`DTENT` nulo**, 2 itens, duplicatas 30/60 | C-006, C-013 (divergente) |
+| 7001 · série 1 · `NUMTRANSENT` 9001 | fornecedor **1015**, emissão 11/09/2026, entrada 14/09/2026, 72.000,00, `NUMPED` **998901**, 3 itens, duplicatas em 28/35/42 dias | C-001, C-007, C-013, C-014 |
+| 7002 · série 1 · `NUMTRANSENT` 9002 | fornecedor **1015**, emissão = envio + 3 dias, sem `NUMPED`, 4 dos 5 produtos do `enviadoSemPedido`, valor dentro do saldo; itens com preço 10,0000 / 20,1600 / 30,4500, um lote válido até 01/02/2027 e outro até 01/12/2026, um item com `QT` 120 contra 100 pedidas e outro com 60 contra 100 | C-002, C-008, C-009, C-010, C-011, C-012 |
+| 7003 · `NUMTRANSENT` 9003 | fornecedor 1015, `DTCANCEL` preenchida | C-004 |
+| 7004 · `NUMTRANSENT` 9004 | fornecedor 1042, entrada normal, **já vinculada** ao card `notaDeOutro` | C-003 |
+| 7005 · `NUMTRANSENT` 9005 | fornecedor 1015, emissão 13/09/2026, **`DTENT` nulo**, 2 itens, duplicatas 30/60 | C-006, C-013 (divergente) |
+| 7006 · série 1 · `NUMTRANSENT` 9006 | fornecedor **1042**, emissão 11/09/2026, entrada 14/09/2026, 2 itens com os **mesmos dois lotes** da 7002 (validade 01/02/2027 = 143 dias e 01/12/2026 = 81 dias), para o card `validade1042` | C-011 (metade do fornecedor com mínimo próprio) |
 
 Faixa de numeração reservada (combinada com a 006): as notas desta spec ficam com
 `NUMNOTA < 90000`; **90001–90015** são da 006 (nota cancelada, duas filiais, sem entrada) e a 007
 não semeia nota nenhuma.
 
+A validade é medida contra o **valor cadastrado do fornecedor**, não contra o 120 padrão — o seed
+da 001 deixa `VALIDADE_MINIMA_DIAS = 90` no 1015 e 180 no 1042 (R-043), e o teste lê o cadastro em
+vez de supor: com o 1015 (90), 143 dias é conforme e 81 é divergente; com o 1042 (180), os dois
+são divergentes. O 120 padrão de RN-005 é exercitado na regra pura, onde o mínimo é parâmetro.
+
 Um item da 7002 tem `CODPROD` 9001 (inexistente no pedido) com `CODFAB` `'FK-123'` igual ao do
 produto 5001, e outro com `CODAUXILIAR` `'7891234567890'` igual ao do 5002: são os dois
 casamentos alternativos de C-008. Um terceiro, `CODPROD` 9999 sem `CODFAB` nem EAN conhecidos, é
-o item não pedido de C-009. O fornecedor 1042 recebe `VALIDADE_MINIMA_DIAS` 180 no seed da 001
-(**pedido ao integrador**, uma linha) para a segunda metade de C-011.
+o item não pedido de C-009. O `VALIDADE_MINIMA_DIAS` dos dois fornecedores (90 no 1015, 180 no
+1042) vem do seed da 001, dono único do cadastro (R-017/R-043): esta spec lê, não grava.
 
-**Contatos e avisos:** 1 contato no `atrasadoNove` (canal telefone, 2 dias atrás) e 1 no
-`faturamentoParcial`; nenhum aviso — os avisos nascem do cron, e é isso que o smoke prova.
+**Contatos e avisos:** todo card pendente desta spec nasce com **1 contato** (canal telefone, 2
+dias atrás), **menos `semNota` e `semNota2`** — é isso, e só isso, que faz o filtro "sem contato"
+devolver exatamente esses dois. Nenhum aviso é semeado: os avisos nascem do cron, e é o que o
+smoke prova.
+
+As faixas dentro de `CARDS_005`: `sem_contato` 2 (`semNota`, `semNota2`), `3` quatro
+(`enviadoComPedido`, `faturamentoParcial`, `validade1042` com 3 dias úteis e `conferencias` com
+4), `5` um (`enviadoSemPedido`), `mais5` dois (`atrasadoNove` com 9 e `emBo` com 7). `notaDeOutro`
+e `cemPorCento` estão em 100 % e ficam fora da listagem: 9 pendentes ao todo.
+
+**Cards exportados:** o seed exporta `CARDS_005` (`{ enviadoComPedido, enviadoSemPedido,
+faturamentoParcial, conferencias, notaDeOutro, semNota, semNota2, atrasadoNove, cemPorCento,
+emBo, validade1042 }`), como a 003 faz com `CARDS_003`. É por essa lista que o smoke recorta as
+asserções sobre listagens globais (R-045) em vez de contar linhas do banco inteiro.
 
 ### `CHECK_INPUT`
 
-Acrescentar em `backend/simulator/config.mjs` (arquivo do integrador), seção 005:
-`numnota: '7001'`, `serie: ''`, `numpeds: '998877'`, `dataEnvio: '2026-08-01'`,
-`status: ''`, `faixa: ''`, `idSugestao: '0'`, `idOcorrencia: '0'`, `modo: 'individual'`,
-`decisao: 'aceito'`, `justificativa: ''`, `chave: 'faturamento_3:1:2026-09-15'`,
-`tipo: 'faturamento_3'`, `paraUsuarioId: '0'`, `paraPersona: ''`, `texto: 'x'`, `nivel: '3'`,
-`vlTotal: '0'`, `numtransent: '0'`, `chavenfe: ''`, `dtEmissao: '2026-09-11'`,
-`dtEntrada: '2026-09-14'`, `prazoParcelas: '28/35/42'`, `canal: 'telefone'`, `resumo: 'x'`,
-`previsao: '2026-09-20'`, `dtContato: '2026-09-15T12:00:00'`, `score: '100'`,
-`alertaEm: '2026-09-15T12:00:00'`, `criadoEm: '2026-09-15T12:00:00'`,
-`decididoEm: '2026-09-15T12:00:00'`. `codfornec`, `codfilial`, `cardId`, `idCard`, `usuarioId`,
-`busca`, `limite`, `offset`, `agora`, `motivo` e `origem` já existem (D-09 da onda 1 vale: o
-objeto é um só e a última chave ganha — os valores da 005 não podem quebrar as seções anteriores,
-por isso nenhum dos nomes repetidos muda de valor aqui).
+O `sim:check` só exercita **SQL de leitura** (pula escrita e JAVASCRIPT), então a seção 005 de
+`backend/simulator/config.mjs` (arquivo do integrador) tem só os parâmetros das nove leituras:
+
+`numnota: '7001'`, `serie: ''`, `numpeds: '998901'`, `dataEnvio: '2026-08-01'`,
+`status: ''`, `faixa: ''`, `hoje: ''`. `codfornec` (`'1015'`), `codfilial` (`'1'`), `cardId`,
+`busca`, `limite` e `offset` já existem da 003 e da 002, com valores que servem a esta spec —
+nenhum deles muda de valor aqui (D-09 da onda 1: o objeto é um só e a última chave ganha).
+
+**Nome próprio para o que colidiria** (G-4): as escritas desta spec usam `canalContato`
+(`sgcEscContatoInserir`) e `nivelAlerta` (`sgcEscPedidoAlertaFaturamento`) no lugar de `canal` e
+`nivel`, que a 002 já ocupa com outro significado. `sgcEscAvisoInserir` mantém `tipo`, porque a
+assinatura é contrato das três specs da onda (R-038) e a 006 e a 007 chamam com essa chave — o
+`sim:check` não a exercita, então não há colisão de valor; se um dia alguma **leitura** precisar
+filtrar por tipo de aviso, o parâmetro nasce como `tipoAviso`.
 
 ### Dialeto
 
@@ -820,7 +901,7 @@ JSON é usada: o campo do quadro é escrito pela lib (R-042).
 
 | Cenário / regra | Arquivo | O que o `assert` verifica |
 |---|---|---|
-| C-001 | `smoke/005-notas-fiscais.mjs` | `sgcNfDetectar` cria 1 sugestão da nota 7001 para `enviadoComPedido`, `SCORE = 100`, `ORIGEM = 'pedido'`; `SELECT COUNT(*) FROM SGC_NF` continua no que era antes |
+| C-001 | `smoke/005-notas-fiscais.mjs` | `sgcNfDetectar` cria 1 sugestão da nota 7001 para `enviadoComPedido` (`NUMPED_WINTHOR` **998901**, número exclusivo deste seed), `SCORE = 100`, `ORIGEM = 'pedido'`; `SELECT COUNT(*) FROM SGC_NF` continua no que era antes da rodada (diferença, não literal) |
 | C-002 | `smoke/…` + `tests/nf.test.mjs` | a sugestão de `enviadoSemPedido` sai com `SCORE = 88`, `ORIGEM = 'heuristica'` e `MOTIVO` contendo "4 de 5"; `pontuarSugestao` com cobertura 4/5, +3 dias e valor no saldo → 88 |
 | C-003 | `smoke/…` | a nota 7004 não aparece em `sgcNfSugestoesListar`; `sgcNfVincular` dela em outro card devolve `ok: false` com "já está vinculada" |
 | C-004 | `smoke/…` | `sgcWintNfEntradas` do 1015 não traz a 7003 (e traz > 0 linhas); nenhuma sugestão dela |
@@ -830,7 +911,7 @@ JSON é usada: o campo do quadro é escrito pela lib (R-042).
 | C-008 | `tests/nf.test.mjs` + `smoke/…` | `casarItem` devolve `codfab` e `ean` na ordem certa; as ocorrências dos dois itens saem `atencao` com o código no `VALOR_ENCONTRADO` |
 | C-009 | `smoke/…` | o item 9999 gera 1 ocorrência `item_nao_pedido` com `RESULTADO = 'divergente'` |
 | C-010 | `tests/nf.test.mjs` + `smoke/…` | `classificarDelta(20, 20.16)` → `atencao` 0,008; `(30, 30.45)` → `divergente` 0,015; `(10, 10)` → `conforme` 0; as três ocorrências `preco_divergente` gravadas com esses resultados |
-| C-011 | `tests/nf.test.mjs` + `smoke/…` | `diasDeValidade('2026-09-11', '2027-02-01')` → 143 e `resultadoDeValidade(143, 120)` → `conforme`; `(81, 120)` → `divergente`; com o fornecedor 1042 (mínimo 180) a nota vinculada gera as duas `validade_curta` divergentes |
+| C-011 | `tests/nf.test.mjs` + `smoke/…` | **na regra pura** (único lugar onde o padrão de 120 aparece): `diasDeValidade('2026-09-11', '2027-02-01')` → 143, `resultadoDeValidade(143, 120)` → `conforme` e `(81, 120)` → `divergente`. **No smoke**, o mínimo vem sempre do cadastro (`SGC_FORNECEDOR.VALIDADE_MINIMA_DIAS`, lido no próprio teste, nunca suposto): validar a NF 7002 no card `conferencias` (fornecedor **1015**, mínimo **90**) gera 1 `validade_curta` `conforme` (143) e 1 `divergente` (81); validar a NF 7006 no card `validade1042` (fornecedor **1042**, mínimo **180**) gera as **duas** `validade_curta` divergentes |
 | C-012 | `tests/nf.test.mjs` | `resultadoDeQuantidade(100, 120)` → `divergente`; `(100, 60)` → `conforme` com "saldo de 40"; `(100, 100)` → `conforme` |
 | C-013 | `tests/nf.test.mjs` + `smoke/…` | `sgcWintNfParcelas` da 7001 devolve 3 linhas (> 0) com `DIAS` 28/35/42; `resultadoDePrazo('28/35/42', [28,35,42], 0)` → `conforme`; da 7005 (30/60) → `divergente` com os dois textos |
 | C-014 | `tests/faturamento.test.mjs` + `smoke/…` | `percentuaisFaturados({120000, 72000, 2000, 1200})` → 60 / 60 / 48000; depois do vínculo, `SGC_PEDIDO` do card traz `PERC_FATURADO_VALOR = 60` e `PERC_FATURADO_QTD = 60` |
@@ -838,14 +919,14 @@ JSON é usada: o campo do quadro é escrito pela lib (R-042).
 | C-016 | `smoke/…` | recusar com 9 caracteres devolve `ok: false` citando a justificativa; com 10, grava `DECISAO = 'recusado'`, `DECIDIDO_POR` e `DECIDIDO_EM`; `SGC_NF` do card continua com 1 linha nos dois casos |
 | C-017 | `smoke/…` | `sgcPodeMover` de `enviado` para `transito` no card `semNota` devolve `PODE = 0` e o `MOTIVO` exato do fragmento; no `enviadoComPedido` com 1 nota, `PODE = 1` e `MOTIVO` vazio |
 | C-018 | `smoke/…` | `sgcPodeMover` para `concluido` com 3 ocorrências pendentes → `PODE = 0` e `MOTIVO` contendo "3 conferências"; decididas as três, `PODE = 1`; o mesmo par saindo de `bo` |
-| C-019 | `tests/faturamento.test.mjs` + `smoke/…` | `textoDaCapaFaturamento` devolve `R$ 72.000,00 (60 %) · saldo R$ 48.000,00`; depois do vínculo, `DT_PRIMEIRO_FATURAMENTO` é `2026-09-11`; o espelho da capa é provado **pelos dois caminhos**: `kbCardAtualizar` com sessão (`valoresJson = { faturamento }`) e, na rodada do cron, `kbCardAtualizar` por id com `atualizadoPor` + `origem: 'sistema'` — nos dois, `KB_CARD.VALORES_JSON` do card passa a ter o texto na chave `faturamento` |
+| C-019 | `tests/faturamento.test.mjs` + `smoke/…` | `textoDaCapaFaturamento` devolve `R$ 72.000,00 (60 %) · saldo R$ 48.000,00`; depois do vínculo, `DT_PRIMEIRO_FATURAMENTO` é `2026-09-11`; o espelho da capa é provado **pelos dois caminhos**: `kbCardAtualizar` com sessão (`valoresJson = { faturamento }`) e, na rodada do cron, `kbCardAtualizar` por id com `atualizadoPor` + `origem: 'sistema'` — nos dois, `KB_CARD.VALORES_JSON` do card passa a ter o texto na chave `faturamento`. **R-047:** nos dois caminhos o teste guarda `TITULO`, `PRAZO` e a lista de `KB_CARD_RESPONSAVEL` antes da chamada e assegura que continuam idênticos depois — a chamada reenvia os quatro campos, não pode zerar nenhum |
 | C-020 | `smoke/…` | `sgcFaturamentoMonitorar` sobre o card `cemPorCento` devolve `encerrados: 1`, zera `ALERTA_FATURAMENTO_NIVEL`, não cria aviso e o card some de `sgcFaturamentoPendenteListar` |
-| C-021 | `smoke/…` | a rodada cria 1 `SGC_AVISO` `faturamento_3` para `enviadoComPedido` com "3 dias úteis" e o fornecedor no `TEXTO`, `PARA_USUARIO_ID = 0`, nível 3 gravado e 1 nota no histórico |
-| C-022 | `smoke/…` | a rodada cria 2 avisos para `enviadoSemPedido` (`faturamento_5` com `PARA_USUARIO_ID = 0` e outro com `PARA_PERSONA = 'gestor'`) e nível 5 |
-| C-023 | `smoke/…` | duas rodadas seguidas sobre `atrasadoNove` criam 1 aviso `faturamento_diario`, não 2; a `CHAVE` é `faturamento_diario:<card>:<hoje>` |
+| C-021 | `smoke/…` | a rodada cria 1 `SGC_AVISO` `faturamento_3` para `enviadoComPedido` com "3 dias úteis" e o fornecedor no `TEXTO`, `PARA_USUARIO_ID = 0`, nível 3 gravado e 1 nota no histórico; **R-047:** `KB_CARD.TITULO`/`PRAZO` e os `KB_CARD_RESPONSAVEL` do card, guardados antes, continuam iguais depois do `kbCardAtualizar` do cron |
+| C-022 | `smoke/…` | a rodada cria 2 avisos para `enviadoSemPedido` (`faturamento_5` com `PARA_USUARIO_ID = 0` e outro com `PARA_PERSONA = 'gestor'`) e nível 5; **R-047:** título, prazo e responsáveis do card intactos depois da rodada |
+| C-023 | `smoke/…` | duas rodadas seguidas sobre `atrasadoNove` criam 1 aviso `faturamento_diario`, não 2; a `CHAVE` é `faturamento_diario:<card>:<hoje>`; **R-047:** depois das **duas** rodadas, título, prazo e responsáveis do card continuam os do seed (o reenvio repetido não acumula nem apaga nada) |
 | C-024 | `smoke/…` | dois `sgcEscContatoInserir` no mesmo card → `sgcContatosListar` devolve 2, o mais novo primeiro; `sgcFaturamentoPendenteListar` traz `QT_CONTATOS = 2` e a data do último |
 | C-025 | `smoke/…` | `sgcCobrancaEnviar` devolve `destinatarios` com o contato e `compras@benenutri.com`, o coletor de e-mails do smoke registra 1 envio e `SGC_COMUNICACAO` ganha 1 linha `cobranca`; a rodada do cron não gera e-mail nenhum |
-| C-026 | `smoke/…` + `tests/faturamento.test.mjs` | `sgcFaturamentoPendenteListarTotal` = 8; `faixa: 'sem_contato'` = 2, `'3'` = 3, `'5'` = 1, `'mais5'` = 2; `busca: 'Fresenius'` recorta; `colunasDoCsv` devolve o cabeçalho e uma linha por pedido, na ordem da tela (o escape é de `lib/csv.ts`, testado pela base) |
+| C-026 | `smoke/…` + `tests/faturamento.test.mjs` | **nenhuma asserção literal de total** (R-045 — o banco do smoke é compartilhado com as suítes 002/006/007): o teste recorta as linhas de `sgcFaturamentoPendenteListar` por `ID_CARD IN (CARDS_005)` e conta o recorte — 9 pedidos deste seed, `faixa: 'sem_contato'` 2, `'3'` 4, `'5'` 1, `'mais5'` 2; `sgcFaturamentoPendenteListarTotal` é conferido **por diferença** (o total com `faixa: ''` menos o total medido antes de semear os 9 cresce 9, e o total de cada faixa ≥ o recorte); `busca: 'Fresenius'` só reduz o recorte; `colunasDoCsv` devolve o cabeçalho e uma linha por pedido, na ordem da tela (o escape é de `lib/csv.ts`, testado pela base) |
 | C-027 | `smoke/…` + `tests/permissoes.test.mjs` | `sgcNfVincular` como `leo` (comercial) e como `dora` (diretoria) devolve `ok: false`; `sgcEscContatoInserir` como `leo` não grava; `permissoesDe` devolve `verNotasFiscais`/`operarNf`/`verFaturamentoPendente` por persona, com a diretoria lendo os dois painéis |
 | C-028 | `smoke/…` | com o card `emBo` (fase `bo`, 7 dias úteis, saldo a faturar), `sgcFaturamentoMonitorar` não cria aviso nenhum para ele e não mexe no nível; `sgcFaturamentoPendenteListar` traz o card, com `DT_PREVISAO_BO` e `QT_BO_ABERTO` |
 | RN-001 | `tests/dias-uteis.test.mjs` + `smoke/…` | `somarDiasUteis('2026-08-24', 15)` → `'2026-09-14'`; `diasUteisEntre('2026-08-24', '2026-09-14')` → 15; sex→seg 1; seg→sáb 4; mesmo dia 0; e a mesma conta pelo fragmento SQL, num `SELECT` com as duas datas literais |
@@ -874,9 +955,10 @@ JSON é usada: o campo do quadro é escrito pela lib (R-042).
 
 **Consome da 001 (fornecedores):** `SGC_FORNECEDOR.VALIDADE_MINIMA_DIAS` (RN-005) e os contatos
 de `SGC_FORNECEDOR_LINHA_CONTATO` por `sgcFornecedorCarregar`, para a cobrança escolher o
-destinatário entre os cadastrados (EN-02 A). O seed da 001 ganha `VALIDADE_MINIMA_DIAS = 180` no
-fornecedor 1042 (C-011) — **pela base**, dona única do cadastro de fornecedores no simulador
-(R-017); não é task desta spec.
+destinatário entre os cadastrados (EN-02 A). O seed da 001 ganha `VALIDADE_MINIMA_DIAS = 90` no
+fornecedor 1015 e `= 180` no 1042 (C-011) — **pela base**, dona única do cadastro de fornecedores
+no simulador (R-017/R-043); não é task desta spec. O padrão de 120 dias fica só na regra pura,
+para o fornecedor sem mínimo cadastrado.
 
 **Consome da lib (`@benenutri/mitra-kanban` 1.4.0):** `kbCardAtualizar` com `atualizadoPor` (int)
 e `origem: 'sistema'`, que só valem sem sessão — é assim que o cron espelha o campo `faturamento`
@@ -885,7 +967,11 @@ lib local por `npm link`.
 
 **Consome da 002 (quadro):** `SGC_PEDIDO` (`VL_TOTAL`, `DT_ENVIO`, `NUMPED_WINTHOR`,
 `EMAIL_ENVIO`, `PRAZO_ACORDADO`, `CODFORNEC`, `CODFILIAL`, `CRIADO_POR`); `SGC_FASE` pelas
-chaves; `sgcEscComunicacaoInserir` (por id, `tipo = 'cobranca'`) para registrar a cobrança;
+chaves; `sgcEscComunicacaoInserir` para registrar a cobrança — SF SQL da 002, chamada **por id**
+pelo `sgcCobrancaEnviar`, com a assinatura dela, que esta spec **não** altera (G-12):
+`input: { cardId, tipo, para, cc, assunto, corpo, enviadoPor, enviadoEm }`, guardada por
+`{{enviadoPor}}` (a guarda de persona da 002, não `:VAR_USER`); esta spec passa
+`tipo = 'cobranca'`, `para`/`cc` com os destinatários resolvidos e `enviadoPor` = quem clicou;
 `sgcPodeMover`, onde o integrador cola os dois fragmentos novos; `notificacoesUniao()`, que ganha
 o ramo de `backend/sql/notificacoes-avisos.sql`; `abas/capa-do-quadro.ts` para o espelho do
 cartão no caminho de tela.
@@ -901,7 +987,9 @@ leitura, nas duas colunas novas de `sgcFaturamentoPendenteListar` (R-041, D-014)
 degrada sem a 007: sem linhas em `SGC_BO_ITEM`, `QT_BO_ABERTO` é 0 e `DT_PREVISAO_BO` é vazio.
 
 **Consome da base (S2):** `frontend/src/lib/csv.ts` (`textoCsv`, `baixarCsv`) e as chaves novas de
-`lib/permissoes.ts` (R-028).
+`lib/permissoes.ts` (R-028). É nesse mesmo arquivo que vivem os **itens de menu**: a constante
+`MENU` de `lib/permissoes.ts` lista rota, rótulo e a chave `exige` de cada item, e o `AdminLayout`
+só fornece o ícone (G-7) — as duas rotas desta spec entram lá, pelo integrador (T-049).
 
 **Fornece:**
 
@@ -937,7 +1025,7 @@ degrada sem a 007: sem linhas em `SGC_BO_ITEM`, `QT_BO_ABERTO` é 0 e `DT_PREVIS
 | D-006 | A ocorrência guarda **dados** (`TIPO`, `RESULTADO`, esperado, encontrado, delta), não a frase | Coluna `DESCRICAO` com o texto pronto, como no legado | Texto pronto no banco envelhece: mudar uma palavra exigiria migração de dados, e a mesma regra passaria a ter duas redações. `textoDaOcorrencia()` monta na tela e é testável |
 | D-007 | `item_nao_pedido` é o tipo do **casamento**, com os três resultados (`conforme` quando casou por código, `atencao` por código de fábrica/EAN, `divergente` quando não casou) | Criar um tipo `casamento_item` | O 000 fechou os sete tipos e **recusou** a renomeação (R-043): um oitavo tipo seria mudança de contrato para ganhar só clareza de nome |
 | D-008 | O `sgcNfDetectar` grava aviso do tipo `nf_sugerida` | Cron sem aviso, só com a nota no histórico | R-023 manda todo cron gravar aviso e nota; nenhum dos seis tipos do 000 cobria sugestão, e o 000 **aceitou** `nf_sugerida` como oitavo (R-043). Sem ele, a sugestão só apareceria para quem abre `/notas-fiscais` |
-| D-009 | A recusa de mover (Trânsito e conclusão) é **só do servidor**; `transicoes.ts` ganha os textos em `MOTIVOS` mas nenhum ramo novo em `motivoDeDestino` | Espelhar a trava na tela, como o resto da matriz | O espelho síncrono precisaria da contagem de notas e de ocorrências em cada cartão do quadro — uma SF por cartão (proibido) ou dois campos novos no quadro. Quem recusa é o gancho, e a lib já mostra o motivo na faixa de aviso do card. O teste de 500 combinações (RNF-005 da 002) continua valendo sem alteração |
+| D-009 | A recusa de mover (Trânsito e conclusão) é **só do servidor** (confirmado pelo R-046); `transicoes.ts` ganha os textos em `MOTIVOS` mas nenhum ramo novo em `motivoDeDestino`, nenhum `antesDeMover`/`podeMover` novo (G-14) | Espelhar a trava na tela, como o resto da matriz | O espelho síncrono precisaria da contagem de notas e de ocorrências em cada cartão do quadro — uma SF por cartão (proibido) ou dois campos novos no quadro. Quem recusa é o gancho, e a lib já mostra o motivo na faixa de aviso do card. O teste de 500 combinações (RNF-005 da 002) continua valendo sem alteração |
 | D-010 | Dias úteis por aritmética de `DATEDIFF`/`FLOOR`/`MOD`/`LEAST` a partir de uma segunda-feira fixa | A tabela de lookup `MID('01234444…')` + `WEEKDAY` do legado | `WEEKDAY` e `MID` seriam dois shims novos no simulador e a string de 40 caracteres é ilegível; a aritmética usa quatro funções comuns, é a mesma nos dois lados e casa com a conferência do R-025 |
 | D-011 | A aba carrega **tudo** numa SF (`sgcNfListar`), inclusive contatos | Uma SF por bloco (sugestões, notas, ocorrências, contatos) | RNF-001 e o teto de 300/min: abrir um card já custa `kbCardDetalhe` + `sgcPedidoCarregar`; uma terceira execução é o limite, quatro não |
 | D-012 | Ao vincular uma nota que **já entrou** no ERP (`PCNFENT.DTENT` preenchido), `sgcNfVincular` grava `DT_RECEBIMENTO = DT_ENTRADA`: a nota nasce recebida e o cron da 006 não a procura. Sem `DTENT` (registro híbrido), `DT_ENTRADA` e `DT_RECEBIMENTO` nascem vazias e o recebimento é da 006 | Deixar `DT_RECEBIMENTO` para a 006 preencher sempre | O 000 é explícito, e sem isso uma nota que já entrou no ERP ficaria "não recebida" até a próxima rodada de 2 h da 006 — e o card não sairia de Trânsito sozinho. Contrato alinhado com o plan da 006 |
