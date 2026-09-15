@@ -8,12 +8,12 @@
 
 | Princípio | Toca? | Como atende |
 |---|---|---|
-| Spec antes de código | sim | `spec.md` sem `[NEEDS CLARIFICATION]`; 22 cenários e 13 regras, todos vindos de O2-04, O2-05 e das decisões R-021, R-023, R-025, R-027, R-028, R-029, R-030, R-031 do contrato da onda 2 |
+| Spec antes de código | sim | `spec.md` sem `[NEEDS CLARIFICATION]`; 23 cenários e 13 regras, todos vindos de O2-04, O2-05 e das decisões R-021, R-023, R-025, R-027, R-028, R-029, R-030, R-031 do contrato da onda 2, mais R-035..R-038 e R-045/R-046/R-049 da revisão cruzada |
 | Backend escrito local, executado no sandbox | sim | só `backend/add-009-transito.mjs` (novo). **Nenhuma tabela e nenhuma coluna nova**: as duas que esta spec escreve (`SGC_NF.DT_RECEBIMENTO` e `SGC_NF.ALERTA_ATRASO_EM`) já estão no `CREATE TABLE` da 005 (R-026). Nada do `mitra-sdk` roda da máquina local |
 | Migrations append-only | sim | nada em `backend/migrations/`; o DDL continua no `setup-backend.mjs` (arquivo da base) e a migration é gerada pelo sandbox |
 | Leitura e escrita por Server Function | sim | a aba e a tela usam `linhas()`/`acao()` de `src/lib/mitra-api.ts`; zero `listRecords`/`patchRecord`. As duas escritas são SF SQL de uma instrução, chamadas **por id** pelo JS com `{{usuarioId}}` e a guarda de persona única (R-013) — não há escrita de tela nesta spec (D-005) |
-| Simulador cobre a feature | sim | `add-009-transito.mjs` no `PUBLISH_ORDER`; `simulator/seed/006-transito.mjs` só insere linhas (6 pedidos, 15 notas, as entradas `PCNFENT` das notas desta spec); `CHECK_INPUT` ganha as chaves novas; `sim:check` roda as 4 SQL de leitura com contagem > 0 |
-| Testes automatizados obrigatórios | sim | 22 cenários e 13 regras mapeados em `backend/simulator/smoke/006-transito.mjs` e `frontend/tests/recebimento.test.mjs` |
+| Simulador cobre a feature | sim | `add-009-transito.mjs` no `PUBLISH_ORDER`; `simulator/seed/006-transito.mjs` só insere linhas (7 pedidos, 17 notas, as entradas `PCNFENT` das notas desta spec) e exporta `CARDS_006`; `CHECK_INPUT` ganha as chaves novas; `sim:check` roda as 4 SQL de leitura com contagem > 0 |
+| Testes automatizados obrigatórios | sim | 23 cenários e 13 regras mapeados em `backend/simulator/smoke/006-transito.mjs` e `frontend/tests/recebimento.test.mjs`. As duas listagens globais desta spec (`sgcNfsEmAtraso`/`Total`) são verificadas **sem número literal** (R-045): o teste conta pelo banco e recorta pelos cards da própria spec |
 | Design tokens, sem cor literal | sim | tabela, `Status`, `Code`, `Dash`, `FilterChip`, `Pagination` do `page.tsx`; zero hex, zero `style={{}}`, zero classe Tailwind solta (o legado pintava a situação com hex — D-009) |
 | Simplicidade | sim | nenhuma dependência nova; a previsão é **uma** expressão SQL usada pelas quatro leituras; a regra pura da tela é só rótulo, faixa, resumo e CSV — a aritmética de data não é reimplementada no front (D-003) |
 
@@ -184,7 +184,7 @@ lote, com busca e faixa:
 SELECT … FROM ( <camada com SITUACAO e DIAS_ATRASO> ) A
 WHERE A.SITUACAO = 'atrasada'
   AND ('{{busca}}' = ''
-       OR CAST(A.NUMNOTA AS CHAR) LIKE CONCAT('%', '{{busca}}', '%')
+       OR CONCAT('', A.NUMNOTA) LIKE CONCAT('%', '{{busca}}', '%')
        OR UPPER(A.FORNECEDOR) LIKE CONCAT('%', UPPER('{{busca}}'), '%')
        OR A.NUMPED_WINTHOR LIKE CONCAT('%', '{{busca}}', '%'))
   AND ('{{faixa}}' = ''
@@ -198,6 +198,10 @@ LIMIT {{limite}} OFFSET {{offset}}
 `sgcNfsEmAtrasoTotal` é o mesmo corpo com
 `SELECT COUNT(*) AS TOTAL, COALESCE(SUM(A.VL_TOTAL), 0) AS VALOR_TOTAL` e sem `ORDER BY`/`LIMIT`:
 uma execução dá o total de notas **e** o valor acumulado que o topo da tela mostra (RF-018).
+
+A busca no número da nota usa `CONCAT('', A.NUMNOTA)`, e não `CAST(… AS CHAR)`: o `CONCAT` já é
+shim do dialeto do simulador e coage número para texto nos dois bancos — uma função a menos para
+a base ter de acrescentar (R-043).
 
 ### Leitura — WinThor (Oracle, `jdbcId` resolvido por nome)
 
@@ -263,9 +267,30 @@ e de `listServerFunctionsMitra` na publicação, R-016). SFs chamadas por id:
    `NF 90003 de FRESENIUS KABI (faturada em 26/08/2026, previsão 04/09/2026) está 11 dias atrasada e continua sem entrada no WinThor.`;
    depois `sgcEscNfAlertaAtraso({ idNf, alertaEm, usuarioId })`. A dupla trava (data na nota +
    `CHAVE` única do aviso) é o que faz C-011 dar 5 e não 15 (RN-007).
-6. **Conclusão do trânsito.** Para cada pedido **tocado** que está na fase `transito`, uma
-   consulta conta as notas ainda sem recebimento; zero pendentes e ao menos uma nota →
-   `kbCardMover({ cardId, faseId: <fase 'transito' → 'faturamento' do board>, ordem: 0, movidoPor: QUEM_PROCESSA, origem: 'sistema' })`
+6. **Conclusão do trânsito.** Uma consulta só (`runQueryMitra`) lista **todo** pedido na fase
+   `transito` com ao menos uma nota e **zero** nota sem recebimento, com o `QUEM_PROCESSA` de
+   cada um — não apenas os pedidos tocados nesta rodada:
+
+   ```sql
+   SELECT C.ID AS ID_CARD, C.BOARD_ID,
+     COALESCE((SELECT R.USUARIO_ID FROM KB_CARD_RESPONSAVEL R
+                WHERE R.CARD_ID = C.ID ORDER BY R.ORDEM, R.ID LIMIT 1),
+              C.CRIADO_POR, 0) AS QUEM_PROCESSA,
+     (SELECT COUNT(*) FROM SGC_NF N WHERE N.ID_CARD = C.ID) AS QT_NFS
+   FROM KB_CARD C
+   JOIN SGC_FASE F ON F.BOARD_ID = C.BOARD_ID AND F.FASE_ID = C.FASE_ID AND F.CHAVE = 'transito'
+   WHERE C.EXCLUIDO_EM IS NULL
+     AND EXISTS (SELECT 1 FROM SGC_NF N WHERE N.ID_CARD = C.ID)
+     AND NOT EXISTS (SELECT 1 FROM SGC_NF N
+                      WHERE N.ID_CARD = C.ID AND TRIM(COALESCE(N.DT_RECEBIMENTO, '')) = '')
+   ```
+
+   Varrer só o que a rodada tocou deixaria parado exatamente o pedido cuja última nota **nasceu
+   recebida** (D-012 da 005: nota vinculada depois da entrada no ERP já vem com
+   `DT_RECEBIMENTO`): ela nunca aparece em `sgcNfsRecebimentoPendente`, então o pedido não seria
+   "tocado" e ficaria em trânsito para sempre (D-014, C-023). Com `cardId` informado (o botão), a
+   consulta leva `AND C.ID = <cardId>`. Para cada pedido da lista:
+   `kbCardMover({ cardId, faseId: <fase 'faturamento' do board>, ordem: 0, movidoPor: QUEM_PROCESSA, origem: 'sistema' })`
    (R-021/R-031). `ok !== true` vira erro do pedido e o laço segue. Movido: `sgcEscAvisoInserir`
    com `tipo: 'nf_recebida'`, `chave: 'nf_recebida:<idCard>:<hoje>'`, e `kbNotaRegistrar` com
    `As 2 notas do pedido deram entrada no WinThor. O pedido saiu de Em Trânsito para BN e está em Faturamento em Andamento.`
@@ -275,11 +300,13 @@ e de `listServerFunctionsMitra` na publicação, R-016). SFs chamadas por id:
    (`Recebimento sincronizado: 1 nota com entrada no WinThor (NF 90005, 14/09/2026).`), em
    `try/catch` — nota que falha não derruba a rodada (D-07 da revisão da onda 1).
 
-**Custo (RNF-002/RNF-003):** por rodada, 1 execução por fornecedor com nota pendente + 1 por
-nota recebida + 2 por nota que alerta + 3 por pedido movido. Com o teto de 30 pedidos e o perfil
-do SGC (2 a 5 notas por pedido, 2 fornecedores por rodada), a rodada fica na casa das dezenas de
-execuções, a cada 2 horas — folga larga no teto de 300/min do projeto. As leituras são
-`runQueryMitra` e não contam como execução de SF.
+**Custo (RNF-002/RNF-003):** por rodada, **1** execução de `sgcNfsRecebimentoPendente` (chamada
+**por id**, não por `runQueryMitra` — o texto da consulta existe uma vez só, na SF publicada, que
+é a mesma que o `sim:check` exercita; D-015) + 1 por fornecedor com nota pendente + 1 por nota
+recebida + 2 por nota que alerta + 3 por pedido movido. As demais leituras do JS — a resolução da
+sessão e a varredura do passo 6 — são `runQueryMitra` e **não** contam como execução. Com o teto
+de 30 pedidos e o perfil do SGC (2 a 5 notas por pedido, 2 fornecedores por rodada), a rodada
+fica na casa das dezenas de execuções, a cada 2 horas: folga larga no teto de 300/min do projeto.
 
 ### Escritas SQL (uma instrução por SF, chamadas só por id)
 
@@ -363,6 +390,13 @@ Desenho (design.md §8.4, §8.6, §9.1, §9.4):
   menu nem chega ao quadro.
 - **Sem campo de data**: nenhuma tela desta spec tem um. Se aparecer, é o
   `src/components/DatePicker.tsx` da 004 (UI-03 B), nunca o controle nativo.
+- **Sem `contagem` na aba** (R-049): `AbaExtra.contagem` é síncrona e lê só `card.valores`, e não
+  existe campo do quadro para "notas pendentes" — a `AbaRecebimento` declara só `id`, `rotulo` e
+  `render`. O resumo "2 de 3 recebidas" aparece **dentro** da aba, onde a consulta já rodou.
+- **Nada novo em `podeMover`/`antesDeMover`** (R-046): os blocos de mover da onda 2 vivem só no
+  servidor. Esta spec não toca `transicoes.ts` além dos textos que a 005 e a 007 entregam para
+  `MOTIVOS`, e a recusa de C-019 chega pela regra ligada, com a lib mostrando a frase ao clicar.
+  A ação que a aba oferece antes do movimento é "Verificar entrada no WinThor".
 
 ## Fluxo
 
@@ -422,8 +456,15 @@ Só **linhas**, nenhuma tabela: fornecedores (1015 Fresenius, 7 dias úteis; 104
 corridos), filiais (1, 2, 3) e o fornecedor genérico 999999 (existe em `PCFORNEC`, **não** em
 `SGC_FORNECEDOR` — é o "sem parametrização" de C-003) vêm do `seed/001-fornecedores.mjs`; as
 personas, do `seed/002-quadro.mjs`; o quadro e as dez fases, do `seed.mjs` (R-017).
-`NUMNOTA` desta spec: faixa **90001–90015**, reservada, para não colidir com as notas que a 005
-semeia (D-008).
+`NUMNOTA` desta spec: faixa **90001–90017**, reservada, para não colidir com as notas que a 005
+semeia (D-008). R-036 fixou o teto em 90015 a partir da versão anterior deste plan; o cenário
+C-023, nascido na revisão cruzada, acrescentou duas notas ao seed — o teto sobe para **90017** e
+o piso que separa da 005 (90000) não muda. **Uma linha a corrigir em R-036.**
+
+Todos os pedidos deste seed nascem com **`DT_ENVIO` vazio**: nenhum cenário desta spec depende do
+registro de envio, e com a coluna vazia eles ficam fora de `sgcFaturamentoPendenteListar` (005),
+que exige `DT_ENVIO <> ''` — o smoke roda tudo num banco só e as asserções da 005 não devem
+carregar carona dos cards daqui (R-045).
 
 | Pedido | Fase | Fornecedor · filial · responsáveis | Notas | Serve a |
 |---|---|---|---|---|
@@ -433,20 +474,31 @@ semeia (D-008).
 | **T4** | `transito` | 999999 · filial 1 · [ana] | 90009 (fornecedor 999999, faturada 24/08/2026) e 90010 (fornecedor 1015, **`DT_EMISSAO` vazia**), as duas pendentes | C-003, C-004 |
 | **E5** | `enviado` | 1042 · filial 2 · [ana], `NUMPED_WINTHOR` `900500` | 90011 faturada hoje−12, R$ 4.000; 90012 hoje−15, R$ 6.000; 90013 hoje−19, R$ 10.000 — todas pendentes, sem entrada | C-005, C-011, C-015, C-016, C-017 |
 | **F6** | `faturamento` | 1015 · filial 1 · [ana] | 90014 recebida; 90015 faturada hoje−19, pendente (prova que o monitoramento e a lista param na fase); 1 linha de `SGC_NF_OCORRENCIA` com `DECISAO = 'pendente'` | C-015, C-019 |
+| **T7** | `transito` | 1015 · filial 1 · [**gil**, ana], criador ana | 90016 e 90017, as duas **já com `DT_RECEBIMENTO`** (nasceram recebidas na vinculação, D-012 da 005) e **sem** linha em `PCNFENT` | C-023 |
 
 Os números fecham sozinhos, independentemente do dia em que o smoke rodar: as notas do E5 usam
 prazo em dias **corridos** (10), então o atraso é exatamente 2, 5 e 9 dias; as de data absoluta
 (90001, 90002, 90006) servem a cenários de previsão, não de contagem de faixa.
 
-Estado esperado da **primeira** rodada: 2 notas recebidas (90005 e 90008), 5 avisos
-`nf_atrasada` (90003, 90006, 90011, 90012, 90013), 1 pedido movido (T2) e 1 aviso `nf_recebida`.
-A segunda rodada no mesmo dia: 0, 0, 0, 0.
+Estado esperado da **primeira** rodada **sobre os cards desta spec**: 2 notas recebidas (90005 e
+90008), 5 avisos `nf_atrasada` (90003, 90006, 90011, 90012, 90013) e 2 pedidos movidos (T2, pela
+nota que acabou de entrar, e T7, pela varredura do passo 6), com 1 aviso `nf_recebida` cada. A
+segunda rodada no mesmo dia: 0, 0, 0, 0.
+
+**O banco do smoke é um só** (R-045): a rodada desta spec alcança também os cards das outras
+suítes que estiverem em Enviado ou Em Trânsito com nota — o `notaDeOutro` da 005 (NF 7004) e os
+cards que o `criarPedido()` do `smoke/002-quadro.mjs` passa a criar com 1 linha em `SGC_NF`
+(R-044). Por isso **nenhuma** asserção desta spec usa total absoluto de listagem ou de rodada:
+todas contam pelo banco ou recortam por `ID_CARD IN (CARDS_006)` — a constante que o seed exporta
+com os ids de T1…T7, E5 e F6. A suíte da 006 roda depois da 005 no `smoke.mjs`, então o que a
+rodada mexer em cards alheios não invalida asserção já feita.
 
 Linhas de `PCNFENT` inseridas por este seed (só as das notas 900xx — R-027 dá as entradas da
-detecção à 005, e a faixa 90001–90015 é desta spec, decisão 2 do 000): 90005 (filial 1, `DTENT` hoje−1, sem cancelamento), 90007
-(filial 2, `DTENT` hoje−2, **`DTCANCEL` hoje−1**), 90008 em duas linhas (filial 1 `DTENT` hoje−3;
-filial 2 `DTENT` hoje−1). Nenhuma linha para 90003, 90006 e 90011–90013 — é o que os mantém
-pendentes.
+detecção à 005, e a faixa acima de 90000 é desta spec, R-036): 90005 (filial 1, `DTENT` hoje−1,
+sem cancelamento), 90007 (filial 2, `DTENT` hoje−2, **`DTCANCEL` hoje−1**), 90008 em duas linhas
+(filial 1 `DTENT` hoje−3; filial 2 `DTENT` hoje−1). Nenhuma linha para 90003, 90006, 90011–90013
+e 90016–90017 — é o que os mantém pendentes (ou, no T7, prova que o pedido anda sem nenhuma
+consulta ao ERP ter casado nota nenhuma).
 
 ### `CHECK_INPUT`
 
@@ -458,10 +510,14 @@ Acrescentar em `backend/simulator/config.mjs` (arquivo da base): `faixa: ''`, `i
 ### Dialeto
 
 Usados por esta spec e já com shim: `COALESCE`, `CONCAT`, `CURDATE`, `DATEDIFF`, `DATE_FORMAT`,
-`STR_TO_DATE`, `NVL`, `TO_CHAR`, `UPPER`, `LIMIT/OFFSET`, `FROM DUAL`. **Faltam** (entram em
-`simulator/mysql-dialect.mjs`, arquivo da base, junto do `dias-uteis.mjs` de R-025):
-`WEEKDAY`, `CAST(x AS CHAR)` e `DATE_ADD(col, INTERVAL <expressão> DAY)` — o shim de hoje só
-reescreve `INTERVAL <literal> DAY`, e a previsão soma uma **coluna** de dias. Ver *Riscos*.
+`STR_TO_DATE`, `NVL`, `TO_CHAR`, `UPPER`, `TRIM`, `NULLIF`, `LIMIT/OFFSET`, `FROM DUAL`.
+
+**Falta** (entra em `simulator/mysql-dialect.mjs`, arquivo da base, junto do `dias-uteis.mjs` de
+R-025 — R-043 pede só o que a SQL usa de fato): `DATE_ADD(col, INTERVAL <expressão> DAY)`, porque
+o shim de hoje só reescreve `INTERVAL <literal> DAY` e a previsão soma uma **coluna** de dias;
+mais `FLOOR`, `MOD` e `LEAST` se o fragmento `somarDiasUteis` da 005 os usar (é ele que decide).
+Esta spec **não** usa `WEEKDAY` nem `CAST(x AS CHAR)` em SQL própria: a aritmética de dia útil
+está toda dentro do fragmento da 005, e a busca por número usa `CONCAT('', A.NUMNOTA)`.
 
 ## Testes
 
@@ -472,32 +528,33 @@ reescreve `INTERVAL <literal> DAY`, e a previsão soma uma **coluna** de dias. V
 | C-003 | `smoke/006-transito.mjs` | a 90009 devolve `DT_PREVISAO = ''`, `SITUACAO = 'sem_prazo'`, `DIAS_ATRASO = 0`; `sgcNfsEmAtraso` não a traz |
 | C-004 | `smoke/006-transito.mjs` | a 90010 devolve `SITUACAO = 'sem_prazo'` mesmo com o fornecedor 1015 parametrizado |
 | C-005 | `smoke/006-transito.mjs` | a 90011 devolve `SITUACAO = 'atrasada'` e `DIAS_ATRASO = 2` |
-| C-006 | `smoke/006-transito.mjs` | depois de `sgcRecebimentoSincronizar({ cardId: 0 })`, `recebidas = 2` e a 90005 tem `DT_RECEBIMENTO` = hoje−1 e `SITUACAO = 'recebida'` |
+| C-006 | `smoke/006-transito.mjs` | depois de `sgcRecebimentoSincronizar({ cardId: 0 })`, a 90005 tem `DT_RECEBIMENTO` = hoje−1 e `SITUACAO = 'recebida'`, e `sgcWintNfEntradasConfirmadas(1015, '90005')` devolve ≥ 1 linha (a resposta da rodada conta notas de todas as suítes: o assert é sobre a nota, não sobre o total) |
 | C-007 | `smoke/006-transito.mjs` | depois da rodada, a 90007 continua com `DT_RECEBIMENTO = ''` (a entrada existe, mas tem `DTCANCEL`); `sgcWintNfEntradasConfirmadas(1042, '90007')` devolve 0 linhas |
 | C-008 | `smoke/006-transito.mjs` | a 90008 fica com `DT_RECEBIMENTO` = hoje−1 (a entrada da filial 2, a do pedido), não hoje−3 |
 | C-009 | `smoke/006-transito.mjs` | depois da rodada, `KB_CARD` do T2 está na `FASE_ID` de `SGC_FASE.CHAVE = 'faturamento'`; a última linha de `KB_MOVIMENTO` do T2 tem `ORIGEM = 'sistema'` e `USUARIO_ID = gil`; 1 linha em `SGC_AVISO` com `TIPO = 'nf_recebida'` e 1 nota no histórico |
 | C-010 | `smoke/006-transito.mjs` | o T1 continua na fase `transito` e `resumoRecebimento` sobre `sgcNfsRecebimentoCard(T1)` dá `{ total: 3, recebidas: 2, completo: false }` |
-| C-011 | `smoke/006-transito.mjs` | primeira rodada: `SELECT COUNT(*) FROM SGC_AVISO WHERE TIPO = 'nf_atrasada'` = **5**; segunda e terceira rodadas no mesmo dia: continua 5 e `atrasadas = 0` na resposta |
+| C-011 | `smoke/006-transito.mjs` | primeira rodada: `SELECT COUNT(*) FROM SGC_AVISO WHERE TIPO = 'nf_atrasada' AND ID_CARD IN (CARDS_006)` = **5**; segunda e terceira rodadas no mesmo dia: continua 5 (o recorte por card é o que torna o número estável com as outras suítes no mesmo banco) |
 | C-012 | `smoke/006-transito.mjs` | no T1, 90001 e 90002 com `SITUACAO = 'recebida'` e a 90003 com `'atrasada'`, na mesma resposta |
 | C-013 | `smoke/006-transito.mjs` | `sgcRecebimentoSincronizar({ cardId: T3 })` com sessão de `ana` devolve `notas` só do T3 e não altera nenhuma nota do T1 |
-| C-014 | `smoke/006-transito.mjs` | com a definição de `sgcWintNfEntradasConfirmadas` trocada no `byId` por uma que lança quando `codfornec = 1042`, a rodada grava o recebimento do 1015 (90005) e devolve `erros` com 1 item citando 1042 |
-| C-015 | `smoke/006-transito.mjs` | `sgcNfsEmAtrasoTotal` devolve `TOTAL = 5` e `VALOR_TOTAL = 32500`; nenhuma linha de `sgcNfsEmAtraso` tem `NUMNOTA = 90015` |
-| C-016 | `smoke/006-transito.mjs` | `faixa: 'ate3'` → 1 linha (90011); `'4a7'` → 1 linha (90012); `'mais7'` → 3 linhas, entre elas a 90013 |
-| C-017 | `smoke/006-transito.mjs` | `busca: '90012'` → 1 linha; `busca: 'NESTLE'` → 3 linhas do E5; `busca: '900500'` → as mesmas 3 |
+| C-014 | `smoke/006-transito.mjs` | com a definição de `sgcWintNfEntradasConfirmadas` trocada no `byId` por uma que lança quando `codfornec = 1042`, a rodada grava o recebimento do 1015 (90005), devolve `erros` contendo um item com `codfornec` 1042 e **não** grava recebimento em nenhuma nota do 1042 |
+| C-015 | `smoke/006-transito.mjs` | as linhas de `sgcNfsEmAtraso` com `ID_CARD IN (CARDS_006)` são exatamente as 5 esperadas (90003, 90006, 90011, 90012, 90013) e nenhuma é a 90015; `sgcNfsEmAtrasoTotal` bate com um `SELECT COUNT(*)`/`SUM(VL_TOTAL)` que o próprio teste faz no banco pela mesma regra (fases `enviado`/`transito`, sem recebimento, vencida) — **sem literal**, porque a 005 e a 002 também têm notas nessa lista (R-045) |
+| C-016 | `smoke/006-transito.mjs` | recortando por `CARDS_006`: `faixa: 'ate3'` → só a 90011; `'4a7'` → só a 90012; `'mais7'` → 90013, 90003 e 90006 |
+| C-017 | `smoke/006-transito.mjs` | `busca: '90012'` → traz a 90012; `busca: 'NESTLE'` e `busca: '900500'` → trazem as 3 notas do E5 (as duas buscas podem trazer linhas de outras suítes; o assert é de presença, não de contagem) |
 | C-018 | `tests/recebimento.test.mjs` | `linhasCsv` de 3 notas → 3 linhas com as colunas de `COLUNAS_CSV_ATRASO` na ordem; `textoCsv(COLUNAS_CSV_ATRASO, linhasCsv(notas))` → 4 linhas, valor `4000.5` como `4000,50` e fornecedor com `;` entre aspas |
 | C-019 | `smoke/006-transito.mjs` | `sgcPodeMover({ usuarioId: gil, cardId: F6, boardId, faseId: fase 'concluido' })` devolve `PODE = 0` e `MOTIVO` citando a validação pendente (**depende dos fragmentos da 005/007 compostos no gancho — S4**) |
 | C-020 | `smoke/006-transito.mjs` | `sgcRecebimentoSincronizar` como `leo` e como `dora` devolve `ok: false` e nada muda; `sgcEscNfRecebimento` com `usuarioId: leo` não altera linha nenhuma |
 | C-021 | `smoke/006-transito.mjs` | `UPDATE SGC_FORNECEDOR SET PRAZO_ENTREGA_DIAS = 10 WHERE CODFORNEC = 1015` → a 90001 passa a `DT_PREVISAO = '2026-09-07'` e a 90002 mantém `DT_RECEBIMENTO`; o teste devolve o prazo a 7 no fim |
 | C-022 | `smoke/006-transito.mjs` | a 90006 (sem linha em `PCNFENT`) tem previsão e situação e continua com `DT_RECEBIMENTO = ''` depois da rodada |
+| C-023 | `smoke/006-transito.mjs` | o T7 (2 notas já recebidas, nenhuma pendente, nenhuma linha em `PCNFENT`) **não** aparece em `sgcNfsRecebimentoPendente` e, ainda assim, depois da rodada está na fase `faturamento`, com `KB_MOVIMENTO.ORIGEM = 'sistema'`, `USUARIO_ID = gil` e 1 aviso `nf_recebida` |
 | RN-001 | `smoke/006-transito.mjs` | uma consulta direta ao fragmento: 24/08/2026 + 15 dias úteis = `2026-09-14`; 29/08/2026 (sábado) + 1 dia útil = `2026-08-31` |
 | RN-002 | `smoke/006-transito.mjs` | fornecedor com `PRAZO_ENTREGA_DIAS = 0` e nota com `DT_EMISSAO = ''` devolvem `DT_PREVISAO = ''` |
 | RN-003 | `smoke/006-transito.mjs` + `tests/recebimento.test.mjs` | no servidor, com `hoje` forçado: previsão hoje−1 → `atrasada`, hoje+2 → `em_transito`, hoje+3 → `dentro_prazo`, recebida vence tudo; na tela, `situacaoDeTexto`/`rotuloSituacao`/`tomSituacao` para os cinco valores e para um valor desconhecido |
 | RN-004 | `smoke/006-transito.mjs` | coberto por C-007 (cancelada) e C-008 (duas filiais) |
 | RN-005 | `tests/recebimento.test.mjs` | `faixaDeAtraso`: 0 e 3 → `'ate3'`; 4 e 7 → `'4a7'`; 8 → `'mais7'` |
-| RN-006 | `smoke/006-transito.mjs` | rodada 1 move o T2; rodada 2 não move nada (`movidos = 0`) e o T2 continua em `faturamento` com um único movimento `sistema` |
-| RN-007 | `smoke/006-transito.mjs` | apagando `ALERTA_ATRASO_EM` da 90011 e rodando de novo no mesmo dia, `sgcEscAvisoInserir` é chamada e **não** cria linha nova (a `CHAVE` do dia já existe); `SGC_AVISO` continua com 5 linhas |
+| RN-006 | `smoke/006-transito.mjs` | rodada 1 move o T2 e o T7; rodada 2 não move nenhum dos dois e cada um continua com um único movimento `sistema`; o T1 (1 nota pendente) e um card em `transito` **sem nota** não movem em nenhuma das duas |
+| RN-007 | `smoke/006-transito.mjs` | apagando `ALERTA_ATRASO_EM` da 90011 e rodando de novo no mesmo dia, `sgcEscAvisoInserir` é chamada e **não** cria linha nova (a `CHAVE` do dia já existe): a contagem de `nf_atrasada` em `CARDS_006` continua 5 |
 | RN-008 | `smoke/006-transito.mjs` | 1 linha `nf_recebida` para o T2, com `PARA_USUARIO_ID = 0` |
-| RN-009 | `smoke/006-transito.mjs` | contador de execuções de `sgcWintNfEntradasConfirmadas` numa rodada com notas de 1015, 1042 e 999999 = **3**, com todas as notas de cada fornecedor no mesmo `numnotas` |
+| RN-009 | `smoke/006-transito.mjs` | o teste conta os `CODFORNEC` distintos que `sgcNfsRecebimentoPendente` devolveu e compara com o número de execuções de `sgcWintNfEntradasConfirmadas` registradas na rodada: são iguais, e as notas de um mesmo fornecedor chegam num `numnotas` só |
 | RN-010 | `smoke/006-transito.mjs` | com 45 pedidos pendentes semeados no próprio teste, `sgcNfsRecebimentoPendente({ cardId: 0 })` devolve notas de exatamente 30 pedidos, e todas as notas de cada um deles |
 | RN-011 | `smoke/006-transito.mjs` | a 90015 (pedido em `faturamento`) não aparece em `sgcNfsRecebimentoPendente` nem em `sgcNfsEmAtraso`; marcando o T4 como excluído (`EXCLUIDO_EM`), as notas dele somem das duas |
 | RN-012 | `tests/recebimento.test.mjs` | `permissoesDe` para as 5 personas × 4 níveis: `verNfsAtraso` liga para admin/analista/gestor/diretoria e desliga para comercial; `operarNf` desliga para diretoria, comercial e `READ_ONLY` |
@@ -506,6 +563,10 @@ reescreve `INTERVAL <literal> DAY`, e a previsão soma uma **coluna** de dias. V
 - **Backend:** `backend/simulator/smoke/006-transito.mjs`, um `teste()` por linha, título
   começando pelo id. A consulta ao WinThor assere **contagem > 0** (vazio não é verde): o teste
   de C-006 confere que `sgcWintNfEntradasConfirmadas(1015, '90005')` devolve ≥ 1 linha.
+- **Nada de total absoluto** (R-045): o seed exporta `CARDS_006` (os ids de T1…T7, E5 e F6) e
+  toda asserção sobre listagem global ou sobre contagem de avisos ou recebe esse recorte, ou é
+  comparada com um `SELECT` que o próprio teste faz no banco, ou é medida por diferença antes e
+  depois da rodada. O banco do smoke é compartilhado por todas as suítes.
 - **Frontend:** `frontend/tests/recebimento.test.mjs` com `node --test` sobre `src/lib/`.
 - **Seed extra para o smoke:** os 45 pedidos de RN-010 são inseridos pelo próprio teste (e não
   pelo seed) para não inflar o simulador de tela; o resto nasce em `seed/006-transito.mjs`.
@@ -518,8 +579,10 @@ reescreve `INTERVAL <literal> DAY`, e a previsão soma uma **coluna** de dias. V
 **Consome da 005 (notas fiscais e faturamento):**
 
 - `SGC_NF` — todas as colunas da tabela do modelo; escreve `DT_RECEBIMENTO` e `ALERTA_ATRASO_EM`.
-  Contrato pedido à 005: ao vincular uma nota que **já entrou** no ERP, gravar `DT_RECEBIMENTO`
-  igual a `DT_ENTRADA` (R-026) — assim a nota nasce recebida e o cron não a procura de novo.
+  Contrato fixado em R-038 e na D-012 da 005: ao vincular uma nota que **já entrou** no ERP,
+  `sgcNfVincular` grava `DT_RECEBIMENTO = DT_ENTRADA` — a nota nasce recebida e o cron não a
+  procura de novo. É por causa dele que a conclusão do trânsito varre todos os pedidos em
+  trânsito, e não só os tocados na rodada (D-014).
 - `sgcEscAvisoInserir` (por id, R-023) — input `{ idCard, tipo, chave, paraUsuarioId, paraPersona, texto, criadoEm }`,
   idempotente por `CHAVE`. Esta spec grava `nf_atrasada` e `nf_recebida` com `paraUsuarioId: 0`
   e `paraPersona: ''`.
@@ -543,9 +606,11 @@ fragmentos no `sgcPodeMover`.
 `faturamento`), `sgcPodeMover` (o gancho que C-019 exercita), `lib/permissoes.ts` e o
 `usePedido()` do `PedidoProvider` (persona e `podeEditar` já carregados).
 
-**Consome da base (S2):** `frontend/src/lib/csv.ts` — `textoCsv(cabecalho, linhas)` e
-`baixarCsv(nome, texto)`, compartilhados com a 005 (decisão 3 do 000); `lib/permissoes.ts` com
-as chaves de R-028; o item de menu **Fiscal › NFs em atraso** no `AdminLayout`.
+**Consome da base (S2):** tudo que nasce antes do fan-out — as colunas de `SGC_NF` no
+`setup-backend.mjs`, `backend/lib/dias-uteis.mjs`, os shims do dialeto, `CHECK_INPUT`,
+`frontend/src/lib/csv.ts` (`textoCsv`, `baixarCsv`, compartilhados com a 005, R-037),
+`lib/permissoes.ts` com as chaves de R-028 e o item **Fiscal › NFs em atraso** na constante
+`MENU` do mesmo arquivo. Esta spec **não** cria nem altera nenhum desses arquivos.
 
 **Consome da lib 1.4.0:** `kbCardMover` com `movidoPor` (int) e `origem: 'sistema'`, válidos só
 sem sessão (R-021); `kbNotaRegistrar` com `usuarioId`.
@@ -557,9 +622,10 @@ sem sessão (R-021); `kbNotaRegistrar` com `usuarioId`.
 - `SGC_NF.DT_RECEBIMENTO` preenchido — quem quiser saber se a mercadoria chegou lê essa coluna,
   sem reconsultar o ERP.
 - `AbaRecebimento` — `AbaExtra` pronta para o integrador ligar em `abasExtras` do `QuadroPage`
-  (R-029), com `contagem` opcional = notas pendentes.
-- `NfsAtrasoPage` + a rota `/nfs-em-atraso` e o item **Fiscal › NFs em atraso** do menu, que a
-  base liga com a chave `verNfsAtraso`.
+  (R-029), **sem** `contagem` (R-049).
+- `NfsAtrasoPage` + a rota `/nfs-em-atraso`; o item **Fiscal › NFs em atraso** entra na constante
+  `MENU` de `lib/permissoes.ts` (é lá que o menu vive — o `AdminLayout` só resolve o ícone por
+  rota), com `exige: 'verNfsAtraso'`.
 - Para `lib/permissoes.ts` (base, S2), os valores desta spec: `verNfsAtraso` = admin, analista,
   gestor, **diretoria** (lê), comercial não; `operarNf` (chave da 005) = admin, analista, gestor,
   zerada por `READ_ONLY` — é ela que governa "Verificar entrada" e "Sincronizar".
@@ -582,12 +648,15 @@ sem sessão (R-021); `kbNotaRegistrar` com `usuarioId`.
 | D-011 | A aba consulta só quando é **aberta**, e não entra no `sgcPedidoCarregar` da 002 | Trazer as notas junto da capa, como itens e alertas | Abrir card já custa 3 execuções (D-01, dívida aberta). Notas só interessam da fase Enviado em diante; carregá-las sempre pagaria o custo em todo pedido em Análise. Trocar de aba não recarrega nada |
 | D-012 | O CSV é montado na tela, a partir das linhas já carregadas, com `textoCsv`/`baixarCsv` de `lib/csv.ts` (base, S2) | Uma SF que devolva o CSV pronto, ou uma consulta sem paginação; ou cada tela escrever o seu escape | Exportar o que está na tela é o que o usuário espera, custa zero execução e mantém as colunas iguais às da tabela por construção. O escape de aspas e separador é idêntico ao da 005, então mora uma vez só (decisão 3 do 000) |
 | D-013 | Uma SF (`sgcRecebimentoSincronizar`) serve ao cron e aos dois botões, com `cardId` decidindo o alcance | Uma SF para o cron e outra para a verificação sob demanda | É o desenho do legado e a única forma de garantir que o botão e o cron não divirjam; o `cardId` já neutraliza o lote de 30 |
+| D-014 | A conclusão do trânsito varre **todo** pedido em `transito` com nota e zero pendência, e não só os pedidos tocados na rodada (uma consulta a mais, por `runQueryMitra`) | Mover só o que a rodada tocou (o desenho do legado) | Nota vinculada depois de a entrada existir no ERP nasce recebida (D-012 da 005): ela nunca aparece entre as pendentes, então o pedido nunca seria "tocado" e ficaria preso em trânsito com 100 % recebido. O legado não tinha esse caminho porque lá a NF automática e o recebimento nasciam na mesma rotina (C-023, achado C-3 da revisão cruzada) |
+| D-015 | O JS chama `sgcNfsRecebimentoPendente` **por id** (1 execução por rodada), e não repete a SQL inline num `runQueryMitra` | Consulta inline, como o lote do cron da 004 | Aqui a consulta **é** uma SF do contrato do 000, chamada também pelo botão e exercitada pelo `sim:check`: repetir o texto criaria duas versões da mesma regra de previsão. Uma execução a mais por rodada de 2 h é barata; as outras leituras do JS continuam em `runQueryMitra` |
 
 ## Riscos
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| `somarDiasUteis`/`somarDiasCorridos` (R-025) chegarem só com `n` literal, ou o shim `INTERVAL` do simulador não aceitar coluna | a previsão não compila no `sim:check` e nenhuma consulta desta spec roda | o contrato está escrito em *Contratos de backend* e em *Dependências*; a task T-001 é conferir a assinatura antes de escrever a primeira SQL, e o item do dialeto (`WEEKDAY`, `INTERVAL <expressão>`, `CAST AS CHAR`) está listado para a base |
+| `somarDiasUteis`/`somarDiasCorridos` (R-038) chegarem só com `n` literal, ou o shim `INTERVAL` do simulador não aceitar coluna | a previsão não compila no `sim:check` e nenhuma consulta desta spec roda | o contrato está escrito em *Contratos de backend* e em *Dependências*; a task T-001 é conferir a assinatura antes de escrever a primeira SQL, e o único item de dialeto que esta spec pede — `DATE_ADD(col, INTERVAL <expressão> DAY)` — está listado para a base |
+| Cards de outras suítes entrarem nas listagens e nas rodadas desta spec (NF 7004 da 005, os cards com NF do `criarPedido()` da 002, R-044) | asserção de total quebra sem nada estar errado; a rodada desta spec move um card alheio | nenhuma asserção usa total absoluto (R-045): recorte por `CARDS_006`, contagem feita no próprio teste ou diferença antes/depois; a suíte da 006 roda depois da 005 no `smoke.mjs`; e os pedidos deste seed nascem com `DT_ENVIO` vazio, fora de `/faturamentos-pendentes` |
 | A plataforma propagar a sessão na chamada aninhada (D-04, dívida aberta) | `movidoPor`/`origem: 'sistema'` seriam ignorados: o pedido movido pelo botão apareceria como movido por quem clicou, e o movimento passaria pelo gancho `podeMover` | o efeito visível é só a autoria do movimento; `transito>faturamento` é par liberado para admin/analista/gestor, que são exatamente as personas que podem clicar. O cron continua sem sessão. Item da verificação no sandbox |
 | Fornecedor com centenas de notas pendentes estourar `IN (…)` no Oracle (ORA-01795) | a consulta do fornecedor falha e as notas dele não atualizam | o JS fatia `numnotas` em 500 e soma os resultados — o mesmo teto da 003 |
 | Duas notas do mesmo fornecedor com o mesmo `NUMNOTA` e séries diferentes | recebimento gravado na nota errada | o casamento usa `NUMNOTA` **e**, quando a nota já o tem, `NUMTRANSENT`; na falta dos dois, a filial do pedido desempata (RN-004). Registrado como limite conhecido: série não entra no `IN` porque o legado provou que ela vem vazia em parte das notas |
@@ -595,29 +664,24 @@ sem sessão (R-021); `kbNotaRegistrar` com `usuarioId`.
 | ERP fora do ar por uma janela inteira | notas ficam pendentes e alertam atraso sem ter atrasado de fato | nada é sobrescrito e a rodada seguinte corrige; o alerta é de **atraso da entrega**, que não depende do ERP estar no ar — a nota realmente não chegou |
 | Fuso do cron lido como horário local em vez de UTC | a janela cobriria 3h–17h de Brasília e as entradas do fim da tarde só apareceriam no dia seguinte | a expressão é `0 25 9-23/2 * * *`, já convertida (decisão 1 do 000, 2026-09-15); o smoke não cobre agendamento, então a conferência é no sandbox, na primeira publicação |
 
-## Pedidos ao 000 — respondidos (2026-09-15)
+## Pedidos ao 000 — respondidos, e o que a revisão cruzada fechou
 
-Os quatro pedidos desta spec foram aceitos pelo 000 e já estão aplicados acima. Ficam
-registrados aqui porque mudam contrato de outras specs:
-
-1. **Janela do cron.** `sgcRecebimentoSincronizar` passa de `0 25 6-20/2 * * *` para
-   **`0 25 9-23/2 * * *`** — a tabela do 000 diz que os crons são em UTC, e 6h–20h UTC seria
-   3h–17h de Brasília, não o horário comercial que a regra herdada pede. Os outros dois crons da
-   onda (`0 0 11 * * *` e `0 5 11 * * *` = 8h de Brasília) confirmam a leitura em UTC.
-2. **Linhas `PC*` por spec**, com faixa de `NUMNOTA` reservada: 005 abaixo de 90000, 006 em
-   90001–90015, 007 não semeia nota fiscal. O DDL das `PC*` continua do integrador (R-027);
-   o R-017 passa a valer por **linha**, não por tabela.
-3. **`frontend/src/lib/csv.ts` na base (S2)**, como `dias-uteis.ts`:
-   `textoCsv(cabecalho: string[], linhas: (string | number)[][]): string` e
-   `baixarCsv(nome: string, texto: string): void`. A 005 (`/faturamentos-pendentes`) e a 006
-   (`/nfs-em-atraso`) exportam com a mesma mecânica; cada tela só decide as colunas.
-4. **Permissões**: `operarNf` (R-028) governa também "Verificar entrada no WinThor" e
-   "Sincronizar com o WinThor"; `verNfsAtraso` inclui a **diretoria** como leitura.
-
-Assinaturas que esta spec assumiu e o 000 repassou à 005:
-`sgcEscAvisoInserir { idCard, tipo, chave, paraUsuarioId, paraPersona, texto, criadoEm }`;
-`somarDiasUteis(col, n)` / `somarDiasCorridos(col, n)` com `n` literal **ou** coluna;
+Os quatro pedidos desta spec viraram decisão do 000 e já estão aplicados acima: a janela do cron
+(**R-035**, `0 25 9-23/2 * * *`, 6h25–20h25 de Brasília), as linhas `PC*` por spec com faixa de
+`NUMNOTA` (**R-036**), `frontend/src/lib/csv.ts` na base (**R-037**) e as permissões — `operarNf`
+governando "Verificar entrada"/"Sincronizar" e `verNfsAtraso` com a diretoria como leitura
+(**R-038**). As assinaturas que esta spec assumiu também estão fixadas em R-038:
+`sgcEscAvisoInserir { idCard, tipo, chave, paraUsuarioId, paraPersona, texto, criadoEm }`,
+`somarDiasUteis(col, n)` / `somarDiasCorridos(col, n)` com `n` literal ou coluna, e
 `DT_RECEBIMENTO = DT_ENTRADA` na vinculação de nota que já entrou no ERP.
+
+A revisão cruzada acrescentou, e este plan aplica: **R-045** (nenhuma asserção de total literal
+sobre listagem global — §Testes e §Simulador), **R-046** (blocos de mover só no servidor, sem
+`antesDeMover`/`podeMover` novos — §Superfície) e **R-049** (sem `contagem` na aba — §Superfície).
+
+**Uma linha a corrigir em R-036:** o teto da faixa desta spec passa de `90015` para **`90017`**.
+O cenário C-023, que nasceu da própria revisão cruzada (achado C-3), acrescentou duas notas ao
+seed; o piso 90000, que é o que separa da 005, não muda, e a 007 continua sem semear nota.
 
 ## Complexity Tracking
 
