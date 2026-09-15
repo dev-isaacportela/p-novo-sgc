@@ -138,3 +138,23 @@ export function recorte(
 export function diaNoFuso(instante: number): string {
   return new Date(instante + FUSO_MINUTOS * 60000).toISOString().slice(0, 10);
 }
+
+/**
+ * Depois de `sgcEscAgendaInserir` (SQL guardada, sem retorno de id — a
+ * plataforma só devolve linhas de SELECT), a tela relista pelo trio
+ * fornecedor/filial/data e precisa achar QUAL linha é a que acabou de
+ * nascer. Pegar o maior ID é errado: se já existir um agendamento antigo do
+ * mesmo trio (fornecedor reagendado na mesma data, por exemplo) e a guarda
+ * recusar o insert (fornecedor inativo, perfil sem permissão…), o maior ID
+ * continua sendo o antigo — e a tela agiria sobre ele como se fosse novo
+ * (achado A5 da revisão). `CRIADO_EM` é o instante exato que esta chamada
+ * enviou, então só ele identifica com certeza a linha que ESTA gravação
+ * criou; nenhuma bate, é sinal de que o insert foi recusado.
+ */
+export function localizarPorCriadoEm(
+  candidatos: { ID: number | string; CRIADO_EM?: string | null }[],
+  criadoEm: string,
+): number | null {
+  const achado = candidatos.find((c) => String(c.CRIADO_EM ?? '') === criadoEm);
+  return achado ? Number(achado.ID) : null;
+}

@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   proximaOcorrencia, situacao, periodoPadrao, periodoDaOcorrencia,
-  validarAgendamento, recorte, diaNoFuso,
+  validarAgendamento, recorte, diaNoFuso, localizarPorCriadoEm,
 } from '../src/lib/agenda.ts';
 import { permissoesDe } from '../src/lib/permissoes.ts';
 
@@ -108,4 +108,17 @@ test('recorte: os quatro modos do processamento manual (D-007, D-008)', () => {
   assert.deepEqual(recorte('mes', {}, '2026-09-15'), { modo: 'mes', dataInicio: '2026-09-01', dataFim: '2026-09-30', idAgenda: 0 });
   assert.deepEqual(recorte('', {}, '2026-09-15'), { modo: 'mes', dataInicio: '2026-09-01', dataFim: '2026-09-30', idAgenda: 0 }, 'modo desconhecido cai em mes, nunca a base inteira');
   assert.ok('erro' in recorte('intervalo', { dataInicio: '2026-09-16', dataFim: '2026-09-14' }, '2026-09-15'), 'intervalo invertido é recusado');
+});
+
+test('A5: localizarPorCriadoEm acha a linha pelo CRIADO_EM exato, não pelo maior ID', () => {
+  const candidatos = [
+    { ID: 4, CRIADO_EM: '2026-09-10T09:00:00' }, // agendamento antigo do mesmo trio (fornecedor/filial/data)
+    { ID: 91, CRIADO_EM: '2026-09-15T14:30:05' }, // o que esta chamada acabou de gravar
+  ];
+  assert.equal(localizarPorCriadoEm(candidatos, '2026-09-15T14:30:05'), 91);
+  // Insert recusado pela guarda (fornecedor inativo, perfil sem permissão…):
+  // nenhuma linha nova nasceu, então nada bate no CRIADO_EM desta chamada —
+  // NÃO deve devolver o ID 4 (o maior ID) como se fosse o recém-criado.
+  assert.equal(localizarPorCriadoEm(candidatos, '2026-09-15T14:31:00'), null);
+  assert.equal(localizarPorCriadoEm([], '2026-09-15T14:30:05'), null);
 });

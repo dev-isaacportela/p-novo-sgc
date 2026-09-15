@@ -293,14 +293,14 @@ export async function suite(ctx) {
   await teste('C-016/RF-016/RN-012: o envio grava a data real e guarda a planejada original uma vez só', async () => {
     const planejadaOriginal = agendaPorId(6).DATA_ANALISE;
     const primeiroEnvio = comDias(-1);
-    await chamar('sgcEscAgendaEnvio', { idCard: 9006, dtEnvio: primeiroEnvio }, 0);
+    await chamar('sgcEscAgendaEnvio', { idCard: 9006, dtEnvio: primeiroEnvio, usuarioId: U.ana }, 0);
     let a6 = agendaPorId(6);
     assert.equal(a6.DATA_ENVIO_REAL, primeiroEnvio);
     assert.equal(a6.DATA_PLANEJADA_ORIGINAL, planejadaOriginal);
     assert.equal(a6.DATA_ANALISE, primeiroEnvio);
 
     const segundoEnvio = hoje;
-    await chamar('sgcEscAgendaEnvio', { idCard: 9006, dtEnvio: segundoEnvio }, 0);
+    await chamar('sgcEscAgendaEnvio', { idCard: 9006, dtEnvio: segundoEnvio, usuarioId: U.ana }, 0);
     a6 = agendaPorId(6);
     assert.equal(a6.DATA_PLANEJADA_ORIGINAL, planejadaOriginal, 'a segunda chamada não sobrescreve a planejada original');
     assert.equal(a6.DATA_ENVIO_REAL, segundoEnvio);
@@ -411,5 +411,33 @@ export async function suite(ctx) {
     } finally {
       byId.get = getOriginal;
     }
+  });
+
+  /* ─────────────── A1 (revisão adversarial) ─────────────── */
+
+  await teste('A1: as quatro escritas internas recusam usuarioId de perfil comercial (Leo)', async () => {
+    const criadoEm = agoraIso();
+
+    const idPendente = inserirAgendaTeste({ DATA_ANALISE: comDias(-1), RECORRENCIA: 'nenhuma', CRIADO_POR: U.ana, CRIADO_EM: criadoEm });
+    await chamar('sgcEscAgendaProcessada', { id: idPendente, idCard: 999999, processadoEm: agoraIso(), usuarioId: U.leo }, 0);
+    assert.equal(agendaPorId(idPendente).PROCESSADO_EM, null, 'Leo (comercial) não deveria conseguir marcar como processado');
+
+    const antesTotal = db.prepare('SELECT COUNT(*) AS N FROM SGC_AGENDA').get().N;
+    await chamar('sgcEscAgendaProximaInserir', {
+      codfornec: 1015, fornecedor: 'Fresenius Kabi Brasil Ltda', codfilial: '1', filial: 'Benenutri Matriz',
+      dataAnalise: comDias(20), periodoInicio: comDias(-25), periodoFim: comDias(20),
+      recorrencia: 'nenhuma', dataLimiteRecorrencia: '', observacao: '', criadoPor: U.ana, criadoEm: agoraIso(), usuarioId: U.leo,
+    }, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) AS N FROM SGC_AGENDA').get().N, antesTotal, 'Leo não deveria conseguir inserir a próxima ocorrência');
+
+    await chamar('sgcEscAgendaParticipanteCopiar', { idOrigem: 1, idNova: idPendente, criadoEm: agoraIso(), usuarioId: U.leo }, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) AS N FROM SGC_AGENDA_PARTICIPANTE WHERE ID_AGENDA = ?').get(idPendente).N, 0, 'Leo não deveria conseguir copiar participantes');
+
+    const idCardTeste = 888888;
+    const idEnvioTeste = inserirAgendaTeste({
+      DATA_ANALISE: comDias(-5), RECORRENCIA: 'nenhuma', PROCESSADO_EM: agoraIso(), ID_CARD_GERADO: idCardTeste, CRIADO_POR: U.ana, CRIADO_EM: agoraIso(),
+    });
+    await chamar('sgcEscAgendaEnvio', { idCard: idCardTeste, dtEnvio: comDias(0), usuarioId: U.leo }, 0);
+    assert.equal(agendaPorId(idEnvioTeste).DATA_ENVIO_REAL, null, 'Leo não deveria conseguir sincronizar o envio');
   });
 }

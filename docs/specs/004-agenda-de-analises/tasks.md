@@ -37,7 +37,7 @@
 - [x] **T-036** `[P]` — Confirmação de cancelamento (fornecedor, filial e data no texto) e recarga da lista, sem aviso passageiro (RF-013) → `frontend/src/pages/agenda/AgendaPage.tsx`
 - [x] **T-037** — Consumir de `permissoesDe(persona, acesso)` os campos `agendar` (`admin`, `analista`, `gestor`) e `cancelarAgendamento` (`admin`, `gestor`, `diretoria`) que a 002 acrescenta à interface `Permissoes`; a agenda não define matriz própria (B-02, RF-017, RN-011) → consome `frontend/src/lib/permissoes.ts` (arquivo da 002)
 - [x] **T-038** — Pedir ao integrador: rota `/agenda` e item de menu "Agenda" no módulo Compras, escondido para `comercial` conforme P-03 → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx` (arquivos compartilhados)
-- [ ] **T-039** — Pedir à spec 002: `sgcEnvioIndustriaRegistrar` chamando `sgcEscAgendaEnvio` por id com `{ idCard, dtEnvio }` ao registrar o envio (RF-016, RN-012) → `backend/add-006-*.mjs` (arquivo da 002)
+- [ ] **T-039** — A integração já fez `sgcEnvioIndustriaRegistrar` chamar `sgcEscAgendaEnvio` por id com `{ idCard, dtEnvio }` (`backend/add-005-quadro-compras.mjs:~588`). Pendente (A1 da revisão adversarial): `sgcEscAgendaEnvio` passou a exigir `{{usuarioId}}` (guarda de persona — antes qualquer perfil business gravava direto); falta acrescentar `usuarioId: inteiro(ctx.USUARIO_ID)` nesse `escrever(...)`, mesmo valor que a 002 já resolve para `kbNotaRegistrar` duas linhas abaixo. Sem isso a sincronização da agenda ao registrar envio fica sempre recusada pela guarda (falha silenciosa: `agendaSincronizada = false`, o envio em si continua ok) → `backend/add-005-quadro-compras.mjs` (arquivo da 002)
 
 ## Testes
 

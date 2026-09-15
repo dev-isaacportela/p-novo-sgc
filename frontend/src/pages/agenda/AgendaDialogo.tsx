@@ -7,7 +7,7 @@ import { X as IconeRemover } from 'lucide-react';
 
 import { linhas, linha, acao } from '@/lib/mitra-api';
 import { hojeIso } from '@/lib/formato';
-import { periodoPadrao, validarAgendamento, type Recorrencia } from '@/lib/agenda';
+import { localizarPorCriadoEm, periodoPadrao, validarAgendamento, type Recorrencia } from '@/lib/agenda';
 import { DatePicker } from '@/components/DatePicker';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
@@ -40,20 +40,22 @@ const FORM_VAZIO = {
 
 /**
  * `sgcEscAgendaInserir` é SQL puro e não devolve o id gerado (a plataforma só
- * devolve linhas de SELECT). Sem "id do último insert" disponível, localiza o
- * agendamento recém-gravado pelo trio que acabou de submeter e fica com o
- * maior ID entre os que baterem — é o que acabou de nascer, mesmo se houver
- * outro igual mais antigo.
+ * devolve linhas de SELECT). Localiza o agendamento recém-gravado pelo trio
+ * que acabou de submeter e pelo `criadoEm` exato desta chamada — NÃO pelo
+ * maior ID: um agendamento antigo do mesmo trio (mesmo fornecedor/filial/
+ * data) tem ID maior que zero mesmo quando o insert é recusado pela guarda
+ * (fornecedor inativo, perfil sem permissão), e pegar o maior ID acabaria
+ * sobrescrevendo os participantes dele (achado A5 da revisão). `null` aqui
+ * significa "o insert não gravou nada".
  * ponytail: SF dedicada devolvendo o id evitaria a segunda chamada; adicionar
  * se este padrão se repetir em outra tela.
  */
-async function localizarRecemCriado(codfornec: number, codfilial: string, dataAnalise: string): Promise<number | null> {
+async function localizarRecemCriado(codfornec: number, codfilial: string, dataAnalise: string, criadoEm: string): Promise<number | null> {
   const candidatos = await linhas('sgcAgendaListar', {
     codfornec, codfilial, dataInicio: dataAnalise, dataFim: dataAnalise,
     situacao: '', hoje: hojeIso(), limite: 50, offset: 0,
   });
-  const maiorId = candidatos.reduce((maior, r) => Math.max(maior, Number(r.ID) || 0), 0);
-  return maiorId || null;
+  return localizarPorCriadoEm(candidatos as { ID: number; CRIADO_EM?: string | null }[], criadoEm);
 }
 
 export function AgendaDialogo({ open, onOpenChange, idAgenda, onSalvo }: AgendaDialogoProps) {
@@ -180,13 +182,15 @@ export function AgendaDialogo({ open, onOpenChange, idAgenda, onSalvo }: AgendaD
         await acao('sgcEscAgendaAtualizar', { ...payload, id, atualizadoEm: agora });
       } else {
         await acao('sgcEscAgendaInserir', { ...payload, criadoEm: agora });
-        id = await localizarRecemCriado(form.codfornec, form.codfilial, form.dataAnalise);
-      }
-      if (id != null) {
-        await acao('sgcEscAgendaParticipanteLimpar', { idAgenda: id });
-        for (const participante of participantes) {
-          await acao('sgcEscAgendaParticipanteInserir', { idAgenda: id, usuarioId: participante.ID, criadoEm: agora });
+        id = await localizarRecemCriado(form.codfornec, form.codfilial, form.dataAnalise, agora);
+        if (id == null) {
+          setErro('O agendamento não foi gravado: confira o fornecedor (ativo?) e o seu perfil.');
+          return;
         }
+      }
+      await acao('sgcEscAgendaParticipanteLimpar', { idAgenda: id });
+      for (const participante of participantes) {
+        await acao('sgcEscAgendaParticipanteInserir', { idAgenda: id, usuarioId: participante.ID, criadoEm: agora });
       }
       onSalvo();
     } catch {
