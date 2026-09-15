@@ -1,0 +1,21 @@
+{
+	"name": "p-novo-sgc-backend",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"setup": "node setup-backend.mjs",
+		"publish:001": "node add-001-kanban.mjs",
+		"publish:002": "node add-002-perfil-acesso.mjs",
+		"sync:function-map": "node sync-server-function-map.mjs",
+		"sim": "node simulator/server.mjs",
+		"sim:seed": "node simulator/seed-cli.mjs",
+		"sim:check": "node simulator/check.mjs",
+		"sim:smoke": "node simulator/smoke.mjs",
+		"test": "npm run sim:check && npm run sim:smoke"
+	},
+	"dependencies": {
+		"@benenutri/mitra-kanban": "^1.2.0",
+		"dotenv": "*",
+		"mitra-sdk": "^1.0.58"
+	}
+}
