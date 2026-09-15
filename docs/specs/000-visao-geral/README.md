@@ -375,6 +375,21 @@ Revisão feita sobre `develop` depois da S4 (integração das três features), c
 | A-16 | 000 dizia `sgcFaturamentoMonitorar 0 0 11`; o código e o plan da 005 usam `0 2 11` (não disputar o minuto com `sgcNfDetectar`). | 000 corrigido. |
 | A-17 | Comentário do `App.tsx` dizia que as telas da onda 2 eram stub. | Reescrito. |
 | A-15 | R-037 listava `/bo` entre os consumidores de `lib/csv.ts` sem exportação; a tabela de telas dava a `/notas-fiscais` "busca híbrida" que é do diálogo da aba. | `/bo` ganha "Exportar CSV" (fix/007); a linha de `/notas-fiscais` no 000 descreve o que existe. |
+| A-1 | `sgcNfDetectar` só pulava nota já vinculada: sugestão existente era reprocessada a cada rodada (nota no histórico de 30 em 30 min, contador mentindo). | Uma consulta traz vinculadas e sugestões do card; nota já sugerida é pulada; só o insert real conta e registra nota (2ª rodada = +0). |
+| A-2 | Escrita por id guardada pela persona do responsável do card casa 0 linhas e volta `COMPLETED`: os crons de cobrança (005), recebimento (006) e B.O. (007) contavam sucesso sem gravar (nota nunca recebida, pedido preso em Trânsito, aviso repetido). | Cada cron relê a linha depois da escrita e só conta o que releu; o resto vai a `erros[]` com o motivo ("responsável sem persona operante"). Smokes com `leo` (comercial) como 1º responsável nas três specs. |
+| A-3 | `sgcEscOcorrenciaDecidir` com `id = 0` e `modo = 'individual'` decidia todas as pendentes do card, inclusive divergentes, sem justificativa. | `(({{id}} > 0 AND ID = {{id}}) OR ('{{modo}}' = 'conformes' AND RESULTADO = 'conforme'))`. |
+| A-4 | Cobrança enviada não virava contato (`SGC_CONTATO_FATURAMENTO` vazio; "Sem contato" mentindo). | O `DialogoCobranca` grava `sgcEscContatoInserir` depois do ok, para a aba e para `/faturamentos-pendentes`. |
+| A-5 | Canal `outro` na tela e fora do `IN` da escrita: contato sumia sem aviso (D-03). | `CANAIS_CONTATO` = a lista de R-026, com teste que espelha o `IN`. |
+| A-6 | Escritas de previsão e documento de B.O. sem condição de fase nem de dono: previsão gravada em card na Análise; RESTRICTED em card alheio. | Guarda de fase (`faturamento`/`bo`) e dono no mesmo `EXISTS` da guarda de persona. |
+| A-7 | Espelho da capa: tela decidia por `nfs.length > 0`, cron por `VL_FATURADO > 0` — NF com valor zero fazia os dois se sobrescreverem. | `temNfNaCapa()` em `lib/faturamento.ts`, usado pelos dois caminhos. |
+| A-8 | Telas Fiscal sem porteiro de rota: comercial lia tudo pela URL. | Bloco de `SegurancaPage` em `/notas-fiscais`, `/faturamentos-pendentes` e `/nfs-em-atraso`. |
+| A-9 | Cron da 005 reenviava responsáveis `ORDER BY R.ID` e o `kbCardAtualizar` regravava a ordem: "quem processa" mudava. | `ORDER BY R.ORDEM, R.ID`. |
+| A-10 | Detecção de NF não varria a fase `bo` (R-041 tira do `bo` só o aviso). | `FASES_NF` nas quatro fases; seed com a nota 7007. |
+| A-11 | `texto()` dobrava a aspa antes de o runtime dobrar: `SANT'ANNA` gravava `SANT''ANNA`. | Escape só dentro de `lote()` (`aspas()`); escalares crus. Teste com apóstrofo nas 005 e 007. |
+| A-18 | JS da 006 devolvia `{ ok:false, error }`; 005/007 `erro`. | `erro` em todo lugar (servidor e telas da 006). |
+| D-15 | `chamar()` de 008/010 não conferia `executionStatus === 'FAILED'`. | Lança em `FAILED` (o simulador nunca produz o ramo; vale na plataforma). |
+| D-21 | `Recebimento.tsx` comparava o mesmo objeto antes e depois do `await`. | Decide `recarregar()` só por `movidos > 0`. |
+| R-050 | Correção do usuário: uma aba por assunto (Itens, Alertas, Notas fiscais, Recebimento, B.O.) em vez do conteúdo variar com a fase, como no legado. | Lib 1.5.0 (`conteudoDaFase`, spec 015) e `lib/conteudo-da-fase.ts`; nenhuma `abasExtras`. |
 
 **Aberto — verificar no sandbox na primeira publicação**
 
