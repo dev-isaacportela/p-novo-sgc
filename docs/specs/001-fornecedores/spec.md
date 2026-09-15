@@ -1,6 +1,6 @@
 # Spec: Fornecedores — cadastro do ERP e parametrização de compra
 
-**ID:** 001-fornecedores · **Status:** em revisão · **Data:** 2026-09-15
+**ID:** 001-fornecedores · **Status:** aprovada · **Data:** 2026-09-15 (pendências fechadas em R-001 a R-004)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -30,6 +30,8 @@ o pedido mínimo deste fornecedor, quando e de quanto para quanto".
 | diretoria | mesma parametrização, principalmente prazo de pagamento e pedido mínimo | mensal |
 | admin (TI) | destravar parametrização, corrigir CNPJ e documentos | eventual |
 | analista (compradora) | consultar o que está parametrizado antes de montar o pedido | diária |
+
+Quem é do comercial não vê este módulo (P-03, R-001).
 
 ## Cenários
 
@@ -116,10 +118,12 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-010 | O sistema DEVE deixar enviar documentos do fornecedor pela própria tela, guardando nome, tipo (Documento ou Modelo de envio de pedido), endereço do arquivo e vencimento | documento enviado aparece na lista com o vencimento 31/03/2027 e abre pelo endereço guardado | must |
 | RF-011 | Salvar DEVE substituir a parametrização inteira do fornecedor (parâmetros, filiais, linhas, contatos, faixas e documentos); dado recusado não grava nada | C-005 e C-004 | must |
 | RF-012 | O sistema DEVE mostrar o histórico de alterações campo a campo, do mais recente para o mais antigo, com campo, valor anterior, valor novo, quem e quando (últimas 20 alterações) | após C-006, as duas primeiras linhas do histórico são "Pedido mínimo 5000,00 → 8000,00" e "Validade mínima 120 dias → 90 dias" | must |
-| RF-013 | Só admin, gestor e diretoria DEVEM conseguir salvar; a analista vê a parametrização em modo leitura, e a recusa acontece também no servidor | C-003, com a recusa reproduzida quando a chamada não passa pela tela | must |
+| RF-013 | Só admin, gestor e diretoria DEVEM conseguir salvar; a analista vê a parametrização em modo leitura, a recusa acontece também no servidor, e quem é do comercial não enxerga o módulo | C-003, com a recusa reproduzida quando a chamada não passa pela tela; o menu não mostra "Fornecedores" para o comercial | must |
 | RF-014 | O sistema DEVE informar qual faixa e quais opções de prazo valem para um valor de pedido | pedido de R$ 20.000,00 na linha "Nutrição Parenteral" cai na faixa 20.000–45.000 e devolve a opção `30/45`; R$ 50.000,00 devolve `30/45/60` e `30/60` | must |
 | RF-015 | Prazo de SLA não preenchido DEVE ser exibido como o padrão do sistema: 1 dia útil para análise e 5 para faturamento | campo vazio mostra "padrão do sistema (1 dia útil)" e "padrão do sistema (5 dias úteis)" | should |
 | RF-016 | Toda recusa DEVE citar o campo ou a linha que a causou | "Pedido mínimo deve ser maior que zero."; "E-mail inválido no contato da linha Nutrição Enteral." | must |
+| RF-017 | A lista de documentos DEVE marcar como "vencido" o documento cujo vencimento já passou | documento com vencimento 31/03/2027 aparece marcado em 01/04/2027 e não em 31/03/2027; documento sem vencimento nunca é marcado | must |
+| RF-018 | A situação do fornecedor (ativo/inativo) DEVE ficar visível na lista e editável na parametrização | marcar o 1088 como inativo tira-o do filtro "ativos" e o mantém na lista sem filtro | must |
 
 > `must` = sem isso a feature não entrega valor. `should` = entra se couber.
 > `could` = registrado, não prometido.
@@ -161,8 +165,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-002** — CNPJ tem 14 dígitos e dígitos verificadores válidos; qualquer
   outra coisa é recusada (FO-02).
 - **RN-003** — Pedido mínimo é maior que zero (FO-02).
-- **RN-004** — A janela de fechamento usa dois dias entre 1 e 31 (FO-02).
-  `[NEEDS CLARIFICATION: a janela pode virar o mês (ex.: do dia 28 ao 5)? Se não puder, o dia inicial nunca é maior que o final e a regra ganha essa checagem.]`
+- **RN-004** — A janela de fechamento usa dois dias entre 1 e 31. A janela **pode
+  virar o mês** (do dia 28 ao 5), como no SGC anterior: não se exige que o dia
+  inicial seja menor que o final (FO-02, R-003).
 - **RN-005** — Prazo de SLA não preenchido vale o padrão do sistema: 1 dia útil
   para a análise e 5 dias úteis para o faturamento (FO-02).
 - **RN-006** — O prazo de entrega é um número de dias mais o tipo de contagem,
@@ -182,8 +187,15 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-011** — Documento tem tipo "Documento" ou "Modelo de envio de pedido",
   nome, endereço do arquivo e vencimento opcional; o arquivo enviado fica em
   endereço público e a tela avisa isso antes do envio (FO-05, UI-06).
-- **RN-012** — Parametrizam admin, gestor e diretoria; a analista só consulta.
-  A decisão é conferida no servidor, não só na tela (FO-07, P-12).
+- **RN-012** — Parametrizam admin, gestor e diretoria; a analista só consulta;
+  o comercial não vê o módulo. A decisão é conferida no servidor, não só na
+  tela (FO-07, P-03, P-12, R-001).
+- **RN-013** — Fornecedor marcado como inativo continua na lista e mantém os
+  pedidos e agendamentos que já existem, mas deixa de ser oferecido na criação
+  de pedido e no agendamento (R-002).
+- **RN-014** — Documento cujo vencimento é anterior a hoje aparece marcado como
+  "vencido" na parametrização; documento sem vencimento nunca é marcado. Nenhum
+  aviso, bloqueio ou rotina além dessa marca na onda 1 (FO-05, R-004).
 
 ## Testes
 
@@ -195,14 +207,14 @@ automática e com que números; **como** (arquivo, ferramenta) é do `plan.md`.
 | Cenário / regra | Evidência automática exigida | Camada |
 |---|---|---|
 | C-001 · RN-001 | Salvar a parametrização do fornecedor 1088 (CNPJ 49324221000104, prazo 7 úteis, mínimo 5000,00, fechamento 7–15, validade 120, filiais 1 e 2, 1 linha com 1 contato e 1 faixa `30/60/90`) devolve sucesso; ler de volta pelo código 1088 traz pedido mínimo 5000,00, 2 filiais, 1 linha, 1 contato, 1 faixa e 1 linha de histórico | regra de negócio |
-| C-002 | Com 3 fornecedores (1015 e 1042 ativos, 1088 inativo): sem filtro a lista devolve 3 e o total 3; filtrando filial `2` devolve 2 e total 2; filtrando situação "ativo" devolve 2; busca "fresenius" devolve 1 | regra de negócio |
+| C-002 · RN-013 | Com 3 fornecedores (1015 e 1042 ativos, 1088 inativo): sem filtro a lista devolve 3 e o total 3; filtrando filial `2` devolve 2 e total 2; filtrando situação "ativo" devolve 2 e o 1088 não aparece; busca "fresenius" devolve 1 | regra de negócio |
 | C-003 · RN-012 | O mesmo salvamento feito pela analista devolve recusa com mensagem que cita "gestor" e não altera o pedido mínimo (continua 5000,00) nem cria linha de histórico; feito pelo gestor devolve sucesso | regra de negócio |
 | C-004 · RN-003 | Salvar o fornecedor 1015 com pedido mínimo 0 devolve recusa com mensagem que casa com /pedido mínimo/i; depois da tentativa o fornecedor continua com 5000,00, 2 filiais e 2 linhas | regra de negócio |
 | C-005 | Salvar o 1015 sem a linha "Nutrição Parenteral" deixa 1 linha, 2 contatos e 1 faixa; nenhuma das 4 faixas nem o contato da linha apagada sobrevivem | regra de negócio |
 | C-006 | Mudar pedido mínimo 5000,00 → 8000,00 e validade 120 → 90 grava exatamente 2 linhas de histórico, com os valores anterior e novo de cada campo e o id de quem salvou; um segundo salvamento sem mudança não acrescenta linha de campo | regra de negócio |
 | C-007 · RN-011 | Salvar com um documento (nome "Contrato comercial 2026", tipo "Documento", vencimento 2027-03-31, endereço não vazio) devolve 1 documento na releitura, com os quatro valores; tipo fora dos dois aceitos é normalizado para "Documento" | regra de negócio |
 | C-008 | A consulta de fornecedores do ERP devolve mais de 0 registros e não traz o código 999999; a de filiais devolve mais de 0 e não traz a filial 99; buscar "nestle" devolve 1 | regra de negócio |
-| RN-002 · RN-004 · RN-005 · RN-006 | CNPJ `49324221000104` é válido, `49324221000105` e `4932422100010` não; fechamento 7 e 15 é válido, 0 e 32 não; SLA vazio devolve 1 e 5 com origem "padrão"; SLA 3 devolve 3 com origem "parametrizado"; prazo 7 + `uteis` vira "7 dias úteis" e 1 + `corridos` vira "1 dia corrido" | regra de tela |
+| RN-002 · RN-004 · RN-005 · RN-006 · RN-014 | CNPJ `49324221000104` é válido, `49324221000105` e `4932422100010` não; fechamento 7 e 15 é válido, **28 e 5 também** (janela que vira o mês), 0 e 15 e 7 e 32 não; SLA vazio devolve 1 e 5 com origem "padrão"; SLA 3 devolve 3 com origem "parametrizado"; prazo 7 + `uteis` vira "7 dias úteis" e 1 + `corridos` vira "1 dia corrido"; vencimento 31/03/2027 está vencido em 01/04/2027 e não em 31/03/2027, e vencimento vazio nunca está vencido | regra de tela |
 | RN-007 · RN-008 · RN-009 · RN-010 | `elaine@` é recusado e `elaine.santos@fresenius-kabi.com` aceito; as faixas 0–20000 e 20000–45000 passam, 0–20000 e 10000–30000 são recusadas com o motivo, duas faixas sem teto são recusadas; `30/60/90` vira [30,60,90], `0/30` e `trinta` são recusados; valor 20000 cai na faixa 20000–45000 (`30/45`), valor 50000 devolve as 2 opções da faixa sem teto e valor 19999,99 cai na faixa 0–20000 | regra de tela |
 
 - Cada cenário C-00N e cada regra RN-00N tem pelo menos uma linha.
@@ -215,6 +227,8 @@ automática e com que números; **como** (arquivo, ferramenta) é do `plan.md`.
   - [ ] C-007 — o aviso de endereço público aparece antes do envio do arquivo
   - [ ] C-003 — a analista vê a tela inteira em modo leitura, sem botão de salvar habilitado
   - [ ] C-001 — o diálogo de linha de produto (contatos e faixas) abre, rola só no miolo e cabe no celular
+  - [ ] RF-013 — entrando como comercial, o módulo Fornecedores não aparece no menu (R-001)
+  - [ ] RF-017 — o documento vencido aparece marcado na lista de documentos
 
 ## Fora de escopo
 
@@ -236,10 +250,14 @@ Obrigatório. O que não estiver listado como incluído está excluído.
 
 Cada item aqui **bloqueia** o `plan.md`.
 
-- [ ] `[NEEDS CLARIFICATION: a persona "leitura" do 000 é a mesma "comercial" das regras P-01/P-03? Se for, ela não vê o módulo Fornecedores (P-03); se não for, ela vê as duas telas em modo leitura. Enquanto não decidir, a spec só afirma o que FO-07 decide: admin, gestor e diretoria salvam; analista consulta.]`
-- [ ] `[NEEDS CLARIFICATION: o que "fornecedor inativo" impede fora desta tela? Ele deixa de ser oferecido na criação de pedido (spec 002) e no agendamento (spec 004), ou a situação é só um filtro de organização da lista?]`
-- [ ] `[NEEDS CLARIFICATION: a janela de fechamento pode virar o mês (do dia 28 ao 5)? Ver RN-004.]`
-- [ ] `[NEEDS CLARIFICATION: documento vencido precisa de algum sinal na tela (marca na lista, aviso ao abrir o fornecedor) ou basta a data cadastrada? FO-05 só define o campo.]`
+Nenhuma. As quatro pendências desta spec foram decididas na revisão de
+2026-09-15 e estão na tabela "Decisões tomadas na revisão das specs" do
+`../000-visao-geral/README.md`:
+
+- [x] **R-001** — a persona é `comercial` (P-01), não `leitura`; na onda 1 ela não vê Quadro, Agenda nem Fornecedores (P-03) → RF-013, RN-012
+- [x] **R-002** — fornecedor inativo deixa de ser oferecido na criação de pedido e no agendamento; o que já existe segue → RN-013, RF-018
+- [x] **R-003** — a janela de fechamento pode virar o mês (28 → 5) → RN-004
+- [x] **R-004** — documento vencido ganha a marca "vencido" na lista; nada além disso na onda 1 → RF-017, RN-014
 
 ## Checklist de revisão
 
@@ -248,4 +266,4 @@ Cada item aqui **bloqueia** o `plan.md`.
 - [x] Seção "Fora de escopo" preenchida
 - [x] Cenários cobrem pelo menos um caminho de erro (C-003, C-004)
 - [x] Seção "Testes" preenchida: todo C-00N e toda RN-00N com evidência concreta
-- [ ] Zero `[NEEDS CLARIFICATION]` em aberto — 4 pendências abertas, nenhuma bloqueia o modelo de dados nem os contratos
+- [x] Zero `[NEEDS CLARIFICATION]` em aberto — as 4 pendências foram fechadas por R-001 a R-004
