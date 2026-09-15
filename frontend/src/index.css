@@ -1,0 +1,374 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* Classes dos componentes da lib do motor de quadros (dist do pacote). */
+@source "../node_modules/@benenutri/mitra-kanban";
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Tema escuro por CLASSE, não por sistema (design.md §2.1). No Tailwind 4,
+   `dark:` segue o prefers-color-scheme do SO por padrão; aqui a variante é
+   presa à classe `.dark` no <html>, aplicada por src/lib/theme.ts (e pelo
+   script inline do index.html, antes do React montar). Assim o tema é uma
+   escolha da pessoa — claro, escuro ou "seguir o sistema" — e os `dark:`
+   embutidos nos primitivos do shadcn só acendem quando a paleta escura
+   abaixo está de fato ativa.
+   ═══════════════════════════════════════════════════════════════════════ */
+@custom-variant dark (&:is(.dark *));
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FONTE ÚNICA DE COR DO PROJETO — design.md §2
+   Trocar a paleta é mexer aqui, não nas telas. O hex legível fica no
+   comentário; o valor é hsl() completo porque no Tailwind 4 o modificador
+   de opacidade (bg-primary/90) opera sobre a cor pronta, sem precisar da
+   tripla crua que a v3 exigia.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── vocabulário do shadcn/ui ── */
+  --background: hsl(90 9.1% 95.7%);            /* #f4f5f3 — fundo da tela */
+  --foreground: hsl(90 3.7% 10.6%);            /* #1b1c1a — texto */
+  --card: hsl(0 0% 100%);                      /* #ffffff — superfície de componente */
+  --card-foreground: hsl(90 3.7% 10.6%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(90 3.7% 10.6%);
+  --primary: hsl(120.7 67.2% 25.1%);           /* #156b16 — verde corporativo */
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(90 9.1% 95.7%);             /* #f4f5f3 — área rebaixada dentro de um componente */
+  --secondary-foreground: hsl(90 3.7% 10.6%);
+  --muted: hsl(90 9.1% 95.7%);
+  --muted-foreground: hsl(103.6 5.6% 38.2%);   /* #5f675c — secundário, 5,9:1 sobre branco */
+  --accent: hsl(109.1 40.7% 94.7%);            /* #eef7ec — realce e hover */
+  --accent-foreground: hsl(120.8 67.6% 21.8%); /* #125d13 */
+  --destructive: hsl(4.2 76.5% 40%);           /* #b42318 — risco e ação destrutiva */
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(90 18.5% 89.4%);               /* #e4e9df — borda externa e de controle */
+  --input: hsl(90 18.5% 89.4%);
+  --ring: hsl(120.7 67.2% 25.1%);
+
+  /* ── rampa da marca ── */
+  --brand-50: hsl(109.1 40.7% 94.7%);          /* #eef7ec */
+  --brand-100: hsl(111.8 36.7% 88.2%);         /* #d9ecd6 */
+  --brand-200: hsl(112.5 36.4% 78.4%);         /* #b9dcb4 */
+  --brand-300: hsl(115.1 35.3% 66.1%);         /* #8fc78a */
+  --brand-400: hsl(120.8 33.6% 46.7%);         /* #4f9f50 */
+  --brand-500: hsl(122 49.4% 34.9%);           /* #2d8530 */
+  --brand-600: hsl(120.6 64.9% 29%);           /* #1a7a1b */
+  --brand-800: hsl(120.8 67.6% 21.8%);         /* #125d13 */
+  --brand-900: hsl(121 66.3% 17.5%);           /* #0f4a10 */
+  --brand-950: hsl(121.7 71.4% 9.6%);          /* #072a08 */
+
+  /* ── o que este design nomeia e o shadcn não tem ── */
+  --row-border: hsl(94.3 21.2% 93.5%);         /* #eef2eb — separador entre linhas */
+  --ink-muted: hsl(105 4.7% 49.8%);            /* #7c8579 — 3,8:1: só rótulo em caixa alta */
+  --attention: hsl(35.1 74.5% 36.9%);          /* #a46a18 — atenção */
+  --attention-bg: hsl(30 100% 97.3%);          /* #fff8f1 */
+  --destructive-bg: hsl(5 85.7% 97.3%);        /* #fef3f2 */
+
+  /* Contorno geral. Translúcido de propósito — nenhum uso precisa de
+     modificador de opacidade em cima dele. */
+  --border-soft: rgba(191, 202, 184, 0.38);
+
+  /* Verde da MARCA (design.md §11). Não é --primary e não muda com o tema:
+     existe como token só para a classe `text-brand-mark` não precisar de hex
+     solto em componente. */
+  --brand-mark: #45963d;
+
+  /* ── Rampa de DADOS — cor de série de gráfico (design.md §12) ──
+     Oito matizes em ORDEM FIXA: a série 3 usa --data-3 mesmo que um filtro
+     apague a 2. Não é a rampa da marca: cinco verdes vizinhos são
+     indistinguíveis numa barra de 12px (medido: ΔE 12,7 na visão normal,
+     abaixo do piso 15). Também não é paleta de estado — o verde e o vermelho
+     daqui são matiz, não julgamento, e é por isso que estado em gráfico leva
+     rótulo e ícone além da cor.
+     Origem: paleta de referência do skill `dataviz`, validada contra #ffffff
+     (fundo do Panel) e contra o --card escuro: pior par adjacente ΔE 9,1 /
+     8,4 em daltonismo e 19,6 / 19,3 na visão normal.
+     Os slots 3, 4 e 5 ficam abaixo de 3:1 contra o branco: onde eles
+     aparecem, o gráfico traz rótulo direto ou a visão de tabela. */
+  --data-1: hsl(212.8 67.7% 50.2%);            /* #2a78d6 — azul */
+  --data-2: hsl(17 82.1% 56.3%);               /* #eb6834 — laranja */
+  --data-3: hsl(158.5 73.3% 39.6%);            /* #1baf7a — água */
+  --data-4: hsl(40.8 100% 46.5%);              /* #eda100 — amarelo */
+  --data-5: hsl(337.4 70.3% 69.6%);            /* #e87ba4 — magenta */
+  --data-6: hsl(120 100% 25.7%);               /* #008300 — verde */
+  --data-7: hsl(248.8 48.4% 44.1%);            /* #4a3aa7 — violeta */
+  --data-8: hsl(0.4 73.5% 58.6%);              /* #e34948 — vermelho */
+
+  /* Rampa SEQUENCIAL — magnitude (mapa de calor, matriz de risco). Uma matiz
+     só, claro→escuro. Quatro passos, não a rampa brand-* inteira: brand-50 e
+     brand-100 distam 0,043 de luminosidade e o passo mais claro fica em
+     1,10:1 contra o branco — invisível. Estes quatro passam nos dois temas. */
+  --data-seq-1: hsl(114.7 34% 60.8%);          /* #7fbd79 — 2,22:1 sobre branco */
+  --data-seq-2: var(--brand-400);              /* #4f9f50 */
+  --data-seq-3: var(--brand-600);              /* #1a7a1b */
+  --data-seq-4: var(--brand-900);              /* #0f4a10 */
+
+  --radius: 0.75rem;
+
+  color-scheme: light;
+  /* Preço, contagem e código são lidos em coluna, não dentro de uma frase,
+     e só alinham com figuras tabulares. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TEMA ESCURO — design.md §2.1
+   Mesmos nomes, valores invertidos; nenhum componente muda. Todo token de
+   cor que existir em :root PRECISA existir aqui, senão a tela escura herda
+   o valor claro naquele ponto. A rampa brand-* é invertida de propósito:
+   `bg-brand-50` continua sendo "superfície sutil" e `text-brand-800`
+   continua sendo "texto forte" nos dois temas. Contrastes medidos sobre
+   --card (#1c1f1c): texto 13,9:1 · secundário 7,8:1 · primary 6,6:1 ·
+   destructive 6,2:1 · attention 8,1:1 · ink-muted 4,6:1 (segue só rótulo).
+   ═══════════════════════════════════════════════════════════════════════ */
+.dark {
+  /* ── vocabulário do shadcn/ui ── */
+  --background: hsl(120 5% 7.8%);              /* #131513 — fundo da tela */
+  --foreground: hsl(94.3 14.9% 90.8%);         /* #e7ebe4 — texto */
+  --card: hsl(120 5.1% 11.6%);                 /* #1c1f1c — superfície de componente */
+  --card-foreground: hsl(94.3 14.9% 90.8%);
+  --popover: hsl(120 5.1% 11.6%);
+  --popover-foreground: hsl(94.3 14.9% 90.8%);
+  --primary: hsl(120.7 36.2% 53.9%);           /* #5fb460 — verde claro: o #156b16 some no escuro */
+  --primary-foreground: hsl(123.6 73.3% 8.8%); /* #062708 — 6,3:1 sobre primary */
+  --secondary: hsl(120 5.4% 14.5%);            /* #232723 — área rebaixada dentro de um componente */
+  --secondary-foreground: hsl(94.3 14.9% 90.8%);
+  --muted: hsl(120 5.4% 14.5%);
+  --muted-foreground: hsl(101.5 7.9% 67.6%);   /* #aab3a6 — secundário, 7,8:1 sobre card */
+  --accent: hsl(123.3 22.5% 15.7%);            /* #1f3120 — realce e hover */
+  --accent-foreground: hsl(112.5 36.4% 78.4%); /* #b9dcb4 */
+  --destructive: hsl(4.6 83.3% 69.4%);         /* #f27a70 — risco; o botão usa text-white sobre /60 */
+  --destructive-foreground: hsl(5 60% 10%);    /* #290e0b */
+  --border: hsl(120 5% 19.8%);                 /* #303530 — borda externa e de controle */
+  --input: hsl(120 5% 19.8%);
+  --ring: hsl(120.7 36.2% 53.9%);
+
+  /* ── rampa da marca (invertida) ── */
+  --brand-50: hsl(120 24.6% 13.5%);            /* #1a2b1a */
+  --brand-100: hsl(113.1 29.5% 17.3%);         /* #22391f */
+  --brand-200: hsl(116.7 29.5% 23.9%);         /* #2d4f2b */
+  --brand-300: hsl(117.7 31.3% 32.5%);         /* #3b6d39 */
+  --brand-400: hsl(120.8 33.6% 46.7%);         /* #4f9f50 */
+  --brand-500: hsl(120 36.1% 57.6%);           /* #6cba6c */
+  --brand-600: hsl(118.1 38.2% 67.6%);         /* #8fcc8d */
+  --brand-800: hsl(112.5 36.4% 78.4%);         /* #b9dcb4 */
+  --brand-900: hsl(111.8 36.7% 88.2%);         /* #d9ecd6 */
+  --brand-950: hsl(109.1 40.7% 94.7%);         /* #eef7ec */
+
+  /* ── o que este design nomeia e o shadcn não tem ── */
+  --row-border: hsl(120 6.2% 15.9%);           /* #262b26 — separador entre linhas */
+  --ink-muted: hsl(105 4.8% 51%);              /* #7f887c — 4,6:1: continua só rótulo em caixa alta */
+  --attention: hsl(35.8 75.1% 60.6%);          /* #e6a94f — atenção */
+  --attention-bg: hsl(37.9 51.4% 14.5%);       /* #382a12 */
+  --destructive-bg: hsl(5.5 39.8% 16.3%);      /* #3a1c19 */
+
+  /* Contorno geral, mais discreto que no claro: no escuro o filete
+     translúcido clareia em vez de escurecer. */
+  --border-soft: rgba(191, 202, 184, 0.16);
+
+  /* A marca não muda com o tema. Onde o verde dela não lê (monograma sobre
+     accent), o componente troca para accent-foreground — ver Logo.tsx. */
+  --brand-mark: #45963d;
+
+  /* Rampa de DADOS no escuro (design.md §12). Mesmas oito matizes, repassadas
+     para a superfície escura — não é o claro invertido, e a ordem é a mesma:
+     trocar a ordem é trocar a cor de uma série que já está no ar. Aqui os oito
+     passam de 3:1 contra o --card, então o rótulo direto vira escolha, não
+     obrigação. O verde é o mesmo #008300 nos dois temas: já estava na banda. */
+  --data-1: hsl(212.8 76.8% 56.1%);            /* #3987e5 — azul */
+  --data-2: hsl(17.1 70.2% 50%);               /* #d95926 — laranja */
+  --data-3: hsl(159.2 72.7% 35.9%);            /* #199e70 — água */
+  --data-4: hsl(39.7 100% 39.4%);              /* #c98500 — amarelo */
+  --data-5: hsl(338.2 61.1% 57.6%);            /* #d55181 — magenta */
+  --data-6: hsl(120 100% 25.7%);               /* #008300 — verde */
+  --data-7: hsl(246.6 69.4% 71.8%);            /* #9085e9 — violeta */
+  --data-8: hsl(0 71.8% 65.3%);                /* #e66767 — vermelho */
+
+  /* Sequencial no escuro: a mesma matiz, subindo em vez de descer — o passo
+     mais escuro é o "pouco", porque aqui o fundo é que é escuro. */
+  --data-seq-1: var(--brand-300);              /* #3b6d39 — 2,72:1 sobre o card */
+  --data-seq-2: var(--brand-400);              /* #4f9f50 */
+  --data-seq-3: var(--brand-500);              /* #6cba6c */
+  --data-seq-4: hsl(116.8 39.9% 72%);          /* #9ed49b */
+
+  /* Controles nativos (date, scrollbar, seleção) escurecem junto. */
+  color-scheme: dark;
+}
+
+/* Tipografia — declarada direto no @theme: no Tailwind 4 as variáveis do
+   tema já são custom properties reais, então não há ganho em passar por
+   :root antes. */
+@theme {
+  --font-sans: 'Work Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-title: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* `inline` faz as utilitárias apontarem para var(--token) em vez de copiar
+   o valor — é o que mantém :root como fonte única. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-bg: var(--destructive-bg);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Apelidos do domínio. Existem porque `text-ink-secondary` diz mais numa
+     tela do que `text-muted-foreground`. */
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--primary);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+  --color-brand-mark: var(--brand-mark); /* verde da marca, fixo nos dois temas */
+
+  --color-ground: var(--background);
+  --color-paper: var(--card);
+  --color-paper-sunken: var(--muted);
+
+  --color-nav: var(--card);
+  --color-nav-text: var(--muted-foreground);
+  --color-nav-active: var(--primary);
+  --color-nav-hover: var(--accent);
+
+  /* Três pesos de filete, um por trabalho. */
+  --color-rule: var(--border-soft);   /* contorno geral */
+  --color-rule-table: var(--border);  /* fecha tabela e controle */
+  --color-rule-row: var(--row-border);/* separa linhas */
+
+  --color-ink: var(--foreground);
+  --color-ink-secondary: var(--muted-foreground);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-attention: var(--attention);
+  --color-attention-bg: var(--attention-bg);
+  --color-alert: var(--destructive);
+  --color-alert-bg: var(--destructive-bg);
+
+  /* Séries de gráfico — a rampa de dados (design.md §12). O nome é `data-N`,
+     não `chart-N`: exemplo colado do shadcn que pede var(--chart-1) troca o
+     token, não ganha um apelido. Duas famílias para a mesma cor é a receita
+     de duas fontes de verdade. */
+  --color-data-1: var(--data-1);
+  --color-data-2: var(--data-2);
+  --color-data-3: var(--data-3);
+  --color-data-4: var(--data-4);
+  --color-data-5: var(--data-5);
+  --color-data-6: var(--data-6);
+  --color-data-7: var(--data-7);
+  --color-data-8: var(--data-8);
+  --color-data-seq-1: var(--data-seq-1);
+  --color-data-seq-2: var(--data-seq-2);
+  --color-data-seq-3: var(--data-seq-3);
+  --color-data-seq-4: var(--data-seq-4);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  /* Seleção na cor da interface, não no azul do sistema — o azul é a única
+     cor que a paleta não usa (§5), e aparecia justamente por cima do texto.
+     O par primary/primary-foreground já é escolhido para ter contraste nos
+     dois temas, então a seleção acompanha o tema sem uma cor nova. */
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-title);
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+
+  /* Rede de segurança de foco: cada componente traz o próprio anel, este
+     pega o que passar sem classe. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Sanfona sem altura fixa: 0fr -> 1fr anima sem precisar medir o conteúdo. */
+.collapsible {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 180ms ease;
+}
+.collapsible[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+.collapsible > * {
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background-color: var(--background);
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
