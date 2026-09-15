@@ -375,7 +375,7 @@ export async function suite(ctx) {
     }
     // C-019 pelo caminho do CRON: kbCardAtualizar por id, com atualizadoPor e origem sistema.
     assert.match(JSON.parse(cardDe(CARDS_005.atrasadoNove).VALORES_JSON).faturamento || '',
-      /Faturamento pendente · 9 dias uteis/, 'a capa do cartao recebe a linha de faturamento pelo cron');
+      /Faturamento pendente · 9 dias úteis/, 'a capa do cartao recebe a linha de faturamento pelo cron');
   });
 
   /* ─────────── T-088 — contatos, cobrança e a lista consolidada ─────────── */

@@ -967,9 +967,14 @@ function nivelDeAlerta(diasUteis) {
   if (diasUteis >= 3) return 3;
   return 0;
 }
+// Espelho de textoDaCapaFaturamento (frontend/src/lib/faturamento.ts, RN-013):
+// o mesmo texto nos dois caminhos, o de tela e o do cron.
 function textoDaCapa(temNf, vlFaturado, percValor, saldo, diasUteis) {
-  if (temNf) return moeda(vlFaturado) + ' (' + (Math.round(percValor * 100) / 100) + ' %) · saldo ' + moeda(saldo);
-  if (diasUteis >= 3) return 'Faturamento pendente · ' + diasUteis + ' dias uteis';
+  if (temNf) {
+    const perc = String(Math.round(numero(percValor) * 100) / 100).replace('.', ',');
+    return moeda(vlFaturado) + ' (' + perc + ' %) · saldo ' + moeda(saldo);
+  }
+  if (diasUteis >= 3) return 'Faturamento pendente · ' + diasUteis + ' dias úteis';
   return '';
 }
 
