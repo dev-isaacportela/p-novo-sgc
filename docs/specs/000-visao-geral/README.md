@@ -333,3 +333,12 @@ Consultas Oracle no smoke provam contagem > 0.
 Menu (`AdminLayout`, base S2): grupo **Fiscal** (Notas fiscais, Faturamentos pendentes, NFs em atraso)
 e **Produtos em B.O.** no grupo Compras. Capa do card: etiqueta "Faturamento pendente" a partir de 3 dias
 úteis vem do campo `faturamento` e de `ALERTA_FATURAMENTO_NIVEL` na capa da 002 (o integrador liga).
+
+### Decisões tomadas durante as specs da onda 2 (R-035..R-038)
+
+| Id | Decisão |
+|---|---|
+| R-035 | **Crons em UTC.** `sgcRecebimentoSincronizar` = `0 25 9-23/2 * * *` (6h25–20h25 de Brasília, de 2 em 2 h); `sgcFaturamentoMonitorar` `0 0 11 * * *` e `sgcBoMonitorar` `0 5 11 * * *` (8h/8h05 de Brasília); `sgcNfDetectar` `0 */30 * * * *`. |
+| R-036 | **Linhas `PC*` por spec** (R-017 aplicado a linha, não a tabela): cada spec insere as notas dos seus cenários em faixa de `NUMNOTA` reservada — 005 abaixo de 90000, 006 em 90001–90015; a 007 não semeia NF e as suas vendas em `PCMOV` usam `CODCLI` ≥ 900 e `NUMTRANSITEM` ≥ 900000 para não colidir com a 003. |
+| R-037 | **CSV** uma vez só: `frontend/src/lib/csv.ts` na base (`textoCsv(cabecalho, linhas)`, `baixarCsv(nome, texto)`), usado por `/faturamentos-pendentes`, `/nfs-em-atraso` e `/bo`. |
+| R-038 | **Assinaturas fixas entre specs:** `sgcEscAvisoInserir { idCard, tipo, chave, paraUsuarioId, paraPersona, texto, criadoEm }` idempotente por `CHAVE`; `backend/lib/dias-uteis.mjs` exporta `somarDiasUteis(col, n)`, `somarDiasCorridos(col, n)` (`n` literal ou coluna; fragmento SQL que roda no MySQL e no dialeto do simulador; base em fim de semana recua para sexta) e `diasUteisEntre(colInicio, colFim)`; NF vinculada que já entrou no ERP nasce com `DT_RECEBIMENTO = DT_ENTRADA`; `operarNf` governa também "Verificar entrada"/"Sincronizar" da 006; `verNotasFiscais`, `verFaturamentoPendente` e `verNfsAtraso` incluem a diretoria (leitura); `verBo` inclui todas as personas. |
