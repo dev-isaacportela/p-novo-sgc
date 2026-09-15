@@ -36,7 +36,7 @@ const agora = () => new Date().toISOString().slice(0, 19);
 const horaCurta = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
 export default function AbaItens(ctx: ExtensaoContexto) {
-  const pedido = usePedido(ctx.card.id);
+  const pedido = usePedido(ctx.card.id, ctx.card.criadoPor);
   const [itens, setItens] = React.useState<ItemPedido[]>([]);
   const [alterados, setAlterados] = React.useState<number[]>([]);
   const [erro, setErro] = React.useState('');
