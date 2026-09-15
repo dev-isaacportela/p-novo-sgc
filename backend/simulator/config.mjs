@@ -66,6 +66,14 @@ export const CHECK_INPUT = {
   busca: '', limite: '20', offset: '0',
   // spec 001 (fornecedores):
   // spec 002 (quadro de compras):
+  usuarioId: '2', cardId: '5', idCard: '5', boardId: '1', faseId: '2',
+  origem: 'agenda', idAgenda: '1', usuarioAlvo: '2', persona: 'gestor',
+  agora: '2026-09-15T12:00:00', motivo: 'teste', produtos: '',
+  codfornec: '1', fornecedor: 'X', codfilial: '1', filial: 'Y',
+  periodoInicio: '2026-08-01', periodoFim: '2026-09-15',
+  canal: 'email', email: 'a@b.com', dtEnvio: '2026-09-15', numped: '1', obs: '',
+  enviadoPor: '2', enviadoEm: '2026-09-15T12:00:00', tipo: 'email',
+  para: 'a@b.com', cc: 'compras@benenutri.com', assunto: 'x', corpo: 'x',
   // spec 003 (itens do pedido):
   // spec 004 (agenda de análises):
 };
