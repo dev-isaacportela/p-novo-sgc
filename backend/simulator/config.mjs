@@ -90,6 +90,11 @@ export const CHECK_INPUT = {
   // spec 004 (agenda de análises):
   situacao: '', hoje: '2026-09-15', id: '1',
   // spec 005 (notas fiscais e faturamento): a 005 preenche quando publicar.
-  // spec 006 (trânsito e recebimento): a 006 preenche quando publicar.
+  // spec 006 (trânsito e recebimento): só as chaves NOVAS — cardId, busca,
+  // limite, offset, hoje, usuarioId e codfornec (1015) já vêm das specs
+  // acima e servem. `numnotas` é FRAGMENTO (lista de inteiros sem aspas),
+  // e 90005 é a nota do seed 006 que tem entrada confirmada no PCNFENT.
+  faixa: '', idNf: '1', numnotas: '90005', dtRecebimento: '2026-09-01',
+  alertaEm: '2026-09-15T12:00:00', numtransent: '0', chavenfe: '',
   // spec 007 (produtos em B.O.): a 007 preenche quando publicar.
 };
