@@ -30,15 +30,15 @@ test('RN-002: READ_ONLY zera a operação e RESTRICTED liga somenteProprios — 
   assert.equal(permissoesDe('analista', 'MEMBER').somenteProprios, false);
 });
 
-test('C-044 / RN-021: a persona comercial é a única sem acesso ao quadro, e o menu dela não traz compras', () => {
+test('C-044 / RN-021: a persona comercial é a única sem acesso ao quadro; o menu dela não traz compras nem fiscal — só B.O. (C-013 do plan da 007, O2-06)', () => {
   const comercial = permissoesDe('comercial', 'MEMBER');
   assert.equal(comercial.verQuadro, false);
   for (const persona of PERSONAS.filter((p) => p !== 'comercial')) {
     assert.equal(permissoesDe(persona, 'MEMBER').verQuadro, true, `${persona} deveria ver o quadro`);
   }
   const menu = menuParaPersona(comercial);
-  assert.equal(menu.length, 0);
-  for (const rota of ['/quadro', '/agenda', '/fornecedores']) {
+  assert.deepEqual(menu.map((item) => item.to), ['/bo']);
+  for (const rota of ['/quadro', '/agenda', '/fornecedores', '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso']) {
     assert.equal(menu.some((item) => item.to === rota), false, `${rota} não é do comercial`);
   }
 });
@@ -77,13 +77,46 @@ test('RN-015 / P-13: excluem pedido admin, gestor e diretoria; veem Segurança a
   assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').aprovarDiretoria), ['admin', 'diretoria']);
 });
 
-test('menuParaPersona: o menu do analista tem quadro, novo pedido, agenda, notificações e fornecedores — e nada de segurança', () => {
+test('menuParaPersona: o menu do analista tem quadro, novo pedido, agenda, notificações, B.O., fornecedores e o grupo Fiscal — e nada de segurança nem coberturas', () => {
   const rotas = menuParaPersona(permissoesDe('analista', 'MEMBER')).map((item) => item.to);
-  assert.deepEqual(rotas, ['/quadro', '/pedidos/novo', '/agenda', '/notificacoes', '/fornecedores']);
+  assert.deepEqual(rotas, [
+    '/quadro', '/pedidos/novo', '/agenda', '/notificacoes', '/bo', '/fornecedores',
+    '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso',
+  ]);
   assert.ok(menuParaPersona(permissoesDe('admin', 'ADMIN')).some((item) => item.to === '/seguranca'));
   assert.ok(menuParaPersona(permissoesDe('gestor', 'MEMBER')).some((item) => item.to === '/coberturas'));
   // Somente leitura vê o quadro, mas não a criação de pedido.
   const leitura = menuParaPersona(permissoesDe('gestor', 'READ_ONLY')).map((item) => item.to);
   assert.ok(leitura.includes('/quadro'));
   assert.equal(leitura.includes('/pedidos/novo'), false);
+});
+
+test('C-027 / R-028/R-038 (onda 2): chaves novas por persona — comercial só vê B.O.; diretoria só lê; READ_ONLY zera operar*/registrarContato, mas não ver*', () => {
+  const CHAVES_VER = ['verNotasFiscais', 'verFaturamentoPendente', 'verNfsAtraso'];
+  const CHAVES_OPERAR = ['operarNf', 'registrarContato'];
+
+  // comercial: só verBo — nada de fiscal, nada de B.O. operado (O2-06/R-028).
+  const comercial = permissoesDe('comercial', 'MEMBER');
+  for (const chave of [...CHAVES_VER, ...CHAVES_OPERAR, 'operarBo']) {
+    assert.equal(comercial[chave], false, `comercial não deveria ter ${chave}`);
+  }
+  assert.equal(comercial.verBo, true, 'comercial vê o painel de B.O. (O2-06)');
+
+  // admin/analista/gestor: tudo ligado.
+  for (const persona of ['admin', 'analista', 'gestor']) {
+    const p = permissoesDe(persona, 'MEMBER');
+    for (const chave of [...CHAVES_VER, ...CHAVES_OPERAR, 'verBo', 'operarBo']) {
+      assert.equal(p[chave], true, `${persona} deveria ter ${chave}`);
+    }
+  }
+
+  // diretoria: lê tudo (inclusive verBo), não opera nada (R-038).
+  const diretoria = permissoesDe('diretoria', 'MEMBER');
+  for (const chave of [...CHAVES_VER, 'verBo']) assert.equal(diretoria[chave], true, `diretoria deveria ver ${chave}`);
+  for (const chave of [...CHAVES_OPERAR, 'operarBo']) assert.equal(diretoria[chave], false, `diretoria não deveria operar ${chave}`);
+
+  // READ_ONLY: zera operar*/registrarContato (como qualquer escrita), mas ver* continua.
+  const leitura = permissoesDe('gestor', 'READ_ONLY');
+  for (const chave of [...CHAVES_VER, 'verBo']) assert.equal(leitura[chave], true, `READ_ONLY continua vendo ${chave}`);
+  for (const chave of [...CHAVES_OPERAR, 'operarBo']) assert.equal(leitura[chave], false, `READ_ONLY zera ${chave}`);
 });

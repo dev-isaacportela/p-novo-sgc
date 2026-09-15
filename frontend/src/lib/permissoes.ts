@@ -59,6 +59,17 @@ export interface Permissoes {
   // Consumidas pela spec 004 (B-02): a agenda não tem matriz própria.
   agendar: boolean;
   cancelarAgendamento: boolean;
+  // Onda 2 (R-028/R-038 do 000): NF, faturamento e trânsito são operados por
+  // admin/analista/gestor; diretoria só lê (não zera com READ_ONLY, como
+  // verCoberturas/verSeguranca); comercial não vê nenhuma. B.O. é visto por
+  // todas as personas (O2-06), inclusive comercial; opera admin/analista/gestor.
+  verNotasFiscais: boolean;
+  operarNf: boolean;
+  verFaturamentoPendente: boolean;
+  registrarContato: boolean;
+  verNfsAtraso: boolean;
+  verBo: boolean;
+  operarBo: boolean;
 }
 
 /** Quem faz o quê, por persona (a tabela do plan.md § Regras puras). */
@@ -67,16 +78,22 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: true,
     cancelar: true, registrarEnvio: true, excluirPedido: true, administrarQuadro: true, verSeguranca: true,
     editarFornecedor: true, verCoberturas: true, agendar: true, cancelarAgendamento: true,
+    verNotasFiscais: true, operarNf: true, verFaturamentoPendente: true, registrarContato: true,
+    verNfsAtraso: true, verBo: true, operarBo: true,
   },
   analista: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: false, aprovarDiretoria: false,
     cancelar: true, registrarEnvio: true, excluirPedido: false, administrarQuadro: false, verSeguranca: false,
     editarFornecedor: false, verCoberturas: false, agendar: true, cancelarAgendamento: false,
+    verNotasFiscais: true, operarNf: true, verFaturamentoPendente: true, registrarContato: true,
+    verNfsAtraso: true, verBo: true, operarBo: true,
   },
   gestor: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: false,
     cancelar: true, registrarEnvio: true, excluirPedido: true, administrarQuadro: false, verSeguranca: false,
     editarFornecedor: true, verCoberturas: true, agendar: true, cancelarAgendamento: true,
+    verNotasFiscais: true, operarNf: true, verFaturamentoPendente: true, registrarContato: true,
+    verNfsAtraso: true, verBo: true, operarBo: true,
   },
   diretoria: {
     // CA-01 + P-07: a diretoria cancela, mas só na fase dela — quem cobra a
@@ -84,6 +101,9 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verQuadro: true, criarPedido: false, editarPedido: false, aprovarTecnica: false, aprovarDiretoria: true,
     cancelar: true, registrarEnvio: false, excluirPedido: true, administrarQuadro: false, verSeguranca: true,
     editarFornecedor: true, verCoberturas: false, agendar: false, cancelarAgendamento: true,
+    // R-038: a diretoria lê NF/faturamento/atraso, mas não opera nem registra contato.
+    verNotasFiscais: true, operarNf: false, verFaturamentoPendente: true, registrarContato: false,
+    verNfsAtraso: true, verBo: true, operarBo: false,
   },
   comercial: {
     // D-017: a única persona sem acesso ao quadro — fora do menu, fora da rota
@@ -91,6 +111,9 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verQuadro: false, criarPedido: false, editarPedido: false, aprovarTecnica: false, aprovarDiretoria: false,
     cancelar: false, registrarEnvio: false, excluirPedido: false, administrarQuadro: false, verSeguranca: false,
     editarFornecedor: false, verCoberturas: false, agendar: false, cancelarAgendamento: false,
+    // O2-06/R-028: o comercial só vê o painel de B.O. — nada de NF/faturamento/trânsito.
+    verNotasFiscais: false, operarNf: false, verFaturamentoPendente: false, registrarContato: false,
+    verNfsAtraso: false, verBo: true, operarBo: false,
   },
 };
 
@@ -114,6 +137,15 @@ export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes 
     verCoberturas: base.verCoberturas,
     agendar: operar(base.agendar),
     cancelarAgendamento: operar(base.cancelarAgendamento),
+    // Onda 2: ver* não zera com READ_ONLY (como verCoberturas/verSeguranca);
+    // operar*/registrarContato zeram, como toda escrita.
+    verNotasFiscais: base.verNotasFiscais,
+    operarNf: operar(base.operarNf),
+    verFaturamentoPendente: base.verFaturamentoPendente,
+    registrarContato: operar(base.registrarContato),
+    verNfsAtraso: base.verNfsAtraso,
+    verBo: base.verBo,
+    operarBo: operar(base.operarBo),
     somenteProprios: acesso === 'RESTRICTED',
     somenteLeitura,
   };
@@ -130,8 +162,15 @@ const MENU: readonly (ItemDeMenu & { exige: keyof Permissoes })[] = [
   { grupo: 'Compras', to: '/pedidos/novo', label: 'Novo pedido', exige: 'criarPedido' },
   { grupo: 'Compras', to: '/agenda', label: 'Agenda', exige: 'verQuadro' },
   { grupo: 'Compras', to: '/notificacoes', label: 'Notificações', exige: 'verQuadro' },
+  // Onda 2 (R-028): visível a todas as personas, inclusive comercial (único
+  // item de menu que ela recebe, C-013 do plan da 007).
+  { grupo: 'Compras', to: '/bo', label: 'Produtos em B.O.', exige: 'verBo' },
   { grupo: 'Cadastros', to: '/fornecedores', label: 'Fornecedores', exige: 'verQuadro' },
   { grupo: 'Cadastros', to: '/coberturas', label: 'Coberturas', exige: 'verCoberturas' },
+  // Onda 2 (R-028): NF/faturamento/atraso — diretoria lê, comercial não vê nada.
+  { grupo: 'Fiscal', to: '/notas-fiscais', label: 'Notas fiscais', exige: 'verNotasFiscais' },
+  { grupo: 'Fiscal', to: '/faturamentos-pendentes', label: 'Faturamentos pendentes', exige: 'verFaturamentoPendente' },
+  { grupo: 'Fiscal', to: '/nfs-em-atraso', label: 'NFs em atraso', exige: 'verNfsAtraso' },
   { grupo: 'Administração', to: '/seguranca', label: 'Segurança', exige: 'verSeguranca' },
 ];
 

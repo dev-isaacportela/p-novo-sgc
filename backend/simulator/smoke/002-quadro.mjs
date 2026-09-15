@@ -12,7 +12,7 @@
 
 import { assert, CENARIO } from './base.mjs';
 import { seed002Extras } from '../seed/002-quadro.mjs';
-import { motivoDeDestino, FASES as CHAVES_FASE } from '../../../frontend/src/lib/transicoes.ts';
+import { motivoDeDestino, MOTIVOS, FASES as CHAVES_FASE } from '../../../frontend/src/lib/transicoes.ts';
 
 const AGORA = '2026-09-15T12:00:00';
 const CAPA = {
@@ -64,6 +64,13 @@ export async function suite(ctx) {
     db.prepare(`UPDATE SGC_PEDIDO SET PRAZO_PADRAO = '30/60', PRAZO_ACORDADO = '30/60' WHERE ID_CARD = ?`).run(criado.id);
     db.prepare(`INSERT INTO SGC_PEDIDO_ITEM (ID_CARD, CODPROD, DESCRICAO, QT_PEDIDA, PRECO_CUSTO, STATUS, COBERTURA_DIAS, COBERTURA_LIMITE, CRIADO_EM, ATUALIZADO_EM)
       VALUES (?, 1, 'ITEM DE TESTE', 1, 1, 'montagem', 0, 35, ?, ?)`).run(criado.id, AGORA, AGORA);
+    // R-044 (onda 2): o gancho ganhou os blocos de NF (005) e de B.O. (007),
+    // então o pedido "montado" desta suíte nasce também com 1 nota vinculada e
+    // nenhuma conferência pendente — senão `enviado>transito` e as duas
+    // conclusões sairiam recusadas nas 500 combinações de RNF-005.
+    db.prepare(`INSERT INTO SGC_NF (ID_CARD, NUMNOTA, SERIE, CODFORNEC, CODFILIAL, DT_EMISSAO, DT_ENTRADA, DT_RECEBIMENTO, VL_TOTAL, ORIGEM, VINCULADO_POR, VINCULADO_EM)
+      VALUES (?, ?, '1', ?, ?, '2026-09-11', '2026-09-14', '2026-09-14', 0, 'manual', ?, ?)`)
+      .run(criado.id, 60000 + criado.id, CAPA.codfornec, CAPA.codfilial, usuarioId, AGORA);
     return criado.id;
   }
 
@@ -572,7 +579,8 @@ export async function suite(ctx) {
     assert.match(String(capaAnalise.CAPA_JSON), /alertas_pendentes/);
     const obrigatorios = db.prepare('SELECT COUNT(*) AS N FROM KB_CAMPO WHERE BOARD_ID = ? AND OBRIGATORIO = 1').get(boardId);
     assert.equal(Number(obrigatorios.N), 0);
-    assert.equal(Number(db.prepare('SELECT COUNT(*) AS N FROM KB_CAMPO WHERE BOARD_ID = ?').get(boardId).N), 6);
+    // 6 campos da 002 (CAMPOS) + 1 da onda 2 (CAMPOS_008: `faturamento`, R-048).
+    assert.equal(Number(db.prepare('SELECT COUNT(*) AS N FROM KB_CAMPO WHERE BOARD_ID = ?').get(boardId).N), 7);
   });
 
   await teste('RN-018: a prioridade aceita alta e recusa altissima', async () => {
@@ -696,7 +704,20 @@ export async function suite(ctx) {
     };
     const personas = [['admin', U.admin], ['analista', U.ana], ['gestor', U.gil], ['diretoria', U.dora], ['comercial', U.leo]];
 
+    // R-046 (onda 2): quatro pares são decididos SÓ no servidor (nota vinculada,
+    // item em B.O., conferência e B.O. pendentes) — a tela libera e o gancho
+    // decide pelo dado; o resto continua caractere a caractere. O pedido
+    // "montado" nasce com NF vinculada, sem conferência pendente e sem item em
+    // B.O.: enviado>transito e as duas conclusões liberam, faturamento>bo recusa
+    // com a frase de R-030 (a mesma de MOTIVOS.boEntrada).
+    const SO_SERVIDOR = {
+      'enviado>transito': [1, ''],
+      'faturamento>bo': [0, MOTIVOS.boEntrada],
+      'faturamento>concluido': [1, ''],
+      'bo>concluido': [1, ''],
+    };
     let comparadas = 0;
+    let decididasNoServidor = 0;
     for (const origem of CHAVES_FASE) {
       emFase(card, origem);
       for (const destino of CHAVES_FASE) {
@@ -704,12 +725,46 @@ export async function suite(ctx) {
           const tela = motivoDeDestino(persona, 'MEMBER', origem, destino, estado);
           const servidor = await podeMover(usuarioId, card, destino);
           const podeNaTela = tela === null;
-          assert.equal(Number(servidor.PODE) === 1, podeNaTela, `${persona} ${origem}>${destino}: tela ${tela} x servidor ${servidor.PODE}`);
-          assert.equal(servidor.MOTIVO, tela === null ? '' : tela, `${persona} ${origem}>${destino}`);
+          const esperado = podeNaTela ? SO_SERVIDOR[`${origem}>${destino}`] : undefined;
+          if (esperado) {
+            assert.equal(Number(servidor.PODE), esperado[0], `${persona} ${origem}>${destino}: servidor ${servidor.PODE}, esperado ${esperado[0]}`);
+            assert.equal(servidor.MOTIVO, esperado[1], `${persona} ${origem}>${destino}`);
+            decididasNoServidor += 1;
+          } else {
+            assert.equal(Number(servidor.PODE) === 1, podeNaTela, `${persona} ${origem}>${destino}: tela ${tela} x servidor ${servidor.PODE}`);
+            assert.equal(servidor.MOTIVO, tela === null ? '' : tela, `${persona} ${origem}>${destino}`);
+          }
           comparadas += 1;
         }
       }
     }
     assert.equal(comparadas, 500);
+    // 4 pares x 3 personas que a tela libera (admin, analista, gestor).
+    assert.equal(decididasNoServidor, 12);
+
+    // R-044 (revisão da onda 2, A-13): o mesmo pedido com 1 item em B.O. aberto
+    // inverte os quatro pares — faturamento>bo libera e as duas conclusões
+    // recusam com a frase de pendencias-conclusao-bo.sql (singular).
+    const COM_BO_ABERTO = {
+      'enviado>transito': [1, ''],
+      'faturamento>bo': [1, ''],
+      'faturamento>concluido': [0, 'Resolva o 1 item em B.O. antes de concluir o pedido.'],
+      'bo>concluido': [0, 'Resolva o 1 item em B.O. antes de concluir o pedido.'],
+    };
+    db.prepare(`INSERT INTO SGC_BO_ITEM (ID_CARD, CODPROD, DESCRICAO, QT_PENDENTE, STATUS, CRIADO_POR, CRIADO_EM)
+      VALUES (?, 1, 'ITEM DE TESTE', 1, 'aberto', ?, ?)`).run(card, U.ana, AGORA);
+    try {
+      for (const [par, [pode, motivo]] of Object.entries(COM_BO_ABERTO)) {
+        const [origem, destino] = par.split('>');
+        emFase(card, origem);
+        for (const [persona, usuarioId] of personas.slice(0, 3)) {
+          const servidor = await podeMover(usuarioId, card, destino);
+          assert.equal(Number(servidor.PODE), pode, `${persona} ${par} com B.O. aberto: servidor ${servidor.PODE}`);
+          assert.equal(servidor.MOTIVO, motivo, `${persona} ${par} com B.O. aberto`);
+        }
+      }
+    } finally {
+      db.prepare('DELETE FROM SGC_BO_ITEM WHERE ID_CARD = ?').run(card);
+    }
   });
 }

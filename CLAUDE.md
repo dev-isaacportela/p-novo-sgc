@@ -35,7 +35,7 @@ backend/                  scripts de provisionamento via mitra-sdk (.env vazio l
   setup-backend.mjs         schema SGC_* (CREATE TABLE IF NOT EXISTS) — todo o DDL da onda
   add-001-kanban.mjs        instala a lib (instalar({ ganchos }))
   add-002-perfil-acesso.mjs perfil business; roda por último no sandbox; FORA do PUBLISH_ORDER
-  add-003…007-*.mjs         Server Functions por spec, exportam `definitions`
+  add-003…010-*.mjs         Server Functions por spec, exportam `definitions` (008–010 = onda 2)
   sync-server-function-map.mjs  leva os ids reais ao frontend após publicar
   simulator/                Mitra local em SQLite: executa as MESMAS definitions; tabelas PC* do WinThor simuladas
   simulator/smoke.mjs       suíte de testes do backend: SFs reais + assert por cenário da spec (um arquivo por feature em smoke/)
@@ -124,7 +124,7 @@ push, prompt do sandbox com a ordem dos `add-*` (perfil por último), `git pull`
 - `verbatimModuleSyntax`: importe tipos com `import type`.
 - `npm run build` roda `tsc -b`: erro de tipo derruba o build.
 - `base: './'` no `vite.config.ts` faz o app funcionar em subpath. Não mexa.
-- `resolve.dedupe` e `server.fs.allow` existem para a lib linkada de `../../mitra-kanban`; no sandbox são inertes.
+- `resolve.dedupe` e `server.fs.allow` (vite) e o `paths` de `react`/`react-dom` (`tsconfig.app.json`) existem para a lib linkada de `../../mitra-kanban` (`npm link`, enquanto a 1.5.0 não está no registry); no sandbox são inertes.
 
 ## Antes de dizer que terminou
 

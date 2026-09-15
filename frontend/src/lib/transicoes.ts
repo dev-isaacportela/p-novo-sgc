@@ -56,6 +56,16 @@ export const MOTIVOS: Readonly<Record<string, string>> = {
   reprovar: 'Para devolver o pedido para análise, use a ação Reprovar e informe o motivo.',
   envio: 'Registre o envio do pedido (plataforma ou e-mail) antes de mover para Enviado para Indústria.',
   excluir: 'Excluir pedido é da gerência, da diretoria ou do administrador. Para encerrar um pedido, use "Cancelar compra".',
+  // Onda 2 (R-030/R-046): as travas de Trânsito e de conclusão são SÓ do
+  // servidor — `motivoDeDestino` não ganha ramo novo (o espelho síncrono
+  // custaria uma SF por cartão do quadro). Só os textos FIXOS ficam aqui, iguais
+  // caractere a caractere a `M` em backend/add-005-quadro-compras.mjs (o smoke
+  // 002 confere); as frases das conclusões (`Decida as N conferências…`,
+  // `Resolva os N itens em B.O.…`) levam contagem e são só do servidor
+  // (backend/sql/pendencias-conclusao-{nf,bo}.sql). A lib mostra a frase do
+  // gancho na faixa de aviso do card.
+  transito: 'Vincule ao menos uma nota fiscal ao pedido antes de mover para Em Trânsito para BN.',
+  boEntrada: 'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.',
 };
 
 const permitida = (origem: ChaveFase, destino: ChaveFase) =>

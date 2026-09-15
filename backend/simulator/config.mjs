@@ -45,6 +45,9 @@ export const HEALTH_TABLE = 'KB_BOARD';
 // Ordem do sandbox (mesma do README da 000): a 001 lê fornecedor/filial do
 // WinThor (precisa da conexão JDBC já criada), a 002 lê a 001, a 003 lê a 002
 // e a 004 lê a 002 e a 003. Cada add-00N publica as SFs da sua spec.
+// Onda 2 (R-024 do 000): 005 -> add-008-notas-fiscais.mjs, 006 ->
+// add-009-transito.mjs, 007 -> add-010-bo.mjs, nessa ordem lógica (006 e 007
+// leem SGC_NF da 005). add-002 continua fora, por último no sandbox.
 export const PUBLISH_ORDER = [
   'add-001-kanban.mjs',
   'add-003-jdbc-winthor.mjs',
@@ -52,6 +55,9 @@ export const PUBLISH_ORDER = [
   'add-005-quadro-compras.mjs',
   'add-006-itens.mjs',
   'add-007-agenda.mjs',
+  'add-008-notas-fiscais.mjs',
+  'add-009-transito.mjs',
+  'add-010-bo.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -83,4 +89,18 @@ export const CHECK_INPUT = {
   nivel: '',
   // spec 004 (agenda de análises):
   situacao: '', hoje: '2026-09-15', id: '1',
+  // spec 005 (notas fiscais e faturamento): só os parâmetros das 9 leituras SQL.
+  // codfornec/codfilial/cardId/busca/limite/offset já vêm da 002 e da 003 com
+  // valores que servem aqui (D-09: o objeto é um só e a última chave ganha).
+  numnota: '7001', serie: '', numpeds: '998901', dataEnvio: '2026-08-01',
+  status: '', faixa: '',
+  // spec 006 (trânsito e recebimento): só as chaves NOVAS — cardId, busca,
+  // limite, offset, hoje, usuarioId e codfornec (1015) já vêm das specs
+  // acima e servem. `numnotas` é FRAGMENTO (lista de inteiros sem aspas),
+  // e 90005 é a nota do seed 006 que tem entrada confirmada no PCNFENT.
+  faixa: '', idNf: '1', numnotas: '90005', dtRecebimento: '2026-09-01',
+  alertaEm: '2026-09-15T12:00:00', numtransent: '0', chavenfe: '',
+  // spec 007 (produtos em B.O.): dias entra sem aspas em sgcWintClientesImpactados
+  // (TRUNC(SYSDATE) - {{dias}}) — sem valor, o sim:check quebra por sintaxe.
+  dias: '60', status: '',
 };

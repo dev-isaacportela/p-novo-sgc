@@ -17,6 +17,10 @@ import CoberturasPage from '@/pages/coberturas/CoberturasPage';
 import AgendaPage from '@/pages/agenda/AgendaPage';
 import NotificacoesPage from '@/pages/notificacoes/NotificacoesPage';
 import SegurancaPage from '@/pages/seguranca/SegurancaPage';
+import NotasFiscaisPage from '@/pages/fiscal/NotasFiscaisPage';
+import FaturamentosPendentesPage from '@/pages/fiscal/FaturamentosPendentesPage';
+import NfsAtrasoPage from '@/pages/fiscal/NfsAtrasoPage';
+import BoPage from '@/pages/bo/BoPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -72,9 +76,11 @@ function Autenticado() {
     );
   }
 
-  // Onda 1 do SGC 2: quadro de compras (002), fornecedores (001), itens e
-  // coberturas (003), agenda (004) — telas reais chegam com as specs; aqui só
-  // as rotas e páginas stub (docs/specs/000-visao-geral).
+  // Rotas por spec (docs/specs/000-visao-geral): onda 1 — quadro de compras
+  // (002), fornecedores (001), itens e coberturas (003), agenda (004); onda 2 —
+  // notas fiscais e faturamentos pendentes (005), NFs em atraso (006), produtos
+  // em B.O. (007). Quem barra persona sem acesso é cada página, no topo, com a
+  // mesma frase do servidor; o menu (AdminLayout) só esconde.
   return (
     <Routes>
       <Route element={<AdminLayout usuario={usuario} />}>
@@ -88,6 +94,10 @@ function Autenticado() {
         <Route path="agenda" element={<AgendaPage />} />
         <Route path="notificacoes" element={<NotificacoesPage />} />
         <Route path="seguranca" element={<SegurancaPage />} />
+        <Route path="notas-fiscais" element={<NotasFiscaisPage />} />
+        <Route path="faturamentos-pendentes" element={<FaturamentosPendentesPage />} />
+        <Route path="nfs-em-atraso" element={<NfsAtrasoPage />} />
+        <Route path="bo" element={<BoPage />} />
         <Route path="*" element={<Navigate to="/quadro" replace />} />
       </Route>
     </Routes>
