@@ -13,7 +13,12 @@ export async function suite(ctx) {
   const { db, byName, overridden, byId, chamar, teste, U } = ctx;
 
   await teste('S0-001: add-001-kanban.mjs carrega ESCRITAS.length + PUBLICAS.length server functions com os ids do mapa deste projeto', async () => {
-    assert.equal(byName.size, ESCRITAS.length + PUBLICAS.length);
+    // >= , nao ===: byName acumula TODO o PUBLISH_ORDER (config.mjs), e os
+    // add-004..007 das outras specs da onda 1 deixam de ser stub (definitions
+    // = []) conforme publicam as proprias SFs — o esqueleto so garante que as
+    // da lib estao todas la, nao que sao as UNICAS carregadas.
+    assert.ok(byName.size >= ESCRITAS.length + PUBLICAS.length,
+      `esperava pelo menos ${ESCRITAS.length + PUBLICAS.length} server functions da lib, achou ${byName.size}`);
     assert.equal(overridden.length, 0);
     for (const definicao of byName.values()) assert.ok(!definicao.code.includes('__KB_IDS__'), `${definicao.name} ficou com o marcador de ids`);
     // byId agora resolve TODO nome publicado (ids-do-mapa.mjs), nao so as kbEsc*.
