@@ -112,9 +112,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** as notas do segundo fornecedor são atualizadas normalmente, nada do primeiro é sobrescrito, e o resultado informa a falha daquele fornecedor
 
 **C-015 — Lista de notas vencidas**
-- **Dado que** há 5 notas vencidas em pedidos nas fases Enviado e Em Trânsito, somando **R$ 32.500,00**, e mais uma nota vencida num pedido que já está em Faturamento
+- **Dado que** há pedidos nas fases Enviado e Em Trânsito com notas vencidas, e mais uma nota vencida num pedido que já está em Faturamento
 - **Quando** o gestor abre a lista de notas vencidas
-- **Então** a lista mostra **5 notas** e **R$ 32.500,00**, e a nota do pedido em Faturamento **não** aparece
+- **Então** a lista traz todas as notas vencidas dos pedidos nas duas primeiras fases, o total de notas e o valor acumulado batem com o que está na lista, e a nota do pedido em Faturamento **não** aparece
 
 **C-016 — Faixas de atraso**
 - **Dado que** há notas com 2, 5 e 9 dias de atraso
@@ -151,6 +151,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** o acompanhamento é consultado
 - **Então** a nota aparece com previsão e situação normais, e só vira "Recebida" quando o ERP confirmar a entrada
 
+**C-023 — Pedido cujas notas já chegaram recebidas**
+- **Dado que** o pedido está em Em Trânsito com 2 notas que já nasceram recebidas (foram vinculadas depois de a entrada existir no ERP), e nenhuma nota dele está pendente
+- **Quando** a verificação roda
+- **Então** o pedido é movido para Faturamento em Andamento do mesmo jeito — a verificação não olha só o que mudou na rodada, olha todo pedido em trânsito com nota
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -179,6 +184,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-022 | Concluir o pedido DEVE ser recusado enquanto houver comparação de nota fiscal sem decisão, com o motivo na recusa | C-019 | must |
 | RF-023 | Acompanhar e ver a lista é de admin, analista, gestor e diretoria; verificar a entrada é de admin, analista e gestor; o comercial não vê nada desta feature | C-020 | must |
 | RF-024 | A recusa por perfil DEVE valer também fora da tela | Chamada direta com perfil sem direito não grava nada (C-020) | must |
+| RF-025 | A verificação DEVE alcançar **todo** pedido em Em Trânsito com ao menos uma nota, mesmo que nenhuma nota dele tenha mudado naquela rodada | Pedido com todas as notas já recebidas é movido na primeira rodada (C-023) | must |
 
 ## Requisitos não-funcionais
 
@@ -206,7 +212,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-003 — Situação da nota**, nesta ordem: com data de recebimento é **recebida**; sem previsão é **sem prazo**; previsão anterior a hoje é **em atraso**; previsão até dois dias à frente é **chegando**; o resto é **dentro do prazo**.
 - **RN-004 — Recebimento.** Data de recebimento = data de entrada consolidada da nota no ERP. Nota com cancelamento no ERP não é recebimento. Entrada na filial do pedido tem prioridade sobre entrada em outra filial.
 - **RN-005 — Dias de atraso.** Diferença em dias **corridos** entre a previsão e hoje — mercadoria parada não descansa no fim de semana. Faixas da lista: até 3, de 4 a 7, mais de 7.
-- **RN-006 — Conclusão do trânsito.** O pedido sai de Em Trânsito para Faturamento sozinho quando **toda** nota vinculada tem data de recebimento. O movimento é do sistema, em nome do primeiro responsável do pedido, ou de quem o criou quando não há responsável. Mover à mão de Em Trânsito para Faturamento continua permitido, sem exigência.
+- **RN-006 — Conclusão do trânsito.** O pedido sai de Em Trânsito para Faturamento sozinho quando **toda** nota vinculada tem data de recebimento e existe ao menos uma nota. A avaliação é de **todo** pedido em Em Trânsito com nota, e não só dos que tiveram nota atualizada na rodada — uma nota pode já ter nascido recebida, e sem isso o pedido nunca andaria. O movimento é do sistema, em nome do primeiro responsável do pedido, ou de quem o criou quando não há responsável. Mover à mão de Em Trânsito para Faturamento continua permitido, sem exigência.
 - **RN-007 — Aviso de atraso.** Uma vez por dia por nota, enquanto a nota estiver em atraso. A nota guarda a data do último aviso, e o aviso guarda a sua própria identidade de dia — as duas travas, para a rodada repetida não duplicar.
 - **RN-008 — Aviso de chegada.** Ao mover o pedido por 100 % recebido, um aviso aos responsáveis, uma vez por pedido por dia.
 - **RN-009 — Uma consulta por fornecedor.** A verificação agrupa as notas pendentes por fornecedor e faz uma consulta ao ERP por fornecedor, com todas as notas dele. Falha em um fornecedor é registrada e o processo segue nos demais.
@@ -233,20 +239,21 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-012 | no pedido T1, as notas 90001 e 90002 continuam `recebida` enquanto a 90003 está `atrasada` | regra de negócio |
 | C-013 | verificação com o pedido T3 informado toca só as notas do T3; as do T1 ficam como estavam | regra de negócio |
 | C-014 | com a consulta ao ERP falhando para o fornecedor 1042, a rodada grava o recebimento do fornecedor 1015 e devolve 1 erro, com o código do fornecedor 1042 | regra de negócio |
-| C-015 | a lista de vencidas devolve total 5 e valor 32.500,00; a nota 90015, de pedido em `faturamento`, não está na lista | regra de negócio |
-| C-016 | faixa "até 3" devolve só a nota 90011; "de 4 a 7" só a 90012; "mais de 7" devolve 3 notas, entre elas a 90013 | regra de negócio |
-| C-017 | busca "90012" devolve 1 linha; busca "NESTLE" devolve as 3 notas do pedido E5; busca "900500" (pedido no ERP) devolve as mesmas 3 | regra de negócio |
+| C-015 | a lista traz as 5 notas vencidas dos pedidos deste cenário e não traz a 90015, de pedido em `faturamento`; o total de notas e o valor acumulado batem com a contagem e a soma que o próprio teste faz no banco pela mesma regra (sem número literal — outras suítes têm notas na mesma lista) | regra de negócio |
+| C-016 | entre as notas destes pedidos: faixa "até 3" traz só a 90011; "de 4 a 7" só a 90012; "mais de 7" traz a 90013, a 90003 e a 90006 | regra de negócio |
+| C-017 | busca "90012" traz a 90012; busca "NESTLE" e busca "900500" (pedido no ERP) trazem as 3 notas do pedido E5 | regra de negócio |
 | C-018 | 3 notas viram 4 linhas de texto (cabeçalho + 3), com ponto e vírgula como separador, valor em vírgula decimal e aspas no campo que contém o separador | regra de tela |
 | C-019 | o servidor recusa mover o pedido F6 de `faturamento` para `concluido`, com motivo citando a validação pendente | regra de negócio |
 | C-020 | verificação chamada por `leo` (comercial) e por `dora` (diretoria) devolve recusa sem gravar; gravação de recebimento com o comercial como autor não altera nenhuma linha | regra de negócio |
 | C-021 | trocando o prazo do fornecedor 1015 de 7 para 10 dias úteis, a nota 90001 passa a prever `2026-09-07`; as notas recebidas mantêm a data de recebimento | regra de negócio |
 | C-022 | a nota 90006, registrada sem entrada no ERP, tem previsão e situação e continua sem recebimento depois da rodada | regra de negócio |
+| C-023 | pedido em trânsito com 2 notas já recebidas e nenhuma pendente é movido para faturamento na primeira rodada, com o mesmo registro de movimento e aviso de C-009 | regra de negócio |
 | RN-001 | 24/08/2026 + 15 dias úteis = 14/09/2026; 29/08/2026 (sábado) + 1 dia útil = 31/08/2026 | regra de negócio |
 | RN-002 | prazo 0 → sem previsão; data de faturamento vazia → sem previsão | regra de negócio |
 | RN-003 | recebida vence atraso; previsão hoje−1 → `atrasada`; hoje+2 → `em_transito`; hoje+3 → `dentro_prazo`; sem previsão → `sem_prazo` | regra de tela + regra de negócio |
 | RN-004 | entrada com cancelamento é descartada; das duas filiais vale a do pedido | regra de negócio |
 | RN-005 | atraso 3 → faixa "até 3"; 4 e 7 → "de 4 a 7"; 8 → "mais de 7" | regra de tela |
-| RN-006 | com 1 de 2 notas recebidas o pedido não move; com 2 de 2, move uma vez só (a rodada seguinte não move de novo) | regra de negócio |
+| RN-006 | com 1 de 2 notas recebidas o pedido não move; com 2 de 2, move uma vez só (a rodada seguinte não move de novo); pedido em trânsito **sem nenhuma** nota não move | regra de negócio |
 | RN-007 | a nota atrasada com aviso de hoje não avisa de novo; apagando a data do último aviso, avisa — e o aviso repetido do mesmo dia é recusado pela identidade do aviso | regra de negócio |
 | RN-008 | o aviso de chegada é gravado uma vez para o pedido movido | regra de negócio |
 | RN-009 | rodada com notas de 2 fornecedores faz 2 consultas ao ERP (uma por fornecedor), com todas as notas de cada um | regra de negócio |
