@@ -7,67 +7,76 @@
 >
 > `[P]` = paralelizável (arquivos distintos, sem dependência entre si).
 > **pedir ao integrador** = arquivo compartilhado; esta feature não o edita.
+>
+> Estado em 2026-09-15 (branch `feature/003-itens`): tudo entregue, exceto
+> T-040 e T-042 (ligação no `QuadroPage`, rota e menu — arquivos do
+> integrador, com os trechos prontos no relatório da feature) e T-092/T-093
+> (verificação manual no simulador, que o agente da feature não sobe).
+> T-001, T-015, T-020 e T-022 já vieram prontos na base da onda 1 (schema
+> `SGC_*`, `PUBLISH_ORDER`, `schema-winthor.mjs`); T-022 e T-023 foram
+> preenchidos aqui (seção 003 do `CHECK_INPUT` e shims novos do dialeto,
+> isolados num commit `chore(integração)`).
 
 ## Backend
 
-- [ ] **T-001** — **Pedir ao integrador**: `SGC_PEDIDO_ITEM`, `SGC_ALERTA` e `SGC_COBERTURA` no `setup-backend.mjs`, com as colunas, os `UNIQUE KEY` (`UK_ITEM (ID_CARD, CODPROD)`, `UK_ALERTA (ID_CARD, CHAVE)`, `UK_COBERTURA (NIVEL, CODIGO)`) e os índices da seção *Modelo de dados* do plan → `backend/setup-backend.mjs`
-- [ ] **T-002** — Criar `add-006-itens.mjs` com o esqueleto padrão (`definitions` exportado, `isEntrypoint()` resolvendo o `jdbcId` do WinThor por nome, `configureSdkMitra` guardado por `if (process.env.MITRA_BASE_URL)`) → `backend/add-006-itens.mjs`
-- [ ] **T-003** — `sgcWintAnaliseMontagem` (SQL Oracle, 7301): a consulta completa do plan, com o recorte de produto ativo, departamentos 4 e 7 e licitação por `CODATV1` → `backend/add-006-itens.mjs`
-- [ ] **T-004** `[P]` — `sgcWintBuscarProduto` (7302) e `sgcWintPrazoPagamento` (7305), as duas com o `ROWNUM` dentro da subconsulta ordenada → `backend/add-006-itens.mjs`
-- [ ] **T-005** `[P]` — `sgcWintLotesAVencer` (7303) e `sgcWintExcessoOutrasFiliais` (7304), porte fiel de `p-45547/backend/add-alertas-analise.mjs` com `{{diasValidade}}` e `{{diasEstoque}}` parametrizados → `backend/add-006-itens.mjs`
-- [ ] **T-006** `[P]` — `sgcCustoUnidadesPorCaixa` (7306), tipo `INTEGRATION` sobre a conexão `gestao-de-custos` (`runQuery` em `PRODUTOS.UNIDADES_POR_CAIXA`) → `backend/add-006-itens.mjs`
-- [ ] **T-007** `[P]` — `sgcCoberturaListar` (7307) → `backend/add-006-itens.mjs`
-- [ ] **T-008** — `sgcAnaliseSaidaVerificar` (7308): os cinco predicados de RN-012 na ordem da regra, devolvendo `PODE` e `MOTIVO` da primeira condição que falha → `backend/add-006-itens.mjs`
-- [ ] **T-009** — Escritas de item: `sgcEscItemGravar` (7350, upsert de várias tuplas), `sgcEscItemRemover` (7351), `sgcEscItemRemoverZerados` (7352), `sgcEscItemStatusFase` (7353) — uma instrução por SF; `sgcEscItemRemover` e `sgcEscItemStatusFase` são escritas de **tela** (`:VAR_USER` + guarda: `admin`/`analista`/`gestor` e, no status, também `diretoria`), as outras duas recebem `usuarioId` do JS → `backend/add-006-itens.mjs`
-- [ ] **T-010** `[P]` — Escritas de alerta: `sgcEscAlertaInserir` (7354), `sgcEscAlertaRemoverObsoletos` (7355), `sgcEscAlertaLer` (7356), `sgcEscAlertaJustificar` (7357) — as duas últimas são de tela, com `:VAR_USER` + guarda `admin`/`analista`/`gestor` → `backend/add-006-itens.mjs`
-- [ ] **T-011** `[P]` — Escritas de cobertura e de pedido: `sgcEscCoberturaGravar` (7358), `sgcEscCoberturaExcluir` (7359), `sgcEscPedidoPrazo` (7360), `sgcEscPedidoTotal` (7361), com a guarda de persona da 002 copiada literalmente (mapa de `ACCESS_LEVEL` + `<> 'READ_ONLY'`), trocando só a lista de personas → `backend/add-006-itens.mjs`
-- [ ] **T-012** — `sgcItensGravar` (7309, JAVASCRIPT): persona por `runQueryMitra` com `:VAR_USER`, recusa fora da fase `analise`, `escapar()` do texto, `{{linhas}}` em lotes de 200, chamada das escritas por id com `usuarioId`, total recalculado no retorno → `backend/add-006-itens.mjs`
-- [ ] **T-013** — `sgcAlertasGerar` (7310, JAVASCRIPT): lê os itens vivos, fatia `codprods` em 500, chama as duas consultas Oracle, monta `CHAVE`/`MENSAGEM`, insere em lote e remove as chaves mortas → `backend/add-006-itens.mjs`
-- [ ] **T-014** — `sgcAnaliseSair` (7311, JAVASCRIPT): é o passo do `antesDeMover` em `analise → tecnica` — regera alertas → `sgcAnaliseSaidaVerificar` (`PODE = 0` devolve `{ ok: false, erro }` sem gravar nada) → zerados → total → `sgcEscPedidoReprovacoesLimpar` (SF SQL da 002, `{{usuarioId}}`/`{{idCard}}`, sem `:VAR_USER`; persona conferida aqui antes de escrever) → `kbNotaRegistrar` com o resumo de AN-10 A → `backend/add-006-itens.mjs`
-- [ ] **T-015** — Registrar o `add-006-itens.mjs` no `PUBLISH_ORDER` → **pedir ao integrador** (`backend/config.mjs` ou o índice equivalente)
+- [x] **T-001** — **Pedir ao integrador**: `SGC_PEDIDO_ITEM`, `SGC_ALERTA` e `SGC_COBERTURA` no `setup-backend.mjs`, com as colunas, os `UNIQUE KEY` (`UK_ITEM (ID_CARD, CODPROD)`, `UK_ALERTA (ID_CARD, CHAVE)`, `UK_COBERTURA (NIVEL, CODIGO)`) e os índices da seção *Modelo de dados* do plan → `backend/setup-backend.mjs`
+- [x] **T-002** — Criar `add-006-itens.mjs` com o esqueleto padrão (`definitions` exportado, `isEntrypoint()` resolvendo o `jdbcId` do WinThor por nome, `configureSdkMitra` guardado por `if (process.env.MITRA_BASE_URL)`) → `backend/add-006-itens.mjs`
+- [x] **T-003** — `sgcWintAnaliseMontagem` (SQL Oracle, 7301): a consulta completa do plan, com o recorte de produto ativo, departamentos 4 e 7 e licitação por `CODATV1` → `backend/add-006-itens.mjs`
+- [x] **T-004** `[P]` — `sgcWintBuscarProduto` (7302) e `sgcWintPrazoPagamento` (7305), as duas com o `ROWNUM` dentro da subconsulta ordenada → `backend/add-006-itens.mjs`
+- [x] **T-005** `[P]` — `sgcWintLotesAVencer` (7303) e `sgcWintExcessoOutrasFiliais` (7304), porte fiel de `p-45547/backend/add-alertas-analise.mjs` com `{{diasValidade}}` e `{{diasEstoque}}` parametrizados → `backend/add-006-itens.mjs`
+- [x] **T-006** `[P]` — `sgcCustoUnidadesPorCaixa` (7306), tipo `INTEGRATION` sobre a conexão `gestao-de-custos` (`runQuery` em `PRODUTOS.UNIDADES_POR_CAIXA`) → `backend/add-006-itens.mjs`
+- [x] **T-007** `[P]` — `sgcCoberturaListar` (7307) → `backend/add-006-itens.mjs`
+- [x] **T-008** — `sgcAnaliseSaidaVerificar` (7308): os cinco predicados de RN-012 na ordem da regra, devolvendo `PODE` e `MOTIVO` da primeira condição que falha → `backend/add-006-itens.mjs`
+- [x] **T-009** — Escritas de item: `sgcEscItemGravar` (7350, upsert de várias tuplas), `sgcEscItemRemover` (7351), `sgcEscItemRemoverZerados` (7352), `sgcEscItemStatusFase` (7353) — uma instrução por SF; `sgcEscItemRemover` e `sgcEscItemStatusFase` são escritas de **tela** (`:VAR_USER` + guarda: `admin`/`analista`/`gestor` e, no status, também `diretoria`), as outras duas recebem `usuarioId` do JS → `backend/add-006-itens.mjs`
+- [x] **T-010** `[P]` — Escritas de alerta: `sgcEscAlertaInserir` (7354), `sgcEscAlertaRemoverObsoletos` (7355), `sgcEscAlertaLer` (7356), `sgcEscAlertaJustificar` (7357) — as duas últimas são de tela, com `:VAR_USER` + guarda `admin`/`analista`/`gestor` → `backend/add-006-itens.mjs`
+- [x] **T-011** `[P]` — Escritas de cobertura e de pedido: `sgcEscCoberturaGravar` (7358), `sgcEscCoberturaExcluir` (7359), `sgcEscPedidoPrazo` (7360), `sgcEscPedidoTotal` (7361), com a guarda de persona da 002 copiada literalmente (mapa de `ACCESS_LEVEL` + `<> 'READ_ONLY'`), trocando só a lista de personas → `backend/add-006-itens.mjs`
+- [x] **T-012** — `sgcItensGravar` (7309, JAVASCRIPT): persona por `runQueryMitra` com `:VAR_USER`, recusa fora da fase `analise`, `escapar()` do texto, `{{linhas}}` em lotes de 200, chamada das escritas por id com `usuarioId`, total recalculado no retorno → `backend/add-006-itens.mjs`
+- [x] **T-013** — `sgcAlertasGerar` (7310, JAVASCRIPT): lê os itens vivos, fatia `codprods` em 500, chama as duas consultas Oracle, monta `CHAVE`/`MENSAGEM`, insere em lote e remove as chaves mortas → `backend/add-006-itens.mjs`
+- [x] **T-014** — `sgcAnaliseSair` (7311, JAVASCRIPT): é o passo do `antesDeMover` em `analise → tecnica` — regera alertas → `sgcAnaliseSaidaVerificar` (`PODE = 0` devolve `{ ok: false, erro }` sem gravar nada) → zerados → total → `sgcEscPedidoReprovacoesLimpar` (SF SQL da 002, `{{usuarioId}}`/`{{idCard}}`, sem `:VAR_USER`; persona conferida aqui antes de escrever) → `kbNotaRegistrar` com o resumo de AN-10 A → `backend/add-006-itens.mjs`
+- [x] **T-015** — Registrar o `add-006-itens.mjs` no `PUBLISH_ORDER` → **pedir ao integrador** (`backend/config.mjs` ou o índice equivalente)
 
 ## Simulador
 
-- [ ] **T-020** — **Pedir ao integrador**: as `PC*` em `backend/simulator/schema-winthor.mjs` (união das colunas que a 001 e a 003 usam) com o que esta spec exige — `PCPRODUT.OBS2`, `PCEST.QTVENDMES*`, `PCCLIENT.CODATV1`, `PCLOTE`, `PCESTENDLOTE`, `PCLOTEEND`, `PCPEDIDO.PRAZO1/2/3` — e a tabela `CUSTO_PRODUTOS` → `backend/simulator/schema-winthor.mjs`
-- [ ] **T-021** — Seed `003-itens.mjs`, **só INSERT**: 20 produtos do fornecedor 1015 (1 inativo, 1 do departamento 4), vendas que produzem os números de C-002 a C-007, clientes públicos, lote a vencer em 60 dias na filial 2 (Benenutri Filial Norte) e o de controle em 120, excesso de 100 dias na mesma filial e o de controle com 79, `PCPEDIDO` do 1015 com 28/35/42, `CUSTO_PRODUTOS`, `SGC_COBERTURA` (departamento 2 = 60, sku 5001 = 20) e os três cards de teste. Fornecedores (1015, 1042, 1088) e filiais (1, 2, 3) vêm do `seed/001-fornecedores.mjs`; `SGC_USUARIO_PERSONA` é do `seed/002-quadro.mjs` — este seed **não** grava nem um nem outro → `backend/simulator/seed/003-itens.mjs`
-- [ ] **T-022** — **Pedir ao integrador**: `CHECK_INPUT` com `codfornec`, `codfilial`, `dataInicio`, `dataFim`, `codprods`, `codprod`, `diasValidade`, `diasEstoque`, `nivel` → `backend/simulator/config.mjs`
-- [ ] **T-023** — Conferir os shims do dialeto usados por esta spec (`SYSDATE + N`, `ROUND(data − SYSDATE)`, `CONCAT`); o que faltar, **pedir ao integrador** → `backend/simulator/mysql-dialect.mjs`
+- [x] **T-020** — **Pedir ao integrador**: as `PC*` em `backend/simulator/schema-winthor.mjs` (união das colunas que a 001 e a 003 usam) com o que esta spec exige — `PCPRODUT.OBS2`, `PCEST.QTVENDMES*`, `PCCLIENT.CODATV1`, `PCLOTE`, `PCESTENDLOTE`, `PCLOTEEND`, `PCPEDIDO.PRAZO1/2/3` — e a tabela `CUSTO_PRODUTOS` → `backend/simulator/schema-winthor.mjs`
+- [x] **T-021** — Seed `003-itens.mjs`, **só INSERT**: 20 produtos do fornecedor 1015 (1 inativo, 1 do departamento 4), vendas que produzem os números de C-002 a C-007, clientes públicos, lote a vencer em 60 dias na filial 2 (Benenutri Filial Norte) e o de controle em 120, excesso de 100 dias na mesma filial e o de controle com 79, `PCPEDIDO` do 1015 com 28/35/42, `CUSTO_PRODUTOS`, `SGC_COBERTURA` (departamento 2 = 60, sku 5001 = 20) e os três cards de teste. Fornecedores (1015, 1042, 1088) e filiais (1, 2, 3) vêm do `seed/001-fornecedores.mjs`; `SGC_USUARIO_PERSONA` é do `seed/002-quadro.mjs` — este seed **não** grava nem um nem outro → `backend/simulator/seed/003-itens.mjs`
+- [x] **T-022** — **Pedir ao integrador**: `CHECK_INPUT` com `codfornec`, `codfilial`, `dataInicio`, `dataFim`, `codprods`, `codprod`, `diasValidade`, `diasEstoque`, `nivel` → `backend/simulator/config.mjs`
+- [x] **T-023** — Conferir os shims do dialeto usados por esta spec (`SYSDATE + N`, `ROUND(data − SYSDATE)`, `CONCAT`); o que faltar, **pedir ao integrador** → `backend/simulator/mysql-dialect.mjs`
 
 ## Frontend
 
-- [ ] **T-030** `[P]` — `lib/compras.ts`: `mesesDoPeriodo`, `sugestaoDeCompra`, `unidadesPorCaixa`, `arredondarPorCaixa`, `curvaAbc`, `coberturaFuturaDias`, `totalDoPedido`, `montarItens` — portadas de `p-45547/.../compras.ts` → `frontend/src/lib/compras.ts`
-- [ ] **T-031** `[P]` — `lib/cobertura.ts`: `LIMITE_COBERTURA_PADRAO_DIAS`, `limiteDeCobertura`, `acimaDoLimite` → `frontend/src/lib/cobertura.ts`
-- [ ] **T-032** `[P]` — `lib/prazo-pagamento.ts`: `parcelasDoPrazo`, `textoDeParcelas`, `normalizarPrazo`, `prazoMedioDias`, `compararPrazo`, `validarPrazoMontagem` — portadas de `p-45547/.../prazo-pagamento.ts` mais `normalizarPrazo` (D-005) → `frontend/src/lib/prazo-pagamento.ts`
-- [ ] **T-033** — Bloco 73xx em `SERVER_FUNCTION_NAMES` e `SERVER_FUNCTIONS` (7301–7311 e 7350–7361), no formato rígido do arquivo → `frontend/src/lib/server-functions.ts`
-- [ ] **T-034** — `PedidoProvider` + `usePedido()`: carrega capa, itens e alertas com uma chamada de `sgcPedidoCarregar` por card aberto e expõe `recarregar()` → `frontend/src/pages/quadro/abas/pedido-contexto.tsx`
-- [ ] **T-035** — `AbaItens`: tabela do design (§9.1) com `Code`, `RowTitle`, `RowMeta`, `numeric`, `Dash` e `Status` para cobertura acima do limite; colunas venda total, licitação, estoque, trânsito, sugestão, quantidade, un/caixa, custo, tipo de preço, curva, cobertura e total da linha → `frontend/src/pages/quadro/abas/Itens.tsx`
-- [ ] **T-036** — `AbaItens`: montar a análise (`sgcWintAnaliseMontagem` + `sgcCustoUnidadesPorCaixa` + `sgcCoberturaListar` → `montarItens`), busca e adição de produto (`sgcWintBuscarProduto`), remoção de item e edição consolidada com "Salvar" único: `sgcItensGravar` → `sgcAlertasGerar` → `kbCardAtualizar` com `valoresJson = { valor_total, alertas_pendentes }` numa chamada só, e só quando um dos dois muda (teto de 3 chamadas do RNF-001) → `frontend/src/pages/quadro/abas/Itens.tsx`
-- [ ] **T-037** — `AbaItens`: bloco de prazo de pagamento — padrão pelas faixas da 001, sugestão por `sgcWintPrazoPagamento`, comparação por `compararPrazo`, diálogo de justificativa com mínimo de 10 caracteres e gravação normalizada por `sgcEscPedidoPrazo` → `frontend/src/pages/quadro/abas/Itens.tsx`
-- [ ] **T-038** — `AbaAlertas`: lista por item com tipo, mensagem, situação de leitura e justificativa; "Marcar como lido" (`sgcEscAlertaLer`) e diálogo "Justificar" por produto (`sgcEscAlertaJustificar`), cada um seguido de `kbCardAtualizar` com `valoresJson = { alertas_pendentes }` para o cartão do quadro; a `contagem` da aba lê o mesmo campo → `frontend/src/pages/quadro/abas/Alertas.tsx`
-- [ ] **T-039** — `verificarSaidaAnalise(cardId)`: uma chamada de `sgcAnaliseSair`, devolvendo `{ ok, erro }` no formato do `antesDeMover` — a tela só chama `ctx.mover` depois do `ok` → `frontend/src/pages/quadro/abas/verificar-saida.ts`
+- [x] **T-030** `[P]` — `lib/compras.ts`: `mesesDoPeriodo`, `sugestaoDeCompra`, `unidadesPorCaixa`, `arredondarPorCaixa`, `curvaAbc`, `coberturaFuturaDias`, `totalDoPedido`, `montarItens` — portadas de `p-45547/.../compras.ts` → `frontend/src/lib/compras.ts`
+- [x] **T-031** `[P]` — `lib/cobertura.ts`: `LIMITE_COBERTURA_PADRAO_DIAS`, `limiteDeCobertura`, `acimaDoLimite` → `frontend/src/lib/cobertura.ts`
+- [x] **T-032** `[P]` — `lib/prazo-pagamento.ts`: `parcelasDoPrazo`, `textoDeParcelas`, `normalizarPrazo`, `prazoMedioDias`, `compararPrazo`, `validarPrazoMontagem` — portadas de `p-45547/.../prazo-pagamento.ts` mais `normalizarPrazo` (D-005) → `frontend/src/lib/prazo-pagamento.ts`
+- [x] **T-033** — Bloco 73xx em `SERVER_FUNCTION_NAMES` e `SERVER_FUNCTIONS` (7301–7311 e 7350–7361), no formato rígido do arquivo → `frontend/src/lib/server-functions.ts`
+- [x] **T-034** — `PedidoProvider` + `usePedido()`: carrega capa, itens e alertas com uma chamada de `sgcPedidoCarregar` por card aberto e expõe `recarregar()` → `frontend/src/pages/quadro/abas/pedido-contexto.tsx`
+- [x] **T-035** — `AbaItens`: tabela do design (§9.1) com `Code`, `RowTitle`, `RowMeta`, `numeric`, `Dash` e `Status` para cobertura acima do limite; colunas venda total, licitação, estoque, trânsito, sugestão, quantidade, un/caixa, custo, tipo de preço, curva, cobertura e total da linha → `frontend/src/pages/quadro/abas/Itens.tsx`
+- [x] **T-036** — `AbaItens`: montar a análise (`sgcWintAnaliseMontagem` + `sgcCustoUnidadesPorCaixa` + `sgcCoberturaListar` → `montarItens`), busca e adição de produto (`sgcWintBuscarProduto`), remoção de item e edição consolidada com "Salvar" único: `sgcItensGravar` → `sgcAlertasGerar` → `kbCardAtualizar` com `valoresJson = { valor_total, alertas_pendentes }` numa chamada só, e só quando um dos dois muda (teto de 3 chamadas do RNF-001) → `frontend/src/pages/quadro/abas/Itens.tsx`
+- [x] **T-037** — `AbaItens`: bloco de prazo de pagamento — padrão pelas faixas da 001, sugestão por `sgcWintPrazoPagamento`, comparação por `compararPrazo`, diálogo de justificativa com mínimo de 10 caracteres e gravação normalizada por `sgcEscPedidoPrazo` → `frontend/src/pages/quadro/abas/Itens.tsx`
+- [x] **T-038** — `AbaAlertas`: lista por item com tipo, mensagem, situação de leitura e justificativa; "Marcar como lido" (`sgcEscAlertaLer`) e diálogo "Justificar" por produto (`sgcEscAlertaJustificar`), cada um seguido de `kbCardAtualizar` com `valoresJson = { alertas_pendentes }` para o cartão do quadro; a `contagem` da aba lê o mesmo campo → `frontend/src/pages/quadro/abas/Alertas.tsx`
+- [x] **T-039** — `verificarSaidaAnalise(cardId)`: uma chamada de `sgcAnaliseSair`, devolvendo `{ ok, erro }` no formato do `antesDeMover` — a tela só chama `ctx.mover` depois do `ok` → `frontend/src/pages/quadro/abas/verificar-saida.ts`
 - [ ] **T-040** — **Pedir ao integrador**: ligar as abas no `/quadro` (`abasExtras` com Itens e Alertas, `contagem` de alertas), envolver o `KanbanBoard` no `PedidoProvider` e plugar `verificarSaidaAnalise` no `antesDeMover` de `analise → tecnica` → `frontend/src/pages/quadro/QuadroPage.tsx`
-- [ ] **T-041** `[P]` — `CoberturasPage`: listagem por nível com `SelectMenu`, `Toolbar` colada à tabela, diálogo de cadastro/edição (`sgcEscCoberturaGravar`), desativação (`sgcEscCoberturaExcluir`) e formulário desabilitado (nunca escondido) para quem não é admin nem gestor → `frontend/src/pages/coberturas/CoberturasPage.tsx`
+- [x] **T-041** `[P]` — `CoberturasPage`: listagem por nível com `SelectMenu`, `Toolbar` colada à tabela, diálogo de cadastro/edição (`sgcEscCoberturaGravar`), desativação (`sgcEscCoberturaExcluir`) e formulário desabilitado (nunca escondido) para quem não é admin nem gestor → `frontend/src/pages/coberturas/CoberturasPage.tsx`
 - [ ] **T-042** — **Pedir ao integrador**: rota `/coberturas` e item de menu (admin e gestor) → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx`
 
 ## Testes
 
 Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo.
 
-- [ ] **T-080** — `teste('C-001 …')`, `teste('C-009 …')` e `teste('RN-011 …')` em `backend/simulator/smoke/003-itens.mjs`: a análise devolve 18 linhas (> 0) sem inativo nem departamento 4; a busca devolve entre 1 e 20 e exatamente 1 por código; o 5001 traz licitação 6 dentro de venda 18
-- [ ] **T-081** — `teste('C-011 …')`, `teste('C-012 …')`, `teste('RN-009 …')` e `teste('RN-010 …')`: as duas consultas Oracle de alerta devolvem contagem > 0; `sgcAlertasGerar` cria 1 alerta de vencimento (60 dias, Benenutri Filial Norte — `CODFILIAL` 2) e 1 de excesso (100 dias); 91 dias e 79 dias não alertam, 90 e 81 alertam, 100 dias na própria filial não alerta
-- [ ] **T-082** — `teste('C-010 …')` e `teste('C-021 …')`: `sgcItensGravar` com 9 itens numa chamada devolve `{ itens: 9 }`, grava as 9 quantidades e o `VL_TOTAL` esperado; 1 de 3 itens com `TIPO_PRECO` especial
-- [ ] **T-083** — `teste('C-013 …')`, `teste('C-014 …')`, `teste('C-017 …')`, `teste('C-007 …')` (parte servidor), `teste('C-015 …')` (parte servidor) e `teste('RN-012 …')`: cada condição de saída quebrada sozinha devolve `PODE = 0` com a sua mensagem; tudo satisfeito devolve `PODE = 1` e `MOTIVO` vazio
-- [ ] **T-084** — `teste('C-018 …')`, `teste('C-022 …')`, `teste('RN-013 …')` e `teste('RN-014 …')`: `sgcAnaliseSair` com `ok: true` remove 12 de 20, recalcula o total, limpa a reprovação e deixa a nota com "8 itens"; com alerta não lido devolve `ok: false` sem gravar nada; `sgcEscItemStatusFase` muda só os itens vivos
-- [ ] **T-085** — `teste('C-019 …')` e `teste('C-020 …')`: cancelar passa com alertas não lidos e sem item; `gil` grava cobertura e `ana` não
-- [ ] **T-086** `[P]` — `test('C-002 …')`, `test('C-003 …')`, `test('C-005 …')`, `test('C-006 …')`, `test('RN-001 …')`, `test('RN-003 …')` e `test('RN-008 …')` em `frontend/tests/compras.test.mjs`
-- [ ] **T-087** `[P]` — `test('C-004 …')`, `test('C-007 …')` (parte tela), `test('RN-002 …')` e `test('RN-004 …')` em `frontend/tests/compras.test.mjs`
-- [ ] **T-088** `[P]` — `test('C-008 …')` e `test('RN-005 …')` em `frontend/tests/cobertura.test.mjs`
-- [ ] **T-089** `[P]` — `test('C-015 …')` (parte tela), `test('C-016 …')`, `test('RN-006 …')` e `test('RN-007 …')` em `frontend/tests/prazo-pagamento.test.mjs`
+- [x] **T-080** — `teste('C-001 …')`, `teste('C-009 …')` e `teste('RN-011 …')` em `backend/simulator/smoke/003-itens.mjs`: a análise devolve 18 linhas (> 0) sem inativo nem departamento 4; a busca devolve entre 1 e 20 e exatamente 1 por código; o 5001 traz licitação 6 dentro de venda 18
+- [x] **T-081** — `teste('C-011 …')`, `teste('C-012 …')`, `teste('RN-009 …')` e `teste('RN-010 …')`: as duas consultas Oracle de alerta devolvem contagem > 0; `sgcAlertasGerar` cria 1 alerta de vencimento (60 dias, Benenutri Filial Norte — `CODFILIAL` 2) e 1 de excesso (100 dias); 91 dias e 79 dias não alertam, 90 e 81 alertam, 100 dias na própria filial não alerta
+- [x] **T-082** — `teste('C-010 …')` e `teste('C-021 …')`: `sgcItensGravar` com 9 itens numa chamada devolve `{ itens: 9 }`, grava as 9 quantidades e o `VL_TOTAL` esperado; 1 de 3 itens com `TIPO_PRECO` especial
+- [x] **T-083** — `teste('C-013 …')`, `teste('C-014 …')`, `teste('C-017 …')`, `teste('C-007 …')` (parte servidor), `teste('C-015 …')` (parte servidor) e `teste('RN-012 …')`: cada condição de saída quebrada sozinha devolve `PODE = 0` com a sua mensagem; tudo satisfeito devolve `PODE = 1` e `MOTIVO` vazio
+- [x] **T-084** — `teste('C-018 …')`, `teste('C-022 …')`, `teste('RN-013 …')` e `teste('RN-014 …')`: `sgcAnaliseSair` com `ok: true` remove 12 de 20, recalcula o total, limpa a reprovação e deixa a nota com "8 itens"; com alerta não lido devolve `ok: false` sem gravar nada; `sgcEscItemStatusFase` muda só os itens vivos
+- [x] **T-085** — `teste('C-019 …')` e `teste('C-020 …')`: cancelar passa com alertas não lidos e sem item; `gil` grava cobertura e `ana` não
+- [x] **T-086** `[P]` — `test('C-002 …')`, `test('C-003 …')`, `test('C-005 …')`, `test('C-006 …')`, `test('RN-001 …')`, `test('RN-003 …')` e `test('RN-008 …')` em `frontend/tests/compras.test.mjs`
+- [x] **T-087** `[P]` — `test('C-004 …')`, `test('C-007 …')` (parte tela), `test('RN-002 …')` e `test('RN-004 …')` em `frontend/tests/compras.test.mjs`
+- [x] **T-088** `[P]` — `test('C-008 …')` e `test('RN-005 …')` em `frontend/tests/cobertura.test.mjs`
+- [x] **T-089** `[P]` — `test('C-015 …')` (parte tela), `test('C-016 …')`, `test('RN-006 …')` e `test('RN-007 …')` em `frontend/tests/prazo-pagamento.test.mjs`
 
 ## Verificação
 
-- [ ] **T-090** — `cd backend && npm test` verde (`sim:check` + `sim:smoke`); nenhuma consulta Oracle com 0 linha
-- [ ] **T-091** — `cd frontend && npm test` verde; `npm run build` e `npm run lint` limpos
+- [x] **T-090** — `cd backend && npm test` verde (`sim:check` + `sim:smoke`); nenhuma consulta Oracle com 0 linha
+- [x] **T-091** — `cd frontend && npm test` verde; `npm run build` e `npm run lint` limpos
 - [ ] **T-092** — Verificação manual no simulador: C-001 (tabela com 300 linhas rolando), C-007 (item acima do limite sinalizado com ponto e texto), C-013 (contagem de alertas na aba e no cartão), C-020 (tela de coberturas com formulário desabilitado para quem só lê)
 - [ ] **T-093** — Tema claro e tema escuro sem cor quebrada nas duas abas e na tela de coberturas
 

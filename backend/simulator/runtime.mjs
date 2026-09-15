@@ -35,18 +35,30 @@ export async function loadDefinitions(order = PUBLISH_ORDER) {
   return { byName, overridden };
 }
 
-/** Aplica `{{param}}` e `:VAR_USER` como o runtime do Mitra faz: por texto. */
+/**
+ * Aplica `{{param}}` e `:VAR_USER` como o runtime do Mitra faz: por texto.
+ *
+ * A convencao do projeto (CLAUDE.md) e "string com aspas manuais": o SQL
+ * escreve `'{{nome}}'` e o valor entra DENTRO das aspas — e dado, entao aspa
+ * no valor e escapada aqui, reproduzindo a ligacao de parametro.
+ *
+ * `{{x}}` SEM aspas ao redor e outra coisa: numero (`WHERE ID = {{id}}`) ou
+ * FRAGMENTO de SQL montado por uma server function JAVASCRIPT — as tuplas de
+ * `VALUES {{linhas}}` e as listas de `IN ({{codprods}})`. Esse texto e
+ * sintaxe, nao dado: escapa-lo quebraria o fragmento. Quem monta o fragmento e
+ * quem escapa (o `texto()` do add-006-itens.mjs dobra a aspa simples).
+ */
 export function bindParams(sql, input, userId) {
   return String(sql)
     .replace(/:VAR_USER\b/g, String(Number(userId) || 0))
-    .replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    .replace(/'?\{\{(\w+)\}\}'?/g, (marcador, key) => {
+      const entreAspas = marcador.startsWith("'") && marcador.endsWith("'");
       const value = input?.[key];
       // Ausente vira string vazia: as funcoes testam `'{{x}}' = ''` para
       // decidir se o filtro esta ativo.
-      if (value === undefined || value === null) return '';
-      // A plataforma LIGA o parametro em vez de concatenar texto, entao aspas
-      // no valor sao dado e nao sintaxe. Escapar aqui reproduz isso.
-      return String(value).replace(/\\/g, '\\\\').replace(/'/g, "''");
+      const texto = value === undefined || value === null ? '' : String(value);
+      if (!entreAspas) return texto;
+      return `'${texto.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
     });
 }
 

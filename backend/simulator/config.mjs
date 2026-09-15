@@ -76,5 +76,8 @@ export const CHECK_INPUT = {
   enviadoPor: '2', enviadoEm: '2026-09-15T12:00:00', tipo: 'email',
   para: 'a@b.com', cc: 'compras@benenutri.com', assunto: 'x', corpo: 'x',
   // spec 003 (itens do pedido):
+  codfornec: '1015', codfilial: '1', dataInicio: '2026-08-01', dataFim: '2026-09-14',
+  codprods: '5001,5002', codprod: '0', diasValidade: '90', diasEstoque: '80',
+  nivel: '', cardId: '1',
   // spec 004 (agenda de análises):
 };
