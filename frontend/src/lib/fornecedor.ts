@@ -221,7 +221,10 @@ export function validarParametrizacao(payload: ParametrizacaoPayload): { ok: boo
     if (!resultadoFaixas.ok) return { ok: false, error: `${resultadoFaixas.erro} (linha ${nome}).` };
 
     for (const faixa of linha.faixas ?? []) {
-      if (parcelasDoPrazo(faixa.parcelas).length === 0) {
+      // RN-009: opção de faixa é "30/60/90" — toda parcela em dias > 0 ("0/30" e
+      // "à vista" valem só na comparação de prazo da 003, não aqui).
+      const parcelasDaFaixa = parcelasDoPrazo(faixa.parcelas);
+      if (parcelasDaFaixa.length === 0 || parcelasDaFaixa.some((dias) => dias <= 0)) {
         return { ok: false, error: `Opção de prazo inválida na linha ${nome}.` };
       }
     }
