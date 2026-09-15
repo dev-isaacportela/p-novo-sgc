@@ -91,7 +91,7 @@ test('menuParaPersona: o menu do analista tem quadro, novo pedido, agenda, notif
   assert.equal(leitura.includes('/pedidos/novo'), false);
 });
 
-test('R-028/R-038 (onda 2): chaves novas por persona — comercial só vê B.O.; diretoria só lê; READ_ONLY zera operar*/registrarContato, mas não ver*', () => {
+test('C-027 / R-028/R-038 (onda 2): chaves novas por persona — comercial só vê B.O.; diretoria só lê; READ_ONLY zera operar*/registrarContato, mas não ver*', () => {
   const CHAVES_VER = ['verNotasFiscais', 'verFaturamentoPendente', 'verNfsAtraso'];
   const CHAVES_OPERAR = ['operarNf', 'registrarContato'];
 

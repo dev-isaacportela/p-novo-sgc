@@ -25,6 +25,8 @@
 //   SYSDATE                            -> datetime('now') (reescrita textual)
 //   SYSDATE +/- N  e  TRUNC(SYSDATE) +/- N   -> N DIAS, nao N unidades numericas
 //   <data> - SYSDATE / - TRUNC(SYSDATE)      -> diferenca em dias (JULIANDAY)
+//   TRUNC(A.COL - B.COL)               -> diferenca em dias entre duas colunas
+//                                         de data qualificadas (JULIANDAY)
 //   FROM DUAL                          -> removido (reescrita textual)
 //   ON DUPLICATE KEY UPDATE / VALUES(COL)    -> ON CONFLICT DO UPDATE SET / excluded.COL
 //   WHERE ROWNUM <= N / AND ROWNUM <= N -> remove a condicao, acrescenta LIMIT N no fim
@@ -392,6 +394,15 @@ export function toSqlite(sql) {
       (_, coluna) => `(JULIANDAY(${coluna}) - JULIANDAY('now', 'start of day'))`);
     out = out.replace(/([A-Za-z_][\w.]*)\s*-\s*SYSDATE\b/gi,
       (_, coluna) => `(JULIANDAY(${coluna}) - JULIANDAY('now'))`);
+
+    // TRUNC(A.COL - B.COL) entre duas colunas QUALIFICADAS de data: no Oracle a
+    // subtracao de datas ja da dias; no SQLite as duas sao TEXT e o `-` daria
+    // zero (spec 005, sgcWintNfParcelas: dias entre emissao e vencimento da
+    // duplicata). So a forma `alias.COLUNA - alias.COLUNA` dentro de TRUNC e
+    // traduzida — coluna numerica raramente aparece assim, e `TRUNC(numero)`
+    // solto continua indo para a funcao escalar registrada.
+    out = out.replace(/\bTRUNC\s*\(\s*([A-Za-z_]\w*\.[A-Za-z_]\w*)\s*-\s*([A-Za-z_]\w*\.[A-Za-z_]\w*)\s*\)/gi,
+      (_, fim, inicio) => `CAST(JULIANDAY(${fim}) - JULIANDAY(${inicio}) AS INTEGER)`);
 
     // SYSDATE -> datetime('now'); FROM DUAL -> nada (SELECT sem FROM e valido no SQLite).
     out = out.replace(/\bSYSDATE\b/gi, "datetime('now')");
