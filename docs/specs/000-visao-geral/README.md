@@ -91,7 +91,9 @@ remove nem reordena (o `add-005` cria as dez com a chave; o seed idem).
 | `SGC_FORNECEDOR` + `_FILIAL`, `_LINHA`, `_LINHA_CONTATO`, `_FAIXA_PRAZO`, `_DOCUMENTO`, `_LOG` | parametrização própria sobre o cadastro do WinThor — `CODFORNEC` (chave do ERP, único), `FORNECEDOR` (nome copiado do ERP), `CNPJ`, `CNPJ_FORMATADO`, `ATIVO`, prazo de entrega (úteis/corridos), pedido mínimo, janela de fechamento, link da plataforma, validade mínima, SLA de análise (1) e faturamento (5) dias úteis; filiais atendidas; linhas com contatos de envio; faixas de valor com opções de prazo (`"30/60/90"`); documentos; log campo a campo (FO-06 B) | 001 |
 | `SGC_AGENDA` + `SGC_AGENDA_PARTICIPANTE` | `CODFORNEC`, `FORNECEDOR`, `CODFILIAL`, `FILIAL`, `DATA_ANALISE`, `PERIODO_INICIO/FIM`, `RECORRENCIA` (`nenhuma`/`semanal`/`quinzenal`/`mensal`), `DATA_LIMITE_RECORRENCIA`, `ATIVO`, `PROCESSADO_EM`, `ID_CARD_GERADO`, `CANCELADO_EM`, `CANCELADO_POR`, `OBSERVACAO` (a descrição da reunião, AG-02 B), `DATA_PLANEJADA_ORIGINAL` e `DATA_ENVIO_REAL` (planejado × real, EN-05 A), `CRIADO_POR`, `CRIADO_EM`, `ATUALIZADO_EM`; participantes em `SGC_AGENDA_PARTICIPANTE` (`ID`, `ID_AGENDA`, `USUARIO_ID`, `CRIADO_EM`) | 004 |
 
-Convenções: colunas em UPPERCASE; datas em `VARCHAR(10)`/`VARCHAR(19)`; chaves
+Convenções: colunas em UPPERCASE; datas em `VARCHAR(10)`/`VARCHAR(19)`; o mesmo dado tem o mesmo
+tipo em toda tabela: `CODFORNEC INT`, `CODFILIAL VARCHAR(10)`, `FORNECEDOR VARCHAR(200)`,
+`FILIAL VARCHAR(200)` (C-14 da revisão cruzada); chaves
 estrangeiras por convenção (sem `FOREIGN KEY` — o simulador e a plataforma não dependem
 delas); `ID` autoincremento; tabela de log com `CAMPO`, `DE`, `PARA`, `POR`, `EM`.
 `KB_BOARD.CONFIG_JSON` não guarda nada do SGC.
@@ -110,9 +112,9 @@ Prefixo `sgc`. Uma faixa de id local por spec (o `sync-server-function-map` traz
 | Spec | Faixa | Leitura (SQL/JS) | Escrita SQL guardada por `:VAR_USER` | JS (orquestração, e-mail, cron) |
 |---|---|---|---|---|
 | 001 fornecedores | 71xx | `sgcFornecedorListar`, `sgcFornecedorListarTotal`, `sgcWintFornecedores`, `sgcWintFiliais` | `sgcEscFornecedor*` (7150–7162, uma instrução por SF; recebem `{{usuarioId}}` e são chamadas por id só pelo `sgcFornecedorSalvar`) | `sgcFornecedorCarregar` (uma execução: parametrização + filhas + log), `sgcFornecedorSalvar` (confere a persona por `runQueryMitra` com `:VAR_USER` antes de escrever; grava o pai e as filhas, log campo a campo) |
-| 002 quadro | 72xx | `sgcPersonaAtual` (`:VAR_USER`), `sgcPersonasListar`, `sgcPersonasListarTotal`, `sgcFasesListar`, `sgcPodeMover`/`sgcPodeExcluir` (SQL ligadas nos ganchos da lib; a saída da Análise é a subconsulta `PENDENCIAS`, que a 003 preenche), `sgcComunicacoesListar`, `sgcNotificacoesListar`, `sgcNotificacoesListarTotal` | tela, `:VAR_USER`: `sgcEscPedidoCriar` (capa; a tela chama `api.cardCriar` da lib antes), técnica (aprovar/reprovar), diretoria (aprovar/reprovar), `sgcEscPedidoCancelar`, `sgcEscPedidoEnvio`, `sgcEscComunicacaoInserir`, `sgcEscPersonaSalvar`; por id, `{{usuarioId}}`: `sgcEscPedidoCapaInserir` (cron da 004, R-010), `sgcEscPedidoReprovacoesLimpar` (`sgcAnaliseSair` da 003, R-011) | `sgcPedidoCarregar` (capa + itens + alertas numa execução), `sgcEnvioIndustriaRegistrar` (`sendEmailMitra` com cópia fixa compras@; chama `sgcEscAgendaEnvio` da 004 por id quando `ID_AGENDA > 0`, R-012) |
-| 003 itens | 73xx | `sgcWintAnaliseMontagem`, `sgcWintBuscarProduto`, `sgcWintLotesAVencer`, `sgcWintExcessoOutrasFiliais`, `sgcWintPrazoPagamento` (Oracle), `sgcCustoUnidadesPorCaixa` (INTEGRATION `gestao-de-custos`, AN-05 B), `sgcCoberturaListar`, `sgcAnaliseSaidaVerificar` (as travas de saída da Análise; `sgcPodeMover` a incorpora como subconsulta no ramo `analise → tecnica`) | `sgcEscItemGravar`, `sgcEscItemRemover`, `sgcEscItemRemoverZerados`, `sgcEscItemStatusFase`, `sgcEscAlertaInserir`, `sgcEscAlertaRemoverObsoletos`, `sgcEscAlertaLer`, `sgcEscAlertaJustificar`, `sgcEscCoberturaGravar`, `sgcEscCoberturaExcluir`, `sgcEscPedidoPrazo`, `sgcEscPedidoTotal` (7350–7361) | `sgcItensGravar` (lote), `sgcAlertasGerar`, `sgcAnaliseSair` (remove zerados, limpa reprovações por `sgcEscPedidoReprovacoesLimpar` da 002, recalcula o total) |
-| 004 agenda | 74xx | `sgcAgendaListar`, `sgcAgendaListarTotal`, `sgcAgendaCarregar` | `sgcEscAgendaInserir`, `sgcEscAgendaAtualizar`, `sgcEscAgendaCancelar`, `sgcEscAgendaParticipanteLimpar`, `sgcEscAgendaParticipanteInserir` (tela, `:VAR_USER`); internas sem sessão, chamadas por id pelo cron e pelo envio: `sgcEscAgendaProcessada`, `sgcEscAgendaProximaInserir`, `sgcEscAgendaParticipanteCopiar`, `sgcEscAgendaEnvio` | `sgcAgendaProcessar` (cron `0 */30 * * * *`, cria o card com `origem: 'sistema'`), `sgcAgendaProcessarManual` (quatro recortes, AG-06 B) |
+| 002 quadro | 72xx | `sgcPersonaAtual` (`:VAR_USER`), `sgcPersonasListar`, `sgcPersonasListarTotal`, `sgcFasesListar`, `sgcPodeMover`/`sgcPodeExcluir` (SQL ligadas nos ganchos da lib; a saída da Análise é a subconsulta `PENDENCIAS`, que a 003 preenche), `sgcComunicacoesListar`, `sgcNotificacoesListar`, `sgcNotificacoesListarTotal` | tela, `:VAR_USER`: `sgcEscPedidoCriar` (capa; a tela chama `api.cardCriar` da lib antes), técnica (aprovar/reprovar), diretoria (aprovar/reprovar), `sgcEscPedidoCancelar`, `sgcEscPersonaSalvar`; por id, `{{usuarioId}}`: `sgcEscPedidoEnvio` e `sgcEscComunicacaoInserir` (de `sgcEnvioIndustriaRegistrar`), `sgcEscPedidoCapaInserir` (cron da 004, R-010), `sgcEscPedidoReprovacoesLimpar` (`sgcAnaliseSair` da 003, R-011) | `sgcPedidoCarregar` (capa + itens + alertas numa execução), `sgcEnvioIndustriaRegistrar` (`sendEmailMitra` com cópia fixa compras@; chama `sgcEscAgendaEnvio` da 004 por id quando `ID_AGENDA > 0`, R-012) |
+| 003 itens | 73xx | `sgcWintAnaliseMontagem`, `sgcWintBuscarProduto`, `sgcWintLotesAVencer`, `sgcWintExcessoOutrasFiliais`, `sgcWintPrazoPagamento` (Oracle), `sgcCustoUnidadesPorCaixa` (INTEGRATION `gestao-de-custos`, AN-05 B), `sgcCoberturaListar`, `sgcAnaliseSaidaVerificar` (as travas de saída da Análise; `sgcPodeMover` a incorpora como subconsulta no ramo `analise → tecnica`) | 7350–7361: `sgcEscItemGravar`, `sgcEscItemRemover`, `sgcEscItemRemoverZerados`, `sgcEscItemStatusFase` (tela, `:VAR_USER`; quem a chama é a tela da 002, depois da aprovação da diretoria e depois do envio, F-07), `sgcEscAlertaInserir`, `sgcEscAlertaRemoverObsoletos`, `sgcEscAlertaLer`, `sgcEscAlertaJustificar`, `sgcEscCoberturaGravar`, `sgcEscCoberturaExcluir`, `sgcEscPedidoPrazo`, `sgcEscPedidoTotal` — as chamadas direto da tela guardadas por `:VAR_USER`; as chamadas por id de dentro de `sgcItensGravar`/`sgcAlertasGerar`/`sgcAnaliseSair` com `{{usuarioId}}` (o plan da 003 diz qual é qual) | `sgcItensGravar` (lote), `sgcAlertasGerar`, `sgcAnaliseSair` (remove zerados, limpa reprovações por `sgcEscPedidoReprovacoesLimpar` da 002, recalcula o total) |
+| 004 agenda | 74xx | `sgcAgendaListar`, `sgcAgendaListarTotal`, `sgcAgendaCarregar` | `sgcEscAgendaInserir`, `sgcEscAgendaAtualizar`, `sgcEscAgendaCancelar`, `sgcEscAgendaParticipanteLimpar`, `sgcEscAgendaParticipanteInserir` (tela, `:VAR_USER`); internas sem sessão, chamadas por id pelo cron e pelo envio: `sgcEscAgendaProcessada`, `sgcEscAgendaProximaInserir`, `sgcEscAgendaParticipanteCopiar`, `sgcEscAgendaEnvio` | `sgcAgendaProcessar` (cron `0 */30 * * * *`, cria o card com `origem: 'sistema'`), `sgcAgendaProcessarManual` (quatro recortes, AG-06 B: `agendamento` por id, `intervalo` de datas, `dias` a partir de hoje, `mes` corrente — o padrão) |
 
 Escritas por id e perfil de acesso (exceção ao princípio 5): escrita disparada por processo
 sem sessão (cron da agenda) ou de dentro de um JS (`sgcFornecedorSalvar`, `sgcEnvioIndustriaRegistrar`)
@@ -120,20 +122,12 @@ não pode ser guardada por `:VAR_USER` — chamada aninhada não o propaga com g
 SQL recebem `{{usuarioId}}` cru e quem confere a persona é o JS, por `runQueryMitra` com
 `:VAR_USER`, **antes** de qualquer escrita. O perfil business (`add-002`) libera todas as SFs,
 como a lib faz com as `kbEsc*`; se o sandbox provar que chamada aninhada dispensa o perfil, as
-`sgcEsc*` chamadas só por id saem dele (item da verificação da onda 1).
-
-Scripts do backend, na ordem do sandbox: `add-001-kanban.mjs` (instala a lib com
-`instalar({ ganchos })`), `add-003-jdbc-winthor.mjs`, `add-004-fornecedores.mjs`,
-`add-005-quadro-compras.mjs`, `add-006-itens.mjs`, `add-007-agenda.mjs` e, por último e fora do
-`PUBLISH_ORDER`, `add-002-perfil-acesso.mjs`. Todo o DDL `SGC_*` mora no `setup-backend.mjs`.
-
-Escritas por id e perfil de acesso (exceção ao princípio 5): escrita disparada por processo
-sem sessão (cron da agenda) ou de dentro de um JS (`sgcFornecedorSalvar`, `sgcEnvioIndustriaRegistrar`)
-não pode ser guardada por `:VAR_USER` — chamada aninhada não o propaga com garantia. Essas
-SQL recebem `{{usuarioId}}` cru e quem confere a persona é o JS, por `runQueryMitra` com
-`:VAR_USER`, **antes** de qualquer escrita. O perfil business (`add-002`) libera todas as SFs,
-como a lib faz com as `kbEsc*`; se o sandbox provar que chamada aninhada dispensa o perfil, as
-`sgcEsc*` chamadas só por id saem dele (item da verificação da onda 1).
+`sgcEsc*` chamadas só por id saem dele (item da verificação da onda 1). A guarda de persona no
+servidor é UM texto só, o da 002 (mapa completo de `ACCESS_LEVEL`: ADMIN → admin, MEMBER → analista,
+RESTRICTED → comercial, sem linha → analista, e `ACCESS_LEVEL <> 'READ_ONLY'`), copiado literal nas
+outras specs (R-013). Ids no simulador: helper `backend/ids-do-mapa.mjs` (nome → id de todos os blocos
+de `server-functions.ts`; o `lerIdsDoMapa` da lib só devolve as `kbEsc*`); na publicação, por nome
+(`listServerFunctionsMitra`) (R-016).
 
 Scripts do backend, na ordem do sandbox: `add-001-kanban.mjs` (instala a lib com
 `instalar({ ganchos })`), `add-003-jdbc-winthor.mjs`, `add-004-fornecedores.mjs`,
@@ -142,8 +136,11 @@ Scripts do backend, na ordem do sandbox: `add-001-kanban.mjs` (instala a lib com
 
 Oracle (WinThor): `add-003-jdbc-winthor.mjs` cria a conexão com as credenciais do `.env`
 do sandbox; as `sgcWint*` recebem o `jdbcId` resolvido por nome no `isEntrypoint()`. No
-simulador, as tabelas `PC*` existem em SQLite com os mesmos nomes e colunas (só no schema do
-simulador, nunca no `setup-backend.mjs`: na plataforma elas são do Oracle), e o dialeto
+simulador, as tabelas `PC*` existem em SQLite com os mesmos nomes e colunas — um DDL só, do
+integrador, em `backend/simulator/schema-winthor.mjs`, com a união das colunas que as specs usam; nunca
+no `setup-backend.mjs`, porque na plataforma elas são do Oracle; os seeds das features só inserem linhas,
+o seed da 001 é a única fonte de fornecedores (1015 e 1042 ativos, 1088 inativo) e filiais (1 Matriz,
+2 Filial Norte, 3 Filial Sul) e `SGC_USUARIO_PERSONA` só é semeada pelo `seed/002-quadro.mjs` (R-017) — e o dialeto
 tem os shims `NVL`, `TO_DATE`, `TO_CHAR`, `TRUNC`, `SYSDATE`, `ROWNUM`; cada teste de
 consulta Oracle prova contagem > 0. A consulta de análise do p-45547 zerava a venda de
 licitação (filtro no `WHERE` da subconsulta); a `sgcWintAnaliseMontagem` da 003 corrige
@@ -185,7 +182,15 @@ especificado na spec 004 e usado por todas as telas; o `design.md` §1.4 e §9.2
 | R-009 (002) | `SGC_PEDIDO.PRIORIDADE` × campo `prioridade` do quadro: quem é o dono? | Só o campo do quadro (C-07 B: a pessoa edita no card); a coluna sai de `SGC_PEDIDO` |
 | R-010 (002, 004) | capa do pedido criado pelo cron (sem sessão) | `sgcEscPedidoCapaInserir` (002, recebe `{{usuarioId}}`, `origem`, `idAgenda`; sem `:VAR_USER`), chamada por id só pelo `sgcAgendaProcessar`; a tela continua em `sgcEscPedidoCriar` (`:VAR_USER`) |
 | R-011 (002, 003) | quem limpa as reprovações ao sair da Análise? | `sgcEscPedidoReprovacoesLimpar` (002, `{{usuarioId}}` + `{{idCard}}`), chamada por id só pelo `sgcAnaliseSair` da 003, que é o passo do `antesDeMover` em `analise → tecnica`; `sgcEscPedidoReenviar` não existe |
-| R-012 (002, 004) | nome da escrita que sincroniza a agenda no envio (EN-05 A) | `sgcEscAgendaEnvio` (004, `{ idCard, dtEnvio }`), chamada por id pelo `sgcEnvioIndustriaRegistrar` quando `ID_AGENDA > 0` |
+| R-012 (002, 004) | nome da escrita que sincroniza a agenda no envio (EN-05 A) | `sgcEscAgendaEnvio` (004, `{ idCard, dtEnvio }` com `dtEnvio` em `AAAA-MM-DD`), chamada por id pelo `sgcEnvioIndustriaRegistrar` quando `ID_AGENDA > 0` |
+| R-013 (todas) | duas guardas de persona diferentes no servidor | Um texto só, o da 002 (mapa completo de `ACCESS_LEVEL`, RESTRICTED → comercial, `<> 'READ_ONLY'`), copiado literal em 001, 003 e 004 |
+| R-014 (002, 003) | quem chama `sgcEscItemStatusFase` (F-07)? | A tela da 002, depois da aprovação da diretoria (`aprovado`) e depois do envio (`enviado`); é escrita de tela, `:VAR_USER`, input `{ idCard, status, atualizadoEm }` |
+| R-015 (001, 003) | regra de parcelas em dois arquivos | Dono único `lib/prazo-pagamento.ts` (003): `parcelasDoPrazo`/`textoDeParcelas`; a 001 importa e apaga as duplicatas |
+| R-016 (todas) | ids de SF chamadas por id no simulador | Helper do integrador `backend/ids-do-mapa.mjs` (todos os blocos); `lerIdsDoMapa` da lib fica só para as `kbEsc*` do add-001 |
+| R-017 (001, 003, 004) | seeds contraditórios (PC*, fornecedores, personas) | DDL das `PC*` no `schema-winthor.mjs` do integrador; fornecedores e filiais só no seed da 001; personas só no seed da 002; os demais seeds só inserem as próprias linhas |
+| R-018 (002, 004) | título do card criado pelo cron | Igual à RN-014 da 002 (`FILIAL · FORNECEDOR` em maiúsculas), repetida no JS do cron |
+| R-019 (004) | lote do cron | 30 agendamentos por rodada (teto de 300 execuções/min é do projeto inteiro) |
+| R-020 (002) | `sgcPodeMover` devolvia `MOTIVO` com `PODE = 1` | `MOTIVO` vazio quando pode (contrato da lib); `sgcPodeExcluir` trata `RESTRICTED` como o `sgcPodeMover`; diretoria só cancela na própria fase, também na escrita |
 
 ## Mapa das ondas
 
