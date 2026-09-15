@@ -50,7 +50,7 @@ não vê nota fiscal nem faturamento.
 Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 **C-001 — A nota é encontrada pelo número do pedido**
-- **Dado que** o pedido do fornecedor 1015 para a filial 1 foi enviado em 08/09/2026 com o número de pedido 998877 registrado, e a indústria emitiu a nota 7001 contra esse número
+- **Dado que** o pedido do fornecedor 1015 para a filial 1 foi enviado em 08/09/2026 com o número de pedido 998901 registrado, e a indústria emitiu a nota 7001 contra esse número
 - **Quando** a rotina automática de detecção roda
 - **Então** aparece uma sugestão de vínculo da nota 7001 com esse pedido, com pontuação **100** e a origem "pelo número do pedido", e **nada** é vinculado sem uma pessoa confirmar
 
@@ -99,10 +99,12 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** a nota é conferida
 - **Então** o primeiro fica **conforme**, o segundo em **atenção** e o terceiro **divergente**, cada um com o valor esperado, o encontrado e a diferença percentual
 
-**C-011 — Validade mínima de 120 dias contada da emissão**
+**C-011 — Validade mínima contada da emissão**
 - **Dado que** a nota foi emitida em 11/09/2026 e traz um lote com validade 01/02/2027 (143 dias) e outro com 01/12/2026 (81 dias)
-- **Quando** a nota é conferida
-- **Então** o primeiro fica **conforme** e o segundo **divergente**; e para um fornecedor com validade mínima própria de 180 dias, os dois ficam divergentes
+- **Quando** a nota é conferida para um fornecedor cuja validade mínima cadastrada é de **90 dias**
+- **Então** o primeiro lote fica **conforme** e o segundo **divergente**
+- **E quando** a mesma dupla de lotes é conferida para um fornecedor cuja validade mínima cadastrada é de **180 dias**, os dois ficam **divergentes**
+- **E** o padrão de **120 dias** só é usado quando o fornecedor não tem validade mínima cadastrada
 
 **C-012 — Quantidade maior é divergência, menor é faturamento parcial**
 - **Dado que** um item foi pedido em 100 unidades e a nota faturou 120, e outro foi pedido em 100 e a nota faturou 60
@@ -175,9 +177,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** o e-mail sai para esse contato com cópia para compras@benenutri.com, fica registrado como comunicação do pedido e vira um contato no histórico — e **nenhum** e-mail é enviado ao fornecedor sem esse clique
 
 **C-026 — A lista de faturamentos pendentes**
-- **Dado que** existem 8 pedidos sem faturamento completo: 2 sem nenhum contato (1 e 2 dias úteis), 3 com 3 ou 4 dias úteis, 1 com 5, 1 com 9 e 1 em produtos em B.O. com 7
+- **Dado que** 9 pedidos estão sem faturamento completo: 2 sem nenhum contato (1 e 2 dias úteis), 4 com 3 ou 4 dias úteis, 1 com 5, 1 com 9 e 1 em produtos em B.O. com 7
 - **Quando** o gestor abre a lista
-- **Então** o total é 8, o filtro "sem contato" devolve 2, o de "3 dias úteis" devolve 3, o de "5" devolve 1 e o de "+5" devolve 2 (o de 9 e o que está em B.O.), a busca por fornecedor recorta a lista e a exportação devolve as mesmas linhas mostradas
+- **Então** os 9 aparecem, o filtro "sem contato" devolve os 2, o de "3 dias úteis" devolve os 4, o de "5" devolve 1 e o de "+5" devolve 2 (o de 9 e o que está em B.O.), a busca por fornecedor recorta a lista e a exportação devolve as mesmas linhas mostradas
 
 **C-027 — Quem pode o quê**
 - **Dado que** o comercial, a diretoria e um usuário somente leitura abrem o sistema
@@ -262,7 +264,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 | Cenário / regra | Evidência automática exigida | Camada |
 |---|---|---|
-| C-001 | a rodada de detecção sobre o pedido com número 998877 cria 1 sugestão da nota 7001 com pontuação 100 e origem "pedido"; nenhuma nota aparece vinculada | regra de negócio |
+| C-001 | a rodada de detecção sobre o pedido com número 998901 cria 1 sugestão da nota 7001 com pontuação 100 e origem "pedido"; nenhuma nota aparece vinculada | regra de negócio |
 | C-002 | pedido sem número, nota com 4 de 5 produtos, emissão 3 dias depois do envio, valor dentro do saldo → 1 sugestão com pontuação 88 e origem "heuristica" | regra de negócio + regra de tela |
 | C-003 | com a nota 7004 já vinculada a outro pedido, a rodada não cria sugestão dela; o vínculo manual devolve "não pode" citando o outro pedido | regra de negócio |
 | C-004 | a nota 7003 (cancelada) não aparece entre as candidatas do ERP nem entre as sugestões | regra de negócio |
@@ -272,7 +274,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-008 | item da nota com código 9001 e código de fábrica "FK-123" casa com o item do pedido 5001 e a conferência do item fica em atenção citando "código de fábrica"; o mesmo por código de barras | regra de tela + regra de negócio |
 | C-009 | item da nota sem casamento nenhum gera 1 conferência divergente do tipo "item não pedido" | regra de negócio |
 | C-010 | 10,0000 × 10,0000 → conforme, diferença 0; 20,0000 × 20,1600 → atenção, diferença 0,8 %; 30,0000 × 30,4500 → divergente, diferença 1,5 % | regra de tela + regra de negócio |
-| C-011 | emissão 11/09/2026 com validade 01/02/2027 → conforme (143 dias); 01/12/2026 → divergente (81 dias); com mínimo 180 do fornecedor, os dois divergentes | regra de tela + regra de negócio |
+| C-011 | emissão 11/09/2026 → 143 dias com validade 01/02/2027 e 81 dias com 01/12/2026; com o mínimo do fornecedor em 90 dias, conforme e divergente; com o mínimo em 180, os dois divergentes; o padrão de 120 é exercitado só na regra pura, sem fornecedor cadastrado | regra de tela + regra de negócio |
 | C-012 | pedida 100 e faturada 120 → divergente; pedida 100 e faturada 60 → conforme com "saldo de 40" no texto | regra de tela |
 | C-013 | acordado "28/35/42" com duplicatas 28/35/42 → conforme; com 30/60 → divergente mostrando os dois lados | regra de tela + regra de negócio |
 | C-014 | pedido de 120.000,00 e 2.000 unidades com nota de 72.000,00 e 1.200 unidades → 60 % em valor, 60 % em quantidade, saldo 48.000,00 e conferência de valor total conforme | regra de tela + regra de negócio |
@@ -287,7 +289,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-023 | rodar a rotina duas vezes no mesmo dia sobre o pedido de 8 dias úteis cria 1 aviso, não 2; com a data do dia seguinte, cria o segundo | regra de negócio |
 | C-024 | registrar 2 contatos no mesmo pedido devolve os 2 na leitura, em ordem decrescente de data, e a lista de pendentes mostra a data do último | regra de negócio |
 | C-025 | enviar cobrança dispara 1 e-mail com o contato do fornecedor e compras@benenutri.com nos destinatários, grava 1 comunicação do tipo cobrança e 1 contato; a rotina diária não dispara e-mail nenhum | regra de negócio |
-| C-026 | 8 pedidos pendentes → total 8; filtro "sem contato" 2, "3" 3, "5" 1, "+5" 2; busca por "Fresenius" recorta; a exportação usa as mesmas linhas da listagem | regra de negócio + regra de tela |
+| C-026 | os 9 pedidos deste cenário aparecem na listagem; entre eles, "sem contato" devolve 2, "3" devolve 4, "5" devolve 1 e "+5" devolve 2; busca por "Fresenius" recorta; a exportação usa as mesmas linhas da listagem. A contagem é sempre **sobre os pedidos deste cenário**, nunca um total absoluto do sistema | regra de negócio + regra de tela |
 | C-027 | vincular como comercial e como somente leitura devolve "não pode"; como diretoria, idem para operar; a matriz de permissões devolve as chaves certas por persona | regra de negócio + regra de tela |
 | C-028 | pedido em B.O. com 7 dias úteis sem faturamento → a rodada diária não cria aviso nenhum para ele; a lista de faturamentos pendentes continua trazendo esse pedido, com a previsão de liberação e a contagem de itens em aberto | regra de negócio |
 | RN-001 | 24/08/2026 + 15 dias úteis = 14/09/2026; entre 24/08 e 14/09 há 15 dias úteis; sexta para segunda = 1; segunda para sábado = 4; mesmo dia = 0 | regra de tela + regra de negócio |
