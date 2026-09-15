@@ -12,7 +12,7 @@
 import * as React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { KanbanBoard } from '@benenutri/mitra-kanban';
-import type { AbaExtra, Card, ExtensaoContexto, Fase } from '@benenutri/mitra-kanban';
+import type { Card, ExtensaoContexto, Fase } from '@benenutri/mitra-kanban';
 
 import { acao, linhas } from '@/lib/mitra-api';
 import { usePersona } from '@/lib/persona';
@@ -22,11 +22,7 @@ import { ATUALIZAR_A_CADA_MS, QUADRO_COMPRAS, ROTA_NOVO_PEDIDO, ROTULO_NOVO_PEDI
 import { Alert, EmptyState, PageHeader } from '@/components/page';
 import AcoesDoPedido, { type MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
 import { PedidoProvider } from '@/pages/quadros/abas/PedidoProvider';
-import AbaItens from '@/pages/quadros/abas/Itens';
-import AbaAlertas from '@/pages/quadros/abas/Alertas';
-import AbaNotasFiscais from '@/pages/quadros/abas/NotasFiscais';
-import AbaRecebimento from '@/pages/quadros/abas/Recebimento';
-import AbaBo from '@/pages/quadros/abas/Bo';
+import ConteudoDaFase from '@/pages/quadros/abas/ConteudoDaFase';
 import { verificarSaidaAnalise } from '@/pages/quadros/abas/verificar-saida';
 
 /** Tradutor `KB_FASE.ID` ↔ `SGC_FASE.CHAVE` (RF-005: nenhuma regra usa nome nem id). */
@@ -143,28 +139,19 @@ export default function QuadroPage() {
     [sessao],
   );
 
-  // Abas da spec 003 (`AbaExtra` da lib, recebendo o `ExtensaoContexto`); o
-  // `PedidoProvider` embrulha o quadro e guarda capa, itens e alertas do card.
+  // Conteúdo da aba "Nesta fase" (spec 015 da lib, R-050): o card não tem uma
+  // aba por assunto — o que aparece muda com a fase (itens e alertas na
+  // montagem e nas aprovações, notas fiscais e recebimento depois do envio,
+  // B.O. quando falta produto), como no SGC legado. O mapa fase → blocos é
+  // `lib/conteudo-da-fase.ts`; o `PedidoProvider` embrulha o quadro e guarda
+  // capa, itens e alertas do card.
   // ponytail: a capa é carregada duas vezes (este componente e o provider),
   // 3 execuções por card aberto em vez das 2 do RNF-001; unificar quando o
   // provider expuser a capa crua para o AcoesDoPedido.
-  // Onda 2 (R-029, R-049): Notas fiscais (005), Recebimento (006) e B.O. (007),
-  // cada uma com UMA execução ao abrir e sem `contagem` — não há campo do
-  // quadro para notas pendentes nem para itens de B.O. em aberto.
-  const abasExtras: AbaExtra[] = React.useMemo(() => [
-    { id: 'itens', rotulo: 'Itens', render: (ctx) => <AbaItens {...ctx} /> },
-    {
-      id: 'alertas',
-      rotulo: 'Alertas',
-      contagem: (card) => Number(card.valores.alertas_pendentes) || undefined,
-      render: (ctx) => <AbaAlertas {...ctx} />,
-    },
-    { id: 'notas-fiscais', rotulo: 'Notas fiscais', render: (ctx) => <AbaNotasFiscais {...ctx} /> },
-    { id: 'recebimento', rotulo: 'Recebimento', render: (ctx) => <AbaRecebimento {...ctx} /> },
-    ...(sessao
-      ? [{ id: 'bo', rotulo: 'B.O.', render: (ctx: ExtensaoContexto) => <AbaBo {...ctx} fases={fases} sessao={sessao} /> }]
-      : []),
-  ], [fases, sessao]);
+  const conteudoDaFase = React.useCallback(
+    (ctx: ExtensaoContexto) => (sessao ? <ConteudoDaFase {...ctx} fases={fases} sessao={sessao} /> : null),
+    [fases, sessao],
+  );
 
   if (!sessao) return <EmptyState title="Carregando o quadro..." />;
 
@@ -195,7 +182,7 @@ export default function QuadroPage() {
       podeMover={podeMover}
       antesDeMover={antesDeMover}
       podeExcluir={podeExcluir}
-      abasExtras={abasExtras}
+      conteudoDaFase={conteudoDaFase}
       acoesExtras={(ctx) => (
         <AcoesDoPedido
           ctx={ctx}
