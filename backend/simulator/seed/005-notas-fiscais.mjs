@@ -305,6 +305,17 @@ export function seed005(db, cenario) {
     parcelas: [30, 60],
   });
 
+  // 7007 — a nota do pedido 998909, que está em Produtos em B.O. (A-10 da
+  // revisão da onda 2): R-041 tira do `bo` o AVISO diário, não a DETECÇÃO.
+  const emissao7007 = maisDias(envio(7), 1);
+  DATAS_005.emissao7007 = emissao7007;
+  nota({
+    numtransent: 9007, numnota: 7007, serie: '1', codfornec: 1015, codfilial: '1',
+    emissao: emissao7007, entrada: maisDias(emissao7007, 2), vlTotal: 9000, prazo: 30, numped: 998909,
+    itens: [{ codprod: 5013, qt: 30, punit: 300.0, lote: 'L7007A', validade: maisDias(emissao7007, 200) }],
+    parcelas: [30],
+  });
+
   // 7006 — fornecedor 1042, com os mesmos dois prazos de validade da 7001
   // (143 e 81 dias): com a validade mínima do 1042 no cadastro, os dois lotes
   // caem do outro lado da régua (C-011).
