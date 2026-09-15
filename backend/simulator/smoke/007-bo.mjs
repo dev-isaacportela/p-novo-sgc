@@ -331,6 +331,38 @@ export async function suite(ctx) {
     assert.equal(Number(avisos), 0);
   });
 
+  await teste('A-2 (revisão onda 2): sgcEscPedidoAlertaBo é guardada pela persona do responsável — 1º responsável comercial (leo) não conta como avisado, cai em erros[] e ALERTA_BO_EM não grava', async () => {
+    // Cenário sintético — card próprio (fase bo, previsão vencida, sem item
+    // aberto: o cron nem checa ABERTOS), pra não disputar estado com o card
+    // `bo` dos outros testes de cron.
+    const vencida = emDias(-1);
+    db.prepare(`INSERT INTO KB_CARD
+      (BOARD_ID, FASE_ID, TITULO, ORDEM, RESPONSAVEL_ID, PRAZO, VALORES_JSON, TEXTO_BUSCA, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM, FASE_DESDE)
+      VALUES (?, ?, 'TESTE A-2 RESPONSAVEL COMERCIAL', 1, ?, '', '{}', 'teste a-2', ?, ?, ?, ?)`)
+      .run(boardId, fases.bo, U.leo, U.ana, AGORA_BO, AGORA_BO, AGORA_BO);
+    const idCardTemp = Number(db.prepare('SELECT MAX(ID) AS ID FROM KB_CARD').get().ID);
+    try {
+      db.prepare(`INSERT INTO SGC_PEDIDO
+        (ID_CARD, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, PERIODO_INICIO, PERIODO_FIM, ORIGEM, ID_AGENDA, DT_PREVISAO_BO, ALERTA_BO_EM, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM)
+        VALUES (?, 1042, 'Nestlé', '1', 'Benenutri Matriz', '2026-08-01', '2026-09-15', 'manual', 0, ?, '', ?, ?, ?)`)
+        .run(idCardTemp, vencida, U.ana, AGORA_BO, AGORA_BO);
+      db.prepare('INSERT INTO KB_CARD_RESPONSAVEL (CARD_ID, USUARIO_ID, ORDEM) VALUES (?, ?, 1)').run(idCardTemp, U.leo);
+
+      const rodada = await chamar('sgcBoMonitorar', {}, 0);
+      assert.equal(rodada.ok, true, rodada.erro);
+      assert.ok(!rodada.resultados.some((r) => r.idCard === idCardTemp), 'sem persona operante, não deveria contar como avisado');
+      const erro = rodada.erros.find((e) => e.idCard === idCardTemp);
+      assert.ok(erro, 'deveria cair em erros[], não em resultados[]');
+      assert.match(erro.erro, /persona/i);
+      assert.equal(pedidoDe(idCardTemp).ALERTA_BO_EM, '', 'a escrita guardada não gravou: ALERTA_BO_EM continua vazio');
+    } finally {
+      db.prepare('DELETE FROM SGC_AVISO WHERE ID_CARD = ?').run(idCardTemp);
+      db.prepare('DELETE FROM SGC_PEDIDO WHERE ID_CARD = ?').run(idCardTemp);
+      db.prepare('DELETE FROM KB_CARD_RESPONSAVEL WHERE CARD_ID = ?').run(idCardTemp);
+      db.prepare('DELETE FROM KB_CARD WHERE ID = ?').run(idCardTemp);
+    }
+  });
+
   /* ─────────── T-093/T-094 — previsão e documento (mudam o card `bo`: depois do cron) ─────────── */
 
   await teste('C-004 / RN-004: registrar previsão nova mantém o histórico (append-only) e atualiza a previsão vigente do pedido, na ordem do registro', async () => {
@@ -392,6 +424,42 @@ export async function suite(ctx) {
     assert.equal(tipoGravado, 'outro');
   });
 
+  await teste('A-6 (revisão onda 2): sgcEscBoPrevisaoInserir/sgcEscPedidoPrevisaoBo/sgcEscBoDocumentoInserir exigem fase faturamento/bo e dono quando RESTRICTED', async () => {
+    // 1) fase errada — CARDS_003.zerado está em 'analise' (fora de faturamento/bo).
+    const antesPrevisoes = linhas(await chamar('sgcBoPrevisoesCard', { idCard: CARDS_003.zerado })).length;
+    await chamar('sgcEscBoPrevisaoInserir', { idCard: CARDS_003.zerado, dtPrevisao: '2026-11-01', observacao: 'teste A-6 fase', registradoEm: AGORA_BO }, U.ana);
+    assert.equal(linhas(await chamar('sgcBoPrevisoesCard', { idCard: CARDS_003.zerado })).length, antesPrevisoes, 'card fora de faturamento/bo não grava previsão');
+
+    const dtPrevisaoZeradoAntes = (pedidoDe(CARDS_003.zerado) || {}).DT_PREVISAO_BO;
+    await chamar('sgcEscPedidoPrevisaoBo', { idCard: CARDS_003.zerado, dtPrevisao: '2026-11-01' }, U.ana);
+    assert.equal((pedidoDe(CARDS_003.zerado) || {}).DT_PREVISAO_BO, dtPrevisaoZeradoAntes, 'idem: pedido fora do fluxo não altera a previsão vigente');
+
+    const antesDocs = linhas(await chamar('sgcBoDocumentosCard', { idCard: CARDS_003.zerado })).length;
+    await chamar('sgcEscBoDocumentoInserir', { idCard: CARDS_003.zerado, tipo: 'carta_falta', nomeArquivo: 'teste-a6.pdf', endereco: 'https://arquivos.local/teste-a6.pdf', enviadoEm: AGORA_BO }, U.ana);
+    assert.equal(linhas(await chamar('sgcBoDocumentosCard', { idCard: CARDS_003.zerado })).length, antesDocs, 'idem: documento não é gravado fora de faturamento/bo');
+
+    // 2) RESTRICTED em card alheio — não criou CARDS_007.faturamento (é da ana).
+    db.prepare("INSERT INTO INT_USER (DESCR, NOME, ACCESS_LEVEL, ATIVO) VALUES ('restrito.a6@sgc.local', 'Rita A-6 Restrita', 'RESTRICTED', 1)").run();
+    const ritaId = Number(db.prepare('SELECT MAX(ID) AS ID FROM INT_USER').get().ID);
+    db.prepare('INSERT INTO SGC_USUARIO_PERSONA (USUARIO_ID, PERSONA) VALUES (?, ?)').run(ritaId, 'analista');
+
+    const antesPrevisoesFat = linhas(await chamar('sgcBoPrevisoesCard', { idCard: CARDS_007.faturamento })).length;
+    await chamar('sgcEscBoPrevisaoInserir', { idCard: CARDS_007.faturamento, dtPrevisao: '2026-11-05', observacao: 'teste A-6 restrito', registradoEm: AGORA_BO }, ritaId);
+    assert.equal(linhas(await chamar('sgcBoPrevisoesCard', { idCard: CARDS_007.faturamento })).length, antesPrevisoesFat, 'RESTRICTED de fora não grava previsão em card alheio, mesmo na fase certa');
+
+    const dtPrevisaoFatAntes = pedidoDe(CARDS_007.faturamento).DT_PREVISAO_BO;
+    await chamar('sgcEscPedidoPrevisaoBo', { idCard: CARDS_007.faturamento, dtPrevisao: '2026-11-05' }, ritaId);
+    assert.equal(pedidoDe(CARDS_007.faturamento).DT_PREVISAO_BO, dtPrevisaoFatAntes, 'RESTRICTED de fora não altera a previsão vigente de card alheio');
+
+    const antesDocsFat = linhas(await chamar('sgcBoDocumentosCard', { idCard: CARDS_007.faturamento })).length;
+    await chamar('sgcEscBoDocumentoInserir', { idCard: CARDS_007.faturamento, tipo: 'carta_falta', nomeArquivo: 'teste-a6-restrito.pdf', endereco: 'https://arquivos.local/x', enviadoEm: AGORA_BO }, ritaId);
+    assert.equal(linhas(await chamar('sgcBoDocumentosCard', { idCard: CARDS_007.faturamento })).length, antesDocsFat, 'RESTRICTED de fora não grava documento em card alheio');
+
+    // 3) caminho feliz continua gravando — dona (ana), fase correta.
+    await chamar('sgcEscBoPrevisaoInserir', { idCard: CARDS_007.faturamento, dtPrevisao: '2026-11-10', observacao: 'teste A-6 caminho feliz', registradoEm: AGORA_BO }, U.ana);
+    assert.equal(linhas(await chamar('sgcBoPrevisoesCard', { idCard: CARDS_007.faturamento })).length, antesPrevisoesFat + 1, 'o caminho feliz (dona, fase certa) continua gravando');
+  });
+
   /* ─────────── T-095 — liberar (último a mexer no aberto do card `bo`) ─────────── */
 
   await teste('C-007 / RN-007: liberar 1 de 2 itens deixa o outro em aberto; o item do pedido volta a "enviado"', async () => {
@@ -425,5 +493,17 @@ export async function suite(ctx) {
     assert.equal(resultado.ok, false);
     assert.match(resultado.erro, /Faturamento/);
     assert.equal(contarBo(CARDS_003.zerado), 0);
+  });
+
+  await teste("A-11 (revisão onda 2): texto() só escapa uma vez dentro de lote() — observação com apóstrofo (SANT'ANNA) grava com UMA aspa, não duas", async () => {
+    const antes = contarBo(CARDS_007.faturamento);
+    const resultado = await chamar('sgcBoMarcar', {
+      cardId: CARDS_007.faturamento,
+      itensJson: JSON.stringify([{ codprod: 5102, status: 'aberto', qtPendente: 10, observacao: "Fornecedor SANT'ANNA confirmou o atraso" }]),
+    }, U.gil);
+    assert.equal(resultado.ok, true, resultado.erro);
+    assert.equal(contarBo(CARDS_007.faturamento), antes + 1);
+    const item = db.prepare('SELECT OBSERVACAO FROM SGC_BO_ITEM WHERE ID_CARD = ? AND CODPROD = 5102').get(CARDS_007.faturamento);
+    assert.equal(item.OBSERVACAO, "Fornecedor SANT'ANNA confirmou o atraso", 'uma aspa só — texto() não dobra de novo o que o runtime (bindParams) já dobraria em parâmetro escalar entre aspas');
   });
 }
