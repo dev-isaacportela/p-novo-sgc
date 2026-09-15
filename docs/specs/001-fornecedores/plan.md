@@ -15,7 +15,7 @@ Preencher **antes** de detalhar o desenho. Falha aqui é replanejamento.
 | Migrations append-only | sim | `backend/migrations/` intocado; as migrations saem do turno no sandbox |
 | Leitura e escrita por Server Function | sim | as duas telas só chamam `linhas()`/`acao()` de `src/lib/mitra-api.ts`; zero `listRecords`/`patchRecord`. O envio do arquivo é a única chamada direta de SDK na tela (`uploadFilePublicMitra`), que não é CRUD de tabela |
 | Simulador cobre a feature | sim | `add-004-fornecedores.mjs` entra em `PUBLISH_ORDER` e em `DDL_SOURCES` não (o DDL é do setup); seed em `simulator/seed/001-fornecedores.mjs` com os 3 fornecedores e as tabelas `PC*`; `CHECK_INPUT` ganha `codfornec`, `codfilial` e `ativo`; `sim:check` verde |
-| Testes automatizados obrigatórios | sim | as 10 linhas da seção **Testes** da spec viram 8 `teste()` em `backend/simulator/smoke/001-fornecedores.mjs` e 8 `test()` em `frontend/tests/fornecedor.test.mjs`; a consulta Oracle prova contagem > 0 (C-008) |
+| Testes automatizados obrigatórios | sim | as 10 linhas da seção **Testes** da spec viram 8 `teste()` em `backend/simulator/smoke/001-fornecedores.mjs` e 9 `test()` em `frontend/tests/fornecedor.test.mjs` (5 em T-088, 4 em T-089 — R-09); a consulta Oracle prova contagem > 0 (C-008) |
 | Design tokens, sem cor literal | sim | telas montadas só com o vocabulário de `components/page.tsx` (§8 do `design.md`); zero classe Tailwind solta, zero hex, situação por `Status`, não por cor sozinha |
 | Simplicidade | sim | nenhuma dependência nova; faixa/opção/parcela do SGC anterior (3 tabelas + 2 níveis de `JOIN`) viram **uma** tabela com `PARCELAS` em texto `30/60/90`; o histórico do fornecedor não ganha SF própria (vem junto do carregar) |
 
@@ -23,7 +23,7 @@ Preencher **antes** de detalhar o desenho. Falha aqui é replanejamento.
 
 - **Frontend:** React 19 · Vite 7 · Tailwind 4 · react-router 7 · `mitra-interactions-sdk`
 - **Backend:** tabelas e Server Functions na plataforma Mitra, provisionadas por `backend/*.mjs` com `mitra-sdk`
-- **Reuso identificado:** `src/lib/mitra-api.ts` (`linhas`/`linha`/`acao`/`comPadrao`), `src/lib/formato.ts` (moeda e data), vocabulário de `src/components/page.tsx` (`PageHeader`, `Panel`, `PanelHeader`, `Toolbar`, `SearchInput`, `SelectMenu`, `Field`, `LabelledField`, `FilterChip`, `Table`/`Th`/`Td`/`Tr`/`RowTitle`/`RowMeta`, `Code`, `Status`, `Badge`, `Alert`, `EmptyState`, `Dash`, `Pagination`, `Button`, `IconButton`), primitivo `dialog.tsx`. Regra portada do p-45547: validações de `add-parametrizacao-fornecedor.mjs` / `add-prazos-sla-fornecedor.mjs` e o formato de faixa/parcela de `frontend/src/features/kanban/acordos-fornecedor.ts`
+- **Reuso identificado:** `src/lib/mitra-api.ts` (`linhas`/`linha`/`acao`/`comPadrao`), `src/lib/formato.ts` (moeda e data), vocabulário de `src/components/page.tsx` (`PageHeader`, `Panel`, `PanelHeader`, `Toolbar`, `SearchInput`, `SelectMenu`, `Field`, `LabelledField`, `FilterChip`, `Table`/`Th`/`Td`/`Tr`/`RowTitle`/`RowMeta`, `Code`, `Status`, `Badge`, `Alert`, `EmptyState`, `Dash`, `Pagination`, `Button`, `IconButton`), primitivo `dialog.tsx`; `src/lib/prazo-pagamento.ts` da spec 003 (`parcelasDoPrazo`, `textoDeParcelas` — a 001 não reimplementa o formato das parcelas, C-10). Regra portada do p-45547: validações de `add-parametrizacao-fornecedor.mjs` / `add-prazos-sla-fornecedor.mjs` e o formato de faixa de `frontend/src/features/kanban/acordos-fornecedor.ts`
 - **Dependência nova:** nenhuma
 
 ## Modelo de dados
@@ -127,7 +127,7 @@ Valor "desligado": `''` no texto, `0` no numérico.
 
 | Nome (`add-004-fornecedores.mjs`) | Tipo | Entrada (`{{param}}`) | Saída | Atende |
 |---|---|---|---|---|
-| `sgcFornecedorListar` (7101) | SQL | `busca` `''`, `codfilial` `''`, `ativo` `0` (0 todos · 1 ativos · 2 inativos), `limite` `20`, `offset` `0` | `ID, CODFORNEC, FORNECEDOR, CNPJ, CNPJ_FORMATADO, PRAZO_ENTREGA_DIAS, PRAZO_ENTREGA_TIPO, PEDIDO_MINIMO, ATIVO, ATUALIZADO_EM, QT_FILIAIS, QT_LINHAS` | RF-001, RF-002, RF-003 |
+| `sgcFornecedorListar` (7101) | SQL | `busca` `''`, `codfilial` `''`, `ativo` `0` (0 todos · 1 ativos · 2 inativos), `limite` `20`, `offset` `0` | `ID, CODFORNEC, FORNECEDOR, CNPJ, CNPJ_FORMATADO, PRAZO_ENTREGA_DIAS, PRAZO_ENTREGA_TIPO, PEDIDO_MINIMO, ATIVO, ATUALIZADO_EM, QT_FILIAIS, QT_LINHAS` — **contagens, não a lista de filiais**: quem precisa saber quais filiais um fornecedor atende chama `sgcFornecedorCarregar` (C-09) | RF-001, RF-002, RF-003 |
 | `sgcFornecedorListarTotal` (7102) | SQL | `busca` `''`, `codfilial` `''`, `ativo` `0` | `TOTAL` | RF-001, RF-002 |
 | `sgcFornecedorCarregar` (7103) | JAVASCRIPT | `codfornec` `0` | `{ fornecedor, filiais[], linhas[], contatos[], faixas[], documentos[], log[] }` — colunas UPPERCASE; `fornecedor: null` quando não parametrizado; `log` são as 20 últimas, com `POR_NOME` | RF-004, RF-005..RF-010, RF-012 |
 | `sgcWintFornecedores` (7104) | SQL (Oracle, `jdbcId` do WinThor) | `busca` `''` | `CODFORNEC, FORNECEDOR, CGC` | RF-004, C-008 |
@@ -151,20 +151,30 @@ Regras: filtro desligado é `''` no texto e `0` no numérico; toda listagem tem
 `LIMIT/OFFSET`; `:VAR_USER` identifica quem chama; escrita de usuário business
 só por SF SQL.
 
-**A guarda de persona** (FO-07, P-12) é a mesma expressão nas 13 `sgcEsc*`, no
-`WHERE` da instrução — escrita **não autorizada não grava linha**:
+**A guarda de persona** (FO-07, P-12) é a do projeto, escrita uma vez em
+`../002-quadro-de-compras/plan.md` e repetida aqui **literal**, trocando só a
+lista de personas (B-03):
 
 ```sql
-WHERE COALESCE(
-        (SELECT P.PERSONA FROM SGC_USUARIO_PERSONA P WHERE P.USUARIO_ID = {{usuarioId}}),
-        CASE (SELECT U.ACCESS_LEVEL FROM INT_USER U WHERE U.ID = {{usuarioId}})
-          WHEN 'ADMIN' THEN 'admin' WHEN 'RESTRICTED' THEN 'comercial' ELSE 'analista' END
-      ) IN ('admin','gestor','diretoria')
+AND EXISTS (
+  SELECT 1 FROM INT_USER IU
+  LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
+  WHERE IU.ID = :VAR_USER
+    AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
+    AND COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
+                               WHEN 'ADMIN' THEN 'admin'
+                               WHEN 'RESTRICTED' THEN 'comercial'
+                               ELSE 'analista' END) IN ('admin','gestor','diretoria')
+)
 ```
 
-O mapa de fallback é o de P-02 (decisão B). `sgcFornecedorSalvar` faz a mesma
-consulta **com `:VAR_USER`** antes de qualquer escrita e devolve
-`{ ok: false, error }` — ver **D-005**.
+Na 001 ela vale **dentro do `sgcFornecedorSalvar`**: é a consulta que o JS roda
+por `runQueryMitra`, com `:VAR_USER`, antes de qualquer escrita — não passou,
+devolve `{ ok: false, error }` e nada é gravado. As 13 `sgcEsc*`, chamadas por
+id de dentro dele, repetem o mesmo `EXISTS` com `{{usuarioId}}` no lugar de
+`:VAR_USER` (chamada aninhada não propaga a variável — **D-005**); a checagem
+que decide é sempre a do JS. O mapa de fallback é o de P-02 (decisão B) e
+`READ_ONLY` não escreve em nenhuma hipótese (P-08 B).
 
 Forma das duas consultas Oracle (o `jdbcId` é resolvido por nome no
 `isEntrypoint()` do `add-004`; no simulador rodam sobre as `PC*` em SQLite com
@@ -239,15 +249,18 @@ Tudo o que é cálculo, formato ou validação mora aqui, fora do JSX, e é o qu
 | `rotuloPrazoEntrega(dias, tipo)` | `7, 'uteis'` → `"7 dias úteis"`; `1, 'corridos'` → `"1 dia corrido"`; `0` → `''` | RN-006 |
 | `emailValido(valor)` | um `@`, sem espaço, domínio com ponto que não termina em ponto (mesma regra do p-45547) | RN-007 |
 | `validarFaixas(faixas)` | ordena por `valorDe`; `valorAte` 0 = sem teto; recusa sobreposição, `valorAte <= valorDe`, mais de uma sem teto e sem teto que não seja a última → `{ ok, erro }` | RN-008 |
-| `parsearParcelas(texto)` | `"30/60/90"` → `[30,60,90]`; espaço tolerado; `"0/30"`, `"-5"`, `"trinta"`, `""` → `null` | RN-009 |
-| `formatarParcelas(dias)` | `[30,60,90]` → `"30/60/90"` | RN-009 |
-| `faixaDoValor(faixas, valor)` | devolve as opções da faixa com `valorDe <= valor` e (`valorAte === 0` ou `valor < valorAte`); nenhuma → `[]` | RN-010 |
+| `faixaDoValor(faixas, valor)` | devolve as opções da faixa com `valorDe <= valor` e (`valorAte === 0` ou `valor < valorAte`); nenhuma → `[]`. Lê as parcelas por `parcelasDoPrazo` | RN-010 |
 | `validarParametrizacao(payload)` | roda todas as anteriores na ordem da tela e devolve a **primeira** mensagem de recusa, citando o campo ou a linha | RF-016 |
 | `rotuloFaixa(valorDe, valorAte)` | `0,0` → "Qualquer valor"; `0,20000` → "Até R$ 20.000,00"; `20000,0` → "Acima de R$ 20.000,00"; `20000,45000` → "R$ 20.000,00 a R$ 45.000,00" | RF-009 |
 | `documentoVencido(vencimento, hoje)` | `'2027-03-31'` em `'2027-04-01'` → `true`; em `'2027-03-31'` → `false`; `''` → `false` (comparação de texto `VARCHAR(10)`, sem fuso) | RN-014, RF-017 |
 
-`faixaDoValor`, `parsearParcelas` e `formatarParcelas` são o que a spec 003
-importa para comparar prazo padrão × acordado (PZ-01, PZ-02).
+São **12** funções. O formato das parcelas não é desta spec: o dono único é
+`frontend/src/lib/prazo-pagamento.ts` da 003 (`parcelasDoPrazo(texto)` →
+`number[]`, inválido → `[]`; `textoDeParcelas(dias)` → `"30/60/90"`, C-10).
+`validarParametrizacao` e `faixaDoValor` **importam** essas duas: a 001 recusa a
+opção cujo `parcelasDoPrazo` devolve `[]` ou traz algum dia `<= 0` (RN-009),
+e não reescreve o parser. Na outra direção, `faixaDoValor` é o que a 003 importa
+para achar o prazo **padrão** do valor do pedido (PZ-01, PZ-02).
 
 ## Simulador
 
@@ -258,9 +271,13 @@ importa para comparar prazo padrão × acordado (PZ-01, PZ-02).
   - `SGC_FORNECEDOR_LINHA` do 1015: `Nutrição Enteral` (contatos `Mônica <captacao.pedidos@fresenius-kabi.com>` e `Elaine <elaine.santos@fresenius-kabi.com>`; faixa `0–0` "Opção única" `30/60/90`) e `Nutrição Parenteral` (contato `Lauanda <lauanda.oliveira@fresenius-kabi.com>`; faixas `0–20000` `30`, `20000–45000` `30/45`, `45000–0` "Opção A" `30/45/60` e `45000–0` "Opção B" `30/60`) — **C-005, RN-010**. 1042: 1 linha, 1 contato, 1 faixa.
   - `SGC_FORNECEDOR_DOCUMENTO` do 1015: `Contrato comercial 2026`, tipo `Documento`, vencimento `2027-03-31` — **C-007**.
   - `SGC_FORNECEDOR_LOG`: vazio (quem preenche é o salvamento, **C-006**).
-  - Tabelas `PC*` do WinThor, criadas pelo **próprio seed** com `CREATE TABLE IF NOT EXISTS` (não entram no `setup-backend.mjs`: o setup roda na plataforma e criaria tabelas de ERP no banco do Mitra — **D-006**):
-    - `PCFORNEC (CODFORNEC INTEGER PRIMARY KEY, FORNECEDOR TEXT, FANTASIA TEXT, CGC TEXT, EMAIL TEXT, UF TEXT)` — 1015, 1042, 1088 e o genérico `999999`, que a consulta precisa descartar (**C-008**).
-    - `PCFILIAL (CODIGO TEXT PRIMARY KEY, RAZAOSOCIAL TEXT, CGC TEXT, UF TEXT)` — `1` Benenutri Matriz, `2` Benenutri Filial Norte, `3` Benenutri Filial Sul e `99`, que a consulta descarta.
+  - Linhas das tabelas `PC*` do WinThor — o **DDL é do integrador**, em `backend/simulator/schema-winthor.mjs` (união das colunas que a 001 e a 003 usam: `PCFORNEC` com `CODFORNEC`, `FORNECEDOR`, `FANTASIA`, `CGC`, `EMAIL`, `UF`; `PCFILIAL` com `CODIGO`, `RAZAOSOCIAL`, `CGC`, `UF`, mais as colunas que a 003 pede). O seed da 001 **só insere linhas**; nunca cria tabela (B-05, **D-006**):
+    - `PCFORNEC`: `1015` FRESENIUS KABI BRASIL LTDA, `1042` NESTLE BRASIL LTDA, `1088` DANONE NUTRICAO ESPECIALIZADA LTDA e o genérico `999999`, que a consulta precisa descartar (**C-008**).
+    - `PCFILIAL`: `1` Benenutri Matriz, `2` Benenutri Filial Norte, `3` Benenutri Filial Sul e `99`, que a consulta descarta.
+
+  Estas linhas são a **fonte única** do cadastro simulado: a 003 e a 004 usam os
+  mesmos três fornecedores e as mesmas três filiais, com estes nomes, e **não
+  inserem fornecedor nem filial** nos seus próprios seeds (B-04, B-06).
 - **`CHECK_INPUT`** (`simulator/config.mjs`, do integrador) ganha `codfornec: '0'`, `codfilial: ''` e `ativo: '0'` (já tem `busca`, `limite`, `offset`).
 - **`PUBLISH_ORDER`**: `add-004-fornecedores.mjs` depois de `add-003-jdbc-winthor.mjs`. `DDL_SOURCES` não muda (o DDL é do `setup-backend.mjs`, que já está listado).
 - **Dialeto:** nada novo. O SQL usa `CONCAT`, `COALESCE`, `NVL`, `CASE`, `EXISTS`, `LIKE`, `LIMIT/OFFSET` — todos já cobertos por `mysql-dialect.mjs`.
@@ -281,7 +298,7 @@ spec sem linha aqui é plan incompleto; não vai para `tasks.md`.
 | C-007 · RN-011 | `backend/simulator/smoke/001-fornecedores.mjs` | salvar com um documento (`nome`, `tipo: 'Documento'`, `vencimento: '2027-03-31'`, `endereco: 'https://…'`) devolve `documentos.length` 1 na releitura com os quatro valores; `tipo: 'Planilha'` é gravado como `'Documento'` |
 | C-008 | `backend/simulator/smoke/001-fornecedores.mjs` | `sgcWintFornecedores({ busca: '' })` devolve `length > 0` e nenhum `CODFORNEC === 999999`; `busca: 'nestle'` devolve 1; `sgcWintFiliais()` devolve `length > 0` e nenhum `CODFILIAL === '99'` |
 | RN-002 · RN-004 · RN-005 · RN-006 · RN-014 | `frontend/tests/fornecedor.test.mjs` | `cnpjValido('49324221000104')` true, `cnpjValido('49324221000105')` e `cnpjValido('4932422100010')` e `cnpjValido('11111111111111')` false; `formatarCnpj` devolve `49.324.221/0001-04`; `janelaFechamentoValida(7,15)` e `(28,5)` true (a janela vira o mês, R-003), `(0,15)` e `(7,32)` false; `slaEfetivo({analise:0,faturamento:0})` → `{analise:{dias:1,origem:'padrao'},faturamento:{dias:5,origem:'padrao'}}` e `{analise:3}` → `{dias:3,origem:'parametrizado'}`; `rotuloPrazoEntrega(7,'uteis')` → `'7 dias úteis'`, `(1,'corridos')` → `'1 dia corrido'`, `(0,'uteis')` → `''`; `documentoVencido('2027-03-31','2027-04-01')` true, `('2027-03-31','2027-03-31')` e `('','2027-04-01')` false |
-| RN-007 · RN-008 · RN-009 · RN-010 | `frontend/tests/fornecedor.test.mjs` | `emailValido('elaine@')` false, `emailValido('elaine.santos@fresenius-kabi.com')` true; `validarFaixas([0–20000, 20000–45000])` `ok: true`, `[0–20000, 10000–30000]` `ok: false` com `erro` citando a sobreposição, duas faixas com `valorAte: 0` `ok: false`; `parsearParcelas('30/60/90')` → `[30,60,90]`, `' 30 / 45 '` → `[30,45]`, `'0/30'`/`'trinta'`/`''` → `null`; `formatarParcelas([30,60,90])` → `'30/60/90'`; `faixaDoValor(faixas, 20000)` devolve 1 opção `30/45`, `faixaDoValor(faixas, 50000)` devolve 2 opções (`30/45/60` e `30/60`), `faixaDoValor(faixas, 19999.99)` devolve a opção `30` |
+| RN-007 · RN-008 · RN-009 · RN-010 | `frontend/tests/fornecedor.test.mjs` | `emailValido('elaine@')` false, `emailValido('elaine.santos@fresenius-kabi.com')` true; `validarFaixas([0–20000, 20000–45000])` `ok: true`, `[0–20000, 10000–30000]` `ok: false` com `erro` citando a sobreposição, duas faixas com `valorAte: 0` `ok: false`; `validarParametrizacao` recusa a opção `'0/30'` e a opção `'trinta'` com mensagem citando a linha, e aceita `'30/60/90'` (o parser em si é testado em `tests/prazo-pagamento.test.mjs` da 003 — C-10); `faixaDoValor(faixas, 20000)` devolve 1 opção `30/45`, `faixaDoValor(faixas, 50000)` devolve 2 opções (`30/45/60` e `30/60`), `faixaDoValor(faixas, 19999.99)` devolve a opção `30` |
 
 - **Backend:** `backend/simulator/smoke/001-fornecedores.mjs` executa as SFs reais
   (SQL e JAVASCRIPT) em banco descartável; o título de cada `teste()` começa com
@@ -301,9 +318,9 @@ spec sem linha aqui é plan incompleto; não vai para `tasks.md`.
 
 | Para | O quê |
 |---|---|
-| 002 (quadro) | `sgcWintFornecedores` e `sgcWintFiliais` (a criação manual de pedido escolhe fornecedor e filial — C-02, C-05); `SGC_FORNECEDOR.CODFORNEC`/`FORNECEDOR` para a capa do card; `SGC_FORNECEDOR.ATIVO`, que a criação de pedido respeita (RN-013, R-002); `SGC_FORNECEDOR_FILIAL` restringe as filiais oferecidas por fornecedor; os contatos de `SGC_FORNECEDOR_LINHA_CONTATO` são a única origem do destinatário do pedido (EN-02 A) e `LINK_PLATAFORMA` é o outro canal (EN-01) |
-| 003 (itens) | `SGC_FORNECEDOR_FAIXA_PRAZO` + `faixaDoValor`/`parsearParcelas` de `lib/fornecedor.ts` = o prazo **padrão** que PZ-01/PZ-02 comparam com o acordado; `VALIDADE_MINIMA_DIAS` para o alerta de lote a vencer (RN-02); `PRAZO_ENTREGA_DIAS`/`TIPO` e `PEDIDO_MINIMO` na tela de montagem |
-| 004 (agenda) | fornecedor e filiais atendidas de um agendamento (AG-01) saem das mesmas duas consultas do ERP e de `SGC_FORNECEDOR_FILIAL`; fornecedor inativo não é oferecido no agendamento (RN-013, R-002) |
+| 002 (quadro) | `sgcWintFornecedores` e `sgcWintFiliais` (a criação manual de pedido escolhe fornecedor e filial — C-02, C-05); `SGC_FORNECEDOR.CODFORNEC`/`FORNECEDOR` para a capa do card; `SGC_FORNECEDOR.ATIVO`, que a criação de pedido respeita (RN-013, R-002); **as filiais atendidas por um fornecedor só saem de `sgcFornecedorCarregar(codfornec).filiais`** — `sgcFornecedorListar` devolve apenas `QT_FILIAIS`, a contagem (C-09); os contatos de `SGC_FORNECEDOR_LINHA_CONTATO` são a única origem do destinatário do pedido (EN-02 A) e `LINK_PLATAFORMA` é o outro canal (EN-01) |
+| 003 (itens) | `SGC_FORNECEDOR_FAIXA_PRAZO` + `faixaDoValor` de `lib/fornecedor.ts` = o prazo **padrão** que PZ-01/PZ-02 comparam com o acordado (a 003 é dona do formato das parcelas, C-10); `VALIDADE_MINIMA_DIAS` para o alerta de lote a vencer (RN-02); `PRAZO_ENTREGA_DIAS`/`TIPO` e `PEDIDO_MINIMO` na tela de montagem |
+| 004 (agenda) | fornecedor e filiais atendidas de um agendamento (AG-01) saem das duas consultas do ERP e, para restringir as filiais de um fornecedor, de `sgcFornecedorCarregar(codfornec).filiais` — não da listagem (C-09); fornecedor inativo não é oferecido no agendamento (RN-013, R-002) |
 | onda 3 (indicadores) | `SLA_ANALISE_DIAS` e `SLA_FATURAMENTO_DIAS` (padrão 1 e 5 dias úteis) |
 
 **Esta spec consome:**
@@ -311,6 +328,7 @@ spec sem linha aqui é plan incompleto; não vai para `tasks.md`.
 | De | O quê |
 |---|---|
 | 002 (quadro) | `SGC_USUARIO_PERSONA` — a guarda das escritas, o modo leitura da analista e o menu escondido para o comercial (FO-07, P-03, P-12, R-001). Enquanto a 002 não semeia as personas, o seed da 001 as grava se a tabela estiver vazia |
+| 003 (itens) | `src/lib/prazo-pagamento.ts` — `parcelasDoPrazo` e `textoDeParcelas`, dono único do formato `30/60/90` (C-10); `validarParametrizacao` e `faixaDoValor` importam de lá |
 | 004 (agenda) | `src/components/DatePicker.tsx` — o campo de data de todas as telas (UI-03 B, R-006); a 001 usa no vencimento do documento e não escreve controle de data próprio |
 | integrador / 000 | DDL das 7 tabelas no `setup-backend.mjs`; `add-003-jdbc-winthor.mjs` (conexão Oracle, `jdbcId` resolvido por nome); `PUBLISH_ORDER` e `CHECK_INPUT` em `simulator/config.mjs`; bloco 71xx em `frontend/src/lib/server-functions.ts`; rota e item de menu em `App.tsx`/`AdminLayout.tsx`; perfil de acesso (`add-002-perfil-acesso.mjs`) |
 
@@ -323,7 +341,7 @@ spec sem linha aqui é plan incompleto; não vai para `tasks.md`.
 | D-003 | `sgcWintFornecedores` e `sgcWintFiliais` não paginam: são **seletores**, devolvem o recorte inteiro (≈2 mil fornecedores × 3 colunas) e o `SelectMenu` filtra na tela | `ROWNUM <= {{limite}}` com `limite`/`offset` | no Oracle o `ROWNUM` corta **antes** do `ORDER BY`: a "página 2" seria um recorte arbitrário, e o shim do simulador (que vira `LIMIT` no fim) esconderia a diferença. Paginação honesta exigiria `OFFSET … FETCH NEXT` (Oracle 12c+), versão não confirmada no WinThor. A regra do `LIMIT/OFFSET` continua valendo para as listagens do SGC (`sgcFornecedorListar`) |
 | D-004 | "Sem teto" na faixa é `VALOR_ATE = 0`, não `NULL` | `NULL` como no SGC anterior | é o idioma do projeto ("desligado é `0` no numérico"), tira `IS NULL` de toda comparação e evita que o `NULL` atravesse o `JSON` do carregar como `null`/`''` conforme o driver |
 | D-005 | A guarda de persona das `sgcEsc*` é sobre `{{usuarioId}}`; quem confere `:VAR_USER` é `sgcFornecedorSalvar`, com `runQueryMitra`, antes de escrever qualquer coisa | guardar as `sgcEsc*` por `:VAR_USER` | chamada aninhada de SF não propaga `:VAR_USER` com garantia: as escritas gravariam zero linha em silêncio dentro do salvamento. O ponto de entrada de escrita é único (FO-08: salvar substitui tudo), então a checagem forte fica nele; a guarda por `{{usuarioId}}` continua valendo para qualquer chamada direta. **R-007:** as 13 `sgcEsc*` ficam **no** perfil business, como as `kbEsc*` da lib; fica o item de verificação no sandbox — se chamada aninhada dispensar o perfil, elas saem dele |
-| D-006 | As tabelas `PC*` do WinThor são criadas pelo **seed do simulador**, nunca pelo `setup-backend.mjs` | pôr o DDL das `PC*` no setup, como qualquer tabela | o `setup-backend.mjs` roda na plataforma: criaria tabelas de ERP vazias no banco do Mitra e a SF Oracle passaria a ler o lugar errado. No simulador as `PC*` são imitação, e imitação mora no seed |
+| D-006 | O DDL das `PC*` é do integrador, em `backend/simulator/schema-winthor.mjs`, compartilhado por 001 e 003; **nunca** no `setup-backend.mjs`. O seed da 001 só insere linhas | pôr o DDL das `PC*` no setup, como qualquer tabela; ou cada spec criar as suas | o `setup-backend.mjs` roda na plataforma: criaria tabelas de ERP vazias no banco do Mitra e a SF Oracle passaria a ler o lugar errado. E `CREATE TABLE` espalhado por dois seeds daria duas versões da mesma tabela conforme a ordem de execução — a 003 precisa de colunas (`OBS2`, `QTVENDMES*`, `CODATV1`) que a 001 não usa (B-05) |
 | D-007 | O histórico não tem SF própria: vem com `sgcFornecedorCarregar`, limitado às **20** últimas alterações | `sgcFornecedorLogListar` + `sgcFornecedorLogListarTotal` paginadas | duas SFs e uma chamada a mais por tela para um painel que ninguém pagina; 20 linhas respondem "quem mudou o quê da última vez", que é o que FO-06 B pede. Paginar o histórico é mudança de spec, não de plan |
 | D-008 | CNPJ é validado por comprimento **e** dígitos verificadores | só os 14 dígitos, como no SGC anterior | o CNPJ vem do ERP mas é editável aqui, e é ele que liga o fornecedor à nota fiscal na onda 2; 10 linhas de regra pura evitam um vínculo que só falha meses depois |
 | D-009 | A validação roda duas vezes: em `lib/fornecedor.ts` (tela) e dentro de `sgcFornecedorSalvar` (servidor), com as **mesmas mensagens** | validar só no servidor | P-12 exige o servidor; validar só lá faria a tela ida-e-volta a cada campo errado. O mapa de testes cobre os dois lados com os mesmos números, e a mensagem é o contrato entre eles |
