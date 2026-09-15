@@ -7,9 +7,8 @@ import { Pencil, X as IconeCancelar } from 'lucide-react';
 import { linhas, linha, acao } from '@/lib/mitra-api';
 import { fmtData, hojeIso } from '@/lib/formato';
 import { situacao, type SituacaoAgenda } from '@/lib/agenda';
-// PROVISÓRIO: lib/permissoes.ts é da 002 e ainda não existe neste worktree —
-// ver o cabeçalho de lib/agenda-permissoes.ts.
-import { permissoesDe } from '@/lib/agenda-permissoes';
+// Permissões da agenda: agendar/cancelarAgendamento da matriz única (spec 002, B-02).
+import { permissoesDe } from '@/lib/permissoes';
 import { DatePicker } from '@/components/DatePicker';
 import {
   PageHeader, Panel, Toolbar, FilterChip, SelectMenu, Field, Table, Th, Td, Tr,

@@ -62,6 +62,8 @@ export const MAP_IDS = 'SERVER_FUNCTIONS';
 // que o sim:check precisa para exercitar as SFs SQL de leitura (valor
 // desligado: '' no texto, '0' no número — ver CLAUDE.md). Vazia até lá: os
 // add-004..007 ainda não publicam SF nenhuma.
+// Um objeto só: chave repetida entre specs vale a ÚLTIMA — por isso codfornec/codfilial/datas
+// ficam com os valores da 003 (1015, filial 1, período com vendas) e cardId com o da 002 (5).
 export const CHECK_INPUT = {
   busca: '', limite: '20', offset: '0',
   // spec 001 (fornecedores):
@@ -78,7 +80,7 @@ export const CHECK_INPUT = {
   // spec 003 (itens do pedido):
   codfornec: '1015', codfilial: '1', dataInicio: '2026-08-01', dataFim: '2026-09-14',
   codprods: '5001,5002', codprod: '0', diasValidade: '90', diasEstoque: '80',
-  nivel: '', cardId: '1',
+  nivel: '',
   // spec 004 (agenda de análises):
-  codfornec: '0', codfilial: '', dataInicio: '', dataFim: '', situacao: '', hoje: '2026-09-15', id: '1', idAgenda: '1',
+  situacao: '', hoje: '2026-09-15', id: '1',
 };

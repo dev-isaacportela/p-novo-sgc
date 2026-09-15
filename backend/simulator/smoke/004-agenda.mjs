@@ -1,7 +1,8 @@
 // Cenários C-001..C-021 e regras RN-001..RN-015 da spec 004 (agenda de
 // análises). Ver docs/specs/004-agenda-de-analises/plan.md §Testes.
 //
-// PROVISÓRIO (registrado no relatório da 004) — duas dependências de specs
+// (Provisórios removidos na integração: fornecedores vêm do seed da 001 e a capa da 002.)
+// PROVISÓRIO (histórico) — duas dependências de specs
 // que ainda não existem neste worktree:
 //
 // 1. Fornecedores (spec 001): o seed da 001 é stub aqui, então este arquivo
@@ -59,24 +60,7 @@ export async function suite(ctx) {
   const hoje = comDias(0);
   const agoraIso = () => new Date().toISOString().slice(0, 19);
 
-  /* ─────────────── provisórios (ver cabeçalho) ─────────────── */
-
-  db.exec(`
-    INSERT OR IGNORE INTO SGC_FORNECEDOR (CODFORNEC, FORNECEDOR, CNPJ, ATIVO) VALUES
-      (1015, 'Fresenius Kabi Brasil Ltda', '00000000000115', 1),
-      (1042, 'Nestle Brasil Ltda', '00000000000142', 1),
-      (1088, 'Danone Ltda', '00000000000188', 0)
-  `);
-
-  const capaProvisoria = {
-    name: 'sgcEscPedidoCapaInserir',
-    type: 'SQL',
-    code: `INSERT OR IGNORE INTO SGC_PEDIDO (ID_CARD, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, PERIODO_INICIO, PERIODO_FIM, ORIGEM, ID_AGENDA, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM)
-VALUES ({{cardId}}, {{codfornec}}, '{{fornecedor}}', '{{codfilial}}', '{{filial}}', '{{periodoInicio}}', '{{periodoFim}}', '{{origem}}', {{idAgenda}}, {{usuarioId}}, '{{agora}}', '{{agora}}')`,
-  };
-  byName.set(capaProvisoria.name, capaProvisoria);
   const idsMapa = idsDoMapa(FRONTEND_MAP);
-  byId.set(Number(idsMapa.sgcEscPedidoCapaInserir), capaProvisoria);
 
   /* ─────────────── helpers de banco (direto, como o plan pede nos cenários "o teste insere") ─────────────── */
 

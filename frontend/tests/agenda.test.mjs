@@ -1,5 +1,5 @@
 // Regra pura da agenda de análises (spec 004): src/lib/agenda.ts e
-// src/lib/agenda-permissoes.ts (provisório — ver o cabeçalho do arquivo).
+// src/lib/permissoes.ts (provisório — ver o cabeçalho do arquivo).
 // Sem React, sem SDK.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +7,7 @@ import {
   proximaOcorrencia, situacao, periodoPadrao, periodoDaOcorrencia,
   validarAgendamento, recorte, diaNoFuso,
 } from '../src/lib/agenda.ts';
-import { permissoesDe } from '../src/lib/agenda-permissoes.ts';
+import { permissoesDe } from '../src/lib/permissoes.ts';
 
 test('C-004/RN-001: recorrência mensal — mesmo dia do mês seguinte, cortado no último dia quando não existe', () => {
   assert.equal(proximaOcorrencia('2026-01-31', 'mensal'), '2026-02-28');
