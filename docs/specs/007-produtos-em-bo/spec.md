@@ -209,8 +209,8 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-009 | com 2 itens em aberto, B.O. → Faturamento devolve "pode" e motivo vazio | regra de negócio |
 | C-010 | a verificação diária devolve `avisados: 1`; há 1 aviso do tipo previsão de B.O. para o pedido, endereçado aos responsáveis, com a data da previsão e "2 itens" no texto; o pedido fica marcado como avisado hoje e ganha 1 linha de histórico; a segunda chamada devolve `avisados: 0` e a contagem de avisos continua 1 | regra de negócio |
 | C-011 | na mesma rodada, o pedido com previsão futura, o sem previsão e o que está em Faturamento não recebem aviso: a contagem de avisos deles é 0 | regra de negócio |
-| C-012 | o painel devolve 3 linhas e o total 3; a primeira linha é a do pedido sem previsão; filtrando por "vencida" devolve 2; sem filtro de situação do item devolve 4 (3 abertos e 1 liberado) | regra de negócio |
-| C-013 | o painel chamado com o usuário do comercial devolve as mesmas 3 linhas; o menu do comercial devolve exatamente 1 item, o do painel de B.O. | regra de negócio + regra de tela |
+| C-012 | entre os pedidos deste cenário, o painel devolve as 3 linhas em aberto e a do pedido sem previsão vem antes das outras; filtrando por "vencida" sobram 2; sem filtro de situação do item são 4 (3 em aberto e 1 liberado); o total declarado bate com o que existe em B.O. no momento do teste |  regra de negócio |
+| C-013 | o painel chamado pelo usuário do comercial devolve exatamente as mesmas linhas que devolve para o gestor; o menu do comercial devolve exatamente 1 item, o do painel de B.O. | regra de negócio + regra de tela |
 | C-014 | a matriz de permissões da diretoria devolve "vê o B.O." verdadeiro e "opera o B.O." falso; a do gestor devolve os dois verdadeiros; a de quem tem acesso somente-leitura devolve "vê" verdadeiro e "opera" falso | regra de tela |
 | C-015 | marcar itens como comercial e como diretoria devolve recusa citando o perfil e deixa zero item gravado; como gestor grava; com acesso somente-leitura, recusa | regra de negócio |
 | C-016 | marcar o mesmo produto com 25 depois de 40 deixa 1 registro com quantidade 25 | regra de negócio |
@@ -222,7 +222,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-005 | previsão vazia → "sem previsão"; ontem → "vencida"; hoje → "vence hoje"; amanhã → "no prazo" | regra de tela |
 | RN-006 | texto do aviso montado com previsão 2026-10-05 e 2 itens contém a data e "2 itens"; pedido sem previsão não gera texto | regra de tela + regra de negócio |
 | RN-007 | coberto por C-007 | regra de negócio |
-| RN-008 | a frase da recusa para 1 item é "Resolva o 1 item em B.O. antes de concluir o pedido." e para 3 é "Resolva os 3 itens em B.O. antes de concluir o pedido." | regra de tela + regra de negócio |
+| RN-008 | a frase da recusa para 1 item é "Resolva o 1 item em B.O. antes de concluir o pedido." e para 3 é "Resolva os 3 itens em B.O. antes de concluir o pedido." | regra de negócio |
 | RN-009 | coberto por C-014 (tela) e C-015 (servidor); e marcar num pedido de outra pessoa com acesso restrito é recusado | regra de negócio |
 | RN-010 | coberto por C-012 (ordem e ausência de recorte por persona) | regra de negócio |
 | RN-011 | coberto por C-006 | regra de negócio |

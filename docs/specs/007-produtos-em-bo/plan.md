@@ -9,7 +9,7 @@
 | Princípio | Toca? | Como atende |
 |---|---|---|
 | Spec antes de código | sim | `spec.md` sem `[NEEDS CLARIFICATION]`; 17 cenários e 12 regras, todos vindos de O2-06, R-022, R-023, R-024, R-026, R-027, R-028, R-029, R-030 e R-034 |
-| Backend escrito local, executado no sandbox | sim | arquivo novo `backend/add-010-bo.mjs` e dois fragmentos em `backend/sql/`; as 3 tabelas novas e as 2 colunas de `SGC_PEDIDO` entram no `setup-backend.mjs` **pelo integrador** (arquivo compartilhado, R-026). Nada do `mitra-sdk` roda da máquina local |
+| Backend escrito local, executado no sandbox | sim | arquivo novo `backend/add-010-bo.mjs` e dois fragmentos em `backend/sql/`; as 3 tabelas novas e as 2 colunas de `SGC_PEDIDO` entram no `setup-backend.mjs` pela **base da onda 2 (S2)**, que cria TODAS as tabelas e colunas da onda antes do fan-out (arquivo compartilhado, R-026). Nada do `mitra-sdk` roda da máquina local |
 | Migrations append-only | sim | nada em `backend/migrations/`; o DDL vive no `CREATE TABLE` do `setup-backend.mjs` (a onda 2 **edita o CREATE**, sem `ALTER` — nada foi publicado ainda) e a migration é gerada pelo sandbox |
 | Leitura e escrita por Server Function | sim | a aba e o painel usam `linhas()`/`acao()` de `src/lib/mitra-api.ts`; zero `listRecords`/`patchRecord`. Escrita de pessoa é SF SQL guardada por `:VAR_USER`; escrita de processo é SQL interna chamada por id, com a mesma guarda sobre `{{usuarioId}}` (R-013, achado A1) |
 | Simulador cobre a feature | sim | `simulator/seed/007-bo.mjs` só insere linhas (2 produtos novos do fornecedor 1042, vendas `CODOPER = 'S'` dos últimos 60 dias, clientes próprios, 4 cards e os registros de B.O.); `PC*` são do integrador (R-017/R-027); `sim:check` roda as 6 SQL de leitura |
@@ -22,7 +22,7 @@
 - **Frontend:** React 19 · Vite 7 · Tailwind 4 · react-router 7 · `mitra-interactions-sdk`
 - **Backend:** tabelas e Server Functions na plataforma Mitra, provisionadas por `backend/*.mjs` com `mitra-sdk`; leitura do WinThor por JDBC Oracle (`jdbcId` resolvido por nome no `isEntrypoint()`, `jdbcIdWinthor` de `add-003-jdbc-winthor.mjs`)
 - **Reuso identificado:**
-  - `@benenutri/mitra-kanban` (1.3.0, `^1.4.0` na release da onda 2): `abasExtras` + `ExtensaoContexto` (`ctx.mover`, `ctx.recarregar`, `ctx.avisar`), `antesDeMover`, `kbNotaRegistrar` (com `usuarioId`, que só vale sem sessão). **Não** usa `kbCardMover` com `movidoPor` (R-021): quem move é sempre uma pessoa, pela tela.
+  - `@benenutri/mitra-kanban` (1.3.0, `^1.4.0` na release da onda 2): `abasExtras` + `ExtensaoContexto` (`ctx.mover`, `ctx.recarregar`, `ctx.avisar`) e `kbNotaRegistrar` (com `usuarioId`, que só vale sem sessão). **Não** usa `kbCardMover` com `movidoPor` (R-021): quem move é sempre uma pessoa, pela tela.
   - Spec 002: `PERSONA_EFETIVA`/`guardaPersonaDe` (R-013, copiados literalmente), `SGC_FASE` (chave estável), `sgcPodeMover` (os dois blocos novos de R-030), `notificacoesUniao` (o ramo de `SGC_AVISO` é da 005).
   - Spec 003: `SGC_PEDIDO_ITEM` (a lista de itens do pedido e o `STATUS`), o `PedidoProvider`/`usePedido()` do card aberto (o diálogo "Marcar itens" lê os itens de lá, sem SF extra), `lote()`/`texto()`/`chamar()` do preâmbulo JS de `add-006-itens.mjs`.
   - Spec 001: transporte de arquivo — `uploadFilePublicMitra({ file })` devolvendo `publicUrl` (o mesmo `DocumentoDialogo.tsx`), e `/uploads` do `simulator/server.mjs`.
@@ -33,7 +33,7 @@
 ## Modelo de dados
 
 Três tabelas novas e duas colunas em `SGC_PEDIDO`, todas no `setup-backend.mjs`
-(arquivo do integrador, R-026). Convenções do 000: colunas em UPPERCASE, datas em
+(criadas pela **base da onda 2, S2**, antes do fan-out — R-026). Convenções do 000: colunas em UPPERCASE, datas em
 `VARCHAR(10)`, carimbos em `VARCHAR(19)`, sem `FOREIGN KEY`, `ID` autoincremento,
 `CODFORNEC INT`, `CODFILIAL VARCHAR(10)`.
 
@@ -165,6 +165,13 @@ WHERE B.ID_CARD = {{idCard}}
 ORDER BY CASE B.STATUS WHEN 'aberto' THEN 0 ELSE 1 END, B.QT_PENDENTE DESC, B.DESCRICAO
 ```
 
+O dia de referência do painel é uma constante do módulo, a mesma da 006 (G-6): `hoje`
+desligado (`''`) **não** pode virar "tudo no prazo", então cai para o dia do servidor.
+
+```js
+const HOJE = `COALESCE(NULLIF('{{hoje}}', ''), DATE_FORMAT(CURDATE(), '%Y-%m-%d'))`;
+```
+
 ```sql
 -- sgcBoPainel (7704) — uma linha por PRODUTO em B.O. (RF-015)
 SELECT B.ID, B.ID_CARD, C.TITULO,
@@ -176,8 +183,8 @@ SELECT B.ID, B.ID_CARD, C.TITULO,
   COALESCE(P.DT_PREVISAO_BO, '') AS DT_PREVISAO_BO,
   CASE
     WHEN COALESCE(P.DT_PREVISAO_BO, '') = ''   THEN 'sem_previsao'
-    WHEN P.DT_PREVISAO_BO < '{{hoje}}'         THEN 'vencida'
-    WHEN P.DT_PREVISAO_BO = '{{hoje}}'         THEN 'hoje'
+    WHEN P.DT_PREVISAO_BO < ${HOJE}            THEN 'vencida'
+    WHEN P.DT_PREVISAO_BO = ${HOJE}            THEN 'hoje'
     ELSE 'no_prazo' END                        AS SITUACAO_PREVISAO,
   COALESCE((SELECT D.ENDERECO FROM SGC_BO_DOCUMENTO D
             WHERE D.ID_CARD = B.ID_CARD AND D.TIPO = 'carta_falta'
@@ -193,8 +200,8 @@ WHERE ('{{status}}' = '' OR B.STATUS = '{{status}}')
        OR COALESCE(P.FORNECEDOR, '') LIKE CONCAT('%', '{{busca}}', '%'))
   AND ('{{situacao}}' = '' OR '{{situacao}}' = CASE
         WHEN COALESCE(P.DT_PREVISAO_BO, '') = '' THEN 'sem_previsao'
-        WHEN P.DT_PREVISAO_BO < '{{hoje}}'       THEN 'vencida'
-        WHEN P.DT_PREVISAO_BO = '{{hoje}}'       THEN 'hoje'
+        WHEN P.DT_PREVISAO_BO < ${HOJE}          THEN 'vencida'
+        WHEN P.DT_PREVISAO_BO = ${HOJE}          THEN 'hoje'
         ELSE 'no_prazo' END)
 ORDER BY CASE WHEN COALESCE(P.DT_PREVISAO_BO, '') = '' THEN 0 ELSE 1 END,
          P.DT_PREVISAO_BO, B.ID_CARD, B.DESCRICAO
@@ -205,7 +212,8 @@ O painel **não filtra por fase**: um item continua na lista enquanto estiver `a
 mesmo que o pedido tenha voltado a Faturamento — no legado, item aberto num card fora da
 fase 16 sumia do painel e ficava `EM_BO` para sempre (D-006). `hoje` vem da tela
 (`hojeIso()`, dia do navegador), pela mesma assimetria registrada em R-10 da 004: o cron
-decide o dia no fuso de Brasília, a tela no fuso de quem está olhando.
+decide o dia no fuso de Brasília, a tela no fuso de quem está olhando; sem a tela, o
+`HOJE` acima cai no dia do servidor.
 
 `sgcBoPainelTotal` é o mesmo `FROM`/`WHERE` com `SELECT COUNT(*) AS TOTAL`, sem `ORDER BY`
 nem `LIMIT`.
@@ -367,8 +375,9 @@ COALESCE((
 
 -- coluna PENDENCIAS_BO_MOTIVO (a frase, com a contagem e o plural certo)
 COALESCE((
-  SELECT CASE WHEN COUNT(*) = 1
-           THEN 'Resolva o 1 item em B.O. antes de concluir o pedido.'
+  SELECT CASE
+           WHEN COUNT(*) = 0 THEN ''
+           WHEN COUNT(*) = 1 THEN 'Resolva o 1 item em B.O. antes de concluir o pedido.'
            ELSE CONCAT('Resolva os ', COUNT(*), ' itens em B.O. antes de concluir o pedido.')
          END
   FROM SGC_BO_ITEM B WHERE B.ID_CARD = C.ID AND B.STATUS = 'aberto'
@@ -378,14 +387,21 @@ COALESCE((
 Ramos:
 
 ```sql
+-- PODE
 WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_BO_ABERTOS > 0 THEN 0
-WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido')                                 THEN T.PENDENCIAS_BO_MOTIVO
+-- MOTIVO (a condição vai junto — R-044)
+WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_BO_ABERTOS > 0 THEN T.PENDENCIAS_BO_MOTIVO
 ```
 
-Os ramos de conclusão **convivem** com o bloco de NF da 005 (`pendencias-conclusao-nf.sql`):
-o integrador os encadeia na ordem NF → B.O., e a primeira condição que falha define o
-motivo, como já acontece na saída da Análise. `bo>faturamento` e `bo>cancelado` não ganham
-ramo nenhum (RF-014, RN-012). Cancelar nunca passa por aqui.
+O ramo de `MOTIVO` **leva a própria condição** (R-044) e é encadeado **depois** do da NF
+(`… AND T.PENDENCIAS_NF > 0 THEN T.PENDENCIAS_NF_MOTIVO`): assim um pedido com conferência
+de NF pendente recebe a frase da NF, um pedido só com item de B.O. aberto recebe a minha, e
+`PODE = 0` nunca sai com motivo vazio (R-020). Sem a condição no ramo, o `IN (…)` casaria
+também quando a pendência fosse só da NF e devolveria `''`.
+
+O `WHEN COUNT(*) = 0 THEN ''` da coluna é a mesma proteção pelo outro lado: a frase nunca
+vira "Resolva os 0 itens". `bo>faturamento` e `bo>cancelado` não ganham ramo nenhum
+(RF-014, RN-012). Cancelar nunca passa por aqui.
 
 Texto novo em `M` (`add-005`) e em `MOTIVOS` (`transicoes.ts`), **o mesmo caractere a
 caractere** (o teste de 500 combinações da 002 compara):
@@ -394,12 +410,18 @@ caractere** (o teste de 500 combinações da 002 compara):
 boEntrada: 'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.'
 ```
 
-A frase da **conclusão** é dinâmica (tem a contagem) e por isso vive na coluna
-`PENDENCIAS_BO_MOTIVO`, como o `PENDENCIAS_MOTIVO` da 003; o espelho de tela é a função
-pura `motivoConclusaoBo(abertos)` de `lib/bo.ts`, testada com 1 e 3 (RN-008). Em
-`motivoDeDestino` os três pares continuam **livres**: a trava é assíncrona e mora no
-`antesDeMover`, exatamente como `analise>tecnica` da 003 — é isso que mantém o teste de
-500 combinações válido.
+A frase da **conclusão** é dinâmica (tem a contagem) e por isso vive **só** na coluna
+`PENDENCIAS_BO_MOTIVO`, como o `PENDENCIAS_MOTIVO` da 003 — `MOTIVOS` é um
+`Record<string, string>` e não comporta contagem. Ela não tem espelho de tela e é testada
+no smoke, lendo o `MOTIVO` do próprio `sgcPodeMover` com 1 e com 3 itens abertos (RN-008).
+
+**R-046 — os blocos de mover da onda 2 ficam só no servidor.** `faturamento>bo`,
+`faturamento>concluido` e `bo>concluido` são recusados pelo gancho, e a lib mostra a frase
+na faixa de aviso ao clicar. Esta spec **não** entrega `antesDeMover` nem `podeMover`
+novos: em `motivoDeDestino` os três pares continuam livres (é o que mantém o teste de 500
+combinações válido) e o `transicoes.ts` recebe só o texto em `MOTIVOS`. Quem evita o clique
+recusado é a própria aba, que oferece a ação certa **antes** do movimento ("Marcar em
+B.O." e "Liberar").
 
 ### Bloco 77xx de `frontend/src/lib/server-functions.ts`
 
@@ -426,10 +448,9 @@ Arquivos:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `frontend/src/lib/bo.ts` | regra pura: `situacaoDaPrevisao`, `rotuloSituacaoPrevisao`, `motivoConclusaoBo`, `validarMarcacaoBo`, `textoAvisoBo`, `resumoBo` |
+| `frontend/src/lib/bo.ts` | regra pura: `situacaoDaPrevisao`, `rotuloSituacaoPrevisao`, `validarMarcacaoBo`, `textoAvisoBo`, `resumoBo`, e o reexport de `MOTIVOS.boEntrada` (G-8) |
 | `frontend/src/pages/quadros/abas/Bo.tsx` | `AbaBo(ctx: ExtensaoContexto)` — os três blocos, uma chamada de `sgcBoCarregar` |
 | `frontend/src/pages/quadros/abas/bo-dialogos.tsx` | `MarcarItensDialogo`, `PrevisaoDialogo`, `DocumentoBoDialogo` (o `max-lines` 800 não cabe tudo num arquivo) |
-| `frontend/src/pages/quadros/abas/verificar-saida-bo.ts` | `verificarSaidaBo(cardId, destino)` para o `antesDeMover` |
 | `frontend/src/pages/bo/BoPainelPage.tsx` | o painel `/bo` |
 | `frontend/src/lib/server-functions.ts` | bloco 77xx (nomes e ids locais) |
 
@@ -487,7 +508,9 @@ Como `verBo` é verdadeiro para todas as personas, `menuParaPersona` passa a dev
 3. A tela chama `sgcBoMarcar` **uma** vez. Dentro dele: persona → fase → validação →
    `sgcWintClientesImpactados` (1) → `sgcEscBoItemInserir` (1 por lote de 200) →
    `sgcEscItemStatusBo` `'bo'` (1). Devolve `abertos`.
-4. Com `abertos > 0`, a aba oferece "Mover para Produtos em B.O.", que é `ctx.mover(faseId)`
+4. Com `abertos > 0` — e **só** com `abertos > 0`, que é como a aba oferece a ação certa
+   antes do movimento em vez de deixar o gancho recusar (R-046) — a aba oferece
+   "Mover para Produtos em B.O.", que é `ctx.mover(faseId)`
    da lib — quem move é a pessoa, pela tela (R-021 não se aplica aqui). O motor consulta
    `sgcPodeMover`, que com o bloco de `pendencias-bo-entrada.sql` já libera o par.
 5. "Registrar previsão" grava por `sgcEscBoPrevisaoInserir` e `sgcEscPedidoPrevisaoBo`
@@ -501,7 +524,7 @@ Como `verBo` é verdadeiro para todas as personas, `menuParaPersona` passa a dev
    `SGC_AVISO` da `notificacoesUniao()` (005 + integrador).
 8. Quando o item chega, "Liberar" chama `sgcBoMarcar` com `status: 'liberado'`: o registro
    de B.O. fecha e o item do pedido volta a `enviado`. Com zero aberto, o
-   `antesDeMover`/`sgcPodeMover` libera Concluídas.
+   `sgcPodeMover` libera Concluídas — a trava é só do servidor (R-046); com item aberto, o clique em "Mover para → Compras Concluídas" volta com a frase na faixa de aviso do card.
 9. Em paralelo, qualquer pessoa — inclusive o comercial — abre `/bo` e vê a lista
    consolidada, paginada, com quem está sem previsão no topo.
 
@@ -518,12 +541,15 @@ export function situacaoDaPrevisao(dtPrevisao: string, hoje: string): SituacaoPr
 export function rotuloSituacaoPrevisao(situacao: SituacaoPrevisao, dias: number): string;
 // 'Sem previsão' | 'Vencida há 2 dias' | 'Vence hoje' | 'No prazo'.
 
-export function motivoConclusaoBo(abertos: number): string | null;
-// 0 → null; 1 → 'Resolva o 1 item em B.O. antes de concluir o pedido.';
-// N → 'Resolva os N itens em B.O. antes de concluir o pedido.' (espelho do SQL, RN-008)
+// G-8 — o texto da entrada em B.O. tem UM dono, o `MOTIVOS` de transicoes.ts (que é o que
+// entra no teste de 500 combinações). Aqui só se reexporta, para a aba e o teste o lerem
+// de um lugar só, sem uma segunda cópia da frase no projeto.
+export { MOTIVOS } from './transicoes';
+export const MOTIVO_ENTRADA_BO = MOTIVOS.boEntrada;
 
-export const MOTIVO_ENTRADA_BO =
-  'Marque ao menos um item em B.O. antes de mover o pedido para Produtos em B.O.';
+// Não existe `motivoConclusaoBo`: a frase da conclusão tem contagem, `MOTIVOS` não a
+// comporta, e R-046 tirou o espelho de tela dos pares da onda 2 — ela vive só na coluna
+// `PENDENCIAS_BO_MOTIVO` e é testada no smoke.
 
 export function validarMarcacaoBo(
   marcacoes: { codprod: number; qtPendente: number; observacao?: string }[],
@@ -547,7 +573,7 @@ digam a mesma coisa, o mesmo arranjo de `transicoes.ts` × `sqlPodeMover`.
 ### Tabelas
 
 Nenhuma tabela nasce nesta spec. As `SGC_BO_*` e as colunas de `SGC_PEDIDO` vêm do
-`setup-backend.mjs` (integrador); as `PC*` vêm do `schema-winthor.mjs` (integrador). Esta
+`setup-backend.mjs` (base S2); as `PC*` vêm do `schema-winthor.mjs` (integrador). Esta
 spec **não precisa de coluna nova em `PC*`**: `PCMOV` já tem `CODPROD`, `CODFILIAL`,
 `CODCLI`, `CODOPER`, `DTMOV` e `QT` (as adições de R-027 são da 005 e da 006).
 
@@ -587,13 +613,20 @@ e as vendas de 2026-08-15 são do `seed/003-itens.mjs` (R-017). Esta spec insere
   | `boLimpo` | `bo` | 5201 `liberado`; zero aberto; `DT_PREVISAO_BO` = hoje+10 | C-008 (libera), C-009, C-011, C-012 |
   | `boSemPrevisao` | `bo` | 5101 `aberto` (1 cliente, 8 un); `DT_PREVISAO_BO` = `''` | C-011, C-012 (ordenação) |
 
+  Os quatro pedidos nascem com **`DT_ENVIO` vazio** e sem nenhuma linha de `SGC_NF`: o
+  smoke roda todas as suítes num banco só (R-045), e pedido com data de envio e sem
+  faturamento entraria na listagem de `/faturamentos-pendentes` da 005, mexendo nos totais
+  dela. Nada em 007 lê `DT_ENVIO`.
+
   O card em `analise` do C-017 é o do `seed/002-quadro.mjs` — esta spec não cria mais um.
   `CENARIO.usuarios = { admin: 1, ana: 2, gil: 3, dora: 4, leo: 5 }` vem do seed da 002.
   Os ids dos 4 cards são exportados em `CARDS_007`, como a 003 faz em `CARDS_003`, para o
   smoke não depender da ordem de inserção.
 
-Com isso o painel tem **3 itens em aberto** (2 do card `bo` + 1 do `boSemPrevisao`) e
-**4 no total** (com o `liberado` do `boLimpo`) — os números de C-012.
+Com isso os cards desta spec têm **3 itens em aberto** (2 do card `bo` + 1 do
+`boSemPrevisao`) e **4 no total** (com o `liberado` do `boLimpo`). São os números de
+C-012, mas sempre **recortados por `CARDS_007`** no teste: `sgcBoPainel` é uma listagem
+global e a 005 semeia itens de B.O. no card `emBo` dela no mesmo banco (R-045).
 
 ### `CHECK_INPUT`
 
@@ -620,17 +653,17 @@ exige para aceitar `usuarioId` (mesmo arranjo do cron da 004).
 |---|---|---|
 | C-001 | `smoke/007-bo.mjs` | `sgcBoMarcar` no card `faturamento` como `gil`, com 5201 (40) e 5202 (15), devolve `{ ok: true, marcados: 2, abertos: 2 }`; `sgcBoItensCard` traz 2 linhas `aberto` com `QT_PENDENTE` 40 e 15 e `CLIENTES_IMPACTADOS` 4 e 2; `SGC_PEDIDO_ITEM` do card tem 2 em `bo` e 2 em `enviado` |
 | C-002 · RN-002 | `smoke/007-bo.mjs` | `sgcWintClientesImpactados({ codprods: '5201,5202', dias: 60 })` devolve **2** linhas (> 0): 5201 → `CLIENTES_IMPACTADOS` 4 e `QT_VENDIDA_60D` 70; 5202 → 2 e 10 (a venda de hoje−61 e a entrada de hoje−3 ficam de fora) |
-| C-003 | `smoke/007-bo.mjs` | `sgcPodeMover` do card `faturamento` para a fase `bo`, antes do C-001, devolve `PODE = 0` e `MOTIVO` igual a `MOTIVO_ENTRADA_BO`; depois do C-001, `PODE = 1` e `MOTIVO` `''` |
+| C-003 | `smoke/007-bo.mjs` | `sgcPodeMover` do card `faturamento` para a fase `bo`, antes do C-001, devolve `PODE = 0` e `MOTIVO` igual a `MOTIVOS.boEntrada` (importado de `transicoes.ts`, o dono da frase — G-8); depois do C-001, `PODE = 1` e `MOTIVO` `''` |
 | C-004 · RN-004 | `smoke/007-bo.mjs` | `sgcEscBoPrevisaoInserir` + `sgcEscPedidoPrevisaoBo` como `ana` com `2026-10-05`: `sgcBoPrevisoesCard` devolve 2 linhas (a do seed e a nova, com `REGISTRADO_POR_NOME`) e `SGC_PEDIDO.DT_PREVISAO_BO` = `'2026-10-05'` |
 | C-005 | `smoke/007-bo.mjs` | com `ALERTA_BO_EM` = hoje, `sgcEscPedidoPrevisaoBo` com hoje+7 deixa `ALERTA_BO_EM` = `''` e `DT_PREVISAO_BO` = hoje+7; o `sgcBoMonitorar` seguinte não inclui esse card em `resultados` |
 | C-006 · RN-011 | `smoke/007-bo.mjs` | `sgcEscBoDocumentoInserir` com `tipo: 'carta_falta'` → `sgcBoDocumentosCard` devolve 2 linhas (a do seed e a nova) com `NOME_ARQUIVO`, `ENDERECO`, `ENVIADO_POR_NOME` e `ENVIADO_EM`; com `tipo: 'planilha'` a linha é gravada como `'outro'` |
 | C-007 · RN-007 | `smoke/007-bo.mjs` | `sgcBoMarcar` com `[{ codprod: 5201, status: 'liberado' }]` no card `bo` devolve `abertos: 1`; `SGC_BO_ITEM` do 5201 fica `liberado` com `RESOLVIDO_POR` = `gil` e `RESOLVIDO_EM` preenchido; `SGC_PEDIDO_ITEM` do 5201 volta a `enviado` e o do 5202 continua `bo` |
-| C-008 | `smoke/007-bo.mjs` | com 2 abertos, `sgcPodeMover` do card `bo` para `concluido` devolve `PODE = 0` e `MOTIVO` = `'Resolva os 2 itens em B.O. antes de concluir o pedido.'`; o mesmo para `faturamento>concluido` no card `faturamento` depois do C-001; no card `boLimpo`, `bo>concluido` devolve `PODE = 1` e `MOTIVO` `''` |
+| C-008 | `smoke/007-bo.mjs` | com 2 abertos e **zero ocorrência de NF pendente** nos cards desta spec (o ramo da NF vem antes no `CASE`, R-044), `sgcPodeMover` do card `bo` para `concluido` devolve `PODE = 0` e `MOTIVO` = `'Resolva os 2 itens em B.O. antes de concluir o pedido.'` — nunca `''`; o mesmo para `faturamento>concluido` no card `faturamento` depois do C-001; no card `boLimpo`, `bo>concluido` devolve `PODE = 1` e `MOTIVO` `''` |
 | C-009 | `smoke/007-bo.mjs` | com 2 abertos, `sgcPodeMover` do card `bo` para `faturamento` devolve `PODE = 1` e `MOTIVO` `''` |
 | C-010 · RN-006 | `smoke/007-bo.mjs` | `sgcBoMonitorar` com `userId = 0` devolve `{ avisados: 1 }` (o card `bo`); `SGC_AVISO` ganha 1 linha `TIPO = 'bo_previsao'`, `CHAVE = 'bo_previsao:<idCard>:<hoje>'`, `PARA_USUARIO_ID = 0`, `PARA_PERSONA = ''`, com a data da previsão e `'2 itens'` no `TEXTO`; `SGC_PEDIDO.ALERTA_BO_EM` = hoje; `KB_LOG` do card ganha 1 nota; a segunda chamada devolve `avisados: 0` e `SELECT COUNT(*) FROM SGC_AVISO` continua 1 |
 | C-011 · RF-010 | `smoke/007-bo.mjs` | na mesma rodada do C-010, `resultados` não traz `boLimpo` (previsão hoje+10), nem `boSemPrevisao` (`DT_PREVISAO_BO` `''`), nem `faturamento` (fase); `SGC_AVISO` deles tem contagem 0 |
-| C-012 · RN-010 | `smoke/007-bo.mjs` | `sgcBoPainel({ status: 'aberto', hoje })` devolve **3** linhas e `sgcBoPainelTotal` `TOTAL: 3`; a **primeira** é o 5101 do `boSemPrevisao` (`SITUACAO_PREVISAO: 'sem_previsao'`); com `situacao: 'vencida'` devolve 2 (as do card `bo`); com `status: ''` devolve 4; a linha do card `bo` traz `CARTA_FALTA_ENDERECO` não vazia e `VL_PENDENTE` = 40 × 19,00 |
-| C-013 | `smoke/007-bo.mjs` + `tests/bo.test.mjs` | `sgcBoPainel` com `userId = leo` devolve as mesmas 3 linhas; `menuParaPersona(permissoesDe('comercial', 'MEMBER'))` devolve exatamente 1 item, com `to: '/bo'` |
+| C-012 · RN-010 | `smoke/007-bo.mjs` | R-045 — nenhum total literal: `sgcBoPainel({ status: 'aberto', hoje, limite: 200 })` e, **filtrando no teste por `ID_CARD IN CARDS_007`**, devolve 3 linhas; entre elas a do 5101 do `boSemPrevisao` (`SITUACAO_PREVISAO: 'sem_previsao'`) vem **antes** das duas do card `bo` (ordenação de RN-010); `situacao: 'vencida'` recortado pelos mesmos cards devolve 2; `status: ''` devolve 4; `sgcBoPainelTotal({ status: 'aberto', hoje })` bate com `SELECT COUNT(*) FROM SGC_BO_ITEM WHERE STATUS = 'aberto'` lido no próprio teste; a linha do card `bo` traz `CARTA_FALTA_ENDERECO` não vazia e `VL_PENDENTE` = 40 × 19,00 |
+| C-013 | `smoke/007-bo.mjs` + `tests/bo.test.mjs` | `sgcBoPainel` com `userId = leo` devolve **as mesmas linhas** que com `userId = gil` (comparação entre as duas chamadas, sem total literal — R-045); `menuParaPersona(permissoesDe('comercial', 'MEMBER'))` devolve exatamente 1 item, com `to: '/bo'` |
 | C-014 · RN-009 (tela) | `tests/bo.test.mjs` | `permissoesDe('diretoria','MEMBER')` → `{ verBo: true, operarBo: false }`; `permissoesDe('gestor','MEMBER')` → os dois `true`; `permissoesDe('gestor','READ_ONLY')` → `verBo: true`, `operarBo: false`; `permissoesDe('comercial','MEMBER')` → `verBo: true`, `operarBo: false` |
 | C-015 · RN-009 (servidor) | `smoke/007-bo.mjs` | `sgcBoMarcar` como `leo` e como `dora` devolve `ok: false` citando o perfil e `SGC_BO_ITEM` do card não cresce; como `gil` grava; um usuário `READ_ONLY` também é recusado; um `RESTRICTED` que não criou o card é recusado com a frase de acesso restrito |
 | C-016 | `smoke/007-bo.mjs` | remarcar 5201 com `qtPendente: 25` deixa `SELECT COUNT(*) FROM SGC_BO_ITEM WHERE ID_CARD = … AND CODPROD = 5201` em **1** e `QT_PENDENTE` em 25 |
@@ -639,7 +672,7 @@ exige para aceitar `usuarioId` (mesmo arranjo do cron da 004).
 | RN-003 | `smoke/007-bo.mjs` | coberto por C-003; e `sgcPodeMover` de `enviado` para `bo` devolve `PODE = 0` com `MOTIVOS.semTransicao` (o par não existe em `PARES`) |
 | RN-005 | `tests/bo.test.mjs` | `situacaoDaPrevisao('', '2026-09-15')` → `'sem_previsao'`; `('2026-09-14', …)` → `'vencida'`; `('2026-09-15', …)` → `'hoje'`; `('2026-09-16', …)` → `'no_prazo'` |
 | RN-006 (texto) | `tests/bo.test.mjs` | `textoAvisoBo({ titulo: 'BENENUTRI MATRIZ · NESTLE', dtPrevisao: '2026-10-05', hoje: '2026-10-07', abertos: 2 })` contém `'05/10/2026'`, `'venceu há 2 dias'` e `'2 itens'`; com `abertos: 1` diz `'1 item'`; com `dtPrevisao` = `hoje` diz `'vence hoje'` |
-| RN-008 | `tests/bo.test.mjs` | `motivoConclusaoBo(0)` → `null`; `(1)` → `'Resolva o 1 item em B.O. antes de concluir o pedido.'`; `(3)` → `'Resolva os 3 itens em B.O. antes de concluir o pedido.'` — as mesmas frases que o smoke lê do `MOTIVO` do `sgcPodeMover` |
+| RN-008 | `smoke/007-bo.mjs` | o `MOTIVO` de `sgcPodeMover` para `bo>concluido` é `'Resolva os 2 itens em B.O. antes de concluir o pedido.'` no card `bo`; liberando um deles, vira `'Resolva o 1 item em B.O. antes de concluir o pedido.'` (singular); marcando um terceiro, `'Resolva os 3 itens…'`. Sem espelho de tela (R-046) |
 | RN-012 | `smoke/007-bo.mjs` | `sgcPodeMover` do card `bo` (2 abertos, sem motivo de cancelamento gravado) para `cancelado` devolve `PODE = 0` com `MOTIVOS.cancelar`; com `CANC_MOTIVO` preenchido, `PODE = 1` — nenhuma exigência de B.O. entra no caminho |
 
 - **Backend:** `backend/simulator/smoke/007-bo.mjs`, um `teste()` por linha, título
@@ -660,8 +693,9 @@ exige para aceitar `usuarioId` (mesmo arranjo do cron da 004).
   `boEntrada` em `M`. O integrador cola; o teste de 500 combinações da 002 continua valendo
   porque os três pares seguem livres em `motivoDeDestino`.
 - `PERSONA_EFETIVA`/`guardaPersonaDe` — copiados literalmente (R-013).
-- A página `/quadro` liga a aba (`abasExtras`, com `contagem` = itens em aberto) e encadeia
-  `verificarSaidaBo` no `antesDeMover` para os destinos `bo` e `concluido`.
+- A página `/quadro` liga a aba em `abasExtras`, **sem `contagem`** (R-049:
+  `AbaExtra.contagem` é síncrona e lê só `card.valores`, e não há campo do quadro para
+  "itens de B.O. abertos"). Nenhum `antesDeMover` nem `podeMover` novo (R-046).
 
 **Consome da 003 (itens):** `SGC_PEDIDO_ITEM` (`CODPROD`, `DESCRICAO`, `EMBALAGEM`,
 `UNIDADE`, `QT_PEDIDA`, `PRECO_CUSTO`, `STATUS`) e o valor novo `bo` na coluna `STATUS`;
@@ -716,9 +750,9 @@ SF extra; o preâmbulo JS de `add-006-itens.mjs` (`chamar`, `lote`, `texto`, `in
 | D-008 | `SGC_PEDIDO_ITEM.STATUS` ganha **só** o valor `bo` nesta onda; item liberado volta para `enviado` | Uma situação de item por fase do pedido | R-039: a situação do item não acompanha Faturamento nem Concluídas — `bo` é o único valor novo, e `enviado` é para onde o item volta. Menos estado, menos lugar para desincronizar |
 | D-009 | `sgcEscPedidoPrevisaoBo` (tela, `:VAR_USER`) e `sgcEscPedidoAlertaBo` (interna, `{{usuarioId}}`) são **duas** SFs sobre a mesma tabela | Uma SF só, com o usuário resolvido por `COALESCE(NULLIF(:VAR_USER, 0), {{usuarioId}})` | Aceitar `usuarioId` como identidade quando a sessão não resolve é literalmente a dívida D-06 da onda 1. Duas SFs, duas identidades, uma instrução cada — e a segunda espelha `sgcEscPedidoAlertaFaturamento` (005) e `sgcEscNfAlertaAtraso` (006) |
 | D-010 | O cron alerta enquanto o pedido estiver em `bo`, sem olhar o percentual faturado | Repetir o `PERC_FATURADO < 100` do legado | No SGC 2 sair do B.O. é um movimento de fase, explícito; um pedido 100 % faturado que continua em `bo` tem item em aberto e **deve** ser cobrado. Ler o percentual ainda criaria dependência de escrita da 005 dentro do meu cron |
-| D-011 | `MOTIVO_ENTRADA_BO` é fixo (vai literal para `M`/`MOTIVOS`); a frase da conclusão é dinâmica e vive na coluna `PENDENCIAS_BO_MOTIVO` + na pura `motivoConclusaoBo` | As duas frases fixas, sem contagem | A contagem é o que torna a recusa acionável ("resolva **os 2**"), e o arranjo já existe na 003 (`PENDENCIAS_MOTIVO`). A frase fixa vai para o `MOTIVOS` e entra no teste de 500 combinações; a dinâmica é testada pelos dois lados com os mesmos números |
+| D-011 | A frase da entrada é fixa e tem um dono só, `MOTIVOS.boEntrada` (o `lib/bo.ts` reexporta, G-8); a da conclusão é dinâmica, vive só na coluna `PENDENCIAS_BO_MOTIVO` e é testada no smoke | As duas frases fixas, ou a dinâmica duplicada numa função pura de tela | A contagem é o que torna a recusa acionável ("resolva **os 2**") e `MOTIVOS` é `Record<string, string>`: não cabe. Com R-046 a tela não espelha esses pares, então uma pura de conclusão seria código sem chamador — e duas cópias da frase da entrada seriam duas coisas para divergir |
 | D-012 | O painel `/bo` **não** é recortado por persona nem por acesso restrito | Esconder do comercial os pedidos de outras pessoas | O2-06 pede o painel "visível a todas as personas", e `RESTRICTED` é regra de **operação** ("só opera os próprios cards", P-08 B), nunca de leitura — nenhuma listagem do projeto é recortada assim |
-| D-013 | Quem move o card para B.O. e para fora dele é sempre a pessoa, por `ctx.mover` | O `sgcBoMarcar` mover sozinho depois de marcar | Marcar o que faltou e decidir que o pedido inteiro virou B.O. são duas decisões; e mover por dentro de uma SF pularia `antesDeMover` e o aviso da tela. O `kbCardMover` sem sessão (R-021) tem uma consumidora só na onda 2, o cron da 006 |
+| D-013 | Quem move o card para B.O. e para fora dele é sempre a pessoa, por `ctx.mover` | O `sgcBoMarcar` mover sozinho depois de marcar | Marcar o que faltou e decidir que o pedido inteiro virou B.O. são duas decisões; e mover por dentro de uma SF pularia o gancho e o aviso da tela. O `kbCardMover` sem sessão (R-021) tem uma consumidora só na onda 2, o cron da 006 |
 | D-014 | O seed cria produtos e clientes **próprios** (5201/5202, 9101–9105) num fornecedor que a 003 não analisa | Semear vendas sobre os produtos da 003 | As vendas da 003 têm data fixa (2026-08-15) e entrariam na janela de 60 dias enquanto "hoje" estiver perto de 2026-09-15 e sairiam depois: o mesmo teste daria 4 clientes hoje e 3 no ano que vem. Com produtos próprios e datas relativas, os números de C-002 são estáveis |
 
 ## Riscos
