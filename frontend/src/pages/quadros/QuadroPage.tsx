@@ -24,6 +24,7 @@ import AcoesDoPedido, { type MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
 import { PedidoProvider } from '@/pages/quadros/abas/PedidoProvider';
 import AbaItens from '@/pages/quadros/abas/Itens';
 import AbaAlertas from '@/pages/quadros/abas/Alertas';
+import { verificarSaidaAnalise } from '@/pages/quadros/abas/verificar-saida';
 
 /** Tradutor `KB_FASE.ID` ↔ `SGC_FASE.CHAVE` (RF-005: nenhuma regra usa nome nem id). */
 const MAPA_VAZIO: MapaDeFases = { chaveDe: () => null, faseIdDe: () => 0 };
@@ -63,8 +64,9 @@ export default function QuadroPage() {
   const [pedido, setPedido] = React.useState<PedidoCapa | null>(null);
 
   // RNF-001: abrir um pedido custa 2 execuções — a do motor (kbCardDetalhe,
-  // dentro do KanbanBoard) e esta. A 003 troca isto pelo `PedidoProvider`, que
-  // reaproveita a MESMA chamada para as abas Itens e Alertas.
+  // dentro do KanbanBoard) e esta, que traz a capa para o `AcoesDoPedido`. O
+  // `PedidoProvider` da 003 carrega a sua própria cópia para as abas Itens e
+  // Alertas; ver a nota de custo junto de `abasExtras`.
   // `versao` é o pedido de recarga que as ações do card disparam (aprovar,
   // reprovar, cancelar, registrar envio mudam a capa).
   const [versao, setVersao] = React.useState(0);
@@ -109,11 +111,12 @@ export default function QuadroPage() {
    * Saída da Análise (AT-04, R-011, D-009). `sgcAnaliseSair` é da spec 003:
    * uma execução que regera os alertas, consulta as travas, limpa as
    * reprovações por `sgcEscPedidoReprovacoesLimpar` (002, por id) e registra a
-   * nota do resumo. É aqui que o adaptador de tela da 003
-   * (`pages/quadros/abas/verificar-saida.ts`) entra.
+   * nota do resumo. Quem conversa com ela é o adaptador da 003
+   * (`pages/quadros/abas/verificar-saida.ts`): é ele que lê o `erro` do
+   * contrato e devolve a mensagem real de cada uma das cinco condições de
+   * RN-012, em vez de uma frase genérica.
    *
-   * Enquanto a 003 não publica a SF, a falha de transporte não pode travar o
-   * fluxo: o servidor reconfere no gancho `sgcPodeMover`, pelo bloco
+   * O servidor reconfere tudo no gancho `sgcPodeMover`, pelo bloco
    * `PENDENCIAS`, e é ele quem recusa de verdade.
    */
   const antesDeMover = React.useCallback(
@@ -121,14 +124,9 @@ export default function QuadroPage() {
       const origem = fases.chaveDe(card.faseId);
       const destino = fases.chaveDe(fase.id);
       if (origem !== 'analise' || destino !== 'tecnica') return { ok: true };
-      try {
-        const resposta = await acao('sgcAnaliseSair', { cardId: card.id });
-        if (resposta && resposta.ok === false) return { ok: false, erro: String(resposta.error ?? 'Há pendências na Análise.') };
-      } catch {
-        return { ok: true };
-      }
-      await recarregarPedido();
-      return { ok: true };
+      const saida = await verificarSaidaAnalise(card.id);
+      if (saida.ok) await recarregarPedido();
+      return saida;
     },
     [fases, recarregarPedido],
   );

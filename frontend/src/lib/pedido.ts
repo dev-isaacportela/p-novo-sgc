@@ -152,11 +152,10 @@ export function instanteIso(agora: Date = new Date()): string {
  * guardada por `:VAR_USER`: chamada aninhada de dentro de um JAVASCRIPT não
  * propagaria a sessão, e por isso ela NÃO sai do `sgcEnvioIndustriaRegistrar`.
  *
- * A server function ainda não existe neste worktree — a 003 a publica no
- * `add-006-itens.mjs`. O nome já está no mapa (id local 7353) e a chamada é
- * exatamente esta; enquanto a 003 não entrar, a falha é engolida de propósito:
- * o pedido já foi aprovado ou enviado, e a situação do item é consequência
- * disso — não pode derrubar a ação da pessoa. Devolve `false` nesse caso.
+ * A SF vem do `add-006-itens.mjs` (id local 7353). A falha é engolida de
+ * propósito: o pedido já foi aprovado ou enviado, e a situação do item é
+ * consequência disso — não pode derrubar a ação da pessoa. Devolve `false`
+ * nesse caso.
  *
  * O `import` é dinâmico para este módulo continuar puro (é o que `node --test`
  * carrega).
