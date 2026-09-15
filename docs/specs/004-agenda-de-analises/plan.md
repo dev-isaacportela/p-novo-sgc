@@ -17,7 +17,7 @@ Preencher **antes** de detalhar o desenho. Falha aqui é replanejamento.
 | Simulador cobre a feature | sim | `add-007-agenda.mjs` entra no `PUBLISH_ORDER`; seed `simulator/seed/004-agenda.mjs` com vencido, futuro, recorrente com limite, cancelado e processado; `CHECK_INPUT` ganha os filtros da agenda; `sim:check` verde |
 | Testes automatizados obrigatórios | sim | cada linha da seção **Testes** da spec vira `teste()` em `backend/simulator/smoke/004-agenda.mjs` ou `test()` em `frontend/tests/agenda.test.mjs` |
 | Design tokens, sem cor literal | sim | tela montada com o vocabulário de `components/page.tsx`; o `DatePicker` novo usa `--brand-*`, `--card`, `--ink-*`, `--rule-*` nos dois temas, zero hex |
-| Simplicidade | parcial | nenhuma dependência nova e nenhuma abstração com uma implementação só; o `DatePicker` próprio contraria a ausência declarada em `design.md` §1.4 — ver **Complexity Tracking** |
+| Simplicidade | sim | nenhuma dependência nova e nenhuma abstração com uma implementação só; o `DatePicker` próprio é o que a emenda do `design.md` §1.4/§9.2 (2026-09-15, UI-03 B) passou a exigir — registrado em **Complexity Tracking** |
 
 ## Contexto técnico
 
@@ -130,7 +130,8 @@ isso:
 
 | SF | Personas aceitas | Condição extra |
 |---|---|---|
-| `sgcEscAgendaInserir`, `sgcEscAgendaAtualizar`, `sgcEscAgendaParticipante*` | `admin`, `analista` | atualizar/participantes só com `PROCESSADO_EM IS NULL AND ATIVO = TRUE` |
+| `sgcEscAgendaInserir` | `admin`, `analista`, `gestor` | `AND EXISTS (SELECT 1 FROM SGC_FORNECEDOR F WHERE F.CODFORNEC = {{codfornec}} AND F.ATIVO = TRUE)` (RN-015) |
+| `sgcEscAgendaAtualizar`, `sgcEscAgendaParticipante*` | `admin`, `analista`, `gestor` | só com `PROCESSADO_EM IS NULL AND ATIVO = TRUE`; **sem** a checagem de fornecedor ativo (agendamento existente segue editável, RN-015) |
 | `sgcEscAgendaCancelar` | `admin`, `gestor`, `diretoria` | `AND PROCESSADO_EM IS NULL AND ATIVO = TRUE` (RN-004) |
 
 Sem linha em `SGC_USUARIO_PERSONA`, a pessoa é `analista` (P-02 B) — a guarda
@@ -190,7 +191,7 @@ escAgendaProximaInserir, escAgendaParticipanteCopiar }`; no simulador vêm de
 4. Para cada agendamento do lote (nada aqui interrompe o laço — erro vai para `erros[]`, RNF-004):
    1. `titulo = FILIAL + ' · ' + FORNECEDOR` (C-02 A; sem sufixo "- Agenda" do legado).
    2. **`kbCardCriar`** por id: `{ boardId, titulo, valoresJson: JSON.stringify({ fornecedor, filial, prioridade: 'normal' }), responsaveisIds: String(CRIADO_POR), prazo: '', criadoPor: CRIADO_POR, origem: 'sistema' }`. Resposta `{ ok, id }`; `ok !== true` → registra o erro e segue. É o `kbCardCriar` que garante ordem, `TEXTO_BUSCA`, a linha de `KB_MOVIMENTO` com `ORIGEM = 'sistema'` e o disparo das automações `card_criado` do quadro.
-   3. **`sgcEscPedidoCapaInserir`** (spec 002) por id: `{ idCard, codfornec, fornecedor, codfilial, filial, periodoInicio, periodoFim, origem: 'agenda', idAgenda: ID, criadoPor: CRIADO_POR, criadoEm: agora }`.
+   3. **`sgcEscPedidoCapaInserir`** (spec 002, SQL sem `:VAR_USER`, por isso chamável de dentro do JS) por id: `{ idCard, codfornec, fornecedor, codfilial, filial, periodoInicio, periodoFim, origem: 'agenda', idAgenda: ID, usuarioId: CRIADO_POR, criadoEm: agora }`.
    4. **`sgcEscAgendaProcessada`** por id: `{ id, idCard, processadoEm: agora }`.
    5. Recorrência: `proxima = proximaOcorrencia(DATA_ANALISE, RECORRENCIA, DATA_LIMITE_RECORRENCIA)`. Havendo próxima, **`sgcEscAgendaProximaInserir`** com o período recalculado (RN-008: `fim = proxima`, `inicio = proxima - duração`) e `criadoPor = CRIADO_POR`.
    6. `QT_PARTICIPANTES > 0` e próxima criada: uma consulta pega o id novo (`SELECT ID FROM SGC_AGENDA WHERE CRIADO_POR = <x> AND CRIADO_EM = '<agora>' ORDER BY ID DESC LIMIT 1`) e **`sgcEscAgendaParticipanteCopiar`** copia a lista numa instrução (`INSERT ... SELECT`).
@@ -212,7 +213,7 @@ Mesmo corpo do cron (o `add-007` concatena a mesma string `ROTINA` nas duas
 SFs — cada SF da plataforma roda isolada e carrega a própria cópia, como faz o
 motor com `motor.mjs`), com duas diferenças:
 
-1. **Persona antes de tudo.** `SELECT PERSONA FROM SGC_USUARIO_PERSONA WHERE USUARIO_ID = :VAR_USER` por `runQueryMitra`; sem linha, `analista` (P-02 B). Fora de `admin`/`analista` → `{ ok: false, error: 'Seu perfil não processa a agenda.' }` sem tocar em nada (C-012).
+1. **Persona antes de tudo.** `SELECT PERSONA FROM SGC_USUARIO_PERSONA WHERE USUARIO_ID = :VAR_USER` por `runQueryMitra`; sem linha, `analista` (P-02 B). Fora de `admin`/`analista`/`gestor` → `{ ok: false, error: 'Seu perfil não processa a agenda.' }` sem tocar em nada (C-012).
 2. **Seleção pelo recorte**, no lugar de `DATA_ANALISE <= hoje`:
 
 | `modo` | Entrada | `WHERE` |
@@ -253,7 +254,8 @@ truncados, `Dash()` quando vazio) · Envio (data real; quando difere da planejad
 `Pagination` de 50 em 50.
 
 **Diálogo de novo/editar** (§9.5, `max-h-[90vh]`, só o miolo rola): fornecedor e
-filial (`SelectMenu`; filial limitada às atendidas pelo fornecedor, spec 001),
+filial (`SelectMenu`; só fornecedores **ativos** entre as opções, RN-015; filial
+limitada às atendidas pelo fornecedor, spec 001),
 data da análise (`DatePicker`), período (campo "dias" que recalcula De/Até, mais
 os dois `DatePicker`; padrão 45), recorrência (`SelectMenu`) e data-limite
 (`DatePicker`, só aparece com recorrência), participantes (`SelectMenu` sobre
@@ -339,8 +341,9 @@ além de pt-BR, não aceita seleção múltipla, não traz dependência nova.
 
   `CENARIO.usuarios = { admin: 1, ana: 2, gil: 3, dora: 4, leo: 5 }`, com
   `SGC_USUARIO_PERSONA`: 1 `admin`, 2 `analista`, 3 `gestor`, 4 `diretoria`,
-  5 `leitura`. O seed também garante o quadro `compras` com as dez fases (o
-  seed da 002) — a agenda não cria quadro.
+  5 `comercial` (P-01). O seed também garante o quadro `compras` com as dez
+  fases (o seed da 002) — a agenda não cria quadro — e marca um dos
+  fornecedores (Support) com `ATIVO = 0` para o C-021.
 - **`CHECK_INPUT`**: acrescentar `codfornec: '0'`, `codfilial: ''`, `dataInicio: ''`, `dataFim: ''`, `situacao: ''`, `hoje: '2026-09-15'`, `id: '1'`, `idAgenda: '1'` (arquivo do integrador; a spec só pede as chaves).
 - **Dialeto:** nada novo. `GROUP_CONCAT(... SEPARATOR ...)`, `COALESCE`, `CASE` e `NOT EXISTS` já têm tratamento em `mysql-dialect.mjs`.
 - **Como o smoke chama o cron:** `execute(definicao, {}, 0)` — `userId = 0` é a ausência de sessão, que é o que habilita `criadoPor`/`origem: 'sistema'` no `kbCardCriar`. Com `userId` de pessoa o mesmo teste falharia (o card nasceria em nome dela), e é justamente essa a garantia do C-019.
@@ -363,7 +366,7 @@ além de pt-BR, não aceita seleção múltipla, não traz dependência nova.
 | C-009 | `backend/simulator/smoke/004-agenda.mjs` | o teste insere três agendamentos próprios (hoje+40, hoje+41 e hoje+60) e chama `modo: 'intervalo'` de hoje+40 a hoje+41 → `resultados` traz os dois primeiros ids e não o terceiro |
 | C-010 | `backend/simulator/smoke/004-agenda.mjs` | o teste insere um agendamento no dia 1 e outro no último dia do mês de hoje, e um no dia 5 do mês seguinte; `modo: ''` (padrão) → `resultados` traz os dois do mês e não o do mês seguinte |
 | C-011 | `backend/simulator/smoke/004-agenda.mjs` | o teste insere agendamentos em hoje−1, hoje+2 e hoje+30; `modo: 'dias', dias: 7` → `resultados` traz só o de hoje+2 |
-| C-012 | `backend/simulator/smoke/004-agenda.mjs` | `sgcAgendaProcessarManual` com `userId = leo` → `ok: false`, `error` cita perfil; contagem de `KB_CARD` inalterada |
+| C-012 | `backend/simulator/smoke/004-agenda.mjs` | `sgcAgendaProcessarManual` com `userId = leo` (comercial) → `ok: false`, `error` cita perfil; contagem de `KB_CARD` inalterada. O mesmo com `userId = gil` (gestor) → `ok: true` |
 | C-013 | `backend/simulator/smoke/004-agenda.mjs` | `sgcEscAgendaCancelar` do id 3 com `userId = gil` → linha com `ATIVO = 0` e `CANCELADO_EM` preenchido; `sgcAgendaProcessarManual({ modo: 'agendamento', idAgenda: 3 })` seguinte → `processados: 0` |
 | C-014 | `backend/simulator/smoke/004-agenda.mjs` | antes do C-013, `sgcEscAgendaCancelar` do id 3 com `userId = ana` → `ATIVO` continua 1 (a guarda `:VAR_USER` não deixou passar) |
 | C-015 | `frontend/tests/agenda.test.mjs` + smoke | `situacao({ ATIVO: 1, PROCESSADO_EM: null, DATA_ANALISE: '2026-09-14' }, '2026-09-15')` → `'atrasado'`; `sgcAgendaListar({ situacao: 'atrasado' })` traz o id 1 |
@@ -372,6 +375,7 @@ além de pt-BR, não aceita seleção múltipla, não traz dependência nova.
 | C-018 | `backend/simulator/smoke/004-agenda.mjs` | primeiro teste do arquivo, antes de qualquer processamento: `sgcAgendaListar({ situacao: 'atrasado', hoje })` → 2 linhas (ids 1 e 2) e `sgcAgendaListarTotal` → `TOTAL: 2`; sem filtro → 6 linhas, entre elas a cancelada |
 | C-019 | `backend/simulator/smoke/004-agenda.mjs` | do card gerado pelo agendamento 1: `KB_CARD.CRIADO_POR = 2` (ana), `KB_CARD_RESPONSAVEL` com 2, `TITULO = 'Filial 1 · Prodiet'`, `KB_MOVIMENTO` (de 0 para a fase `analise`) com `ORIGEM = 'sistema'` e `USUARIO_ID = 2`, e `SGC_PEDIDO` com `ORIGEM = 'agenda'` e `ID_AGENDA = 1` |
 | C-020 | `backend/simulator/smoke/004-agenda.mjs` | o teste insere três agendamentos vencidos, o do meio com `CRIADO_POR` de usuário inexistente (o `kbCardCriar` recusa com "Usuário informado em criadoPor não encontrado") → `processados: 2`, `erros.length: 1`, e o agendamento com erro sem `PROCESSADO_EM` e sem linha em `SGC_PEDIDO` |
+| C-021 | `backend/simulator/smoke/004-agenda.mjs` | `sgcEscAgendaInserir` como `ana` com o `CODFORNEC` de Support (`ATIVO = 0`) → nenhuma linha nova em `SGC_AGENDA`; com um fornecedor ativo → grava; `sgcEscAgendaAtualizar` do agendamento 4 (que é de Support) muda a data normalmente |
 | RN-001 | `frontend/tests/agenda.test.mjs` | `proximaOcorrencia('2026-01-31','mensal')` → `'2026-02-28'`; `('2026-03-30','mensal')` → `'2026-04-30'` |
 | RN-002 | `frontend/tests/agenda.test.mjs` | `('2026-10-20','semanal')` → `'2026-10-27'`; `('2026-10-20','quinzenal')` → `'2026-11-03'` |
 | RN-003 | `frontend/tests/agenda.test.mjs` | `('2026-10-20','semanal','2026-10-25')` → `null` |
@@ -382,10 +386,11 @@ além de pt-BR, não aceita seleção múltipla, não traz dependência nova.
 | RN-008 | `frontend/tests/agenda.test.mjs` | `periodoDaOcorrencia({ inicio: '2026-08-21', fim: '2026-10-05' }, '2026-10-19')` → `{ inicio: '2026-09-04', fim: '2026-10-19' }` |
 | RN-009 | coberto por C-019 | — |
 | RN-010 | coberto por C-017 | — |
-| RN-011 | `frontend/tests/agenda.test.mjs` + smoke | tela: a matriz de `podeAgendar`/`podeCancelarAgendamento` para as cinco personas e para `READ_ONLY`; servidor: C-012 e C-014 |
+| RN-011 | `frontend/tests/agenda.test.mjs` + smoke | tela: `podeAgendar` verdadeiro para `admin`, `analista` e `gestor` e falso para `diretoria`, `comercial` e qualquer persona com `READ_ONLY`; `podeCancelarAgendamento` verdadeiro para `admin`, `gestor` e `diretoria` e falso para os demais; servidor: C-012 e C-014 |
 | RN-012 | coberto por C-016 | — |
 | RN-013 | `frontend/tests/agenda.test.mjs` | `diaNoFuso(Date.parse('2026-09-16T01:00:00Z'))` → `'2026-09-15'` |
 | RN-014 | coberto por C-008 e C-006 | — |
+| RN-015 | `backend/simulator/smoke/004-agenda.mjs` | além do C-021: o agendamento 4 (Support, inativo) processado pelo manual gera pedido normalmente (C-008); e um agendamento semanal de Support vencido, inserido pelo próprio teste direto no banco, gera a ocorrência seguinte — o processamento não consulta a situação do fornecedor |
 
 - **Backend:** `backend/simulator/smoke/004-agenda.mjs` executa as SFs reais
   (SQL e JAVASCRIPT) em banco descartável; cada `teste()` começa com o id do
@@ -450,11 +455,11 @@ frontend) — espelho declarado, testado dos dois lados com os mesmos números
 
 | Direção | O quê | De/para |
 |---|---|---|
-| consome | `sgcFornecedorListar` e as filiais atendidas por fornecedor para os seletores do diálogo e dos filtros | **001** |
-| consome | `SGC_PEDIDO` com `ORIGEM` e `ID_AGENDA`, e a escrita de capa por id — nome esperado `sgcEscPedidoCapaInserir`, com `idCard, codfornec, fornecedor, codfilial, filial, periodoInicio, periodoFim, origem, idAgenda, criadoPor, criadoEm` | **002** |
+| consome | `sgcFornecedorListar` **só com os ativos** (`SGC_FORNECEDOR.ATIVO = 1`) e as filiais atendidas por fornecedor, para os seletores do diálogo; o filtro da listagem pode mostrar inativos, porque agendamento antigo continua na lista (RN-015) | **001** |
+| consome | `SGC_PEDIDO` com `ORIGEM` e `ID_AGENDA`, e a escrita de capa por id: `sgcEscPedidoCapaInserir` (SQL sem `:VAR_USER`, com `{{usuarioId}}`, `{{origem}}` e `{{idAgenda}}` entre os parâmetros), confirmada na revisão do 000 (R-010) | **002** |
 | consome | quadro `compras` com as dez fases (`analise` como fase de entrada) e os campos `fornecedor`, `filial`, `prioridade`; `SGC_USUARIO_PERSONA`; `sgcPersonaAtual`; `lib/permissoes.ts` com `podeAgendar(persona, acesso)` e `podeCancelarAgendamento(persona, acesso)` (a matriz de persona mora uma vez só, e é lá) | **002** |
 | consome | `kbCardCriar` (8012) e `kbUsuariosListar` (8003) | lib `@benenutri/mitra-kanban` 1.3.0 |
-| fornece | `sgcEscAgendaEnvio` (id 7458): o `sgcEnvioIndustriaRegistrar` da 002 **deve** chamá-la por id com `{ idCard, dtEnvio }` ao registrar o envio, para a agenda guardar planejado × real (EN-05 A / RN-012). É a única coisa que a 002 precisa fazer pela agenda | **002** |
+| fornece | `sgcEscAgendaEnvio` (id 7458): o `sgcEnvioIndustriaRegistrar` da 002 chama-a por id com `{ idCard, dtEnvio }` quando o pedido tem `ID_AGENDA > 0`, para a agenda guardar planejado × real (EN-05 A / RN-012, confirmado na revisão do 000, R-012). É a única coisa que a 002 precisa fazer pela agenda | **002** |
 | fornece | `components/DatePicker.tsx` — as telas de 001, 002 e 003 passam a usá-lo no lugar de `<input type="date">` | **001, 002, 003** |
 | fornece | `SGC_AGENDA.ID_CARD_GERADO` como caminho do card de volta ao agendamento | **002** |
 
@@ -473,9 +478,10 @@ frontend) — espelho declarado, testado dos dois lados com os mesmos números
 | D-009 | A ocorrência seguinte recalcula o período mantendo a duração | Copiar o período do anterior, como o legado | copiar faria a análise recorrente olhar para sempre a mesma janela de vendas antiga — o defeito só não aparecia porque quase todo agendamento era refeito à mão |
 | D-010 | `DatePicker` próprio, sem dependência | `<input type="date">` nativo (a ausência do `design.md` §1.4) | UI-03 decisão **B** do `regras.md`, que é posterior e específica. Ver **Complexity Tracking** |
 | D-011 | Participantes escolhidos por `kbUsuariosListar` da lib | SF nova `sgcUsuariosListar` | a lib já publica a listagem de `INT_USER` com busca e paginação; SF nova seria a mesma consulta com outro nome |
-| D-012 | Criar, editar e processar: `admin` e `analista`. Cancelar: `admin`, `gestor`, `diretoria` (P-10). `READ_ONLY` não opera | Incluir `gestor` na criação, por analogia com P-04 | P-10 decide o cancelamento e o legado (`canEditAgenda`) decide a criação; P-04 fala de pedido, não de agenda. Ponto a confirmar com o usuário no aceite — mudar depois é trocar a lista de personas em duas guardas SQL e numa função de permissão |
+| D-012 | Criar, editar e processar: `admin`, `analista` e `gestor`. Cancelar: `admin`, `gestor`, `diretoria` (P-10). `comercial` não opera a agenda (P-03) e `READ_ONLY` não opera nada | Manter só `admin` e `analista` na criação, como o `canEditAgenda` do p-45547 | R-005 da revisão do 000: P-04 foi ajustada para incluir o gestor em criar e editar pedido, e a agenda é o caminho automático do mesmo pedido — simetria. A lista vive em três lugares (duas guardas SQL e `podeAgendar`), todos citados nas tasks |
 | D-013 | Teto de 50 agendamentos por rodada, com o resto na rodada seguinte | Processar tudo o que estiver vencido | o teto de 300 execuções/min é do projeto inteiro; 50 × 5 = 250 no pior caso, e a rodada seguinte vem em 30 minutos |
 | D-014 | A situação é derivada em dois lugares (SQL do filtro e `lib/agenda.ts`), com os mesmos números testados | Gravar a situação numa coluna | coluna de estado derivado desincroniza silenciosamente quando o dia vira; o espelho tela/servidor é o padrão já adotado em `podeMover` |
+| D-015 | Fornecedor ativo é conferido no `sgcEscAgendaInserir` (e o seletor só oferece ativos); `sgcEscAgendaAtualizar` e o processamento **não** conferem | Conferir também no update e no cron | R-002: "existentes seguem". Conferir no update travaria editar a data de um agendamento legítimo cujo fornecedor foi inativado depois; conferir no cron pararia a agenda em silêncio, que é o oposto de "segue". A trava fica onde o agendamento nasce |
 
 ## Riscos
 
@@ -492,4 +498,4 @@ Só preencher se houver violação de princípio. Vazio é o estado saudável.
 
 | Princípio violado | Por que é necessário | Por que a alternativa simples não serve |
 |---|---|---|
-| VII (Simplicidade) / `design.md` §1.4 e §9.2 — "sem date picker; data é `<input type="date">` nativo" | UI-03 do `regras.md` foi decidida com o usuário em 2026-09-15 na opção **B**: seletor de data próprio sobre os tokens. A agenda é a primeira tela com data, então o componente nasce aqui | O nativo muda de altura, largura e formato conforme o sistema operacional — o mesmo motivo que já tirou o `<select>` nativo dos painéis (§9.3) —, e numa linha de filtros com três datas o desalinhamento é visível. A decisão do usuário é posterior ao texto do `design.md`; **a spec não edita o `design.md`**: a emenda das §1.4 e §9.2 fica pedida ao dono do documento |
+| VII (Simplicidade) / `design.md` §1.4 e §9.2 — "sem date picker; data é `<input type="date">` nativo" | UI-03 do `regras.md` foi decidida com o usuário em 2026-09-15 na opção **B**: seletor de data próprio sobre os tokens. A agenda é a primeira tela com data, então o componente nasce aqui | O nativo muda de altura, largura e formato conforme o sistema operacional — o mesmo motivo que já tirou o `<select>` nativo dos painéis (§9.3) —, e numa linha de filtros com três datas o desalinhamento é visível. A emenda do `design.md` foi **aplicada em 2026-09-15 (§1.4 e §9.2)**, então o conflito de texto não existe mais: fica registrado aqui só como dependência da feature |

@@ -14,16 +14,16 @@
 - [ ] **T-003** — `sgcAgendaListar` (SQL, 7401): filtros `codfornec`/`codfilial`/`dataInicio`/`dataFim`/`situacao`/`hoje`, `LIMIT/OFFSET`, `GROUP_CONCAT` dos participantes, `CASE` da situação (RF-014, RF-015) → `backend/add-007-agenda.mjs`
 - [ ] **T-004** `[P]` — `sgcAgendaListarTotal` (SQL, 7402) com os mesmos filtros (RF-015) → `backend/add-007-agenda.mjs`
 - [ ] **T-005** `[P]` — `sgcAgendaCarregar` (SQL, 7403) por `id`, mesmas colunas (RF-001) → `backend/add-007-agenda.mjs`
-- [ ] **T-006** — Escritas da tela, guardadas por `:VAR_USER` e persona, uma instrução cada: `sgcEscAgendaInserir` (7450), `sgcEscAgendaAtualizar` (7451), `sgcEscAgendaCancelar` (7452, só não processado e ativo), `sgcEscAgendaParticipanteLimpar` (7453), `sgcEscAgendaParticipanteInserir` (7454) (RF-001, RF-005, RF-013, RF-017) → `backend/add-007-agenda.mjs`
+- [ ] **T-006** — Escritas da tela, guardadas por `:VAR_USER` e persona, uma instrução cada: `sgcEscAgendaInserir` (7450, personas `admin`/`analista`/`gestor` **e** fornecedor ativo), `sgcEscAgendaAtualizar` (7451, mesmas personas, sem checar fornecedor), `sgcEscAgendaCancelar` (7452, `admin`/`gestor`/`diretoria`, só não processado e ativo), `sgcEscAgendaParticipanteLimpar` (7453), `sgcEscAgendaParticipanteInserir` (7454) (RF-001, RF-005, RF-013, RF-017, RF-020) → `backend/add-007-agenda.mjs`
 - [ ] **T-007** — Escritas internas (sem sessão), uma instrução cada: `sgcEscAgendaProcessada` (7455, com `AND PROCESSADO_EM IS NULL`), `sgcEscAgendaProximaInserir` (7456), `sgcEscAgendaParticipanteCopiar` (7457, `INSERT ... SELECT`), `sgcEscAgendaEnvio` (7458, planejado × real) (RF-008, RF-009, RF-016) → `backend/add-007-agenda.mjs`
-- [ ] **T-008** — Rotina compartilhada do processamento como string (`ROTINA`): seleção do lote, `kbCardCriar` por id, capa por `sgcEscPedidoCapaInserir`, marcação, próxima ocorrência com período recalculado, cópia de participantes, coleta de erros (RF-006 a RF-010, RNF-001, RNF-004) → `backend/add-007-agenda.mjs`
+- [ ] **T-008** — Rotina compartilhada do processamento como string (`ROTINA`): seleção do lote, `kbCardCriar` por id, capa por `sgcEscPedidoCapaInserir` (`usuarioId`, `origem`, `idAgenda`, sem `:VAR_USER`), marcação, próxima ocorrência com período recalculado, cópia de participantes, coleta de erros (RF-006 a RF-010, RNF-001, RNF-004) → `backend/add-007-agenda.mjs`
 - [ ] **T-009** — `sgcAgendaProcessar` (JAVASCRIPT, 7404, `cronExpression '0 */30 * * * *'`): dia em Brasília, `DATA_ANALISE <= hoje`, teto de 50, sem sessão (RF-006, RNF-002, RNF-006, RN-013) → `backend/add-007-agenda.mjs`
-- [ ] **T-010** — `sgcAgendaProcessarManual` (JAVASCRIPT, 7405): persona por `runQueryMitra` com `:VAR_USER` (sem linha = analista), os quatro recortes, padrão mês vigente, intervalo invertido recusado (RF-011, RF-012, RF-019, C-012) → `backend/add-007-agenda.mjs`
+- [ ] **T-010** — `sgcAgendaProcessarManual` (JAVASCRIPT, 7405): persona por `runQueryMitra` com `:VAR_USER` (sem linha = analista; aceita `admin`, `analista` e `gestor`), os quatro recortes, padrão mês vigente, intervalo invertido recusado (RF-011, RF-012, RF-019, C-012) → `backend/add-007-agenda.mjs`
 - [ ] **T-011** — Pedir ao integrador: `add-007-agenda.mjs` no `PUBLISH_ORDER` (depois do `add-005`) e as 14 SFs liberadas no perfil business do `add-002-perfil-acesso.mjs` → `backend/simulator/config.mjs`, `backend/add-002-perfil-acesso.mjs` (arquivos compartilhados)
 
 ## Simulador
 
-- [ ] **T-020** — Seed da feature: 6 agendamentos (2 atrasados recorrentes, 2 pendentes — um com data-limite —, 1 cancelado, 1 processado com `SGC_PEDIDO`), participantes do id 1 e as personas de `CENARIO.usuarios` (`admin` 1, `ana` 2 analista, `gil` 3 gestor, `dora` 4 diretoria, `leo` 5 leitura) → `backend/simulator/seed/004-agenda.mjs`
+- [ ] **T-020** — Seed da feature: 6 agendamentos (2 atrasados recorrentes, 2 pendentes — um com data-limite —, 1 cancelado, 1 processado com `SGC_PEDIDO`), participantes do id 1 e as personas de `CENARIO.usuarios` (`admin` 1, `ana` 2 analista, `gil` 3 gestor, `dora` 4 diretoria, `leo` 5 comercial) e o fornecedor Support com `ATIVO = 0` (C-021) → `backend/simulator/seed/004-agenda.mjs`
 - [ ] **T-021** `[P]` — Pedir ao integrador as chaves novas do `CHECK_INPUT` (`codfornec`, `codfilial`, `dataInicio`, `dataFim`, `situacao`, `hoje`, `id`, `idAgenda`) → `backend/simulator/config.mjs` (arquivo compartilhado)
 
 ## Frontend
@@ -32,11 +32,11 @@
 - [ ] **T-031** `[P]` — `components/DatePicker.tsx`: campo com máscara `dd/mm/aaaa` + `ui/popover` com a grade do mês, contrato de props, teclado (setas, PageUp/PageDown, Home/End, Enter, Esc) e ARIA (`role="grid"`, `aria-selected`, `aria-label` por extenso), só tokens nos dois temas (RF-018) → `frontend/src/components/DatePicker.tsx`
 - [ ] **T-032** — Bloco 74xx no mapa de server functions: os 14 nomes em `SERVER_FUNCTION_NAMES` e os ids locais 7401–7405 e 7450–7458 em `SERVER_FUNCTIONS` → `frontend/src/lib/server-functions.ts`
 - [ ] **T-033** — `AgendaPage.tsx`: `PageHeader` com contagens e ações por permissão, `Toolbar` de filtros (fornecedor, filial, de/até com `DatePicker`, situação), `FilterChip`, `Table` com situação em `Status`, envio planejado × real, link do pedido em `Code`, `EmptyState` e `Pagination` de 50 (RF-014, RF-015) → `frontend/src/pages/agenda/AgendaPage.tsx`
-- [ ] **T-034** — `AgendaDialogo.tsx`: novo/editar com fornecedor e filial (001), data e período (padrão 45 dias), recorrência e data-limite, participantes por `kbUsuariosListar`, observação; validação por `validarAgendamento` e erro em `Alert`; gravação por inserir/atualizar + limpar/inserir participantes (RF-001 a RF-005) → `frontend/src/pages/agenda/AgendaDialogo.tsx`
+- [ ] **T-034** — `AgendaDialogo.tsx`: novo/editar com fornecedor (só ativos, RF-020) e filial (001), data e período (padrão 45 dias), recorrência e data-limite, participantes por `kbUsuariosListar`, observação; validação por `validarAgendamento` e erro em `Alert`; gravação por inserir/atualizar + limpar/inserir participantes (RF-001 a RF-005) → `frontend/src/pages/agenda/AgendaDialogo.tsx`
 - [ ] **T-035** `[P]` — `ProcessarDialogo.tsx`: os quatro recortes com `hint`, campos por recorte, botão travado durante o processamento e resultado em `Alert` (RF-011, RF-012, RF-019) → `frontend/src/pages/agenda/ProcessarDialogo.tsx`
 - [ ] **T-036** `[P]` — Confirmação de cancelamento (fornecedor, filial e data no texto) e recarga da lista, sem aviso passageiro (RF-013) → `frontend/src/pages/agenda/AgendaPage.tsx`
-- [ ] **T-037** — Pedir à spec 002: `podeAgendar(persona, acesso)` e `podeCancelarAgendamento(persona, acesso)` na matriz única de permissões (RF-017, RN-011) → `frontend/src/lib/permissoes.ts` (arquivo da 002)
-- [ ] **T-038** — Pedir ao integrador: rota `/agenda` e item de menu "Agenda" no módulo Compras, escondido para `comercial` e `leitura` conforme P-03 → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx` (arquivos compartilhados)
+- [ ] **T-037** — Pedir à spec 002: `podeAgendar(persona, acesso)` (`admin`, `analista`, `gestor`) e `podeCancelarAgendamento(persona, acesso)` (`admin`, `gestor`, `diretoria`) na matriz única de permissões (RF-017, RN-011) → `frontend/src/lib/permissoes.ts` (arquivo da 002)
+- [ ] **T-038** — Pedir ao integrador: rota `/agenda` e item de menu "Agenda" no módulo Compras, escondido para `comercial` conforme P-03 → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx` (arquivos compartilhados)
 - [ ] **T-039** — Pedir à spec 002: `sgcEnvioIndustriaRegistrar` chamando `sgcEscAgendaEnvio` por id com `{ idCard, dtEnvio }` ao registrar o envio (RF-016, RN-012) → `backend/add-006-*.mjs` (arquivo da 002)
 
 ## Testes
@@ -47,10 +47,10 @@ estas tasks concluídas não está pronta.
 - [ ] **T-080** — `teste('C-018: lista filtrada por situação …')` e `teste('C-001: agendamento gravado com o período padrão …')` em `backend/simulator/smoke/004-agenda.mjs`: 2 atrasados e `TOTAL: 2`; período 45 dias gravado
 - [ ] **T-081** — `teste('C-006: … 2 cards, 2 marcações e 2 ocorrências')`, `teste('C-007: rodar de novo não duplica')` e `teste('C-019: o pedido nasce em nome de quem agendou')` em `backend/simulator/smoke/004-agenda.mjs`: cron com `userId = 0`; `KB_CARD.CRIADO_POR`, `KB_MOVIMENTO.ORIGEM = 'sistema'`, `SGC_PEDIDO.ORIGEM = 'agenda'`, próximas em hoje+6 e hoje+13
 - [ ] **T-082** — `teste('C-008 …')`, `teste('C-009 …')`, `teste('C-010 …')` e `teste('C-011 …')` em `backend/simulator/smoke/004-agenda.mjs`: um recorte por teste, conferindo os ids que entraram e os que ficaram de fora
-- [ ] **T-083** — `teste('C-012 …')`, `teste('C-013 …')` e `teste('C-014 …')` em `backend/simulator/smoke/004-agenda.mjs`: leitura recusada no processamento; gestor cancela; analista não cancela
+- [ ] **T-083** — `teste('C-012 …')`, `teste('C-013 …')` e `teste('C-014 …')` em `backend/simulator/smoke/004-agenda.mjs`: comercial recusado no processamento e gestor aceito; gestor cancela; analista não cancela
 - [ ] **T-084** — `teste('C-016 …')` e `teste('RN-012 …')` em `backend/simulator/smoke/004-agenda.mjs`: `sgcEscAgendaEnvio` grava real, guarda a planejada original uma vez só e move a data da análise
 - [ ] **T-085** — `teste('C-017 …')` em `backend/simulator/smoke/004-agenda.mjs`: participantes limpos e reinseridos (3 → 2) e herdados pela ocorrência seguinte
-- [ ] **T-086** — `teste('C-020 …')`, `teste('RN-004 …')` e `teste('RN-007 …')` em `backend/simulator/smoke/004-agenda.mjs`: erro isolado no lote; cancelar processado recusado; agendamento com pedido não gera o segundo
+- [ ] **T-086** — `teste('C-020 …')`, `teste('RN-004 …')`, `teste('RN-007 …')`, `teste('C-021 …')` e `teste('RN-015 …')` em `backend/simulator/smoke/004-agenda.mjs`: erro isolado no lote; cancelar processado recusado; agendamento com pedido não gera o segundo; inserir com fornecedor inativo não grava, editar o agendamento antigo dele grava, e o recorrente dele segue gerando ocorrência
 - [ ] **T-087** — `teste('RNF-001: custo por agendamento')` em `backend/simulator/smoke/004-agenda.mjs`: contador de execuções do runner em 3 sem recorrência e 5 com recorrência e participantes
 - [ ] **T-088** `[P]` — `test('C-004 …')`, `test('C-005 …')`, `test('RN-001 …')`, `test('RN-002 …')` e `test('RN-003 …')` em `frontend/tests/agenda.test.mjs`: `proximaOcorrencia` com os números da spec (31/01→28/02→28/03; 31/01/2028→29/02/2028; quinzenal com limite)
 - [ ] **T-089** `[P]` — `test('C-002 …')`, `test('C-003 …')`, `test('C-015 …')`, `test('RN-005 …')`, `test('RN-006 …')`, `test('RN-008 …')`, `test('RN-011 …')` e `test('RN-013 …')` em `frontend/tests/agenda.test.mjs`: validação, situação, período padrão e da ocorrência, matriz de permissão e dia no fuso
@@ -103,6 +103,7 @@ cenário sem task de teste é cenário não entregue.
 | RF-017 / C-012, C-014 | T-006, T-010, T-037 | T-083, T-089 |
 | RF-018 | T-031 | T-092 (manual) |
 | RF-019 / C-020 | T-010, T-035 | T-086 |
+| RF-020 / C-021 | T-006, T-020, T-034 | T-086 |
 | RNF-001 | T-008 | T-087 |
 | RNF-002 | T-009 | T-081 |
 | RNF-003 / C-007 | T-007, T-008 | T-081 |
@@ -118,3 +119,4 @@ cenário sem task de teste é cenário não entregue.
 | RN-011 | T-006, T-010, T-037 | T-083, T-089 |
 | RN-012 | T-007, T-039 | T-084 |
 | RN-014 | T-009, T-010 | T-081, T-082 |
+| RN-015 | T-006, T-020, T-034 | T-086 |

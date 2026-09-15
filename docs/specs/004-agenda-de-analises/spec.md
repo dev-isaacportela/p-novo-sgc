@@ -27,10 +27,10 @@ está atrasado, o que já virou pedido e o que foi cancelado.
 | Perfil | O que precisa fazer | Frequência |
 |---|---|---|
 | analista (comprador) | agendar a análise de um fornecedor numa filial, definir período e recorrência, acompanhar atrasos, disparar o processamento de um recorte | diária |
-| gestor (gerência de compras) | ver a previsão e os atrasos, cancelar agendamento que não vai acontecer | semanal |
+| gestor (gerência de compras) | o mesmo que o analista, e cancelar agendamento que não vai acontecer | semanal |
 | diretoria | ver a previsão da semana e do mês, cancelar agendamento | semanal |
 | admin (TI) | tudo o que o analista faz, e destravar um processamento que falhou | eventual |
-| leitura | consultar a agenda sem operar | eventual |
+| comercial | não usa esta tela: a agenda não aparece no menu dele, e uma ação disparada em nome dele é recusada | — |
 
 ## Cenários
 
@@ -92,8 +92,8 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** 1 pedido é criado (16/09); o de 14/09 está fora do recorte por ser anterior a hoje e o de 30/09 por ser posterior ao sétimo dia
 
 **C-012 — Quem não pode processar**
-- **Dado que** quem está na tela tem perfil de leitura
-- **Quando** tenta disparar o processamento manual
+- **Dado que** quem chama tem perfil comercial, que nem enxerga a agenda no menu
+- **Quando** o processamento manual é disparado em nome dele, por fora da tela
 - **Então** o sistema recusa com mensagem de permissão e nenhum pedido é criado
 
 **C-013 — Cancelar um agendamento**
@@ -105,6 +105,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Dado que** quem está na tela é a analista que criou o agendamento
 - **Quando** ela tenta cancelar
 - **Então** o sistema recusa: cancelar é da gerência, da diretoria ou do admin, e o agendamento continua pendente
+
+**C-021 — Fornecedor inativo não entra em agendamento novo**
+- **Dado que** o fornecedor Support foi inativado no cadastro e já tem um agendamento para 20/09/2026
+- **Quando** a analista abre a escolha de fornecedor para agendar
+- **Então** Support não aparece entre as opções e um agendamento novo para ele é recusado; o agendamento de 20/09/2026 que já existia continua na lista, continua sendo processado e continua editável nos demais campos
 
 **C-015 — Agendamento atrasado**
 - **Dado que** existe um agendamento de 14/09/2026 ainda sem pedido gerado e hoje é 15/09/2026
@@ -156,9 +161,10 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-014 | O sistema DEVE mostrar a situação de cada agendamento entre pendente, atrasado, processado e cancelado | Agendamento de ontem sem pedido aparece como atrasado (C-015) | must |
 | RF-015 | A tela DEVE listar os agendamentos com paginação e filtros por fornecedor, filial, período e situação | Filtro "atrasado" sobre 6 registros devolve 2 e total 2 (C-018) | must |
 | RF-016 | Quando o pedido gerado é enviado à indústria, a agenda DEVE passar a mostrar a data real do envio e guardar a data planejada original quando as duas diferirem | Envio em 22/10 de análise planejada para 20/10: agenda mostra 22/10 e guarda 20/10; segundo envio não sobrescreve a planejada (C-016) | must |
-| RF-017 | Criar, editar e processar manualmente DEVE ser de admin e analista; cancelar DEVE ser de admin, gestor e diretoria; quem só lê não opera | Analista é recusada ao cancelar (C-014); leitura é recusada ao processar (C-012) | must |
+| RF-017 | Criar, editar e processar manualmente DEVE ser de admin, analista e gestor; cancelar DEVE ser de admin, gestor e diretoria; quem não tem a agenda no perfil não opera | Analista é recusada ao cancelar (C-014); comercial é recusado ao processar (C-012) | must |
 | RF-018 | A data da análise, o período e a data-limite DEVEM ser informados por um seletor de data do próprio sistema, operável por teclado | Digitar 20/10/2026 no campo e escolher no calendário levam ao mesmo valor; todo o fluxo funciona sem mouse | must |
 | RF-019 | O resultado do processamento DEVE dizer quantos agendamentos foram processados e quais falharam | Três vencidos com um defeituoso informam 2 processados e 1 erro (C-020) | should |
+| RF-020 | Fornecedor inativo NÃO DEVE ser oferecido ao agendar, e agendamento novo para ele é recusado; o que já estava agendado segue valendo | Com um dos três fornecedores inativado, a escolha mostra 2; agendamento novo para o inativo é recusado e o antigo continua sendo processado (C-021) | must |
 
 > `must` = sem isso a feature não entrega valor. `should` = entra se couber.
 > `could` = registrado, não prometido.
@@ -196,10 +202,11 @@ Conceitos do negócio e como se relacionam — **sem** schema, tipo ou tabela.
 - **RN-008** — A ocorrência seguinte recalcula o período mantendo a duração do anterior: o fim passa a ser a nova data da análise e o início recua a mesma quantidade de dias.
 - **RN-009** — O pedido gerado nasce em nome de quem criou o agendamento, que é também o responsável inicial; a entrada na fase Análise fica registrada como feita pelo sistema.
 - **RN-010** — A lista de participantes é regravada inteira a cada gravação (limpa e reinsere), nunca parcialmente.
-- **RN-011** — Criar, editar e processar manualmente é de admin e analista; cancelar é de admin, gestor e diretoria; quem tem acesso só de leitura não faz nenhuma das duas coisas. A regra vale também quando a ação chega por fora da tela.
+- **RN-011** — Criar, editar e processar manualmente é de admin, analista e gestor (a gerência monta pedido, então também agenda); cancelar é de admin, gestor e diretoria; comercial não opera a agenda e quem tem acesso só de leitura não opera nada. A regra vale também quando a ação chega por fora da tela.
 - **RN-012** — O envio do pedido à indústria atualiza o agendamento que o gerou: grava a data real do envio e, quando ela difere da data planejada, guarda a planejada original (uma vez só) e a data da análise passa a ser a real.
 - **RN-013** — O dia usado para decidir vencimento e atraso é o dia no horário de Brasília.
 - **RN-014** — O processamento manual opera sobre a data do agendamento dentro do recorte, inclusive datas futuras; a verificação automática opera só sobre o que venceu.
+- **RN-015** — Fornecedor inativo não entra em agendamento novo. O que já estava agendado segue: continua na lista, é processado e pode ser editado nos demais campos, e a recorrência dele continua criando as próximas ocorrências — inativar fornecedor não mexe na agenda já gravada.
 
 ## Testes
 
@@ -221,7 +228,7 @@ automática e com que números; **como** (arquivo, ferramenta) é do `plan.md`.
 | C-009 | Manual com intervalo 14/09–16/09 devolve 2 processados e deixa o de 20/09 pendente | regra de negócio |
 | C-010 | Manual sem recorte, em 15/09, devolve 2 processados (14/09 e 20/09) e deixa o de 03/10 pendente | regra de negócio |
 | C-011 | Manual com "próximos 7 dias", em 15/09, devolve 1 processado (16/09); 14/09 e 30/09 ficam pendentes | regra de negócio |
-| C-012 | Processamento manual com perfil de leitura devolve recusa citando permissão e 0 pedidos criados | regra de negócio |
+| C-012 | Processamento manual em nome de uma pessoa de perfil comercial devolve recusa citando permissão e 0 pedidos criados | regra de negócio |
 | C-013 | Cancelamento pelo gestor devolve sucesso, a situação vira cancelado e a rodada seguinte devolve 0 processados | regra de negócio |
 | C-014 | Cancelamento pela analista devolve recusa e a situação continua pendente | regra de negócio |
 | C-015 | Com hoje = 15/09/2026, o agendamento de 14/09 sem pedido tem situação atrasado; o filtro "atrasado" devolve 1 | regra de tela e regra de negócio |
@@ -230,6 +237,7 @@ automática e com que números; **como** (arquivo, ferramenta) é do `plan.md`.
 | C-018 | Com 6 agendamentos semeados, o filtro situação "atrasado" devolve 2 linhas e o total devolve 2 | regra de negócio |
 | C-019 | O pedido criado tem criador = id da analista, responsável = id da analista, título "Filial 1 · Prodiet", origem "agenda" e o registro de entrada na fase Análise com origem "sistema" | regra de negócio |
 | C-020 | Rodada com 3 vencidos, o do meio inválido, devolve 2 processados e 1 erro; o inválido continua sem pedido e sem marcação | regra de negócio |
+| C-021 | Com 3 fornecedores, um inativado: a escolha do agendamento devolve 2; gravar agendamento novo para o inativo não grava nada; o agendamento que ele já tinha continua na lista e é processado na rodada seguinte | regra de negócio |
 | RN-001 | 31/01/2026 mensal → 28/02/2026; 30/03/2026 mensal → 30/04/2026 | regra de tela |
 | RN-002 | 20/10/2026 semanal → 27/10/2026; quinzenal → 03/11/2026 | regra de tela |
 | RN-003 | Semanal 20/10/2026 com limite 25/10/2026 → vazio (27/10 passa do limite) | regra de tela |
@@ -240,10 +248,11 @@ automática e com que números; **como** (arquivo, ferramenta) é do `plan.md`.
 | RN-008 | Ocorrência seguinte de 05/10/2026 (período 21/08–05/10, 45 dias) em 19/10/2026 nasce com período 04/09–19/10 | regra de tela |
 | RN-009 | Ver C-019 | regra de negócio |
 | RN-010 | Ver C-017 | regra de negócio |
-| RN-011 | Matriz: admin cria/edita/processa e cancela; analista cria/edita/processa e não cancela; gestor e diretoria cancelam e não criam; leitura não faz nada | regra de tela e regra de negócio |
+| RN-011 | Matriz: admin cria/edita/processa e cancela; analista cria/edita/processa e não cancela; gestor cria/edita/processa e cancela; diretoria só cancela; comercial não faz nada; acesso só de leitura não faz nada | regra de tela e regra de negócio |
 | RN-012 | Ver C-016 | regra de negócio |
 | RN-013 | Com o relógio em 2026-09-16T01:00 universal (22h de 15/09 em Brasília), o agendamento de 16/09 não é tratado como vencido | regra de tela |
 | RN-014 | Ver C-008 (futuro processado no manual) e C-006 (futuro intocado no automático) | regra de negócio |
+| RN-015 | Ver C-021; além disso, um agendamento semanal vencido de fornecedor inativado gera o pedido e a ocorrência seguinte normalmente | regra de negócio |
 
 - Cada cenário C-00N e cada regra RN-00N tem pelo menos uma linha.
 - Toda linha tem entrada e resultado concretos; "executa sem erro" não é evidência.
