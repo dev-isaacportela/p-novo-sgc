@@ -1,18 +1,24 @@
 // Dados simulados do SGC 2 — os 5 usuarios da equipe de compras, o quadro
-// "Compras" e as 10 fases da onda 1 (regra F-01: mesmos nomes e mesma ordem
-// do SGC anterior). Nenhum campo (KB_CAMPO) e nenhum card ainda: chegam com
-// as specs 004+ (campos do pedido) e 005+ (onda de dados).
+// "Compras" e as 10 fases do motor (regra F-01: mesmos nomes e mesma ordem do
+// SGC anterior), mais os dados de cada spec da onda 1, um modulo por spec em
+// seed/00N-*.mjs (hoje so a 002 grava algo: as personas de SGC_USUARIO_PERSONA
+// — as demais chegam stub ate a feature preencher). Nenhum KB_CAMPO nem card
+// aqui: sao dado da 002 (campos do quadro) em diante.
 //
-// O SCHEMA nao esta aqui (sai de setup-backend.mjs, hoje sem tabelas proprias,
-// mais o schema.mjs da lib — ver backend/simulator/schema.mjs). Geracao
-// deterministica: SEED = 45547, o id do SGC anterior na plataforma, herdado
-// de proposito para o seed ficar estavel — nao muda quando o p-NNNNN deste
-// projeto nascer.
+// O SCHEMA nao esta aqui (sai de setup-backend.mjs — as 16 tabelas SGC_* — mais
+// o schema.mjs da lib e o schema-winthor.mjs das PC* — ver backend/simulator/
+// schema.mjs). Geracao deterministica: SEED = 45547, o id do SGC anterior na
+// plataforma, herdado de proposito para o seed ficar estavel — nao muda quando
+// o p-NNNNN deste projeto nascer.
 
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createSchema } from './schema.mjs';
+import { seed001 } from './seed/001-fornecedores.mjs';
+import { seed002 } from './seed/002-quadro.mjs';
+import { seed003 } from './seed/003-itens.mjs';
+import { seed004 } from './seed/004-agenda.mjs';
 
 const iso = (data) => data.toISOString().slice(0, 19);
 
@@ -82,6 +88,12 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
     VALUES (?, ?, ?, NULL, ?, ?, 0, NULL, NULL, 1)`);
   FASES.forEach((fase, indice) => inserirFase.run(CENARIO.boardCompras, fase.nome, fase.cor, indice + 1, fase.tipo));
   counts.KB_FASE = FASES.length;
+
+  /* ── dados de cada spec da onda 1 (stub até a feature chegar — ver backend/simulator/seed/README) ── */
+  seed001(db, CENARIO);
+  seed002(db, CENARIO);
+  seed003(db, CENARIO);
+  seed004(db, CENARIO);
 
   db.close();
   return counts;
