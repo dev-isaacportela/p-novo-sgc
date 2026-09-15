@@ -57,6 +57,13 @@ export async function suite(ctx) {
     }, usuarioId);
     assert.equal(criado.ok, true, criado.error);
     await chamar('sgcEscPedidoCriar', { cardId: criado.id, ...CAPA, agora: AGORA }, usuarioId);
+    // Integração com a 003: o bloco PENDENCIAS real do gancho exige, para sair
+    // da Análise, prazo padrão e acordado (iguais), ao menos um item com
+    // quantidade e nenhum alerta por ler. O pedido "montado" desta suíte nasce
+    // assim; o P1 do seed, com 2 alertas por ler, continua travado (C-025).
+    db.prepare(`UPDATE SGC_PEDIDO SET PRAZO_PADRAO = '30/60', PRAZO_ACORDADO = '30/60' WHERE ID_CARD = ?`).run(criado.id);
+    db.prepare(`INSERT INTO SGC_PEDIDO_ITEM (ID_CARD, CODPROD, DESCRICAO, QT_PEDIDA, PRECO_CUSTO, STATUS, COBERTURA_DIAS, COBERTURA_LIMITE, CRIADO_EM, ATUALIZADO_EM)
+      VALUES (?, 1, 'ITEM DE TESTE', 1, 1, 'montagem', 0, 35, ?, ?)`).run(criado.id, AGORA, AGORA);
     return criado.id;
   }
 
@@ -309,7 +316,7 @@ export async function suite(ctx) {
   await teste('C-025 / RN-007: pedido na Analise com 2 alertas nao lidos nao avanca, mas cancela normalmente', async () => {
     const travado = await podeMover(U.ana, P1, 'tecnica');
     assert.equal(Number(travado.PODE), 0, 'o bloco PENDENCIAS (reserva da 003) segura a saida da Analise');
-    assert.match(travado.MOTIVO, /pendências na Análise/);
+    assert.match(travado.MOTIVO, /Leia os 2 alertas/);
 
     await chamar('sgcEscPedidoCancelar', { cardId: P1, motivo: 'Indústria suspendeu a linha', agora: AGORA }, U.ana);
     assert.equal(pedidoDe(P1).CANC_MOTIVO, 'Indústria suspendeu a linha');

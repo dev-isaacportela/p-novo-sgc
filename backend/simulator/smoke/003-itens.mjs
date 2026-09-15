@@ -6,7 +6,7 @@
 // só a server function real responde. Toda consulta ao WinThor assere
 // contagem > 0 — vazio não é verde.
 //
-// ISOLAMENTO (remover quando a 001 e a 002 entrarem): PCFORNEC/PCFILIAL são do
+// (Isolamento removido na integração: PCFORNEC/PCFILIAL vêm do seed da 001 e as
 // seed/001-fornecedores.mjs e SGC_FASE é do seed/002-quadro.mjs, os dois ainda
 // stub. Sem eles o JOIN de PCFILIAL zera as consultas de lote/excesso e
 // nenhuma SF reconhece a fase `analise`, então esta suíte insere o mínimo com
@@ -22,30 +22,6 @@ const SQL_PENDENCIAS = new URL('../../sql/pendencias-analise.sql', import.meta.u
 
 const FILIAL = '1';
 const ANALISE = { codfornec: 1015, codfilial: FILIAL, dataInicio: '2026-08-01', dataFim: '2026-09-14' };
-
-function prepararIsolamento(ctx) {
-  const { db } = ctx;
-  db.exec(`INSERT OR IGNORE INTO PCFILIAL (CODIGO, RAZAOSOCIAL) VALUES
-    ('1', 'Benenutri Matriz'), ('2', 'Benenutri Filial Norte'), ('3', 'Benenutri Filial Sul')`);
-  db.exec(`INSERT OR IGNORE INTO PCFORNEC (CODFORNEC, FORNECEDOR) VALUES
-    (1015, 'Fresenius Kabi'), (1042, 'Nestle')`);
-  const inserirFase = db.prepare('INSERT OR IGNORE INTO SGC_FASE (BOARD_ID, CHAVE, FASE_ID, ORDEM) VALUES (?, ?, ?, ?)');
-  Object.entries(CENARIO.fases).forEach(([chave, faseId], indice) => {
-    inserirFase.run(CENARIO.boardCompras, chave, faseId, indice + 1);
-  });
-
-  if (!ctx.byName.has('sgcEscPedidoReprovacoesLimpar')) {
-    const substituto = {
-      name: 'sgcEscPedidoReprovacoesLimpar',
-      type: 'SQL',
-      file: 'smoke/003-itens.mjs (substituto da 002)',
-      code: `UPDATE SGC_PEDIDO SET TEC_MOTIVO = '', TEC_PRODUTOS_REPROVADOS = '', ATUALIZADO_EM = ATUALIZADO_EM
-WHERE ID_CARD = {{idCard}} AND {{usuarioId}} > 0`,
-    };
-    ctx.byName.set(substituto.name, substituto);
-    ctx.byId.set(7256, substituto);
-  }
-}
 
 /** Linhas de uma server function SQL. */
 async function linhas(ctx, nome, input, userId) {
@@ -79,7 +55,6 @@ FROM (
 
 export async function suite(ctx) {
   const { db, chamar, teste, U } = ctx;
-  prepararIsolamento(ctx);
 
   const verificar = async (cardId) => (await linhas(ctx, 'sgcAnaliseSaidaVerificar', { cardId }))[0];
 

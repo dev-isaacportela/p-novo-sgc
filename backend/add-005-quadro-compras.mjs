@@ -28,9 +28,19 @@
 
 import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { idsDoMapa } from './ids-do-mapa.mjs';
 
 const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', import.meta.url));
+
+// Saída da Análise (spec 003, RF-022/RN-012): as duas colunas PENDENCIAS e
+// PENDENCIAS_MOTIVO do gancho vêm de backend/sql/pendencias-analise.sql — o
+// MESMO texto de sgcAnaliseSaidaVerificar (add-006), com {{cardId}} = C.ID.
+// Sem as linhas de comentário, com a vírgula entre as colunas e a final.
+const SQL_PENDENCIAS = readFileSync(new URL('./sql/pendencias-analise.sql', import.meta.url), 'utf8')
+  .split('\n').filter((linha) => !linha.trimStart().startsWith('--')).join('\n')
+  .replace(/AS PENDENCIAS\b/, 'AS PENDENCIAS,')
+  .trim() + ',';
 
 /* ─────────────── o quadro: slug, fases, campos, automações ─────────────── */
 
@@ -667,10 +677,8 @@ function contextoDoCard({ comDestino = true, comPendencias = true } = {}) {
   // prazo divergente e pelo menos um item com quantidade — AL-04, AL-05,
   // AL-06, PZ-03, R-008). A tela chama a mesma SF pelo `antesDeMover` (dentro
   // do `sgcAnaliseSair`), então a frase é a mesma nos dois lugares.
-  const pendencias = comPendencias
-    ? `(SELECT COUNT(*) FROM SGC_ALERTA A WHERE A.ID_CARD = C.ID AND A.LIDO = FALSE) AS PENDENCIAS,
-    'Há pendências na Análise: leia os alertas e justifique os itens antes de enviar para a Aprovação Técnica.' AS PENDENCIAS_MOTIVO,`
-    : '';
+  // Integrado (S4): o corpo real vem de backend/sql/pendencias-analise.sql.
+  const pendencias = comPendencias ? SQL_PENDENCIAS : '';
   const juncaoDestino = comDestino
     ? 'LEFT JOIN SGC_FASE FD              ON FD.BOARD_ID = {{boardId}} AND FD.FASE_ID = {{faseId}}'
     : '';

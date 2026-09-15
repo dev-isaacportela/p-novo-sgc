@@ -21,6 +21,9 @@ import { motivoDeDestino, motivoDeExcluir, type ChaveFase } from '@/lib/transico
 import { ATUALIZAR_A_CADA_MS, QUADRO_COMPRAS, ROTA_NOVO_PEDIDO, ROTULO_NOVO_PEDIDO } from '@/lib/quadro';
 import { Alert, EmptyState, PageHeader } from '@/components/page';
 import AcoesDoPedido, { type MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
+import { PedidoProvider } from '@/pages/quadros/abas/PedidoProvider';
+import AbaItens from '@/pages/quadros/abas/Itens';
+import AbaAlertas from '@/pages/quadros/abas/Alertas';
 
 /** Tradutor `KB_FASE.ID` ↔ `SGC_FASE.CHAVE` (RF-005: nenhuma regra usa nome nem id). */
 const MAPA_VAZIO: MapaDeFases = { chaveDe: () => null, faseIdDe: () => 0 };
@@ -139,10 +142,20 @@ export default function QuadroPage() {
     [sessao],
   );
 
-  // A 003 preenche este array com as abas Itens e Alertas (`AbaExtra` da lib,
-  // recebendo o `ExtensaoContexto`) e embrulha o conteúdo no `PedidoProvider`.
-  // A junção é do integrador; aqui fica o ponto, e só ele.
-  const abasExtras: AbaExtra[] = React.useMemo(() => [], []);
+  // Abas da spec 003 (`AbaExtra` da lib, recebendo o `ExtensaoContexto`); o
+  // `PedidoProvider` embrulha o quadro e guarda capa, itens e alertas do card.
+  // ponytail: a capa é carregada duas vezes (este componente e o provider),
+  // 3 execuções por card aberto em vez das 2 do RNF-001; unificar quando o
+  // provider expuser a capa crua para o AcoesDoPedido.
+  const abasExtras: AbaExtra[] = React.useMemo(() => [
+    { id: 'itens', rotulo: 'Itens', render: (ctx) => <AbaItens {...ctx} /> },
+    {
+      id: 'alertas',
+      rotulo: 'Alertas',
+      contagem: (card) => Number(card.valores.alertas_pendentes) || undefined,
+      render: (ctx) => <AbaAlertas {...ctx} />,
+    },
+  ], []);
 
   if (!sessao) return <EmptyState title="Carregando o quadro..." />;
 
@@ -158,6 +171,7 @@ export default function QuadroPage() {
   }
 
   return (
+    <PedidoProvider>
     <KanbanBoard
       slug={QUADRO_COMPRAS}
       cardId={cardId}
@@ -183,5 +197,6 @@ export default function QuadroPage() {
         />
       )}
     />
+    </PedidoProvider>
   );
 }
