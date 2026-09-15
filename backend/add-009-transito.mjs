@@ -281,6 +281,15 @@ async function pessoaDaSessao() {
   return linhas[0] || null;
 }
 
+/** A-2 da revisão: escrita por id guardada pela persona do QUEM_PROCESSA que
+ * não casa nenhuma linha volta COMPLETED do mesmo jeito — o UPDATE só não
+ * mudou nada. Reler a nota depois de cada escrita é o que distingue "gravou"
+ * de "a guarda recusou"; só o que a releitura confirma conta como sucesso. */
+async function nfRecarregada(idNf) {
+  var linhas = await query('SELECT DT_RECEBIMENTO, ALERTA_ATRASO_EM FROM SGC_NF WHERE ID = ' + inteiro(idNf));
+  return linhas[0] || { DT_RECEBIMENTO: '', ALERTA_ATRASO_EM: '' };
+}
+
 /** RN-009/RNF-002: uma consulta ao ERP por FORNECEDOR, com todas as notas
  * dele, em fatias de 500 (ORA-01795). Falha do fornecedor sobe para quem
  * chama, que a isola (C-014, RNF-006). */
@@ -327,6 +336,10 @@ async function alertarAtraso(nf, hoje, quando) {
     criadoEm: quando,
   });
   await chamar(IDS.sgcEscNfAlertaAtraso, { idNf: inteiro(nf.ID), alertaEm: quando, usuarioId: inteiro(nf.QUEM_PROCESSA) });
+  var recarregada = await nfRecarregada(nf.ID);
+  if (String(recarregada.ALERTA_ATRASO_EM || '').slice(0, 10) !== hoje) {
+    throw new Error('responsável sem persona operante');
+  }
 }
 
 /** RN-006/D-014: TODO pedido em trânsito com ao menos uma nota e zero nota sem
@@ -367,7 +380,7 @@ var quando = agora();
 //    sem sessão (o cron), a guarda cai sobre o QUEM_PROCESSA de cada pedido.
 var pessoa = await pessoaDaSessao();
 if (pessoa && (pessoa.ACESSO === 'READ_ONLY' || PERSONAS_QUE_OPERAM.indexOf(pessoa.PERSONA) === -1)) {
-  return { ok: false, error: 'Seu perfil não verifica o recebimento das notas.' };
+  return { ok: false, erro: 'Seu perfil não verifica o recebimento das notas.' };
 }
 // A2 da revisão: RESTRICTED opera apenas os pedidos que criou.
 var somenteDe = pessoa && pessoa.ACESSO === 'RESTRICTED' ? inteiro(pessoa.ID) : 0;
@@ -412,13 +425,15 @@ for (var f = 0; f < codigos.length; f += 1) {
         chavenfe: String(entrada.CHAVENFE || ''),
         usuarioId: inteiro(nf.QUEM_PROCESSA),
       });
+      var recarregada = await nfRecarregada(nf.ID);
+      if (!String(recarregada.DT_RECEBIMENTO || '')) throw new Error('responsável sem persona operante');
       recebidas += 1;
-      nf.DT_RECEBIMENTO = String(entrada.DT_ENTRADA).slice(0, 10);
+      nf.DT_RECEBIMENTO = String(recarregada.DT_RECEBIMENTO);
       var alvo = porCard[String(inteiro(nf.ID_CARD))] || { quemProcessa: inteiro(nf.QUEM_PROCESSA), notas: [] };
       alvo.notas.push('NF ' + inteiro(nf.NUMNOTA) + ', ' + dataBr(nf.DT_RECEBIMENTO));
       porCard[String(inteiro(nf.ID_CARD))] = alvo;
     } catch (erro) {
-      erros.push({ codfornec: inteiro(codigos[f]), erro: (erro && erro.message) || String(erro) });
+      erros.push({ idNf: inteiro(nf.ID), idCard: inteiro(nf.ID_CARD), codfornec: inteiro(codigos[f]), erro: (erro && erro.message) || String(erro) });
     }
   }
 }
@@ -433,7 +448,7 @@ for (var a = 0; a < pendentes.length; a += 1) {
     await alertarAtraso(nota, hoje, quando);
     atrasadas += 1;
   } catch (erro) {
-    erros.push({ codfornec: inteiro(nota.CODFORNEC), erro: (erro && erro.message) || String(erro) });
+    erros.push({ idNf: inteiro(nota.ID), idCard: inteiro(nota.ID_CARD), codfornec: inteiro(nota.CODFORNEC), erro: (erro && erro.message) || String(erro) });
   }
 }
 
@@ -463,6 +478,9 @@ for (var p = 0; p < prontos.length; p += 1) {
     continue;
   }
   try {
+    // D-20 da revisão: movidoPor/origem:'sistema' valem quando o cron chama sem
+    // sessão; se esta SF for disparada COM sessão (tela), a lib 1.4.0 ignora os
+    // dois e o movimento sai em nome de quem clicou, não do QUEM_PROCESSA.
     var movido = await chamar(IDS.kbCardMover, {
       cardId: inteiro(pedido.ID_CARD),
       faseId: destino,

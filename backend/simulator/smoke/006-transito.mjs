@@ -286,7 +286,7 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
   await teste('C-013: a verificação com o pedido T3 informado, pela sessão da analista, trata só as notas do T3 — as do T1 ficam exatamente como estavam', async () => {
     const antes90003 = nfDoBanco(90003);
     const resposta = await rodada(T3, U.ana);
-    assert.equal(resposta.ok, true, resposta.error);
+    assert.equal(resposta.ok, true, resposta.erro);
     assert.equal(Number(resposta.notas), 3, 'as 3 notas pendentes do T3, e nenhuma de outro pedido');
     assert.equal(Number(resposta.recebidas), 1, 'só a 90008 tinha entrada confirmada');
 
@@ -295,13 +295,34 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
     assert.equal(depois90003.ALERTA_ATRASO_EM ?? '', antes90003.ALERTA_ATRASO_EM ?? '', 'a nota do T1 nem foi alertada');
   });
 
+  await teste('A-2 (revisão onda 2): no T1, com leo (comercial) como 1º responsável, a entrada confirmada no ERP para a 90003 NÃO é contada como recebida — a guarda de persona recusou a escrita, e a rodada registra o erro em vez de mentir sucesso', async () => {
+    // A guarda de sgcEscNfRecebimento é pela persona do QUEM_PROCESSA (1º
+    // responsável por ORDEM); leo é comercial, fora de PERSONAS_RECEBIMENTO.
+    db.prepare('INSERT INTO KB_CARD_RESPONSAVEL (CARD_ID, USUARIO_ID, ORDEM) VALUES (?, ?, 0)').run(T1, U.leo);
+    db.prepare(`INSERT INTO PCNFENT (NUMTRANSENT, NUMNOTA, SERIE, CODFORNEC, CODFILIAL, DTEMISSAO, DTENT, DTCANCEL, VLTOTAL, CHAVENFE, PRAZO, ESPECIE)
+      VALUES (900033, 90003, '1', 1015, '1', ?, ?, NULL, 5000, '', 30, 'NF')`).run(emDias(-20), emDias(-1));
+
+    const resposta = await rodada(T1, 0);
+    assert.equal(resposta.ok, true, resposta.erro);
+    assert.equal(Number(resposta.recebidas), 0, 'escrita que a guarda recusou (0 linhas) não conta como recebida');
+    const erro = resposta.erros.find((linha) => Number(linha.idCard) === T1);
+    assert.ok(erro, 'a recusa entra em erros[], com idCard/idNf');
+    assert.equal(Number(erro.idNf), nfDoBanco(90003).ID);
+    assert.match(String(erro.erro), /persona/i);
+    assert.equal(nfDoBanco(90003).DT_RECEBIMENTO ?? '', '', 'nada foi gravado no banco');
+    assert.equal(faseDoCard(T1), fases.transito, 'sem confirmação real, o pedido não sai do trânsito');
+
+    db.prepare('DELETE FROM PCNFENT WHERE NUMTRANSENT = 900033').run();
+    db.prepare('DELETE FROM KB_CARD_RESPONSAVEL WHERE CARD_ID = ? AND USUARIO_ID = ?').run(T1, U.leo);
+  });
+
   /* ─────────── T-082 — recebimento (RF-008, RF-009) ─────────── */
 
   let rodada1 = null;
 
   await teste('C-006: depois da rodada, a NF 90005 fica com recebimento na data de entrada do ERP (ontem) e situação recebida; a consulta ao WinThor devolve mais de 0 linha para (1015, 90005)', async () => {
     rodada1 = await rodada(0);
-    assert.equal(rodada1.ok, true, rodada1.error);
+    assert.equal(rodada1.ok, true, rodada1.erro);
 
     const nota = acharNota(await notasDoCard(T2), 90005);
     assert.equal(nota.DT_RECEBIMENTO, emDias(-1));
@@ -385,7 +406,7 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
     const semNota = Number(db.prepare('SELECT MAX(ID) AS ID FROM KB_CARD').get().ID);
 
     const segunda = await rodada(0);
-    assert.equal(segunda.ok, true, segunda.error);
+    assert.equal(segunda.ok, true, segunda.erro);
     assert.equal(faseDoCard(semNota), fases.transito, 'sem nota não há o que concluir');
     for (const cardId of [T2, T7]) {
       const doSistema = movimentos(cardId).filter((linha) => linha.ORIGEM === 'sistema');
@@ -401,7 +422,7 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
   await teste('C-011: contando só os pedidos desta spec, as notas vencidas geraram 5 avisos nf_atrasada — um por nota; a terceira rodada do mesmo dia continua em 5, não em 15', async () => {
     assert.equal(avisos('nf_atrasada'), 5, 'uma por nota vencida: 90003, 90006, 90011, 90012, 90013');
     const terceira = await rodada(0);
-    assert.equal(terceira.ok, true, terceira.error);
+    assert.equal(terceira.ok, true, terceira.erro);
     assert.equal(Number(terceira.atrasadas), 0, 'no mesmo dia, nenhuma nota alerta de novo');
     assert.equal(avisos('nf_atrasada'), 5);
   });
@@ -409,7 +430,7 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
   await teste('RN-007: apagando o ALERTA_ATRASO_EM da 90011 e rodando de novo no MESMO dia, a CHAVE do aviso segura — a contagem continua em 5', async () => {
     db.prepare("UPDATE SGC_NF SET ALERTA_ATRASO_EM = '' WHERE NUMNOTA = 90011").run();
     const nova = await rodada(0);
-    assert.equal(nova.ok, true, nova.error);
+    assert.equal(nova.ok, true, nova.erro);
     assert.equal(Number(nova.atrasadas), 1, 'a nota voltou a ser candidata (a trava da nota foi apagada)');
     assert.equal(avisos('nf_atrasada'), 5, 'a segunda trava — a CHAVE única do dia — não deixa duplicar');
     assert.equal(String(nfDoBanco(90011).ALERTA_ATRASO_EM).slice(0, 10), HOJE, 'a marca do dia volta para a nota');
@@ -451,7 +472,7 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
     const resposta = await rodada(0);
     restaurarErp();
 
-    assert.equal(resposta.ok, true, resposta.error);
+    assert.equal(resposta.ok, true, resposta.erro);
     assert.equal(nfDoBanco(90003).DT_RECEBIMENTO, emDias(-1), 'o fornecedor que respondeu foi gravado');
     const erros1042 = resposta.erros.filter((erro) => Number(erro.codfornec) === 1042);
     assert.equal(erros1042.length, 1, 'a falha do fornecedor é registrada, uma vez');
@@ -468,7 +489,7 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
     for (const usuario of [U.leo, U.dora]) {
       const resposta = await rodada(0, usuario);
       assert.equal(resposta.ok, false, 'perfil sem direito de operar');
-      assert.match(String(resposta.error), /perfil/i);
+      assert.match(String(resposta.erro), /perfil/i);
     }
     assert.equal(recebidasNoRecorte(), antes, 'recusa não grava');
 
