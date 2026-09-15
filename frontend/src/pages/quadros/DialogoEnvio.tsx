@@ -2,12 +2,13 @@
 // do pedido no ERP e observação.
 //
 // RN-012: por e-mail o destinatário sai dos contatos CADASTRADOS do fornecedor
-// (spec 001) — nunca um endereço digitado na hora. Enquanto a 001 não publica
-// `sgcFornecedorCarregar`, a lista vem vazia e o pedido não sai por e-mail: é
-// assim mesmo que deve ser.
+// (spec 001) — nunca um endereço digitado na hora. `sgcFornecedorCarregar` é
+// JAVASCRIPT e devolve `{ fornecedor, contatos… }`, então se chama com `acao`;
+// fornecedor sem contato cadastrado não sai por e-mail, e é assim mesmo que
+// deve ser.
 import * as React from 'react';
 
-import { linhas } from '@/lib/mitra-api';
+import { acao } from '@/lib/mitra-api';
 import { validarEnvio, type PedidoCapa } from '@/lib/pedido';
 import { hojeIso } from '@/lib/formato';
 import { DatePicker } from '@/components/DatePicker';
@@ -15,6 +16,8 @@ import {
   Alert, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, Field, LabelledField, Input, SelectMenu, Textarea,
 } from '@/components/page';
+
+type Registro = Record<string, unknown>;
 
 export interface ContatoDeEnvio {
   email: string;
@@ -44,16 +47,19 @@ function useContatos(codfornec: number | undefined, aberto: boolean) {
   React.useEffect(() => {
     if (!aberto || !codfornec) return;
     let vivo = true;
-    linhas('sgcFornecedorCarregar', { codfornec }).then(
-      (registros) => {
+    acao('sgcFornecedorCarregar', { codfornec }).then(
+      (dados) => {
         if (!vivo) return;
+        const registros: Registro[] = Array.isArray(dados.contatos) ? dados.contatos : [];
         setContatos(registros
           .filter((registro) => String(registro.EMAIL ?? '').includes('@'))
           .map((registro) => ({ email: String(registro.EMAIL), nome: String(registro.NOME ?? registro.EMAIL) })));
-        setPlataforma(String(registros[0]?.LINK_PLATAFORMA ?? ''));
+        setPlataforma(String((dados.fornecedor as Registro | null)?.LINK_PLATAFORMA ?? ''));
       },
       () => {
-        if (vivo) setContatos([]);
+        if (!vivo) return;
+        setContatos([]);
+        setPlataforma('');
       },
     );
     return () => {
