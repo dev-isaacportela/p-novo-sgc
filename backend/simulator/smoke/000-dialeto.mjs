@@ -96,6 +96,32 @@ ON DUPLICATE KEY UPDATE STATUS = CASE WHEN VALUES(QT) = 0 THEN 'removido' ELSE V
     assert.equal(voltou.QT, 7);
   });
 
+  await teste("S0-017 (R-064): TO_DATE devolve NULL para NULL e para '' (filtro desligado) e LANÇA para texto que não é data ou para mês/dia inexistente — nunca inventa um dia", async () => {
+    const um = (sql) => db.prepare(toSqlite(sql)).get().X;
+
+    assert.equal(um("SELECT TO_DATE('2026-02-14', 'YYYY-MM-DD') AS X"), '2026-02-14', 'data válida volta o MESMO dia');
+    assert.equal(um("SELECT TO_DATE('14/02/2026', 'DD/MM/YYYY') AS X"), '2026-02-14', 'o outro formato usado nos plans');
+    assert.equal(um("SELECT TO_DATE('2026-02-14 09:30:00', 'YYYY-MM-DD HH24:MI:SS') AS X"), '2026-02-14', 'com hora, o dia é o mesmo');
+    assert.equal(um('SELECT TO_DATE(NULL, \'YYYY-MM-DD\') AS X'), null, 'NULL continua NULL');
+    assert.equal(um("SELECT TO_DATE('', 'YYYY-MM-DD') AS X"), null, "filtro desligado ('') é NULL, não 1970");
+
+    assert.throws(
+      () => um("SELECT TO_DATE('2026-13-45', 'YYYY-MM-DD') AS X"),
+      /TO_DATE/,
+      'mês 13 e dia 45 não existem: Date.UTC transbordaria e o simulador devolveria uma data plausível',
+    );
+    assert.throws(
+      () => um("SELECT TO_DATE('2026-02-30', 'YYYY-MM-DD') AS X"),
+      /TO_DATE/,
+      '30 de fevereiro também é inexistente',
+    );
+    assert.throws(
+      () => um("SELECT TO_DATE('naoedata', 'YYYY-MM-DD') AS X"),
+      /TO_DATE/,
+      'texto que não casa com o formato lança, como TO_NUMBER já faz',
+    );
+  });
+
   await teste('S0-014 (R-070/R-074/R-075): fragmento() carrega a régua de situacao-solicitacao.sql como expressão escalar, e ela COMPÕE com os aliases do contrato (S/C/SF/I)', async () => {
     const situacao = fragmento('situacao-solicitacao.sql');
     assert.ok(situacao.startsWith('CASE') && situacao.endsWith('END'), `a régua é uma expressão escalar, do CASE ao END:\n${situacao.slice(0, 80)}…`);
@@ -113,6 +139,7 @@ LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD A
     const VALORES = ['sem_pedido', 'em_analise', 'em_aprovacao', 'em_envio', 'enviada',
       'em_transito', 'em_faturamento', 'atendida', 'nao_atendida'];
     const linhas = db.prepare(toSqlite(sql)).all();
+    assert.ok(linhas.length > 0, 'laço sobre zero linha não prova nada: o seed precisa ter solicitação (R-045)');
     for (const linha of linhas) {
       assert.ok(VALORES.includes(linha.SITUACAO), `valor fora do contrato da régua: ${linha.SITUACAO}`);
     }

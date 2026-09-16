@@ -18,8 +18,8 @@ import { linhas } from '@/lib/mitra-api';
 import { baixarCsv, textoCsv } from '@/lib/csv';
 import { fmtData, hojeIso } from '@/lib/formato';
 import {
-  LIMITES_PADRAO, chaveRastreio, classificarRastreio, colunasDoCsv, dataReferencia, indexarRastreio,
-  linhaDoCsv, lotesDePares, montarPares, resumoRastreio, rotuloEstoque, rotuloVenda,
+  LIMITES_PADRAO, alvoDeRastreio, chaveRastreio, classificarRastreio, colunasDoCsv, dataReferencia,
+  indexarRastreio, linhaDoCsv, lotesDePares, montarPares, resumoRastreio, rotuloEstoque, rotuloVenda,
   type LimitesRastreio, type LinhaSolicitacao, type RastreioRow, type RastreioSolicitacao,
 } from '@/lib/solicitacoes';
 
@@ -34,10 +34,7 @@ export default function RastreioPainel({ registros }: { registros: LinhaSolicita
   const [erro, setErro] = React.useState('');
 
   // RN-015: só entram as aprovadas COM data de aprovação — é ela a referência.
-  const alvos = React.useMemo(
-    () => registros.filter((registro) => dataReferencia(registro) !== ''),
-    [registros],
-  );
+  const alvos = React.useMemo(() => registros.filter(alvoDeRastreio), [registros]);
   const pares = React.useMemo(() => montarPares(alvos), [alvos]);
 
   React.useEffect(() => {

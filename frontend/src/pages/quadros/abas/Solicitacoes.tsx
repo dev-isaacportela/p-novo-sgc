@@ -63,7 +63,14 @@ export default function BlocoSolicitacoes(
     return rows as unknown as SolicitacaoDaMontagem[];
   }, [ctx.card.id]);
 
+  // A lista depende do que está no pedido (vínculo, QT_NO_PEDIDO): relê sempre
+  // que os itens do pedido mudam — remover item (P-1 do ensaio), gravar,
+  // incluir — e só depois que o pedido DESTE card carregou, para continuar UMA
+  // execução ao abrir (RNF-001).
+  const itensDoPedido = pedido.cardId === ctx.card.id && !pedido.carregando ? pedido.itens : null;
+
   React.useEffect(() => {
+    if (!itensDoPedido) return;
     let vivo = true;
     const cardId = ctx.card.id;
     buscar()
@@ -72,7 +79,7 @@ export default function BlocoSolicitacoes(
         if (vivo) setErro(falha instanceof Error ? falha.message : 'Não foi possível carregar as solicitações.');
       });
     return () => { vivo = false; };
-  }, [buscar, ctx.card.id]);
+  }, [buscar, ctx.card.id, itensDoPedido]);
 
   const chaveFase = fases.chaveDe(ctx.card.faseId);
   const motivoBloqueio = !sessao.permissoes.avaliarSolicitacao
@@ -84,12 +91,13 @@ export default function BlocoSolicitacoes(
         : '';
   const bloqueado = ctx.travado || ocupado || motivoBloqueio !== '';
 
-  async function comRecarga(passos: () => Promise<void>) {
+  /** `reler` = false quando os passos já recarregam o pedido: o efeito acima relê. */
+  async function comRecarga(passos: () => Promise<void>, reler = true) {
     setOcupado(true);
     setErro('');
     try {
       await passos();
-      setResposta({ cardId: ctx.card.id, linhas: await buscar() });
+      if (reler) setResposta({ cardId: ctx.card.id, linhas: await buscar() });
       setSalvoEm(horaCurta());
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : 'Não foi possível concluir a ação.');
@@ -105,7 +113,7 @@ export default function BlocoSolicitacoes(
       // O item novo aparece na lista de Itens e a capa do card pode mudar.
       await pedido.recarregar(ctx.card.id);
       await ctx.recarregar();
-    });
+    }, false);
   }
 
   if (carregando) {

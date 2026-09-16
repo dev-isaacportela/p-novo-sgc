@@ -139,7 +139,18 @@ function parseOracleDate(text, format) {
   const partes = { YYYY: 1970, MM: 1, DD: 1, HH24: 0, MI: 0, SS: 0 };
   order.forEach((token, index) => { partes[token] = Number(match[index + 1]); });
   const date = new Date(Date.UTC(partes.YYYY, partes.MM - 1, partes.DD, partes.HH24, partes.MI, partes.SS));
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) return null;
+  // Date.UTC TRANSBORDA: mes 13 vira janeiro do ano seguinte e dia 45 anda
+  // para o mes seguinte. Sem o round-trip dos componentes, '2026-13-45' viraria
+  // uma data plausivel e o simulador mentiria (R-064). Componente que nao volta
+  // igual = data inexistente.
+  const volta = date.getUTCFullYear() === partes.YYYY
+    && date.getUTCMonth() + 1 === partes.MM
+    && date.getUTCDate() === partes.DD
+    && date.getUTCHours() === partes.HH24
+    && date.getUTCMinutes() === partes.MI
+    && date.getUTCSeconds() === partes.SS;
+  return volta ? date : null;
 }
 
 function formatOracle(date, format) {
@@ -284,9 +295,17 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
 
   def('NVL', 2, (a, b) => (a == null ? b : a));
 
+  // TO_DATE(texto, formato) — NULL e '' (marcador de filtro desligado) viram
+  // NULL, como o Oracle. Texto que nao casa com o formato, ou mes/dia que nao
+  // existe, LANCA (ORA-01861/ORA-01839), como TO_NUMBER e REGEXP_SUBSTR ja
+  // fazem (R-064): devolver 1970-01-01 para 'naoedata' ou 2027-02-14 para
+  // '2026-13-45' e falso positivo, nao compatibilidade — o rastreio da 008
+  // compararia vendas contra uma data que ninguem escreveu.
   def('TO_DATE', 2, (texto, formato) => {
+    if (texto == null || String(texto) === '') return null;
     const date = parseOracleDate(texto, formato);
-    return date ? formatOracle(date, 'YYYY-MM-DD') : null;
+    if (!date) throw new Error(`TO_DATE recebeu um texto que nao e uma data no formato ${formato}: ${texto}`);
+    return formatOracle(date, 'YYYY-MM-DD');
   });
 
   def('TO_CHAR', 2, (valor, formato) => {

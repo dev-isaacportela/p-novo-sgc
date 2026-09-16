@@ -16,7 +16,7 @@ import {
   PainelGrafico, Table, Td, Th, Tr, TextLink, XAxis, YAxis, type ChartConfig,
 } from '@/components/page';
 import { corDeSerie } from '@/components/page';
-import type { Bloco } from '@/lib/analises';
+import type { Bloco, PontoComparativo, PontoSerie } from '@/lib/analises';
 
 const VAZIO = 'Sem dados no período.';
 
@@ -45,8 +45,11 @@ function Conteudo({
 
 const numeroBr = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
-export interface PontoSerie { name: string; value: number }
-export interface PontoComparativo { name: string; a: number; b: number }
+// Os dois pontos vêm de `@/lib/analises` — é lá que as funções que os MONTAM
+// (serieSimples, serieComparativa, serieDoFunil) moram, e duas declarações do
+// mesmo formato divergem no primeiro campo novo. Reexportados porque as abas
+// tipam as próprias séries por este arquivo.
+export type { PontoComparativo, PontoSerie };
 
 /**
  * Bloco de uma série. `formatar` é de quem chama (moeda, quantidade, dias) e

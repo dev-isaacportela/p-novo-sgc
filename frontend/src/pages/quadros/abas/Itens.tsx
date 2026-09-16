@@ -164,7 +164,10 @@ export default function AbaItens(ctx: ExtensaoContexto) {
     setErro('');
     try {
       await acao('sgcEscItemRemover', { idCard: ctx.card.id, codprod, atualizadoEm: agora() });
-      await devolverSolicitacoes(ctx.card.id, removido);
+      // Item sem origem em solicitação não dispara o par (a varredura completa
+      // continua na saída da Análise, verificar-saida.ts); falhar nele não
+      // desfaz a remoção, que o servidor já concedeu.
+      if (removido && removido.idSolicitacao > 0) await devolverSolicitacoes(ctx.card.id, removido).catch(() => null);
       await pedido.recarregar(ctx.card.id);
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : 'Não foi possível remover o item.');

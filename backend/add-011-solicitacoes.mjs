@@ -59,7 +59,7 @@ function guarda(personas, quem = ':VAR_USER', extra = '') {
 }
 
 /** A mesma guarda, para a escrita interna que recebe o usuário como parâmetro. */
-const guardaInterna = (personas) => guarda(personas, '{{usuarioId}}');
+const guardaInterna = (personas, extra = '') => guarda(personas, '{{usuarioId}}', extra);
 
 /** RN-018: registrar e cancelar a própria é do vendedor (o autor É o vendedor, RN-002). */
 const REGISTRAR = ['admin', 'comercial'];
@@ -68,10 +68,14 @@ const AVALIAR = ['admin', 'analista', 'gestor'];
 /** Quem pode qualquer uma das ações acima também deixa a linha do histórico dela. */
 const HISTORICO = ['admin', 'analista', 'gestor', 'comercial'];
 
-// C-12 da revisão cruzada (o A-6/D-19 da onda 2 aplicado aqui): as escritas de
-// TELA que recebem um card precisam conferir fase e dono, não só persona — sem
-// isto um analista RESTRICTED desvincularia solicitação de card alheio e um
-// pedido fora da montagem seria alterado. É a mesma condição de
+// C-12 da revisão cruzada (o A-6/D-19 da onda 2 aplicado aqui): TODA escrita
+// que recebe um card precisa conferir fase e dono, não só persona — sem isto um
+// analista RESTRICTED desvincularia solicitação de card alheio e um pedido fora
+// da montagem seria alterado. Vale para as escritas de tela (`:VAR_USER`) e,
+// desde o achado 2 da onda 3, também para as internas, que recebem
+// `{{usuarioId}}`: o perfil business libera todas as SFs, então a conferência
+// que o JAVASCRIPT faz em `pedidoEmAnalise` não protege quem chama por fora. É
+// a mesma condição de
 // `pedidoEmAnalise` (003), aqui em SQL, dentro do EXISTS da guarda (reusa o
 // alias IU já filtrado por `quem`).
 const faseEDono = (idCardExpr, quem = ':VAR_USER') => `EXISTS (
@@ -96,7 +100,7 @@ const SQL_CLIENTE_BUSCAR = `SELECT * FROM (
        OR ( {{codcli}} = 0
             AND ( UPPER(C.CLIENTE) LIKE '%' || UPPER('{{busca}}') || '%'
                OR REPLACE(REPLACE(REPLACE(NVL(C.CGCENT, ' '), '.', ''), '/', ''), '-', '')
-                  LIKE '%{{busca}}%' ) ) )
+                  LIKE '%' || '{{busca}}' || '%' ) ) )
   ORDER BY C.CLIENTE
 ) WHERE ROWNUM <= 20`;
 
@@ -300,7 +304,7 @@ SET STATUS = 'aprovada', ID_CARD = {{idCard}}, ID_ITEM = {{idItem}}, MOTIVO = ''
     AVALIADO_EM   = CASE WHEN COALESCE(AVALIADO_EM, '') = '' THEN '{{vinculadoEm}}' ELSE AVALIADO_EM END,
     ATUALIZADO_EM = '{{vinculadoEm}}'
 WHERE ID = {{id}} AND ID_CARD = 0 AND STATUS IN ('pendente', 'aprovada')
-  AND ${guardaInterna(AVALIAR)}`;
+  AND ${guardaInterna(AVALIAR, `AND ${faseEDono('{{idCard}}', '{{usuarioId}}')}`)}`;
 
 // D-005: o critério é "o item sumiu", e não o CODPROD — assim a MESMA
 // instrução serve à remoção de um item e à remoção dos zerados ao sair da
@@ -317,18 +321,31 @@ WHERE ID_CARD = {{idCard}} AND {{idCard}} > 0 AND STATUS = 'aprovada'
 // Por id (avaliação, cancelamento) OU pelo card, com o mesmo critério do
 // desvínculo — chamada SEMPRE antes dele, porque depois o ID_CARD já é 0. A
 // forma "id OU critério" é a de sgcEscOcorrenciaDecidir da 005 (achado A-3),
-// uma instrução só. O ramo por {{id}} não toca card nenhum e por isso a
-// conferência de fase e dono entra condicionada a {{idCard}} = 0.
+// uma instrução só.
+//
+// Cada ramo leva a guarda da escrita que ele DOCUMENTA (achados 3 e 4 da onda
+// 3) — guarda de persona larga demais transforma a linha do histórico numa
+// escrita que o resto da spec recusaria:
+//   - por id: `cancelada` é do autor (o mesmo WHERE de sgcEscSolicitacaoCancelar);
+//     qualquer outro evento é de compras (o mesmo de sgcEscSolicitacaoAvaliar);
+//   - por card: a MESMA guarda de sgcEscSolicitacaoDesvincular, fase e dono
+//     inclusive. Antes, a fase/dono valia para os dois ramos e o desvínculo
+//     recusado ainda deixava a linha "desvinculada" gravada.
+// O `guarda(HISTORICO)` externo fica como teto: quem não opera solicitação
+// nenhuma não escreve histórico de espécie alguma.
 const SQL_SOLICITACAO_HISTORICO_INSERIR = `INSERT INTO SGC_SOLICITACAO_HISTORICO (ID_SOLICITACAO, EVENTO, DETALHE, POR, EM)
 SELECT S.ID, '{{evento}}', '{{detalhe}}', :VAR_USER, '{{em}}'
 FROM SGC_SOLICITACAO S
 WHERE '{{evento}}' IN ('aprovada', 'recusada', 'vinculada', 'desvinculada', 'cancelada')
-  AND ( ({{id}} > 0 AND S.ID = {{id}})
+  AND ( ({{id}} > 0 AND S.ID = {{id}}
+         AND ('{{evento}}' <> 'cancelada' OR S.CRIADO_POR = :VAR_USER)
+         AND ('{{evento}}' = 'cancelada' OR ${guarda(AVALIAR)}))
      OR ({{id}} = 0 AND {{idCard}} > 0 AND S.ID_CARD = {{idCard}}
          AND NOT EXISTS (SELECT 1 FROM SGC_PEDIDO_ITEM I
                           WHERE I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD
-                            AND I.STATUS <> 'removido' AND I.QT_PEDIDA > 0)) )
-  AND ${guarda(HISTORICO, ':VAR_USER', `AND ({{idCard}} = 0 OR ${faseEDono('{{idCard}}')})`)}`;
+                            AND I.STATUS <> 'removido' AND I.QT_PEDIDA > 0)
+         AND ${guarda(AVALIAR, ':VAR_USER', `AND ${faseEDono('{{idCard}}')}`)}) )
+  AND ${guarda(HISTORICO)}`;
 
 // B-4: a ORDEM da cláusula é regra, não estilo — todo VALUES() vem antes do
 // único literal, que fica na última atribuição. A base corrigiu o dialeto
@@ -349,7 +366,7 @@ SELECT {{idCard}}, {{codprod}}, '{{descricao}}', '{{embalagem}}', '{{unidade}}',
        '{{quando}}', {{usuarioId}}, '{{quando}}'
 FROM DUAL
 WHERE {{codprod}} > 0 AND {{quantidade}} > 0 AND {{idSolicitacao}} > 0
-  AND ${guardaInterna(AVALIAR)}
+  AND ${guardaInterna(AVALIAR, `AND ${faseEDono('{{idCard}}', '{{usuarioId}}')}`)}
 ON DUPLICATE KEY UPDATE
   ID_SOLICITACAO = VALUES(ID_SOLICITACAO),
   QT_PEDIDA      = CASE WHEN QT_PEDIDA > 0 THEN QT_PEDIDA ELSE VALUES(QT_PEDIDA) END,
