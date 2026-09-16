@@ -11,24 +11,26 @@
 ## Backend
 
 - Nenhuma task. R-051: a 010 não tem script nem SF — lê `sgcPedidoCarregar` (002/003) e
-  `sgcNfListar` (005), já publicadas. O único pedido de mudança em arquivo alheio é o
-  "Pedido ao 000" do `plan.md` (D-001: `CRIADOR_NOME` em `sgcPedidoCarregar`), que é tarefa
-  do integrador, fora desta lista.
+  `sgcNfListar` (005), já publicadas. O único pedido de mudança em arquivo alheio
+  (`CRIADOR_NOME` em `sgcPedidoCarregar`, D-001 do `plan.md`) já foi resolvido na revisão
+  cruzada da S1 como **R-068**: entrega da base (S2), fora desta lista.
 
 ## Frontend
 
 - [ ] **T-001** — `lib/extrato.ts`: tipo `PedidoParaExtrato` (interseção sobre `PedidoCapa`
-      de `lib/pedido.ts` mais os campos de faturamento que `sgcPedidoCarregar` já devolve —
-      D-002), tipo `ModeloExtrato` (cabeçalho, marca, assinaturas, prazo, itens, total,
+      de `lib/pedido.ts` mais os campos de faturamento e `CRIADOR_NOME` que
+      `sgcPedidoCarregar` já devolve, este último a partir de R-068 — D-001, D-002), tipo
+      `ModeloExtrato` (cabeçalho — com `criador` —, marca, assinaturas, prazo, itens, total,
       decisões, faturamento, nome do arquivo), `FASES_DECISAO` (`analise`, `tecnica`,
       `diretoria`) → `frontend/src/lib/extrato.ts`
 - [ ] **T-002** — `montarExtrato(pedido, itensBrutos, fase, nfsBrutas, agora?)` em
       `lib/extrato.ts`: marca/assinaturas por `FASES_DECISAO`/`cancelado` (RN-001..004),
       prazo via `compararPrazo` (RN-005), itens via `itemDeLinha` filtrados por
       `qtPedida > 0` (RN-006), total = `pedido.VL_TOTAL` (D-003, RN-007), faturamento a
-      partir de `nfsBrutas` (RN-008), `numeroWinthor` só com `DT_ENVIO` (RN-009), nome do
-      arquivo `extrato-pedido-<idCard>` (RN-010), `geradoEm` em hora local a partir de
-      `agora` (RN-011) → `frontend/src/lib/extrato.ts`
+      partir de `nfsBrutas` (RN-008), `numeroWinthor` só com `DT_ENVIO` (RN-009), `criador`
+      = `pedido.CRIADOR_NOME` ou `''` quando ausente (RF-010, D-001), nome do arquivo
+      `extrato-pedido-<idCard>` (RN-010), `geradoEm` em hora local a partir de `agora`
+      (RN-011) → `frontend/src/lib/extrato.ts`
 - [ ] **T-003** `[P]` — `linhasCsvExtrato(modelo)` em `lib/extrato.ts`: cabeçalho e linhas
       de item na mesma ordem de `modelo.itens` (RN-012) → `frontend/src/lib/extrato.ts`
 - [ ] **T-004** `[P]` — `popupFoiBloqueado(janela)` em `lib/extrato.ts`: `janela === null`
@@ -63,7 +65,8 @@ concluídas não está pronta.
 - [ ] **T-083** `[P]` — `test('C-010 …')` e `test('C-011 …')`: seção de faturamento com e
       sem nota vinculada
 - [ ] **T-084** `[P]` — `test('C-012 …')`: número do pedido no fornecedor só com envio
-      registrado
+      registrado; `criador` preenchido quando `CRIADOR_NOME` vem na linha (R-068) e vazio
+      quando não vem, sem quebrar o resto do modelo
 - [ ] **T-085** `[P]` — `test('C-013 …')`: `popupFoiBloqueado`
 - [ ] **T-086** `[P]` — `test('C-014 …')`: `linhasCsvExtrato` bate com `modelo.itens`
 - [ ] **T-087** `[P]` — `test('C-015 …')` e `test('C-016 …')`: nome do arquivo; emissão em
@@ -116,5 +119,5 @@ sem task de teste é cenário não entregue.
 | RF-012 / C-014, RN-012 | T-003 | T-086 |
 | RF-013 / C-015, RN-010 | T-002 | T-087 |
 | RF-014 / C-016, RN-011 | T-002 | T-087 |
-| RNF-001 | T-006 | T-091 (revisão: nenhuma SF nova) |
+| RNF-001 | T-006 | T-091 (revisão: nenhuma SF nova; R-077 confirma 2 execuções por clique dentro do teto) |
 | RNF-002 | T-005 | T-092 |
