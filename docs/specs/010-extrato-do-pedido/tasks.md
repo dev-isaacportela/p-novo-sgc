@@ -17,13 +17,13 @@
 
 ## Frontend
 
-- [ ] **T-001** — `lib/extrato.ts`: tipo `PedidoParaExtrato` (interseção sobre `PedidoCapa`
+- [x] **T-001** — `lib/extrato.ts`: tipo `PedidoParaExtrato` (interseção sobre `PedidoCapa`
       de `lib/pedido.ts` mais os campos de faturamento e `CRIADOR_NOME` que
       `sgcPedidoCarregar` já devolve, este último a partir de R-068 — D-001, D-002), tipo
       `ModeloExtrato` (cabeçalho — com `criador` —, marca, assinaturas, prazo, itens, total,
       decisões, faturamento, nome do arquivo), `FASES_DECISAO` (`analise`, `tecnica`,
       `diretoria`) → `frontend/src/lib/extrato.ts`
-- [ ] **T-002** — `montarExtrato(pedido, itensBrutos, fase, nfsBrutas, agora?)` em
+- [x] **T-002** — `montarExtrato(pedido, itensBrutos, fase, nfsBrutas, agora?)` em
       `lib/extrato.ts`: marca/assinaturas por `FASES_DECISAO`/`cancelado` (RN-001..004),
       prazo via `compararPrazo` (RN-005), itens via `itemDeLinha` filtrados por
       `qtPedida > 0` (RN-006), total = `pedido.VL_TOTAL` (D-003, RN-007), faturamento a
@@ -31,17 +31,17 @@
       = `pedido.CRIADOR_NOME` ou `''` quando ausente (RF-010, D-001), nome do arquivo
       `extrato-pedido-<idCard>` (RN-010), `geradoEm` em hora local a partir de `agora`
       (RN-011) → `frontend/src/lib/extrato.ts`
-- [ ] **T-003** `[P]` — `linhasCsvExtrato(modelo)` em `lib/extrato.ts`: cabeçalho e linhas
+- [x] **T-003** `[P]` — `linhasCsvExtrato(modelo)` em `lib/extrato.ts`: cabeçalho e linhas
       de item na mesma ordem de `modelo.itens` (RN-012) → `frontend/src/lib/extrato.ts`
-- [ ] **T-004** `[P]` — `popupFoiBloqueado(janela)` em `lib/extrato.ts`: `janela === null`
+- [x] **T-004** `[P]` — `popupFoiBloqueado(janela)` em `lib/extrato.ts`: `janela === null`
       (RN-013) → `frontend/src/lib/extrato.ts`
-- [ ] **T-005** — `pages/quadros/extrato-html.ts`: import da logo com
+- [x] **T-005** — `pages/quadros/extrato-html.ts`: import da logo com
       `@/assets/logo-benenutri.png?inline` (D-007), `extratoHtml(modelo)` monta o documento
       completo — retrato, monocromático, marca d'água fixa em todas as páginas quando
       `modelo.marca` não é nulo, três linhas de assinatura quando `modelo.assinaturas`,
       cabeçalho, prazo, tabela de itens, decisões, faturamento, `window.print()` ao
       carregar; ≤ 800 linhas → `frontend/src/pages/quadros/extrato-html.ts`
-- [ ] **T-006** — Botões e handlers em `AcoesDoPedido.tsx`: importa `Alert`; estado
+- [x] **T-006** — Botões e handlers em `AcoesDoPedido.tsx`: importa `Alert`; estado
       `avisoPopup`; `extratoPdf` (abre a janela antes do `await` — D-005 —, busca
       `sgcPedidoCarregar` + `sgcNfListar` em paralelo — D-004 —, chama `montarExtrato` e
       `extratoHtml`, ou `popupFoiBloqueado` → `setAvisoPopup(true)`); `extratoCsv`
@@ -55,29 +55,29 @@
 Obrigatório: uma task por linha da seção **Testes** do `plan.md`. Feature sem estas tasks
 concluídas não está pronta.
 
-- [ ] **T-080** — `test('C-001 …')`, `test('C-002 …')`, `test('C-003 …')` e `test('C-004 …')`
+- [x] **T-080** — `test('C-001 …')`, `test('C-002 …')`, `test('C-003 …')` e `test('C-004 …')`
       em `frontend/tests/extrato.test.mjs`: marca e assinaturas nas dez fases, inclusive o
       caso de `TEC_EM` preenchido com o pedido de volta na Análise (RN-001)
-- [ ] **T-081** `[P]` — `test('C-005 …')`, `test('C-006 …')` e `test('C-007 …')`: prazo
+- [x] **T-081** `[P]` — `test('C-005 …')`, `test('C-006 …')` e `test('C-007 …')`: prazo
       igual, divergente com justificativa e divergente sem justificativa ainda
-- [ ] **T-082** `[P]` — `test('C-008 …')` e `test('C-009 …')`: item de quantidade zero fora
+- [x] **T-082** `[P]` — `test('C-008 …')` e `test('C-009 …')`: item de quantidade zero fora
       da lista; total igual a `VL_TOTAL`, não à soma recalculada
-- [ ] **T-083** `[P]` — `test('C-010 …')` e `test('C-011 …')`: seção de faturamento com e
+- [x] **T-083** `[P]` — `test('C-010 …')` e `test('C-011 …')`: seção de faturamento com e
       sem nota vinculada
-- [ ] **T-084** `[P]` — `test('C-012 …')`: número do pedido no fornecedor só com envio
+- [x] **T-084** `[P]` — `test('C-012 …')`: número do pedido no fornecedor só com envio
       registrado; `criador` preenchido quando `CRIADOR_NOME` vem na linha (R-068) e vazio
       quando não vem, sem quebrar o resto do modelo
-- [ ] **T-085** `[P]` — `test('C-013 …')`: `popupFoiBloqueado`
-- [ ] **T-086** `[P]` — `test('C-014 …')`: `linhasCsvExtrato` bate com `modelo.itens`
-- [ ] **T-087** `[P]` — `test('C-015 …')` e `test('C-016 …')`: nome do arquivo; emissão em
+- [x] **T-085** `[P]` — `test('C-013 …')`: `popupFoiBloqueado`
+- [x] **T-086** `[P]` — `test('C-014 …')`: `linhasCsvExtrato` bate com `modelo.itens`
+- [x] **T-087** `[P]` — `test('C-015 …')` e `test('C-016 …')`: nome do arquivo; emissão em
       hora local com `agora` injetado
-- [ ] **T-088** — Conferir que `frontend/tests/permissoes.test.mjs` (002) já cobre C-017
+- [x] **T-088** — Conferir que `frontend/tests/permissoes.test.mjs` (002) já cobre C-017
       (`verQuadro` por persona); nenhuma linha nova a escrever ali
 
 ## Verificação
 
-- [ ] **T-090** — `cd frontend && npm test` verde
-- [ ] **T-091** — `cd frontend && npm run build && npm run lint` limpos
+- [x] **T-090** — `cd frontend && npm test` verde
+- [x] **T-091** — `cd frontend && npm run build && npm run lint` limpos
 - [ ] **T-092** — Verificação manual no simulador: abrir o extrato em cada uma das dez
       fases; nas de decisão e em Canceladas, imprimir de verdade (Ctrl+P) e conferir marca
       d'água, assinaturas e paginação em A4 retrato, monocromático; testar com pop-up
