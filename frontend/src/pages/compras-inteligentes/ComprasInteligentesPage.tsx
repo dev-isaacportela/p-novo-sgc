@@ -185,14 +185,16 @@ export default function ComprasInteligentesPage() {
    * O alvo de cobertura por curva (R-089). Constante única: é a ÚNICA linha
    * desta tela que conhece a 012.
    */
-  // S4 (R-103/R-111): trocar por limiteDeCobertura(coberturas, alvo, curva).alvoDias
-  const alvoDaCurvaDias: AlvoDaCurva = React.useCallback((alvo) => limiteDeCobertura(coberturas, alvo).limiteDias, [coberturas]);
+  const alvoDaCurvaDias: AlvoDaCurva = React.useCallback(
+    (alvo, curva) => limiteDeCobertura(coberturas, alvo, curva).alvoDias,
+    [coberturas],
+  );
 
   /** O teto sem justificativa que viaja com o item do carrinho (R-112). */
   const coberturaLimiteDe = React.useCallback((l: LinhaRessuprimento) => limiteDeCobertura(coberturas, {
     codprod: Number(l.medida.CODPROD), codsec: Number(l.medida.CODSEC),
     codepto: Number(l.medida.CODEPTO), codfornec: Number(codfornec),
-  }).limiteDias, [coberturas, codfornec]);
+  }, l.curva).limiteDias, [coberturas, codfornec]);
 
   // O mapa de unidades por caixa vem vazio de propósito: `sgcCustoUnidadesPorCaixa`
   // (7306) seria uma DÉCIMA execução na carga, e RNF-001 fecha em 9. Sem ele,

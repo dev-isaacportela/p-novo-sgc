@@ -335,6 +335,9 @@ export function itemDoCarrinho(
     coberturaJustificativa: '',
     observacao: '',
     status: 'montagem',
+    // Onda 3 (008): item do carrinho nunca nasce de solicitação.
+    idSolicitacao: 0,
+    solicitacaoDe: '',
   };
 }
 
