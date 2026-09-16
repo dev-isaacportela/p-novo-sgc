@@ -25,6 +25,7 @@ import { seed006 } from './seed/006-transito.mjs';
 import { seed007 } from './seed/007-bo.mjs';
 import { seed008 } from './seed/008-solicitacoes.mjs';
 import { seed009 } from './seed/009-indicadores.mjs';
+import { seed011 } from './seed/011-compras-inteligentes.mjs';
 
 const iso = (data) => data.toISOString().slice(0, 19);
 
@@ -105,6 +106,9 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
   seed007(db, CENARIO);
   seed008(db, CENARIO);
   seed009(db, CENARIO);
+  // Onda 4: a 012 não tem seed próprio — ela é dona das linhas de
+  // SGC_COBERTURA do seed/003-itens.mjs nesta onda (R-096).
+  seed011(db, CENARIO);
 
   db.close();
   return counts;

@@ -49,7 +49,9 @@ export const HEALTH_TABLE = 'KB_BOARD';
 // add-009-transito.mjs, 007 -> add-010-bo.mjs, nessa ordem lógica (006 e 007
 // leem SGC_NF da 005). Onda 3 (R-051): 008 -> add-011-solicitacoes.mjs, 009 ->
 // add-012-indicadores.mjs, nessa ordem (a aderência de solicitações da 009 lê a
-// tabela da 008); a 010 não tem script. add-002 continua fora, por último no sandbox.
+// tabela da 008); a 010 não tem script. Onda 4 (R-081): 011 ->
+// add-013-compras-inteligentes.mjs, 012 -> add-014-coberturas-abc.mjs, nessa
+// ordem. add-002 continua fora, por último no sandbox.
 export const PUBLISH_ORDER = [
   'add-001-kanban.mjs',
   'add-003-jdbc-winthor.mjs',
@@ -62,6 +64,8 @@ export const PUBLISH_ORDER = [
   'add-010-bo.mjs',
   'add-011-solicitacoes.mjs',
   'add-012-indicadores.mjs',
+  'add-013-compras-inteligentes.mjs',
+  'add-014-coberturas-abc.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -120,4 +124,16 @@ export const CHECK_INPUT = {
   // de `responsavel`, `fase` em vez de `faseId` (002). dataInicio/dataFim/hoje/
   // idCard/codfilial/codfornec já vêm com valores que servem aqui.
   fase: '', soVencidos: '', campoAgrupar: 'fase', responsavelId: '0', prioridade: '',
+  // spec 011 (compras inteligentes): só as chaves NOVAS (R-100, D-17).
+  // codfornec/codfilial/dataInicio/dataFim/codprod/limite/offset já vêm das
+  // specs acima com valores que servem. `excluir` é FRAGMENTO (lista de
+  // NUMTRANSITEM sem aspas) e `0` é "nenhuma venda desconsiderada" (R-087);
+  // `diasPeriodo` entra sem aspas no gerador de calendário. leadTimeDias,
+  // coberturaDias e curva NÃO entram: com R-083 deixaram de ser parâmetro de
+  // SQL — a fórmula e a curva são régua pura da tela.
+  diasPeriodo: '153', excluir: '0', meses: '12', compradorId: '0', numtransitem: '960001',
+  // spec 012 (coberturas por curva): só a chave nova (R-100).
+  // nivel, limite e offset vêm da 003; situacao vem da 004, com o mesmo '' que
+  // sgcCoberturaListar quer no ramo "todas".
+  idCobertura: '0',
 };
