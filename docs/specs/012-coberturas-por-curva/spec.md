@@ -76,6 +76,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** a compradora tenta enviar o pedido para a aprovação técnica
 - **Então** o envio é recusado com a mesma frase de sempre — "Justifique os itens com cobertura acima do limite (1), a começar por …" — e passa a ser aceito assim que ela justificar esse item
 
+**C-006b — A fração do teto sobrevive até a trava**
+- **Dado que** o mesmo pedido tem um item de curva B com **49,2 dias** de cobertura futura, quantidade maior que zero e teto de **49,5 dias**, sem justificativa
+- **Quando** a compradora tenta enviar o pedido para a aprovação técnica
+- **Então** esse item **não** barra nada: 49,2 está abaixo de 49,5. Meio dia de tolerância que se perde no caminho vira uma justificativa que ninguém entende por que foi pedida
+
 **C-007 — Comprar mira o alvo, não o teto**
 - **Dado que** o departamento 2 tem alvo 35 dias e tolerância 20 % na curva A
 - **Quando** a sugestão de compra de um item de curva A desse departamento calcula o estoque máximo
@@ -94,7 +99,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 **C-010 — Desativar tira da resolução; regravar reativa**
 - **Dado que** o produto 5001 tem parametrização ativa com teto 25 dias na curva B e o departamento dele tem 49,5 na mesma curva
 - **Quando** o gestor desativa a parametrização do produto
-- **Então** o histórico ganha uma linha com a ação "desativou", o item 5001 de curva B passa a ser cobrado contra **49,5 dias** e, ao regravar o mesmo alvo, o histórico ganha "reativou" e o teto volta a 25
+- **Então** o histórico ganha uma linha com a ação "desativou" e o item 5001 de curva B passa a ser cobrado contra **49,5 dias**
+- **E quando** ele filtra a lista por "Inativas", encontra a parametrização desativada e a regrava
+- **Então** o histórico ganha "reativou" — não "criou" — e o teto volta a 25
 
 **C-011 — Quem mantém, quem lê e quem não entra**
 - **Dado que** um analista tenta abrir a tela de coberturas pelo endereço direto, e um gestor com acesso somente-leitura abre a mesma tela
@@ -117,9 +124,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** vê as alterações da mais recente para a mais antiga, cada uma com o alvo, o campo, o valor antes, o valor depois, a ação, quem fez e quando; e pode ver só as de uma parametrização escolhida
 
 **C-015 — Mudar a régua não reescreve pedido já montado**
-- **Dado que** um pedido na Análise já tem itens com teto gravado e o gestor troca a parametrização depois disso
+- **Dado que** um pedido na Análise já tem um item de curva B com teto **49,5** gravado e o gestor troca a parametrização daquele alvo para 30 dias sem tolerância depois disso
 - **Quando** a compradora reabre o pedido
-- **Então** os itens continuam com o teto que a análise gravou; o teto novo passa a valer quando ela montar a análise de novo, e é esse o teto que a trava de saída cobra
+- **Então** o item continua com os 49,5 que a análise gravou, e é contra eles que a trava de saída decide; o teto novo passa a valer quando ela montar a análise de novo
 
 ## Requisitos funcionais
 
@@ -131,10 +138,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-004 | Item sem curva classificada DEVE ser cobrado pelo teto da curva C | C-003 | must |
 | RF-005 | Sem nenhuma parametrização alcançável, o alvo DEVE ser 35 dias e a tolerância 0 | C-004 | must |
 | RF-006 | A trava de saída da Análise DEVE comparar a cobertura futura do item contra o teto da curva **daquele** item, sem mudar a mensagem mostrada à compradora | C-006 | must |
+| RF-006b | O teto DEVE chegar à trava com a fração que tem: meia casa de tolerância não pode ser perdida entre a tela e a decisão | item de curva B com 49,2 dias contra teto 49,5 passa (C-006b) | must |
 | RF-007 | O alvo em dias DEVE ficar disponível, separado do teto, para o cálculo do estoque máximo da sugestão de compra | C-007 | must |
 | RF-008 | Toda alteração de parametrização DEVE gerar uma linha de histórico **por campo alterado**, com valor antes, valor depois, quem e quando | Seis números alterados = seis linhas (C-008); campo não alterado não gera linha | must |
 | RF-009 | A ação do histórico DEVE ser derivada do que aconteceu: criou, alterou, desativou ou reativou | C-008, C-009, C-010 | must |
-| RF-010 | A tela DEVE listar as parametrizações com nível, alvo, situação e, por curva, alvo, tolerância e o teto calculado | C-001, C-013 | must |
+| RF-010 | A tela DEVE listar as parametrizações com nível, alvo, situação e, por curva, alvo, tolerância e o teto calculado, com filtro por situação (todas, ativas, inativas) | C-001, C-010, C-013 | must |
 | RF-011 | O formulário DEVE mostrar o máximo sem justificativa de cada curva antes de salvar | C-013 | must |
 | RF-012 | Exclusão DEVE ser desativação: a parametrização sai da resolução e o histórico permanece; regravar o mesmo alvo reativa | C-010 | must |
 | RF-013 | A tela DEVE ser mantida por gestor e admin e recusar quem não tem acesso, inclusive por endereço direto; quem tem acesso somente-leitura vê e não grava | C-011 | must |
@@ -146,7 +154,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | ID | Requisito | Como se mede |
 |---|---|---|
 | RNF-001 | Abrir a tela custa **duas** chamadas ao servidor: a lista e a identidade de quem abriu; trocar de página ou de filtro custa **uma** | Contador de chamadas ao abrir e ao paginar |
-| RNF-002 | Salvar uma parametrização custa, no máximo, **uma chamada de gravação mais uma por campo alterado** — no pior caso 8 com sete campos mudados | Contador de chamadas em três salvamentos: 1 campo, 6 campos, criação completa |
+| RNF-002 | Salvar uma parametrização custa **uma chamada de gravação, mais uma por campo alterado, mais uma releitura da lista** — no pior caso 9, com os sete campos mudados. A releitura não é opcional: é ela que mostra o que de fato ficou gravado quando o servidor recusa em silêncio | Contador de chamadas em três salvamentos: 1 campo (3), 6 campos (8), criação completa (9) |
 | RNF-003 | Abrir o histórico custa **uma** chamada, qualquer que seja o número de linhas | Contador de chamadas com 1 e com 200 linhas de histórico |
 | RNF-004 | Resolver o teto de um item não custa chamada nenhuma: a lista de parametrizações já veio junto da análise | Contador de chamadas ao montar a análise de um fornecedor com 300 produtos: o mesmo de hoje |
 | RNF-005 | Um salvamento recusado por falta de permissão não deixa linha de histórico órfã | Tentativa como analista: zero linha gravada nos dois lugares |
@@ -182,15 +190,16 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-004 | produto sem parametrização nenhuma → alvo 35, tolerância 0, teto 35, origem "padrão" | regra de tela |
 | C-005 | seção 21 com A 10/0 e B/C zerados, departamento 2 com B 45/10 → item da seção 21 de curva B recebe 49,5 e origem "departamento" | regra de tela |
 | C-006 | item de curva A gravado com cobertura 45 e teto 42, sem justificativa → a verificação de saída recusa com a frase "Justifique os itens com cobertura acima do limite (1), a começar por" e o nome do produto; gravada a justificativa, a mesma verificação libera com motivo vazio | regra de negócio |
+| C-006b | item de **curva B** gravado com cobertura 49,2 e teto **49,5**, sem justificativa → a verificação de saída libera ("pode", motivo vazio). Teto truncado para 49 recusaria: é este o teste que pega a perda da fração | regra de negócio |
 | C-007 | a resolução do teto devolve, junto, alvo 35 e tolerância 20 para o item de curva A — o alvo é 35, não 42 | regra de tela |
 | C-008 | comparação de uma parametrização A 35/20, B 45/10, C 60/5 contra A 30/10, B 40/5, C 50/0 → seis linhas, ação "alterou", cada uma com campo, antes e depois; gravadas, o histórico devolve as seis | regra de tela + regra de negócio |
 | C-009 | criação do produto 5004 com descrição e os três pares → sete linhas com valor anterior vazio e ação "criou" | regra de tela + regra de negócio |
-| C-010 | desativar o produto 5001 → o histórico ganha 1 linha "desativou", a listagem deixa de trazê-lo e o item de curva B passa a resolver 49,5; regravar → linha "reativou" e teto 25 de volta | regra de negócio |
+| C-010 | desativar o produto 5001 → o histórico ganha 1 linha "desativou", a listagem filtrada por ativas deixa de trazê-lo (a filtrada por inativas traz, com a situação) e o item de curva B passa a resolver 49,5; regravar a partir da linha inativa lida da própria listagem → ação **derivada** "reativou" (nunca "criou") e teto 25 de volta | regra de negócio |
 | C-011 | a gravação chamada como analista não altera nada (nem parametrização, nem histórico); chamada como gestor altera; a matriz de permissão dá a tela a admin e gestor e nega a analista, diretoria e comercial, inclusive com acesso somente-leitura no caso de gestor (vê, não grava) | regra de negócio + regra de tela |
 | C-012 | as linhas do arquivo exportado para uma parametrização A 35/20, B 45/10, C 60/5 trazem 35; 20; 42; 45; 10; 49,5; 60; 5; 63 | regra de tela |
 | C-013 | alvo 45 com tolerância 10 → "49,5"; alvo 45 com tolerância vazia → traço; alvo vazio → traço | regra de tela |
 | C-014 | o histórico devolve as linhas da mais recente para a mais antiga e, filtrado por uma parametrização, só as dela; a contagem é apurada no próprio banco, nunca por número absoluto | regra de negócio |
-| C-015 | item gravado com teto 42; alterada a parametrização para 30/0, a verificação de saída continua cobrando 42 (o teto gravado) | regra de negócio |
+| C-015 | item de curva B gravado com teto 49,5; alterada a parametrização para 30/0, a verificação de saída continua decidindo pelos 49,5 gravados | regra de negócio |
 | RN-001 | (35, 20) → 42; (45, 10) → 49,5; (60, 5) → 63; (35, 0) → 35; (0, 20) → sem teto (a linha não vale) | regra de tela |
 | RN-002 | com produto 20/0, seção 45/0, departamento 60/0 e fornecedor 90/0 na mesma curva → vale 20; sem a do produto → 45; só a do fornecedor → 90; nenhuma → 35 | regra de tela |
 | RN-003 | curva vazia, curva inválida ("D") e curva ausente resolvem todas pela coluna C | regra de tela |
