@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mesesDoPeriodo, sugestaoDeCompra, unidadesPorCaixa, arredondarPorCaixa,
-  curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens, itemDeLinha,
+  curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens, itemDeLinha, itemDeProdutoBuscado,
 } from '../src/lib/compras.ts';
 
 const linha = (codprod, vendaPeriodo, custo, extra = {}) => ({
@@ -120,6 +120,25 @@ test('C-001/C-004 e RN-009 (012): montarItens junta sugestão, arredondamento, c
   assert.equal(itens[1].qtSugerida, 10, 'giro lento, sem caixa: a sugestão não é arredondada');
   assert.equal(itens[1].curvaAbc, 'C');
   assert.equal(itens[1].coberturaLimite, 63, 'sem linha de SKU, vale a curva C do departamento: 60 + 5 %');
+});
+
+// 003 / D-32 (R-104, integração da onda 4): o produto adicionado por busca herda
+// a parametrização carregada na aba — curva C, a mais tolerante (RN-003) — e só
+// cai no padrão 35 quando não há linha nenhuma.
+test('D-32: itemDeProdutoBuscado herda o teto do departamento (curva C) e só sem parametrização cai no padrão', () => {
+  const curvas = (a, b, c) => ({
+    A: { alvoDias: a[0], toleranciaPct: a[1] },
+    B: { alvoDias: b[0], toleranciaPct: b[1] },
+    C: { alvoDias: c[0], toleranciaPct: c[1] },
+  });
+  const coberturas = [
+    { id: 1, nivel: 'departamento', codigo: '2', descricao: 'NUTRICAO', ativo: true, curvas: curvas([35, 20], [45, 10], [60, 5]) },
+  ];
+  const buscado = { CODPROD: 5009, DESCRICAO: 'NOVO', EMBALAGEM: 'CX 6', UNIDADE: 'UN', CODEPTO: 2, CODSEC: 21, ESTOQUE: 3, CUSTO_ULT_ENTRADA: 9 };
+
+  assert.equal(itemDeProdutoBuscado(buscado, coberturas, 1015).coberturaLimite, 63, 'curva C do departamento 2: 60 + 5 %');
+  assert.equal(itemDeProdutoBuscado(buscado, [], 1015).coberturaLimite, 35, 'sem parametrização vale o padrão');
+  assert.equal(itemDeProdutoBuscado({ ...buscado, CODEPTO: 9 }, coberturas, 1015).coberturaLimite, 35, 'departamento sem linha cai no padrão');
 });
 
 // 008 (RF-022, R-054/R-068): a origem do item é dado da linha, não da tela.
