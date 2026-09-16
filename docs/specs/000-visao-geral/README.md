@@ -465,6 +465,19 @@ Pedidos ao 000 vindos dos plans 008, 009 e 010, aceitos pelo integrador:
 | R-071 | 009: `SGC_RELATORIO.COMPARTILHADO BOOLEAN DEFAULT FALSE` (como os outros booleanos do setup); SF a mais `sgcIndPedidosPorFase` (uma linha por fase); reescrita nova no dialeto `JSON_UNQUOTE(JSON_EXTRACT(col, '$.k'))` → `json_extract(col, '$.k')` (prioridade vive só em `KB_CARD.VALORES_JSON`, R-009). |
 | R-072 | Ids fixados pelos plans: 008 leituras/JS 7801–7807, escritas 7850–7857; 009 leituras 7901–7917, escritas 7950–7952. `CHECK_INPUT` ganha só chaves novas — 008: `codcli`, `pares`, `minhas`, `vendedor`; 009: `fase`, `soVencidos`, `campoAgrupar`, `responsavelId`, `prioridade` (D-17: nenhuma repetida, nenhum valor existente alterado). |
 
+Revisão cruzada da S1 (2026-09-16, Opus): 5 bloqueios (B-1..B-5), 13 correções (C-1..C-13) devolvidos aos agentes de spec; registros aceitos:
+
+| Id | Decisão |
+|---|---|
+| R-073 | R-062 emendada: a 008 **cria três cards próprios** (`CARDS_008`: `montagem` analise/filial 1, `montagemFilial2` analise/filial 2, `vinculado` enviado/filial 1), todos do fornecedor 1042, `DT_ENVIO` vazio, sem `SGC_NF` nem `SGC_BO_ITEM`, em vez de vincular solicitações aos cards de 002/003: as datas do rastreio são relativas a hoje e as dos seeds 003/007 são fixas (D-014); cards próprios preservam as listagens globais de 005/007 (R-045). |
+| R-074 | `backend/lib/fragmentos.mjs` com `fragmento(nome)` é entrega da **base (S2)**: move para lá o `fragmentoDePendencias()` do `add-005` e o `add-005` passa a consumi-lo. Pré-requisito de R-070. |
+| R-075 | R-070 emendada: `backend/sql/situacao-solicitacao.sql` declara no cabeçalho o **contrato de composição** — aliases `S` (`SGC_SOLICITACAO`), `C` (`KB_CARD`, `EXCLUIDO_EM IS NULL`), `SF` (`SGC_FASE` por `BOARD_ID` + `FASE_ID`), `I` (`SGC_PEDIDO_ITEM` por `ID_CARD` + `CODPROD`, `STATUS <> 'removido'`) e os três `LEFT JOIN` obrigatórios; `add-011` e `add-012` usam os mesmos aliases. |
+| R-076 | `sgcSolicitacoesFunil` (009) agrega por **`STATUS` e `SITUACAO`**: a régua devolve `sem_pedido` para `pendente`, `recusada`, `cancelada` e `aprovada` sem pedido, e a aderência de fluxo precisa das duas dimensões. Nenhuma régua nova. |
+| R-077 | R-060 emendada: o extrato custa **2 execuções por clique** (`sgcPedidoCarregar` + `sgcNfListar`, em paralelo, relidas a cada clique porque a capa da tela pode estar `null` ou de outro card). "Sem SF nova" não é "sem execução"; cabe no teto de 300/min. |
+| R-078 | R-060 emendada: exceção declarada ao "nenhuma cor literal" — `extrato-html.ts` usa cores fixas e imprime **sempre claro** (janela `about:blank` sem o CSS do app, saída igual em impressora P&B). Não vale para a tela: botões e `Alert` seguem os tokens. |
+| R-079 | Correção do dialeto (base, S2): em `toSqlite`, a troca `VALUES(col)` → `excluded.col` vale do marcador `ON DUPLICATE KEY UPDATE` até o fim da **instrução**, não até o fim do trecho fora de literal (hoje um `'texto'` dentro da cláusula deixa os `VALUES()` seguintes sem tradução). Teste no `smoke/000-dialeto.mjs`. |
+| R-080 | Primitivos de gráfico e KPI ficam em `frontend/src/components/page.tsx` (arquivo compartilhado) e são entrega da **base (S2)**, conforme a seção do plan 009 que os descreve (`corDeSerie`, `GradeKpi`, `Kpi`, `GradeGraficos`, `PainelGrafico`, `AlternaVisao` e os primitivos do `recharts` reexportados); o `design.md` ganha a seção correspondente (§8.7). |
+
 ### Modelo de dados da onda 3
 
 | Tabela | Conteúdo | Spec |
