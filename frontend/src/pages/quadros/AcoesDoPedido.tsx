@@ -16,9 +16,15 @@ import { instanteIso, marcarItensDaFase, type PedidoCapa } from '@/lib/pedido';
 import { COPIA_COMPRAS } from '@/lib/quadro';
 import type { ChaveFase } from '@/lib/transicoes';
 import type { SessaoPersona } from '@/lib/persona';
-import { Button } from '@/components/page';
+import { Button, Alert } from '@/components/page';
 import DialogoMotivo from '@/pages/quadros/DialogoMotivo';
 import DialogoEnvio, { type DadosDoEnvio } from '@/pages/quadros/DialogoEnvio';
+// spec 010 (R-060/R-077): única feature desta onda que edita este arquivo —
+// os dois botões de extrato, em qualquer fase, com wrapper de execução
+// próprio (D-006: não chama recarregarPedido(), o extrato não muda o pedido).
+import { montarExtrato, linhasCsvExtrato, popupFoiBloqueado } from '@/lib/extrato';
+import { extratoHtml } from '@/pages/quadros/extrato-html';
+import { textoCsv, baixarCsv } from '@/lib/csv';
 
 export interface MapaDeFases {
   chaveDe: (faseId: number) => ChaveFase | null;
@@ -40,6 +46,7 @@ const FINAIS: readonly ChaveFase[] = ['concluido', 'cancelado'];
 export default function AcoesDoPedido({ ctx, sessao, pedido, fases, recarregarPedido }: AcoesDoPedidoProps) {
   const [dialogo, setDialogo] = React.useState<Dialogo>('nenhum');
   const [ocupado, setOcupado] = React.useState(false);
+  const [avisoPopup, setAvisoPopup] = React.useState(false);
   const fechar = () => setDialogo('nenhum');
 
   const chave = fases.chaveDe(ctx.card.faseId);
@@ -127,6 +134,58 @@ export default function AcoesDoPedido({ ctx, sessao, pedido, fases, recarregarPe
     ctx.avisar('success', 'Envio registrado no pedido.');
   }
 
+  /**
+   * Busca os dados de novo, direto do servidor (D-004: a prop `pedido` pode
+   * estar `null` ou desatualizada) — `sgcPedidoCarregar` + `sgcNfListar` em
+   * paralelo, R-077, sempre relidas a cada clique.
+   */
+  async function dadosDoExtrato() {
+    const [capa, nf] = await Promise.all([
+      acao('sgcPedidoCarregar', { cardId: ctx.card.id }),
+      acao('sgcNfListar', { cardId: ctx.card.id }),
+    ]);
+    if (!capa?.ok || !capa?.pedido) throw new Error('Não foi possível carregar os dados do pedido.');
+    return montarExtrato(capa.pedido, capa.itens ?? [], chave as ChaveFase, nf?.nfs ?? []);
+  }
+
+  /** D-006: wrapper próprio — trava o botão, mostra erro, mas NÃO chama `recarregarPedido()`: gerar o extrato não muda o pedido. */
+  async function extratoPdf() {
+    setAvisoPopup(false);
+    // D-005: a janela abre DENTRO do clique, antes do `await` — só assim o
+    // navegador trata `window.open` como ação direta da pessoa.
+    const janela = window.open('', '_blank');
+    if (popupFoiBloqueado(janela) || !janela) {
+      setAvisoPopup(true);
+      return;
+    }
+    janela.document.write('<p style="font-family:sans-serif;padding:2rem;">Gerando o extrato…</p>');
+    setOcupado(true);
+    try {
+      const modelo = await dadosDoExtrato();
+      janela.document.open();
+      janela.document.write(extratoHtml(modelo));
+      janela.document.close();
+    } catch (erro) {
+      janela.close();
+      ctx.avisar('error', erro instanceof Error ? erro.message : 'Não foi possível gerar o extrato.');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function extratoCsv() {
+    setOcupado(true);
+    try {
+      const modelo = await dadosDoExtrato();
+      const { cabecalho, linhas: linhasCsv } = linhasCsvExtrato(modelo);
+      baixarCsv(`${modelo.nomeArquivo}.csv`, textoCsv(cabecalho, linhasCsv));
+    } catch (erro) {
+      ctx.avisar('error', erro instanceof Error ? erro.message : 'Não foi possível gerar o extrato.');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   if (!chave) return null;
 
   const motivoSemPermissao = permissoes.somenteLeitura
@@ -135,6 +194,13 @@ export default function AcoesDoPedido({ ctx, sessao, pedido, fases, recarregarPe
   const naoFinal = !FINAIS.includes(chave);
 
   const acoes: { id: string; rotulo: string; permitido: boolean; onClick: () => void }[] = [];
+  // RF-001/C-017 (010): em QUALQUER fase, para toda persona com `verQuadro` —
+  // inclusive Compras Concluídas e Compras Canceladas, onde hoje mais nenhuma
+  // ação aparece.
+  acoes.push(
+    { id: 'extrato-pdf', rotulo: 'Extrato (PDF)', permitido: permissoes.verQuadro, onClick: extratoPdf },
+    { id: 'extrato-csv', rotulo: 'Extrato (CSV)', permitido: permissoes.verQuadro, onClick: extratoCsv },
+  );
   if (chave === 'tecnica') {
     acoes.push(
       { id: 'aprovar-tecnica', rotulo: 'Aprovar tecnicamente', permitido: permissoes.aprovarTecnica, onClick: () => executar(aprovarTecnica) },
@@ -175,6 +241,12 @@ export default function AcoesDoPedido({ ctx, sessao, pedido, fases, recarregarPe
           {item.rotulo}
         </Button>
       ))}
+
+      {avisoPopup ? (
+        <Alert tone="warn">
+          O navegador bloqueou a janela do extrato. Permita pop-ups para este site e tente novamente.
+        </Alert>
+      ) : null}
 
       <DialogoMotivo
         aberto={dialogo === 'reprovarTecnica'}
