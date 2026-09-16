@@ -1,24 +1,24 @@
-// Seção Simulador da spec 009 (indicadores e relatórios). Ver
+// Seção Simulador da spec 009 (indicadores). Ver
 // docs/specs/009-indicadores-e-relatorios/plan.md §Simulador.
 //
-// STUB DA BASE (S2): as suítes de smoke compartilham UM banco, então um stub
-// não insere nada — quem semeia é o agente da 009 (S3). O que este arquivo vai
-// ter, segundo o plan: SÓ relatórios salvos (R-062). Nenhum card, pedido, NF,
-// agendamento, item de B.O. ou solicitação nasce aqui — os indicadores leem
-// exatamente o que as ondas 1 e 2 (e o seed da 008) semearam, e é isso que
-// torna as asserções interessantes.
+// O seed da 009 está VAZIO de propósito, e por duas razões.
 //
-// Quatro linhas em `SGC_RELATORIO`, exportadas em `RELATORIOS_009` (como a 003
-// faz com `CARDS_003`), para o smoke recortar a galeria por id e nunca por
-// total absoluto (R-045): "Pedidos por fase" (ana, compartilhado), "Valor por
-// fornecedor" (gil, compartilhado), "Meus pedidos em análise" (ana, não
-// compartilhado) e "Relatório antigo" (admin, compartilhado, com `CONFIG_JSON`
-// sem `visao` e com uma chave desconhecida, para `lerConfig` provar a tolerância).
+// 1) R-062: nenhum card, pedido, NF, agendamento, item de B.O. ou solicitação
+//    nasce aqui. Os indicadores desta spec leem exatamente o que as ondas 1 e 2
+//    (e o seed da 008) semearam, e é isso que torna as asserções interessantes
+//    — um seed próprio de pedido tornaria todo número desta feature uma cópia
+//    do que o próprio seed escreveu. Os estados de SLA e de agenda que os
+//    cenários precisam (um pedido ligado a um agendamento, um fornecedor sem
+//    prazo de entrega) são arranjados DENTRO do próprio `teste()` por `UPDATE`
+//    direto e desfeitos no fim — C-10 do plan. A suíte 009 é a última do
+//    smoke.mjs, então nenhuma outra depende do que ela toca.
 //
-// Os estados de SLA e de agenda que os cenários precisam são arranjados DENTRO
-// do próprio teste, por `UPDATE` direto e desfeitos no fim — o seed continua
-// sem pedido novo.
+// 2) O que sobrava eram as quatro linhas de `SGC_RELATORIO` da galeria de
+//    `/relatorios` — ADIADO por decisão do usuário em 2026-09-16. Elas saíram
+//    junto com as SFs de relatório.
+//
+// A função continua existindo (e exportada) porque `simulator/seed.mjs` é
+// arquivo do integrador e já a chama: removê-la daqui quebraria o seed inteiro.
 
-export function seed009(db, cenario) {
-  // Stub: nada a inserir até a spec 009 (S3).
-}
+/** Sem seed próprio: ver o cabeçalho. `seed.mjs` (do integrador) chama assim mesmo. */
+export function seed009() {}

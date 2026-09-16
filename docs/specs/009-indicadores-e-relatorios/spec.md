@@ -322,6 +322,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 ## Fora de escopo
 
+- [ ] **`/relatorios` (relatórios salvos)** — adiado por decisão do usuário em 2026-09-16; os cenários C-018, C-019, C-020, C-021, C-022, C-023, a parte de gravação de C-025 e as regras RN-013 e RN-014 (no que toca à consulta do relatório) ficam registrados para quando voltar. A tabela `SGC_RELATORIO`, as chaves de permissão `verRelatorios`/`salvarRelatorio`, a rota, o item de menu e os ids 7914–7917 e 7950–7952 do mapa continuam de pé nos arquivos compartilhados; o integrador decide na S4 o que tira.
 - [ ] **Planilha do Excel (`.xlsx`)** — a exportação é em texto separado por ponto e vírgula, que o Excel abre; nenhuma biblioteca de planilha entra (decisão do 000).
 - [ ] **Gráfico de pizza, rosca e área polar** — o mesmo dado cabe numa barra ordenada, que ainda mostra o valor.
 - [ ] **Faixas de cor para o percentual de compras sobre vendas** (35 % / 58 % / 100 % do sistema anterior) — os cortes nunca foram decididos como regra de negócio; a tela mostra o percentual e não julga.
