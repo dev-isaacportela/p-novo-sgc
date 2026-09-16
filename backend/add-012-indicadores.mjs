@@ -1,10 +1,12 @@
-// add-012 — Server Functions da spec 009 (indicadores e relatórios): KPIs e
-// blocos de `/analises`, SLA dos pedidos por etapa, funil das solicitações,
-// compras × vendas no WinThor e os relatórios salvos de `/relatorios`. Ver
-// docs/specs/009-indicadores-e-relatorios/{spec,plan,tasks}.md.
+// add-012 — Server Functions da spec 009 (indicadores): KPIs e blocos de
+// `/analises`, SLA dos pedidos por etapa, funil das solicitações e compras ×
+// vendas no WinThor. Ver docs/specs/009-indicadores-e-relatorios/{spec,plan,tasks}.md.
 //
-// Faixa de id local: 79xx (R-051/R-072 do 000) — leituras 7901-7917, escritas
-// 7950-7952. TODAS SQL: esta spec não tem JAVASCRIPT nem cron (D-001 do plan),
+// `/relatorios` (relatórios salvos) foi ADIADO por decisão do usuário em
+// 2026-09-16: as leituras 7914-7917 e as escritas 7950-7952 não existem aqui.
+//
+// Faixa de id local: 79xx (R-051/R-072 do 000) — leituras 7901-7913. TODAS
+// SQL: esta spec não tem JAVASCRIPT nem cron (D-001 do plan),
 // porque não há orquestração, e-mail nem rotina aqui — o paralelismo dos
 // blocos é da tela (R-057), e um JS por aba mataria o RF-002 (a falha de um
 // bloco derrubaria os outros). Por isso toda leitura é chamada DIRETO da tela
@@ -59,13 +61,6 @@ function guarda(personas, quem = ':VAR_USER') {
                                  ELSE 'analista' END) IN (${lista})
   )`;
 }
-
-/** R-061: salvar/editar/excluir relatório é de admin, analista e gestor. */
-const PERSONAS_RELATORIO = ['admin', 'analista', 'gestor'];
-/** `<dono>` de RN-013: quem criou, ou o administrador. */
-const DONO_RELATORIO = `(R.CRIADO_POR = :VAR_USER OR ${guarda(['admin'])})`;
-/** O mesmo, sem alias (o UPDATE/DELETE não qualificam a tabela). */
-const DONO_SEM_ALIAS = `(CRIADO_POR = :VAR_USER OR ${guarda(['admin'])})`;
 
 /**
  * RN-015/D-012 — recorte por acesso restrito, aplicado no SERVIDOR em toda
@@ -531,111 +526,6 @@ const SQL_WINT_COMPRAS_VS_VENDAS = `SELECT * FROM (
   ORDER BY VL_VENDIDO DESC, QT_VENDIDA DESC, P.CODFORNEC
 ) WHERE ROWNUM <= {{limite}}`;
 
-/* ─────────────── leituras — relatórios salvos (7914-7917) ─────────────── */
-
-const SQL_RELATORIOS_LISTAR = `SELECT R.ID, R.TITULO, COALESCE(R.DESCRICAO, '') AS DESCRICAO,
-  COALESCE(R.CONFIG_JSON, '') AS CONFIG_JSON,
-  CASE WHEN COALESCE(R.COMPARTILHADO, 0) = 1 THEN 1 ELSE 0 END AS COMPARTILHADO,
-  COALESCE(R.CRIADO_POR, 0) AS CRIADO_POR, COALESCE(IU.NOME, '') AS CRIADO_POR_NOME,
-  COALESCE(R.CRIADO_EM, '') AS CRIADO_EM, COALESCE(R.ATUALIZADO_EM, '') AS ATUALIZADO_EM,
-  CASE WHEN ${DONO_RELATORIO} THEN 1 ELSE 0 END AS PODE_EDITAR
-FROM SGC_RELATORIO R
-LEFT JOIN INT_USER IU ON IU.ID = R.CRIADO_POR
-WHERE (COALESCE(R.COMPARTILHADO, 0) = 1 OR R.CRIADO_POR = :VAR_USER)
-  AND ('{{busca}}' = '' OR R.TITULO LIKE CONCAT('%', '{{busca}}', '%')
-       OR COALESCE(R.DESCRICAO, '') LIKE CONCAT('%', '{{busca}}', '%'))
-ORDER BY R.ID DESC
-LIMIT {{limite}}`;
-
-// R-009/D-011: a prioridade é campo do QUADRO e vive em KB_CARD.VALORES_JSON —
-// o SGC não tem coluna de prioridade. `JSON_UNQUOTE(JSON_EXTRACT(…))` é a forma
-// MySQL, reescrita para `json_extract` no dialeto do simulador (R-071).
-const PRIORIDADE = `COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(C.VALORES_JSON, '$.prioridade')), ''), 'normal')`;
-const RESPONSAVEL = `COALESCE((SELECT COALESCE(IU2.NOME, '') FROM KB_CARD_RESPONSAVEL R2
-                       JOIN INT_USER IU2 ON IU2.ID = R2.USUARIO_ID
-                      WHERE R2.CARD_ID = C.ID ORDER BY R2.ORDEM, R2.ID LIMIT 1), '')`;
-const DIAS_NA_FASE = `GREATEST(0, DATEDIFF(${HOJE}, ${dia('COALESCE(C.FASE_DESDE, C.CRIADO_EM)')}))`;
-
-// A consulta é FIXA (R-059/RNF-005): a tela manda valores, nunca pedaço de
-// consulta. D-014/B-5: aqui — e SÓ aqui — o período é filtro DESLIGÁVEL, e por
-// isso entra em dois ramos independentes, nunca como `BETWEEN` seco (que com o
-// par vazio devolveria zero linha em silêncio).
-const DE_RELATORIO = `FROM SGC_PEDIDO P
-JOIN KB_CARD C       ON C.ID = P.ID_CARD AND C.EXCLUIDO_EM IS NULL
-LEFT JOIN KB_FASE KF ON KF.ID = C.FASE_ID
-LEFT JOIN SGC_FASE SF ON SF.FASE_ID = C.FASE_ID AND SF.BOARD_ID = C.BOARD_ID
-WHERE ('{{fase}}' = '' OR COALESCE(SF.CHAVE, '') = '{{fase}}')
-  AND ({{codfornec}} = 0 OR P.CODFORNEC = {{codfornec}})
-  AND ('{{codfilial}}' = '' OR P.CODFILIAL = '{{codfilial}}')
-  AND ({{responsavelId}} = 0 OR EXISTS (SELECT 1 FROM KB_CARD_RESPONSAVEL R3
-                                        WHERE R3.CARD_ID = C.ID AND R3.USUARIO_ID = {{responsavelId}}))
-  AND ('{{prioridade}}' = '' OR ${PRIORIDADE} = '{{prioridade}}')
-  AND ('{{dataInicio}}' = '' OR ${dia('P.CRIADO_EM')} >= '{{dataInicio}}')
-  AND ('{{dataFim}}'    = '' OR ${dia('P.CRIADO_EM')} <= '{{dataFim}}')
-  ${RECORTE_RESTRITO}`;
-
-const SQL_RELATORIO_PEDIDOS = `SELECT P.ID_CARD, C.TITULO, COALESCE(SF.CHAVE, '') AS FASE_CHAVE,
-  COALESCE(KF.NOME, '') AS FASE_NOME, COALESCE(P.CODFORNEC, 0) AS CODFORNEC,
-  COALESCE(P.FORNECEDOR, '') AS FORNECEDOR, COALESCE(P.CODFILIAL, '') AS CODFILIAL,
-  COALESCE(P.FILIAL, '') AS FILIAL, ${RESPONSAVEL} AS RESPONSAVEL, ${PRIORIDADE} AS PRIORIDADE,
-  COALESCE(P.VL_TOTAL, 0) AS VL_TOTAL, COALESCE(P.NUMPED_WINTHOR, '') AS NUMPED_WINTHOR,
-  COALESCE(P.DT_ENVIO, '') AS DT_ENVIO, COALESCE(P.PERC_FATURADO_VALOR, 0) AS PERC_FATURADO,
-  COALESCE(P.CRIADO_EM, '') AS CRIADO_EM,
-  COALESCE((SELECT IU3.NOME FROM INT_USER IU3 WHERE IU3.ID = C.CRIADO_POR), '') AS CRIADO_POR_NOME,
-  ${DIAS_NA_FASE} AS DIAS_NA_FASE
-${DE_RELATORIO}
-ORDER BY P.ID_CARD DESC
-LIMIT {{limite}} OFFSET {{offset}}`;
-
-const SQL_RELATORIO_PEDIDOS_TOTAL = `SELECT COUNT(*) AS TOTAL
-${DE_RELATORIO}`;
-
-// R-059: o agrupamento é um CASE sobre um domínio FECHADO, nunca concatenação.
-// A derivada existe porque a chave é uma EXPRESSÃO: agrupar pelo alias deixaria
-// o `GROUP BY` à mercê de como cada banco resolve alias de `CASE` com
-// subconsulta dentro (no SQLite ele não agrupa), e repetir o `CASE` no `GROUP
-// BY` seria a mesma régua escrita duas vezes.
-const SQL_RELATORIO_AGREGAR = `SELECT T.CHAVE, COUNT(*) AS QTD,
-  COALESCE(SUM(T.VL_TOTAL), 0) AS VL_TOTAL,
-  ROUND(AVG(T.DIAS_NA_FASE), 1) AS DIAS_NA_FASE_MEDIA
-FROM (
-  SELECT
-    CASE '{{campoAgrupar}}'
-      WHEN 'fornecedor'  THEN COALESCE(NULLIF(P.FORNECEDOR, ''), 'Sem fornecedor')
-      WHEN 'filial'      THEN COALESCE(NULLIF(P.FILIAL, ''), 'Sem filial')
-      WHEN 'responsavel' THEN COALESCE(NULLIF(${RESPONSAVEL}, ''), 'Sem responsável')
-      WHEN 'prioridade'  THEN ${PRIORIDADE}
-      ELSE COALESCE(NULLIF(KF.NOME, ''), 'Sem fase')
-    END AS CHAVE,
-    COALESCE(P.VL_TOTAL, 0) AS VL_TOTAL,
-    ${DIAS_NA_FASE} AS DIAS_NA_FASE
-  ${DE_RELATORIO}
-) T
-GROUP BY T.CHAVE
-ORDER BY QTD DESC, T.CHAVE
-LIMIT {{limite}}`;
-
-/* ─────────────── escritas SQL (uma instrução por SF, :VAR_USER) ─────────────── */
-
-// RN-013: título vazio é recusado na própria instrução. Escrita guardada
-// recusada devolve 0 linhas e NENHUM erro (D-03 da onda 1) — a tela relê a
-// galeria depois de cada uma em vez de confiar no silêncio.
-const SQL_RELATORIO_INSERIR = `INSERT INTO SGC_RELATORIO
-  (TITULO, DESCRICAO, CONFIG_JSON, COMPARTILHADO, CRIADO_POR, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
-SELECT '{{titulo}}', '{{descricao}}', '{{configJson}}', {{compartilhado}},
-       :VAR_USER, '{{agora}}', :VAR_USER, '{{agora}}'
-FROM DUAL
-WHERE TRIM('{{titulo}}') <> '' AND ${guarda(PERSONAS_RELATORIO)}`;
-
-const SQL_RELATORIO_ATUALIZAR = `UPDATE SGC_RELATORIO SET TITULO = '{{titulo}}', DESCRICAO = '{{descricao}}',
-  CONFIG_JSON = '{{configJson}}', COMPARTILHADO = {{compartilhado}},
-  ATUALIZADO_POR = :VAR_USER, ATUALIZADO_EM = '{{agora}}'
-WHERE ID = {{id}} AND TRIM('{{titulo}}') <> ''
-  AND ${DONO_SEM_ALIAS} AND ${guarda(PERSONAS_RELATORIO)}`;
-
-const SQL_RELATORIO_EXCLUIR = `DELETE FROM SGC_RELATORIO
-WHERE ID = {{id}} AND ${DONO_SEM_ALIAS} AND ${guarda(PERSONAS_RELATORIO)}`;
-
 /* ─────────────── a lista publicada ─────────────── */
 
 export const definitions = [
@@ -652,13 +542,6 @@ export const definitions = [
   { name: 'sgcSlaPedidoFases', type: 'SQL', code: SQL_SLA_PEDIDO_FASES, description: 'RF-014/C-015 - a linha do tempo do pedido: uma linha por passagem, com entrada, saida e dias na fase (a ultima contada ate hoje). Params: idCard int, hoje string' },
   { name: 'sgcSolicitacoesFunil', type: 'SQL', code: SQL_SOLICITACOES_FUNIL, description: 'RF-015/C-016 - funil das solicitacoes por PAR status x situacao (R-076), com avaliadas e tempo medio. Params: codfilial string, dataInicio, dataFim (obrigatorios)' },
   { name: 'sgcSolicitacoesPorVendedor', type: 'SQL', code: SQL_SOLICITACOES_POR_VENDEDOR, description: 'RF-016/C-017 - ranking por vendedor solicitante, por CONTAGEM (sem valor em reais). Params: codfilial string, dataInicio, dataFim (obrigatorios), limite int' },
-  { name: 'sgcRelatoriosListar', type: 'SQL', code: SQL_RELATORIOS_LISTAR, description: 'RF-017/C-018/C-020 - galeria: os compartilhados mais os proprios, com PODE_EDITAR resolvido no servidor (RN-013). Params: busca string, limite int' },
-  { name: 'sgcRelatorioPedidos', type: 'SQL', code: SQL_RELATORIO_PEDIDOS, description: 'RF-019/C-021 - a consulta FIXA do relatorio, paginada, com os seis filtros desligaveis. Params: fase, codfornec, codfilial, responsavelId, prioridade, dataInicio, dataFim, hoje, limite, offset' },
-  { name: 'sgcRelatorioPedidosTotal', type: 'SQL', code: SQL_RELATORIO_PEDIDOS_TOTAL, description: 'RF-019/RNF-002 - total da consulta do relatorio, com os mesmos filtros. Params: os mesmos' },
-  { name: 'sgcRelatorioAgregar', type: 'SQL', code: SQL_RELATORIO_AGREGAR, description: 'RF-020/C-022 - a mesma consulta agregada por fase, fornecedor, filial, responsavel ou prioridade. Params: os mesmos + campoAgrupar string' },
-  { name: 'sgcEscRelatorioInserir', type: 'SQL', code: SQL_RELATORIO_INSERIR, description: 'RF-017/RN-013 - salva um relatorio novo (titulo vazio e recusado). Params: titulo, descricao, configJson, compartilhado int, agora string' },
-  { name: 'sgcEscRelatorioAtualizar', type: 'SQL', code: SQL_RELATORIO_ATUALIZAR, description: 'RF-017/RF-018/RN-013 - altera o relatorio proprio (ou qualquer um, como admin). Params: id int, titulo, descricao, configJson, compartilhado int, agora string' },
-  { name: 'sgcEscRelatorioExcluir', type: 'SQL', code: SQL_RELATORIO_EXCLUIR, description: 'RF-018/RN-013 - exclui o relatorio proprio (ou qualquer um, como admin). Params: id int' },
 ];
 
 function isEntrypoint() {
@@ -696,6 +579,6 @@ if (isEntrypoint()) {
     console.log(`${id ? 'atualizada' : 'criada'}: ${definicao.name}`);
   }
 
-  console.log(`Pronto: ${definitions.length} server functions da spec 009 (indicadores e relatórios).`);
+  console.log(`Pronto: ${definitions.length} server functions da spec 009 (indicadores).`);
   console.log('Rode `node sync-server-function-map.mjs` para levar os ids ao frontend.');
 }

@@ -1,10 +1,14 @@
-// Cenários C-001..C-027 e regras RN-001..RN-016 da spec 009 (indicadores e
-// relatórios). Ver docs/specs/009-indicadores-e-relatorios/plan.md §Testes.
+// Cenários e regras da spec 009 (indicadores). Ver
+// docs/specs/009-indicadores-e-relatorios/plan.md §Testes.
+//
+// Os cenários de `/relatorios` (C-018..C-023, C-025 na parte de gravação e
+// RN-013) NÃO estão aqui: a tela de relatórios salvos foi adiada por decisão do
+// usuário em 2026-09-16. O que sobrou de C-025 é o recorte RESTRICTED (RN-015).
 //
 // Tudo roda sobre as MESMAS definitions que o add-012-indicadores.mjs publica,
 // no banco compartilhado do smoke — R-045: NENHUMA asserção literal sobre total
 // global. Todo número esperado é contado no próprio teste, sobre as mesmas
-// tabelas, ou recortado por `RELATORIOS_009`.
+// tabelas.
 //
 // Esta é a ÚLTIMA suíte do smoke.mjs de propósito: os cenários de SLA e de
 // agenda arranjam o estado que precisam por `UPDATE`/`INSERT` direto e o
@@ -12,7 +16,6 @@
 // cria pedido nenhum, R-062), e nenhuma outra suíte depende do que ela toca.
 
 import { assert, CENARIO } from './base.mjs';
-import { RELATORIOS_009 } from '../seed/009-indicadores.mjs';
 import { diasUteisEntre } from '../../lib/dias-uteis.mjs';
 import { somarDiasUteis } from '../../../frontend/src/lib/dias-uteis.ts';
 import { classificarEtapa, notaDoPedido, marcosDaLinha } from '../../../frontend/src/lib/sla.ts';
@@ -540,169 +543,7 @@ export async function suite(ctx) {
     }
   });
 
-  /* ─────────── T-089 — C-018, C-019, C-020 e RN-013 (relatórios salvos) ─────────── */
-
-  const meus = new Set(Object.values(RELATORIOS_009));
-  const galeria = async (usuarioId) => linhas(await chamar('sgcRelatoriosListar', { busca: '', limite: 100 }, usuarioId));
-
-  await teste('C-018: salvar devolve o relatório na galeria com título, autor e o CONFIG_JSON idêntico ao enviado', async () => {
-    const config = JSON.stringify({ filtros: { fase: 'envio' }, colunas: ['numero'], agrupamento: 'filial', visao: 'tabela' });
-    const antes = conta('SELECT COUNT(*) AS N FROM SGC_RELATORIO');
-    await chamar('sgcEscRelatorioInserir', {
-      titulo: 'Relatório do smoke 009', descricao: 'criado pelo teste', configJson: config,
-      compartilhado: 1, agora: `${HOJE}T12:00:00`,
-    }, U.ana);
-    assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_RELATORIO'), antes + 1);
-
-    const novo = sql1("SELECT * FROM SGC_RELATORIO WHERE TITULO = 'Relatório do smoke 009'");
-    try {
-      const lista = await galeria(U.ana);
-      const linha = lista.find((l) => Number(l.ID) === Number(novo.ID));
-      assert.ok(linha, 'o relatório novo aparece na galeria de quem criou');
-      assert.equal(linha.CONFIG_JSON, config);
-      assert.equal(Number(linha.CRIADO_POR), U.ana);
-      assert.equal(linha.CRIADO_POR_NOME, 'Ana Analista');
-      assert.equal(Number(linha.PODE_EDITAR), 1);
-    } finally {
-      db.prepare('DELETE FROM SGC_RELATORIO WHERE ID = ?').run(novo.ID);
-    }
-  });
-
-  await teste('RN-013: título vazio não grava', async () => {
-    const antes = conta('SELECT COUNT(*) AS N FROM SGC_RELATORIO');
-    await chamar('sgcEscRelatorioInserir', {
-      titulo: '   ', descricao: '', configJson: '{}', compartilhado: 0, agora: `${HOJE}T12:00:00`,
-    }, U.ana);
-    assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_RELATORIO'), antes);
-  });
-
-  await teste('C-019 / RN-013: alterar o relatório alheio não muda nada; o dono e o admin mudam, e PODE_EDITAR diz quem pode', async () => {
-    const id = RELATORIOS_009.valorPorFornecedor; // dono: gil
-    const original = sql1('SELECT TITULO, ATUALIZADO_EM FROM SGC_RELATORIO WHERE ID = ?', id);
-    const alterar = (usuarioId, titulo) => chamar('sgcEscRelatorioAtualizar', {
-      id, titulo, descricao: '', configJson: '{}', compartilhado: 1, agora: `${HOJE}T13:00:00`,
-    }, usuarioId);
-    try {
-      await alterar(U.ana, 'Sequestrado pela Ana');
-      const depois = sql1('SELECT TITULO, ATUALIZADO_EM FROM SGC_RELATORIO WHERE ID = ?', id);
-      assert.equal(depois.TITULO, original.TITULO, 'escrita recusada devolve 0 linhas e não altera nada (D-03)');
-      assert.equal(depois.ATUALIZADO_EM, original.ATUALIZADO_EM);
-
-      await alterar(U.gil, 'Valor por fornecedor (dono)');
-      assert.equal(sql1('SELECT TITULO FROM SGC_RELATORIO WHERE ID = ?', id).TITULO, 'Valor por fornecedor (dono)');
-
-      await alterar(U.admin, 'Valor por fornecedor (admin)');
-      assert.equal(sql1('SELECT TITULO FROM SGC_RELATORIO WHERE ID = ?', id).TITULO, 'Valor por fornecedor (admin)');
-
-      const comoGil = await galeria(U.gil);
-      const comoAna = await galeria(U.ana);
-      assert.equal(Number(comoGil.find((l) => Number(l.ID) === id).PODE_EDITAR), 1);
-      assert.equal(Number(comoAna.find((l) => Number(l.ID) === id).PODE_EDITAR), 0);
-    } finally {
-      db.prepare('UPDATE SGC_RELATORIO SET TITULO = ?, ATUALIZADO_EM = ? WHERE ID = ?')
-        .run(original.TITULO, original.ATUALIZADO_EM, id);
-    }
-  });
-
-  await teste('C-020: o relatório não compartilhado só aparece para o autor; os compartilhados, para os dois', async () => {
-    const soMeus = (lista) => lista.filter((l) => meus.has(Number(l.ID))).map((l) => Number(l.ID)).sort((a, b) => a - b);
-    const comoAna = soMeus(await galeria(U.ana));
-    const comoGil = soMeus(await galeria(U.gil));
-    assert.ok(comoAna.includes(RELATORIOS_009.meusEmAnalise), 'a autora vê o próprio privado');
-    assert.ok(!comoGil.includes(RELATORIOS_009.meusEmAnalise), 'o colega não vê o privado');
-    for (const id of [RELATORIOS_009.porFase, RELATORIOS_009.valorPorFornecedor, RELATORIOS_009.antigo]) {
-      assert.ok(comoAna.includes(id) && comoGil.includes(id), 'compartilhado aparece para os dois');
-    }
-  });
-
-  await teste('RN-013: excluir o próprio grava e some da listagem; o alheio não sai', async () => {
-    const config = JSON.stringify({ colunas: ['numero'] });
-    await chamar('sgcEscRelatorioInserir', {
-      titulo: 'Para excluir 009', descricao: '', configJson: config, compartilhado: 1, agora: `${HOJE}T12:00:00`,
-    }, U.ana);
-    const alvo = Number(sql1("SELECT ID FROM SGC_RELATORIO WHERE TITULO = 'Para excluir 009'").ID);
-    try {
-      await chamar('sgcEscRelatorioExcluir', { id: alvo }, U.gil);
-      assert.ok(sql1('SELECT ID FROM SGC_RELATORIO WHERE ID = ?', alvo), 'o colega não exclui');
-      await chamar('sgcEscRelatorioExcluir', { id: alvo }, U.ana);
-      assert.equal(sql1('SELECT ID FROM SGC_RELATORIO WHERE ID = ?', alvo), undefined);
-      const lista = await galeria(U.ana);
-      assert.ok(!lista.some((l) => Number(l.ID) === alvo));
-    } finally {
-      db.prepare('DELETE FROM SGC_RELATORIO WHERE ID = ?').run(alvo);
-    }
-  });
-
-  /* ─────────── T-090 — C-021, C-022 e RN-014 (a consulta do relatório) ─────────── */
-
-  const FILTROS_DESLIGADOS = {
-    fase: '', codfornec: 0, codfilial: '', responsavelId: 0, prioridade: '',
-    dataInicio: '', dataFim: '', hoje: HOJE, campoAgrupar: 'fase', limite: 20, offset: 0,
-  };
-
-  await teste('RN-014: com TODOS os filtros desligados — inclusive o par de datas em branco — o total é o de todos os pedidos vivos, contado no próprio teste', async () => {
-    const vivos = conta(`SELECT COUNT(*) AS N FROM SGC_PEDIDO P
-      JOIN KB_CARD C ON C.ID = P.ID_CARD AND C.EXCLUIDO_EM IS NULL`);
-    const total = uma(await chamar('sgcRelatorioPedidosTotal', FILTROS_DESLIGADOS));
-    assert.equal(Number(total.TOTAL), vivos, 'filtro desligado NÃO reduz e NÃO zera (B-5)');
-
-    const comPeriodoAmplo = uma(await chamar('sgcRelatorioPedidosTotal',
-      { ...FILTROS_DESLIGADOS, dataInicio: '2000-01-01', dataFim: HOJE }));
-    assert.equal(Number(comPeriodoAmplo.TOTAL), vivos, 'um período que cobre tudo dá o mesmo total do par vazio');
-  });
-
-  await teste('C-021: a consulta paginada devolve a primeira página com o total ao lado, e a segunda não repete nenhuma linha', async () => {
-    const primeira = linhas(await chamar('sgcRelatorioPedidos', FILTROS_DESLIGADOS));
-    const total = Number(uma(await chamar('sgcRelatorioPedidosTotal', FILTROS_DESLIGADOS)).TOTAL);
-    assert.equal(primeira.length, Math.min(20, total));
-    assert.ok(total > 20, 'o seed tem mais de uma página — senão a paginação não estaria sendo testada');
-
-    const segunda = linhas(await chamar('sgcRelatorioPedidos', { ...FILTROS_DESLIGADOS, offset: 20 }));
-    const naPrimeira = new Set(primeira.map((l) => Number(l.ID_CARD)));
-    assert.ok(segunda.length > 0);
-    assert.ok(segunda.every((l) => !naPrimeira.has(Number(l.ID_CARD))), 'a 2ª página não repete nem pula');
-  });
-
-  await teste('C-021: cada filtro isolado reduz o resultado, e nenhum deles zera sozinho', async () => {
-    const total = Number(uma(await chamar('sgcRelatorioPedidosTotal', FILTROS_DESLIGADOS)).TOTAL);
-    const respondeu = async (extra) => Number(uma(await chamar('sgcRelatorioPedidosTotal', { ...FILTROS_DESLIGADOS, ...extra })).TOTAL);
-
-    const porFase = await respondeu({ fase: 'analise' });
-    const porFornecedor = await respondeu({ codfornec: 1042 });
-    const porFilial = await respondeu({ codfilial: '2' });
-    const porResponsavel = await respondeu({ responsavelId: U.ana });
-    const ultimoDia = String(sql1('SELECT MAX(SUBSTR(CRIADO_EM, 1, 10)) AS D FROM SGC_PEDIDO').D);
-    const porPeriodo = await respondeu({ dataInicio: ultimoDia });
-
-    for (const [nome, valor] of Object.entries({ porFase, porFornecedor, porFilial, porResponsavel, porPeriodo })) {
-      assert.ok(valor > 0 && valor < total, `${nome} reduz sem zerar (${valor} de ${total})`);
-    }
-    assert.equal(porFase, conta(`SELECT COUNT(*) AS N ${DE_VIVOS} WHERE COALESCE(SF.CHAVE, '') = 'analise'`));
-    assert.equal(porFornecedor, conta(`SELECT COUNT(*) AS N ${DE_VIVOS} WHERE P.CODFORNEC = 1042`));
-
-    // D-011: a prioridade só existe no campo do quadro (KB_CARD.VALORES_JSON),
-    // lida por JSON_EXTRACT — o seed nasce todo em `normal`, então o arranjo
-    // marca UM card como `alta` e o desfaz.
-    const altaAntes = await respondeu({ prioridade: 'alta' });
-    await arranjando('KB_CARD', 'ID', CARD_ABERTO, { VALORES_JSON: '{"prioridade":"alta"}' }, async () => {
-      assert.equal(await respondeu({ prioridade: 'alta' }), altaAntes + 1, 'o card marcado como alta entra no filtro');
-      const somaPrioridades = (await Promise.all(
-        ['normal', 'alta', 'urgente'].map((prioridade) => respondeu({ prioridade })),
-      )).reduce((acc, n) => acc + n, 0);
-      assert.equal(somaPrioridades, total, 'card sem prioridade no JSON conta como normal — as três somam o total');
-    });
-  });
-
-  await teste('C-022: sgcRelatorioAgregar por fase e por fornecedor — uma linha por chave presente e SUM(QTD) igual ao total da consulta', async () => {
-    const total = Number(uma(await chamar('sgcRelatorioPedidosTotal', FILTROS_DESLIGADOS)).TOTAL);
-    for (const campoAgrupar of ['fase', 'fornecedor', 'filial', 'responsavel', 'prioridade']) {
-      const rows = linhas(await chamar('sgcRelatorioAgregar', { ...FILTROS_DESLIGADOS, campoAgrupar, limite: 50 }));
-      assert.ok(rows.length > 0, `agrupar por ${campoAgrupar} devolve linhas`);
-      assert.equal(new Set(rows.map((l) => l.CHAVE)).size, rows.length, `uma linha por ${campoAgrupar}`);
-      assert.equal(rows.reduce((acc, l) => acc + Number(l.QTD), 0), total);
-      assert.ok(rows.every((l) => Number(l.VL_TOTAL) >= 0 && Number(l.DIAS_NA_FASE_MEDIA) >= 0));
-    }
-  });
+  /* ─────────── T-090 — RN-014 (o limite dos blocos top-N) ─────────── */
 
   await teste('RN-014 / D-008: os blocos top-N respeitam o limite declarado', async () => {
     for (const nome of ['sgcIndAgendaAtrasos', 'sgcIndProdutosBo', 'sgcIndPerfilFornecedor', 'sgcSolicitacoesPorVendedor']) {
@@ -711,17 +552,7 @@ export async function suite(ctx) {
     }
   });
 
-  /* ─────────── T-091 — C-025 (servidor), C-026 e RN-015 ─────────── */
-
-  await teste('C-025: gravar relatório como diretoria e como comercial é recusado, sem gravar nada', async () => {
-    const antes = conta('SELECT COUNT(*) AS N FROM SGC_RELATORIO');
-    for (const usuarioId of [U.dora, U.leo]) {
-      await chamar('sgcEscRelatorioInserir', {
-        titulo: `Proibido ${usuarioId}`, descricao: '', configJson: '{}', compartilhado: 0, agora: `${HOJE}T12:00:00`,
-      }, usuarioId);
-    }
-    assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_RELATORIO'), antes);
-  });
+  /* ─────────── T-091 — C-026 e RN-015 ─────────── */
 
   await teste('RN-015 / C-025: o acesso restrito conta SÓ os pedidos que criou — o mesmo usuário como MEMBER conta todos', async () => {
     const meusCards = escolher(`${VIVA} AND C.CRIADO_POR <> ${U.gil}`, 2);
