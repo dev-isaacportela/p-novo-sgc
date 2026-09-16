@@ -283,7 +283,8 @@ export default function AbaItens(ctx: ExtensaoContexto) {
                     <Td>
                       {item.qtPedida <= 0 || item.qtVendaTotal <= 0 ? <Dash /> : (
                         <Status tone={pendente ? 'attention' : excedeu ? 'off' : 'live'}>
-                          {`${Math.round(item.coberturaDias)} d / ${item.coberturaLimite} d`}
+                          {/* O teto da curva tem fração (49,5): `quantidade` é o mesmo formatador das outras células. */}
+                          {`${Math.round(item.coberturaDias)} d / ${quantidade(item.coberturaLimite)} d`}
                           {pendente ? ' — justifique' : ''}
                         </Status>
                       )}

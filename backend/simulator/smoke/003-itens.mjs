@@ -342,23 +342,30 @@ export async function suite(ctx) {
     assert.equal(paraCancelado.MOTIVO, '');
   });
 
-  await teste('C-020: o gestor grava limite de cobertura e o analista nao; sgcCoberturaListar devolve o limite resolvido', async () => {
-    const entrada = { nivel: 'secao', codigo: '21', descricao: 'SUPLEMENTOS ORAIS', limiteDias: 45, atualizadoEm: '2026-09-15T09:40:00' };
+  await teste('C-020: o gestor grava a cobertura por curva e o analista nao; sgcCoberturaListar devolve os tres pares alvo/tolerancia', async () => {
+    const entrada = {
+      nivel: 'secao', codigo: '21', descricao: 'SUPLEMENTOS ORAIS',
+      alvoADias: 35, toleranciaAPct: 20, alvoBDias: 45, toleranciaBPct: 10,
+      alvoCDias: 60, toleranciaCPct: 5, atualizadoEm: '2026-09-15T09:40:00',
+    };
     await chamar('sgcEscCoberturaGravar', entrada, U.ana);
     const depoisDaAna = db.prepare("SELECT COUNT(*) AS N FROM SGC_COBERTURA WHERE NIVEL = 'secao' AND CODIGO = '21'").get();
-    assert.equal(Number(depoisDaAna.N), 0, 'analista nao mantem limite de cobertura');
+    assert.equal(Number(depoisDaAna.N), 0, 'analista nao mantem cobertura');
 
     await chamar('sgcEscCoberturaGravar', entrada, U.gil);
-    const lista = await linhas(ctx, 'sgcCoberturaListar', { nivel: '', limite: 200, offset: 0 }, U.gil);
+    const lista = await linhas(ctx, 'sgcCoberturaListar', { nivel: '', situacao: '', limite: 200, offset: 0 }, U.gil);
     const secao = lista.find((r) => r.NIVEL === 'secao' && String(r.CODIGO) === '21');
-    assert.ok(secao, 'o limite gravado pelo gestor deveria aparecer na listagem');
-    assert.equal(Number(secao.LIMITE_DIAS), 45);
+    assert.ok(secao, 'a cobertura gravada pelo gestor deveria aparecer na listagem');
+    assert.equal(Number(secao.ALVO_B_DIAS), 45);
+    assert.equal(Number(secao.TOLERANCIA_B_PCT), 10);
     const sku = lista.find((r) => r.NIVEL === 'sku' && String(r.CODIGO) === '5001');
-    assert.equal(Number(sku.LIMITE_DIAS), 20);
+    assert.equal(Number(sku.ALVO_A_DIAS), 20);
 
     await chamar('sgcEscCoberturaExcluir', { id: Number(secao.ID), atualizadoEm: '2026-09-15T09:50:00' }, U.gil);
-    const depoisDaExclusao = await linhas(ctx, 'sgcCoberturaListar', { nivel: 'secao', limite: 200, offset: 0 }, U.gil);
-    assert.equal(depoisDaExclusao.length, 0, 'exclusao e desativacao: o limite sai da resolucao');
+    // Sem o `WHERE ATIVO = 1` fixo (R-109), `situacao: ''` traria a desativada
+    // de volta: a listagem que prova a exclusao pede explicitamente as ativas.
+    const depoisDaExclusao = await linhas(ctx, 'sgcCoberturaListar', { nivel: 'secao', situacao: 'ativa', limite: 200, offset: 0 }, U.gil);
+    assert.equal(depoisDaExclusao.length, 0, 'exclusao e desativacao: a cobertura sai da resolucao');
   });
 
   /* ── A1/A2 — a guarda das escritas internas (revisao adversarial) ────── */

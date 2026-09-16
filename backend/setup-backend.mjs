@@ -117,6 +117,11 @@ const DDL_002 = [
 ];
 
 // spec 003 — itens do pedido, alertas de análise e limites de cobertura.
+//
+// COBERTURA_LIMITE é DECIMAL(15,2), não INT (spec 012, R-101): o teto da curva
+// B (45 dias + 10 % de tolerância) é 49,5, e um INT o truncaria para 49 — a
+// trava de saída passaria a barrar meio dia antes. É o mesmo tipo de
+// COBERTURA_DIAS, com quem ele é comparado.
 const DDL_003 = [
   `CREATE TABLE IF NOT EXISTS SGC_PEDIDO_ITEM (
     ID INT AUTO_INCREMENT PRIMARY KEY,
@@ -139,7 +144,7 @@ const DDL_003 = [
     TIPO_PRECO VARCHAR(10) DEFAULT 'padrao',
     CURVA_ABC VARCHAR(1),
     COBERTURA_DIAS DECIMAL(15,2),
-    COBERTURA_LIMITE INT,
+    COBERTURA_LIMITE DECIMAL(15,2),
     COBERTURA_JUSTIFICATIVA VARCHAR(500),
     OBSERVACAO VARCHAR(500),
     STATUS VARCHAR(20) DEFAULT 'montagem',
@@ -168,13 +173,23 @@ const DDL_003 = [
     INDEX IX_SGC_ALERTA_CARD (ID_CARD, LIDO)
   )`,
 
-  // Sem linha aplicavel, o limite padrao e 35 dias (AN-07) — resolvido na regra pura.
+  // Tres pares alvo/tolerancia, um por curva ABC (spec 012, R-089): o alvo e
+  // quantos dias a compra mira, a tolerancia e a folga que passa sem
+  // justificativa. Teto = alvo x (1 + tolerancia / 100), resolvido na regra
+  // pura (lib/cobertura.ts). Alvo 0 significa que a linha NAO vale para
+  // aquela curva: a resolucao cai para o nivel seguinte (D-006), nunca para
+  // um teto 0. Sem linha aplicavel, alvo 35 dias e tolerancia 0 (AN-07).
   `CREATE TABLE IF NOT EXISTS SGC_COBERTURA (
     ID INT AUTO_INCREMENT PRIMARY KEY,
     NIVEL VARCHAR(20),
     CODIGO VARCHAR(20),
     DESCRICAO VARCHAR(200),
-    LIMITE_DIAS INT NOT NULL,
+    ALVO_A_DIAS INT NOT NULL DEFAULT 0,
+    TOLERANCIA_A_PCT DECIMAL(5,2) NOT NULL DEFAULT 0,
+    ALVO_B_DIAS INT NOT NULL DEFAULT 0,
+    TOLERANCIA_B_PCT DECIMAL(5,2) NOT NULL DEFAULT 0,
+    ALVO_C_DIAS INT NOT NULL DEFAULT 0,
+    TOLERANCIA_C_PCT DECIMAL(5,2) NOT NULL DEFAULT 0,
     ATIVO BOOLEAN DEFAULT TRUE,
     CRIADO_EM VARCHAR(19),
     ATUALIZADO_POR INT,

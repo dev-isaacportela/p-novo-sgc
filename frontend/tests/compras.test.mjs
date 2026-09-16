@@ -94,22 +94,30 @@ test('RN-008: três itens (10 × 2,50; 4 × 10,00; 0 × 8,00) totalizam 65,00', 
   assert.equal(totalDoPedido([]), 0);
 });
 
-test('C-001/C-004: montarItens junta sugestão, arredondamento, curva e limite de cobertura numa passada só', () => {
+test('C-001/C-004 e RN-009 (012): montarItens junta sugestão, arredondamento, curva e o teto DA CURVA do item numa passada só', () => {
   const linhas = [
     linha(5001, 18, 10, { ESTOQUE: 5, TRANSITO: 2, EMBALAGEM: 'CX 12' }),
     linha(5002, 6, 10, { EMBALAGEM: 'FRASCO 100 ML' }),
   ];
+  // A parametrização de referência do seed (R-089): departamento 2 = A 35/20 %,
+  // B 45/10 %, C 60/5 %; sku 5001 = A 20/0, B 25/0, C 30/0.
+  const curvas = (a, b, c) => ({
+    A: { alvoDias: a[0], toleranciaPct: a[1] },
+    B: { alvoDias: b[0], toleranciaPct: b[1] },
+    C: { alvoDias: c[0], toleranciaPct: c[1] },
+  });
   const coberturas = [
-    { id: 1, nivel: 'departamento', codigo: '2', descricao: 'NUTRICAO', limiteDias: 60 },
-    { id: 2, nivel: 'sku', codigo: '5001', descricao: 'CREME', limiteDias: 20 },
+    { id: 1, nivel: 'departamento', codigo: '2', descricao: 'NUTRICAO', ativo: true, curvas: curvas([35, 20], [45, 10], [60, 5]) },
+    { id: 2, nivel: 'sku', codigo: '5001', descricao: 'CREME', ativo: true, curvas: curvas([20, 0], [25, 0], [30, 0]) },
   ];
   const itens = montarItens(linhas, coberturas, new Map([[5001, 12]]), { inicio: '2026-08-01', fim: '2026-09-14' }, 1015);
 
   assert.equal(itens.length, 2);
   assert.equal(itens[0].qtSugerida, 24, 'sugestão 21 arredondada para 2 caixas de 12');
-  assert.equal(itens[0].coberturaLimite, 20, 'o limite do SKU vence o do departamento');
-  assert.equal(itens[0].qtPedida, 0, 'abrir a análise não decide quantidade nenhuma (D-014)');
   assert.equal(itens[0].curvaAbc, 'A');
+  assert.equal(itens[0].coberturaLimite, 20, 'curva A do SKU (20 + 0 %) vence o departamento');
+  assert.equal(itens[0].qtPedida, 0, 'abrir a análise não decide quantidade nenhuma (D-014)');
   assert.equal(itens[1].qtSugerida, 10, 'giro lento, sem caixa: a sugestão não é arredondada');
-  assert.equal(itens[1].coberturaLimite, 60, 'sem limite de SKU, vale o do departamento');
+  assert.equal(itens[1].curvaAbc, 'C');
+  assert.equal(itens[1].coberturaLimite, 63, 'sem linha de SKU, vale a curva C do departamento: 60 + 5 %');
 });

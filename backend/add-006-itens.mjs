@@ -196,9 +196,21 @@ const CODE_UNIDADES_POR_CAIXA = JSON.stringify({
 
 /* ─────────────── leituras — banco do projeto ─────────────── */
 
-const SQL_COBERTURA_LISTAR = `SELECT ID, NIVEL, CODIGO, DESCRICAO, LIMITE_DIAS, ATUALIZADO_POR, ATUALIZADO_EM
+// Spec 012 (R-109): devolve os tres pares alvo/tolerancia e o ATIVO, e o
+// `WHERE ATIVO = 1` fixo virou o filtro {{situacao}} ('' = todas, 'ativa',
+// 'inativa'). Sem linha inativa em maos, a tela de coberturas nao tem `antes`
+// para comparar e a acao `reativou` seria inalcancavel (RF-009/C-010). A aba
+// Itens da 003 continua chamando sem `situacao` e nao muda de resultado: a
+// regua pura descarta a linha inativa na resolucao (RN-002).
+const SQL_COBERTURA_LISTAR = `SELECT ID, NIVEL, CODIGO, DESCRICAO,
+       ALVO_A_DIAS, TOLERANCIA_A_PCT,
+       ALVO_B_DIAS, TOLERANCIA_B_PCT,
+       ALVO_C_DIAS, TOLERANCIA_C_PCT,
+       ATIVO, ATUALIZADO_POR, ATUALIZADO_EM
 FROM SGC_COBERTURA
-WHERE ATIVO = 1 AND ('{{nivel}}' = '' OR NIVEL = '{{nivel}}')
+WHERE ('{{nivel}}' = '' OR NIVEL = '{{nivel}}')
+  AND ('{{situacao}}' = '' OR ('{{situacao}}' = 'ativa' AND ATIVO = 1)
+                           OR ('{{situacao}}' = 'inativa' AND ATIVO = 0))
 ORDER BY CASE NIVEL WHEN 'sku' THEN 1 WHEN 'secao' THEN 2 WHEN 'departamento' THEN 3 ELSE 4 END, CODIGO
 LIMIT {{limite}} OFFSET {{offset}}`;
 
@@ -351,13 +363,21 @@ WHERE ID_CARD = {{idCard}} AND CODPROD = {{codprod}}
   },
   {
     name: 'sgcEscCoberturaGravar',
-    resumo: 'RF-027 - limite de cobertura por nível (cadastro e edição); regravar reativa o que foi desativado. Params: nivel string, codigo string, descricao string, limiteDias int, atualizadoEm string',
-    code: `INSERT INTO SGC_COBERTURA (NIVEL, CODIGO, DESCRICAO, LIMITE_DIAS, ATIVO, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
-SELECT '{{nivel}}', '{{codigo}}', '{{descricao}}', {{limiteDias}}, 1, '{{atualizadoEm}}', :VAR_USER, '{{atualizadoEm}}'
+    resumo: 'RF-027/RF-001 (012) - cobertura por nível: alvo em dias e tolerância em % para cada curva ABC (cadastro e edição); regravar reativa o que foi desativado. Params: nivel string, codigo string, descricao string, alvoADias int, toleranciaAPct número, alvoBDias int, toleranciaBPct número, alvoCDias int, toleranciaCPct número, atualizadoEm string',
+    code: `INSERT INTO SGC_COBERTURA (NIVEL, CODIGO, DESCRICAO,
+  ALVO_A_DIAS, TOLERANCIA_A_PCT, ALVO_B_DIAS, TOLERANCIA_B_PCT, ALVO_C_DIAS, TOLERANCIA_C_PCT,
+  ATIVO, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
+SELECT '{{nivel}}', '{{codigo}}', '{{descricao}}',
+  {{alvoADias}}, {{toleranciaAPct}}, {{alvoBDias}}, {{toleranciaBPct}}, {{alvoCDias}}, {{toleranciaCPct}},
+  1, '{{atualizadoEm}}', :VAR_USER, '{{atualizadoEm}}'
 FROM DUAL
 WHERE ${guarda(COBERTURA)}
 ON DUPLICATE KEY UPDATE
-  DESCRICAO = VALUES(DESCRICAO), LIMITE_DIAS = VALUES(LIMITE_DIAS), ATIVO = 1,
+  DESCRICAO = VALUES(DESCRICAO),
+  ALVO_A_DIAS = VALUES(ALVO_A_DIAS), TOLERANCIA_A_PCT = VALUES(TOLERANCIA_A_PCT),
+  ALVO_B_DIAS = VALUES(ALVO_B_DIAS), TOLERANCIA_B_PCT = VALUES(TOLERANCIA_B_PCT),
+  ALVO_C_DIAS = VALUES(ALVO_C_DIAS), TOLERANCIA_C_PCT = VALUES(TOLERANCIA_C_PCT),
+  ATIVO = 1,
   ATUALIZADO_POR = VALUES(ATUALIZADO_POR), ATUALIZADO_EM = VALUES(ATUALIZADO_EM)`,
   },
   {
@@ -501,7 +521,9 @@ const tuplas = itens.map(function (item) {
     numero(item.qtVendaTotal), numero(item.qtVendaLicitacao), numero(item.qtEstoque), numero(item.qtTransito),
     numero(item.qtSugerida), numero(item.qtPedida), numero(item.precoCusto),
     "'" + tipoPreco + "'", "'" + curva + "'",
-    numero(item.coberturaDias), inteiro(item.coberturaLimite),
+    // R-108: numero(), nao inteiro() — inteiro() e Math.trunc e engoliria o
+    // teto 49,5 da curva B mesmo com a coluna DECIMAL(15,2).
+    numero(item.coberturaDias), numero(item.coberturaLimite),
     "'" + texto(item.coberturaJustificativa, 500) + "'", "'" + texto(item.observacao, 500) + "'",
     "'montagem'", "'" + quando + "'", quem.id, "'" + quando + "'",
   ];
@@ -630,7 +652,7 @@ const LEITURAS = [
   { name: 'sgcWintLotesAVencer', code: SQL_LOTES_A_VENCER, resumo: 'RF-014/RN-009 - lotes com saldo e validade dentro do teto de dias, em qualquer filial. Params: codprods lista, codfilial string, diasValidade int' },
   { name: 'sgcWintExcessoOutrasFiliais', code: SQL_EXCESSO_OUTRAS_FILIAIS, resumo: 'RF-015/RN-010 - produto com dias de estoque acima do teto numa filial diferente da do pedido. Params: codprods lista, codfilial string, diasEstoque int' },
   { name: 'sgcWintPrazoPagamento', code: SQL_PRAZO_PAGAMENTO, resumo: 'RF-019 - condição praticada pelo fornecedor nos 5 pedidos de compra mais recentes do ERP (D-004). Params: codfornec int, codfilial string' },
-  { name: 'sgcCoberturaListar', code: SQL_COBERTURA_LISTAR, resumo: 'RF-009/RF-027 - limites de cobertura ativos, do mais específico para o mais geral. Params: nivel string, limite int, offset int' },
+  { name: 'sgcCoberturaListar', code: SQL_COBERTURA_LISTAR, resumo: 'RF-009/RF-027 - coberturas parametrizadas com alvo e tolerância por curva ABC, do mais específico para o mais geral. Params: nivel string, situacao string (vazio = todas, ativa, inativa), limite int, offset int' },
   { name: 'sgcAnaliseSaidaVerificar', code: SQL_SAIDA_VERIFICAR, resumo: 'RF-022/RN-012 - as cinco exigências de saída da Análise, na ordem da regra; devolve PODE e o MOTIVO da primeira que falha. Params: cardId int' },
 ];
 
