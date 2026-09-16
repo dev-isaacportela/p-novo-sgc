@@ -82,6 +82,14 @@ export interface Permissoes {
   verAnalises: boolean;
   verRelatorios: boolean;
   salvarRelatorio: boolean;
+  // Onda 4 (R-095 do 000): compras inteligentes (011). `verComprasInteligentes`
+  // não zera com READ_ONLY (como `verCoberturas`); `operar*` e `parametrizar*`
+  // zeram. RESTRICTED opera: o card que ele cria é dele. O comercial não vê.
+  // As coberturas por curva (012) continuam em `verCoberturas` — nenhuma chave
+  // nova por lá.
+  verComprasInteligentes: boolean;
+  operarComprasInteligentes: boolean;
+  parametrizarCompras: boolean;
 }
 
 /** Quem faz o quê, por persona (a tabela do plan.md § Regras puras). */
@@ -94,6 +102,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNfsAtraso: true, verBo: true, operarBo: true,
     verSolicitacoes: true, criarSolicitacao: true, avaliarSolicitacao: true,
     verAnalises: true, verRelatorios: true, salvarRelatorio: true,
+    verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: true,
   },
   analista: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: false, aprovarDiretoria: false,
@@ -103,6 +112,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNfsAtraso: true, verBo: true, operarBo: true,
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: true,
     verAnalises: true, verRelatorios: true, salvarRelatorio: true,
+    verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: false,
   },
   gestor: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: false,
@@ -112,6 +122,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNfsAtraso: true, verBo: true, operarBo: true,
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: true,
     verAnalises: true, verRelatorios: true, salvarRelatorio: true,
+    verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: true,
   },
   diretoria: {
     // CA-01 + P-07: a diretoria cancela, mas só na fase dela — quem cobra a
@@ -124,6 +135,8 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNfsAtraso: true, verBo: true, operarBo: false,
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: false,
     verAnalises: true, verRelatorios: true, salvarRelatorio: false,
+    // A diretoria vê a tela, mas não opera o carrinho nem parametriza (R-095).
+    verComprasInteligentes: true, operarComprasInteligentes: false, parametrizarCompras: false,
   },
   comercial: {
     // D-017: a única persona sem acesso ao quadro — fora do menu, fora da rota
@@ -136,6 +149,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNfsAtraso: false, verBo: true, operarBo: false,
     verSolicitacoes: true, criarSolicitacao: true, avaliarSolicitacao: false,
     verAnalises: false, verRelatorios: false, salvarRelatorio: false,
+    verComprasInteligentes: false, operarComprasInteligentes: false, parametrizarCompras: false,
   },
 };
 
@@ -175,6 +189,10 @@ export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes 
     verAnalises: base.verAnalises,
     verRelatorios: base.verRelatorios,
     salvarRelatorio: operar(base.salvarRelatorio),
+    // Onda 4: mesma divisão — ver* atravessa READ_ONLY, o resto zera.
+    verComprasInteligentes: base.verComprasInteligentes,
+    operarComprasInteligentes: operar(base.operarComprasInteligentes),
+    parametrizarCompras: operar(base.parametrizarCompras),
     somenteProprios: acesso === 'RESTRICTED',
     somenteLeitura,
   };
@@ -189,6 +207,8 @@ export interface ItemDeMenu {
 const MENU: readonly (ItemDeMenu & { exige: keyof Permissoes })[] = [
   { grupo: 'Compras', to: '/quadro', label: 'Quadro de compras', exige: 'verQuadro' },
   { grupo: 'Compras', to: '/pedidos/novo', label: 'Novo pedido', exige: 'criarPedido' },
+  // Onda 4 (R-095): logo depois de "Novo pedido"; o comercial continua fora.
+  { grupo: 'Compras', to: '/compras-inteligentes', label: 'Compras inteligentes', exige: 'verComprasInteligentes' },
   // Onda 3 (R-056/R-063): com este item o comercial passa a ter DOIS de menu
   // — Solicitações e Produtos em B.O.
   { grupo: 'Compras', to: '/solicitacoes', label: 'Solicitações', exige: 'verSolicitacoes' },
