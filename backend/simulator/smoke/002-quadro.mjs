@@ -56,7 +56,9 @@ export async function suite(ctx) {
       valoresJson: JSON.stringify({ fornecedor: CAPA.fornecedor, filial: CAPA.filial, prioridade: 'normal' }),
     }, usuarioId);
     assert.equal(criado.ok, true, criado.error);
-    await chamar('sgcEscPedidoCriar', { cardId: criado.id, ...CAPA, agora: AGORA }, usuarioId);
+    // `origem` entrou na lista fechada de sgcEscPedidoCriar (R-098/R-106):
+    // parametro ausente vira string vazia no runtime e o WHERE recusaria tudo.
+    await chamar('sgcEscPedidoCriar', { cardId: criado.id, ...CAPA, origem: 'manual', agora: AGORA }, usuarioId);
     // Integração com a 003: o bloco PENDENCIAS real do gancho exige, para sair
     // da Análise, prazo padrão e acordado (iguais), ao menos um item com
     // quantidade e nenhum alerta por ler. O pedido "montado" desta suíte nasce

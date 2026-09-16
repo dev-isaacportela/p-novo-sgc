@@ -267,6 +267,30 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
   def('LCASE', 1, (value) => (value == null ? null : String(value).toLowerCase()));
   def('UCASE', 1, (value) => (value == null ? null : String(value).toUpperCase()));
 
+  // POWER/SQRT dependem da mesma flag de compilacao do FLOOR
+  // (SQLITE_ENABLE_MATH_FUNCTIONS); registradas para o peso por recencia
+  // (0,85^dias) e para a volatilidade SQRT(AVG(x²) - AVG(x)²) da spec 011
+  // (R-096/R-100). STDDEV_POP e INSTR ficaram FORA de proposito (R-100).
+  def('POWER', 2, (base, expoente) => (
+    base == null || expoente == null ? null : Math.pow(Number(base), Number(expoente))
+  ));
+  def('SQRT', 1, (valor) => (valor == null ? null : Math.sqrt(Number(valor))));
+
+  // ADD_MONTHS(data, n) do Oracle: mesmo dia, n meses depois (n negativo
+  // volta). Dia que nao existe no mes de destino cai no ultimo dia do mes,
+  // como no Oracle (31/03 -1 mes = 28/02).
+  def('ADD_MONTHS', 2, (valor, meses) => {
+    const texto = valor == null ? '' : String(valor).trim().slice(0, 10);
+    const partes = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!partes) return null;
+    const ano = Number(partes[1]);
+    const mes = Number(partes[2]) - 1 + Number(meses);
+    const dia = Number(partes[3]);
+    const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+    const data = new Date(Date.UTC(ano, mes, Math.min(dia, ultimo)));
+    return data.toISOString().slice(0, 10);
+  });
+
   /* ── Oracle / WinThor (spec 003) ── */
 
   def('NVL', 2, (a, b) => (a == null ? b : a));
@@ -444,16 +468,97 @@ function reescreverJsonUnquote(sql) {
 }
 
 /**
+ * Gerador de calendario do Oracle (spec 011, R-096/R-100/R-113). A consulta de
+ * ressuprimento precisa de UMA linha por dia do periodo, inclusive nos dias sem
+ * venda — e o denominador do consumo ponderado. No Oracle:
+ *
+ *   SELECT TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') + (LEVEL - 1) AS DIA,
+ *          GREATEST({{diasPeriodo}}, 1) - LEVEL AS DIAS_ATE_FIM
+ *   FROM DUAL
+ *   CONNECT BY LEVEL <= GREATEST({{diasPeriodo}}, 1)
+ *
+ * No SQLite, uma CTE recursiva com a MESMA coluna LEVEL (1..N). `CALENDARIO`, e
+ * nao `NIVEL`: o gerador de R-064 ja usa `NIVEL(LVL)` e as duas reescritas
+ * convivem no mesmo arquivo. So esta forma (`CONNECT BY LEVEL <= …`) e
+ * traduzida — a de R-064 (`CONNECT BY <expr> IS NOT NULL`) continua com o dono
+ * dela, e qualquer outro `CONNECT BY` segue sem traducao: melhor quebrar alto
+ * do que devolver linha plausivel e errada.
+ *
+ * Roda sobre o SQL INTEIRO, fora do `mapOutsideStrings` (a projecao tem
+ * literais de aspas) e antes de `FROM DUAL` ser apagado la embaixo.
+ */
+function reescreverCalendarioOracle(sql) {
+  // O `((?:(?!\bSELECT\b)[\s\S])*?)` impede o casamento de comecar num SELECT
+  // anterior e atravessar outras CTEs ate chegar ao FROM DUAL do gerador — o
+  // que apagaria meia consulta.
+  const ABERTURA = /\bSELECT\b((?:(?!\bSELECT\b)[\s\S])*?)\bFROM\s+DUAL\s+CONNECT\s+BY\s+LEVEL\s*<=\s*/gi;
+  let saida = '';
+  let cursor = 0;
+  let m;
+  while ((m = ABERTURA.exec(sql))) {
+    if (m.index < cursor) continue;
+    const inicioLimite = ABERTURA.lastIndex;
+    const fimLimite = fimDoBlocoForaDeAspas(sql, inicioLimite);
+    const projecao = comDataDoNivel(m[1].trim().replace(/,\s*$/, ''));
+    const limite = sql.slice(inicioLimite, fimLimite).trim();
+    saida += sql.slice(cursor, m.index);
+    saida += 'WITH RECURSIVE CALENDARIO(LEVEL) AS (\n'
+      + `  SELECT 1 UNION ALL SELECT LEVEL + 1 FROM CALENDARIO WHERE LEVEL + 1 <= (${limite})\n`
+      + `)\nSELECT ${projecao} FROM CALENDARIO`;
+    cursor = fimLimite;
+    ABERTURA.lastIndex = cursor;
+  }
+  return saida + sql.slice(cursor);
+}
+
+/**
+ * Do inicio da expressao ate o `)` que fecha o bloco que a contem, ignorando
+ * aspas. Sem parentese envolvente (o gerador solto, fora de uma CTE), o fim da
+ * INSTRUCAO e o fim do bloco — devolver -1 e desistir deixaria o `CONNECT BY`
+ * cru chegar ao SQLite, ja sem o `FROM DUAL` que e apagado depois. Nao existe
+ * caminho de desistencia.
+ */
+function fimDoBlocoForaDeAspas(texto, inicio) {
+  let profundidade = 0;
+  let aspa = null;
+  for (let i = inicio; i < texto.length; i += 1) {
+    const c = texto[i];
+    if (aspa) {
+      if (c === aspa && texto[i + 1] === aspa) { i += 1; continue; }
+      if (c === aspa) aspa = null;
+      continue;
+    }
+    if (c === "'" || c === '"') { aspa = c; continue; }
+    if (c === '(') profundidade += 1;
+    else if (c === ')') {
+      if (profundidade === 0) return i;
+      profundidade -= 1;
+    } else if (c === ';' && profundidade === 0) return i;
+  }
+  return texto.length;
+}
+
+/** `TO_DATE(x, f) + (LEVEL - 1)` -> `date(TO_DATE(x, f), '+' || (LEVEL - 1) || ' days')`. */
+function comDataDoNivel(projecao) {
+  return projecao.replace(
+    /\bTO_DATE\s*\(\s*('(?:[^']|'')*')\s*,\s*('(?:[^']|'')*')\s*\)\s*\+\s*\(\s*LEVEL\s*-\s*1\s*\)/gi,
+    (_, valor, formato) => `date(TO_DATE(${valor}, ${formato}), '+' || (LEVEL - 1) || ' days')`,
+  );
+}
+
+/**
  * Reescreve o que nao cabe em funcao escalar. Trabalha so fora de literais de
- * string, para nunca alterar um dado que por acaso pareca SQL — as tres
+ * string, para nunca alterar um dado que por acaso pareca SQL — as quatro
  * reescritas acima sao a excecao: elas precisam do SQL inteiro e cuidam dos
  * literais por conta propria.
  */
 export function toSqlite(sql) {
   let limiteRownum = null;
 
-  const preparado = reescreverGeradorConnectBy(
-    reescreverUpsert(reescreverJsonUnquote(reescreverDateAddComExpressao(String(sql)))),
+  const preparado = reescreverCalendarioOracle(
+    reescreverGeradorConnectBy(
+      reescreverUpsert(reescreverJsonUnquote(reescreverDateAddComExpressao(String(sql)))),
+    ),
   );
 
   const resultado = mapOutsideStrings(preparado, (chunk) => {

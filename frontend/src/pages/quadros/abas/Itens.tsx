@@ -20,7 +20,7 @@ import type { ItemPedido, LinhaAnalise } from '@/lib/compras';
 import {
   coberturaDoItem, itemDeProdutoBuscado, mesesDoPeriodo, montarItens, totalDoPedido,
 } from '@/lib/compras';
-import { acimaDoLimite, coberturaDeLinha } from '@/lib/cobertura';
+import { acimaDoLimite, coberturaDeLinha, type Cobertura } from '@/lib/cobertura';
 import { usePedido } from './pedido-contexto';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 import BuscarProduto from './BuscarProduto';
@@ -44,6 +44,9 @@ export default function AbaItens(ctx: ExtensaoContexto) {
   const [salvoEm, setSalvoEm] = React.useState('');
   const [ocupado, setOcupado] = React.useState(false);
   const [buscando, setBuscando] = React.useState(false);
+  // D-32 (R-104): a parametrização lida na remontagem serve também ao produto
+  // adicionado por busca — antes ele caía sempre no padrão 35.
+  const [parametrizacao, setParametrizacao] = React.useState<Cobertura[]>([]);
   const [justificando, setJustificando] = React.useState<{ codprod: number; texto: string } | null>(null);
 
   // Recarregou o pedido: a lista da tela volta a ser a do servidor e as
@@ -97,9 +100,11 @@ export default function AbaItens(ctx: ExtensaoContexto) {
         }
       } catch { /* embalagem resolve */ }
 
+      const parametros = coberturas.map(coberturaDeLinha);
+      setParametrizacao(parametros);
       const montados = montarItens(
         analise as unknown as LinhaAnalise[],
-        coberturas.map(coberturaDeLinha),
+        parametros,
         porCaixa,
         { inicio: capa.periodoInicio, fim: capa.periodoFim },
         capa.codfornec,
@@ -292,7 +297,8 @@ export default function AbaItens(ctx: ExtensaoContexto) {
                     <Td>
                       {item.qtPedida <= 0 || item.qtVendaTotal <= 0 ? <Dash /> : (
                         <Status tone={pendente ? 'attention' : excedeu ? 'off' : 'live'}>
-                          {`${Math.round(item.coberturaDias)} d / ${item.coberturaLimite} d`}
+                          {/* O teto da curva tem fração (49,5): `quantidade` é o mesmo formatador das outras células. */}
+                          {`${Math.round(item.coberturaDias)} d / ${quantidade(item.coberturaLimite)} d`}
                           {pendente ? ' — justifique' : ''}
                         </Status>
                       )}
@@ -344,7 +350,7 @@ export default function AbaItens(ctx: ExtensaoContexto) {
           jaNaLista={itens.map((item) => item.codprod)}
           onFechar={() => setBuscando(false)}
           onEscolher={(linha) => {
-            const novo = itemDeProdutoBuscado(linha, [], capa.codfornec);
+            const novo = itemDeProdutoBuscado(linha, parametrizacao, capa.codfornec);
             setItens((atual) => [...atual, novo]);
             setAlterados((atual) => [...atual, novo.codprod]);
             setBuscando(false);

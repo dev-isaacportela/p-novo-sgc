@@ -133,8 +133,14 @@ export function arredondarPorCaixa(sugestao: number, unidades: number): number {
 /**
  * RN-003: valor = venda do período × custo da última entrada; acumulado até
  * 80 % é A, até 95 % é B, o resto é C. Sem valor total, todos são C.
+ *
+ * R-110: a régua é uma só (R-088) e a 011 a reusa sobre as medidas dela — daí
+ * o `Pick<>`: só as três colunas que a curva lê, para a 011 não ter de montar
+ * um `LinhaAnalise` inteiro nem duplicar o tipo da 003.
  */
-export function curvaAbc(linhas: LinhaAnalise[]): Map<number, CurvaAbc> {
+export function curvaAbc(
+  linhas: Pick<LinhaAnalise, 'CODPROD' | 'VENDA_PERIODO' | 'CUSTO_ULT_ENTRADA'>[],
+): Map<number, CurvaAbc> {
   const itens = (linhas ?? []).map((linha) => ({
     codprod: Number(linha?.CODPROD ?? 0),
     valor: Math.max(0, numero(linha?.VENDA_PERIODO)) * Math.max(0, numero(linha?.CUSTO_ULT_ENTRADA)),
@@ -222,7 +228,7 @@ export function montarItens(
       tipoPreco: 'padrao',
       curvaAbc: curvas.get(codprod) ?? 'C',
       coberturaDias: coberturaFuturaDias(numero(linha.VENDA_PERIODO), numero(linha.ESTOQUE), numero(linha.TRANSITO), 0, meses) ?? 0,
-      coberturaLimite: limiteDeCobertura(coberturas, alvo).limiteDias,
+      coberturaLimite: limiteDeCobertura(coberturas, alvo, curvas.get(codprod) ?? 'C').limiteDias,
       coberturaJustificativa: '',
       observacao: '',
       status: 'montagem',
@@ -287,9 +293,10 @@ export function itemDeProdutoBuscado(
     tipoPreco: 'padrao',
     curvaAbc: 'C',
     coberturaDias: 0,
+    // O item nasce sem curva classificada: vale a coluna C, a mais tolerante (RN-003).
     coberturaLimite: limiteDeCobertura(coberturas, {
       codprod, codsec: numero(linha.CODSEC), codepto: numero(linha.CODEPTO), codfornec,
-    }).limiteDias,
+    }, 'C').limiteDias,
     coberturaJustificativa: '',
     observacao: '',
     status: 'montagem',

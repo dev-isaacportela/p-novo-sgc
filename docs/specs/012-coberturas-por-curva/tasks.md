@@ -21,77 +21,77 @@
 
 ## Backend
 
-- [ ] **T-001** — `SGC_COBERTURA`: tirar `LIMITE_DIAS` e pôr os três pares (`ALVO_A_DIAS INT NOT NULL DEFAULT 0`, `TOLERANCIA_A_PCT DECIMAL(5,2) NOT NULL DEFAULT 0`, e o mesmo para B e C), mantendo `UNIQUE KEY UK_SGC_COBERTURA (NIVEL, CODIGO)` → `backend/setup-backend.mjs:172-183` (texto pronto no `plan.md`; **não** é da base, R-113)
-- [ ] **T-002** — *(da base, S2)* `SGC_COBERTURA_LOG` nova — conferir que chegou em `develop` antes de T-006; texto em *Pedidos à base*
-- [ ] **T-003** — `SGC_PEDIDO_ITEM.COBERTURA_LIMITE`: `INT` → `DECIMAL(15,2)` (o teto 49,5 da curva B não cabe em `INT`) → `backend/setup-backend.mjs:142` (mesmo commit de T-001)
-- [ ] **T-004** — `SQL_COBERTURA_LISTAR` devolve os seis campos e `ATIVO` no lugar de `LIMITE_DIAS`, troca o `WHERE ATIVO = 1` fixo pelo filtro `{{situacao}}` (`''` = todas, `ativa`, `inativa`) e mantém a ordenação (R-109) → `backend/add-006-itens.mjs:199-203`
-- [ ] **T-005** — `sgcEscCoberturaGravar` recebe e grava os seis (`{{alvoADias}}`, `{{toleranciaAPct}}`, …), com `ATIVO = 1` no `ON DUPLICATE KEY UPDATE` (regravar reativa) e `FROM DUAL` → `backend/add-006-itens.mjs:352-362`. `sgcEscCoberturaExcluir` (`:363-368`) **não muda**
-- [ ] **T-005b** — `inteiro(item.coberturaLimite)` → `numero(item.coberturaLimite)` na tupla do lote de `sgcItensGravar` (R-108): `inteiro()` é `Math.trunc` e engoliria o 49,5 da curva B mesmo com a coluna decimal → `backend/add-006-itens.mjs:504`
-- [ ] **T-006** — `backend/add-014-coberturas-abc.mjs` novo: `sgcCoberturaLogListar` (8201) e `sgcEscCoberturaLogInserir` (8250), com a guarda `guarda(['admin','gestor'])` copiada literal da 002 (R-013); exporta `definitions`; `isEntrypoint()` no padrão do `add-006` (sem `jdbcId` — nenhuma SF desta spec fala com o Oracle)
-- [ ] **T-007** `[P]` — bloco 82xx em `SERVER_FUNCTION_NAMES` e `SERVER_FUNCTIONS` → `frontend/src/lib/server-functions.ts` (os ids 7307/7358/7359 não mudam)
+- [x] **T-001** — `SGC_COBERTURA`: tirar `LIMITE_DIAS` e pôr os três pares (`ALVO_A_DIAS INT NOT NULL DEFAULT 0`, `TOLERANCIA_A_PCT DECIMAL(5,2) NOT NULL DEFAULT 0`, e o mesmo para B e C), mantendo `UNIQUE KEY UK_SGC_COBERTURA (NIVEL, CODIGO)` → `backend/setup-backend.mjs:172-183` (texto pronto no `plan.md`; **não** é da base, R-113)
+- [x] **T-002** — *(da base, S2)* `SGC_COBERTURA_LOG` nova — conferido em `setup-backend.mjs` (chegou na base da onda 4, `de33618`); conferir que chegou em `develop` antes de T-006; texto em *Pedidos à base*
+- [x] **T-003** — `SGC_PEDIDO_ITEM.COBERTURA_LIMITE`: `INT` → `DECIMAL(15,2)` (o teto 49,5 da curva B não cabe em `INT`) → `backend/setup-backend.mjs:142` (mesmo commit de T-001)
+- [x] **T-004** — `SQL_COBERTURA_LISTAR` devolve os seis campos e `ATIVO` no lugar de `LIMITE_DIAS`, troca o `WHERE ATIVO = 1` fixo pelo filtro `{{situacao}}` (`''` = todas, `ativa`, `inativa`) e mantém a ordenação (R-109) → `backend/add-006-itens.mjs:199-203`
+- [x] **T-005** — `sgcEscCoberturaGravar` recebe e grava os seis (`{{alvoADias}}`, `{{toleranciaAPct}}`, …), com `ATIVO = 1` no `ON DUPLICATE KEY UPDATE` (regravar reativa) e `FROM DUAL` → `backend/add-006-itens.mjs:352-362`. `sgcEscCoberturaExcluir` (`:363-368`) **não muda**
+- [x] **T-005b** — `inteiro(item.coberturaLimite)` → `numero(item.coberturaLimite)` na tupla do lote de `sgcItensGravar` (R-108): `inteiro()` é `Math.trunc` e engoliria o 49,5 da curva B mesmo com a coluna decimal → `backend/add-006-itens.mjs:504`
+- [x] **T-006** — `backend/add-014-coberturas-abc.mjs` novo: `sgcCoberturaLogListar` (8201) e `sgcEscCoberturaLogInserir` (8250), com a guarda `guarda(['admin','gestor'])` copiada literal da 002 (R-013); exporta `definitions`; `isEntrypoint()` no padrão do `add-006` (sem `jdbcId` — nenhuma SF desta spec fala com o Oracle)
+- [x] **T-007** `[P]` — bloco 82xx em `SERVER_FUNCTION_NAMES` e `SERVER_FUNCTIONS` → `frontend/src/lib/server-functions.ts` (os ids 7307/7358/7359 não mudam)
 
 ## Simulador e seed
 
-- [ ] **T-010** — as duas linhas de `SGC_COBERTURA` com os três pares: `departamento 2` = A 35/20, B 45/10, C 60/5; `sku 5001` = A 20/0, B 25/0, C 30/0 → `backend/simulator/seed/003-itens.mjs:210-214` (nenhum produto, card ou item novo; **nenhuma linha de `secao`/`21`**, que o C-020 da 003 cria e apaga; os `coberturaLimite` dos itens do seed continuam 35)
-- [ ] **T-011** — conferir que `npm run sim:check` continua verde depois de T-004/T-005 (o `sim:check` pula escrita; o que ele exercita é a `sgcCoberturaListar` nova, com `nivel: ''` e `situacao: ''`)
+- [x] **T-010** — as duas linhas de `SGC_COBERTURA` com os três pares: `departamento 2` = A 35/20, B 45/10, C 60/5; `sku 5001` = A 20/0, B 25/0, C 30/0 → `backend/simulator/seed/003-itens.mjs:210-214` (nenhum produto, card ou item novo; **nenhuma linha de `secao`/`21`**, que o C-020 da 003 cria e apaga; os `coberturaLimite` dos itens do seed continuam 35)
+- [x] **T-011** — conferir que `npm run sim:check` continua verde depois de T-004/T-005 (o `sim:check` pula escrita; o que ele exercita é a `sgcCoberturaListar` nova, com `nivel: ''` e `situacao: ''`)
 
 ## Regra pura
 
-- [ ] **T-020** — `lib/cobertura.ts`: tipos `ParCurva`/`Cobertura` com `curvas: Record<CurvaAbc, ParCurva>` e `ativo`; `ALVO_COBERTURA_PADRAO_DIAS = 35` e `TOLERANCIA_COBERTURA_PADRAO_PCT = 0` no lugar de `LIMITE_COBERTURA_PADRAO_DIAS`; `tetoDaCurva(alvoDias, toleranciaPct): number | null` (`null` com alvo ≤ 0 ou tolerância não finita — nunca 0 por omissão) e `curvaValida` → `frontend/src/lib/cobertura.ts`
-- [ ] **T-021** — `limiteDeCobertura(coberturas, alvo, curva)` devolvendo `{ limiteDias, alvoDias, toleranciaPct, curva, nivel }`, com a precedência de RN-002, o descarte de linha inativa (`ativo === false`) e o de linha com alvo 0 na curva pedida (D-006) → `frontend/src/lib/cobertura.ts`
-- [ ] **T-022** — `coberturaDeLinha` lê as colunas novas de `sgcCoberturaListar`, inclusive `ATIVO` (ausente = ativa) → `frontend/src/lib/cobertura.ts`
-- [ ] **T-023** — auditoria pura: `CAMPOS_COBERTURA`, `diferencasDeCobertura(antes, depois)` e `acaoDaCobertura(antes, depois)` → `frontend/src/lib/cobertura.ts`
-- [ ] **T-024** — CSV: `COLUNAS_CSV_COBERTURA` e `linhasCsvCobertura(lista)` (números em vírgula decimal) → `frontend/src/lib/cobertura.ts`
-- [ ] **T-025** — os dois chamadores da régua: `montarItens` passa `curvas.get(codprod) ?? 'C'` e `itemDeProdutoBuscado` passa `'C'` → `frontend/src/lib/compras.ts:221` e `:282` (mesmo commit de T-021)
-- [ ] **T-026** — a célula de cobertura da aba Itens passa o teto por `quantidade()` (`${item.coberturaLimite} d` sairia "49.5 d", com ponto, quando o teto tem fração) → `frontend/src/pages/quadros/abas/Itens.tsx:286`
+- [x] **T-020** — `lib/cobertura.ts`: tipos `ParCurva`/`Cobertura` com `curvas: Record<CurvaAbc, ParCurva>` e `ativo`; `ALVO_COBERTURA_PADRAO_DIAS = 35` e `TOLERANCIA_COBERTURA_PADRAO_PCT = 0` no lugar de `LIMITE_COBERTURA_PADRAO_DIAS`; `tetoDaCurva(alvoDias, toleranciaPct): number | null` (`null` com alvo ≤ 0 ou tolerância não finita — nunca 0 por omissão) e `curvaValida` → `frontend/src/lib/cobertura.ts`
+- [x] **T-021** — `limiteDeCobertura(coberturas, alvo, curva)` devolvendo `{ limiteDias, alvoDias, toleranciaPct, curva, nivel }`, com a precedência de RN-002, o descarte de linha inativa (`ativo === false`) e o de linha com alvo 0 na curva pedida (D-006) → `frontend/src/lib/cobertura.ts`
+- [x] **T-022** — `coberturaDeLinha` lê as colunas novas de `sgcCoberturaListar`, inclusive `ATIVO` (ausente = ativa) → `frontend/src/lib/cobertura.ts`
+- [x] **T-023** — auditoria pura: `CAMPOS_COBERTURA`, `diferencasDeCobertura(antes, depois)` e `acaoDaCobertura(antes, depois)` → `frontend/src/lib/cobertura.ts`
+- [x] **T-024** — CSV: `COLUNAS_CSV_COBERTURA` e `linhasCsvCobertura(lista)` (números em vírgula decimal) → `frontend/src/lib/cobertura.ts`
+- [x] **T-025** — os dois chamadores da régua: `montarItens` passa `curvas.get(codprod) ?? 'C'` e `itemDeProdutoBuscado` passa `'C'` → `frontend/src/lib/compras.ts:221` e `:282` (mesmo commit de T-021)
+- [x] **T-026** — a célula de cobertura da aba Itens passa o teto por `quantidade()` (`${item.coberturaLimite} d` sairia "49.5 d", com ponto, quando o teto tem fração) → `frontend/src/pages/quadros/abas/Itens.tsx:286`
 
 ## Telas
 
-- [ ] **T-030** — `CoberturasPage`: porteiro de rota por `usePersona()`/`permissoes.verCoberturas` e `podeManter = verCoberturas && !somenteLeitura` (sai a lista local `PERSONAS_QUE_MANTEM` e a leitura crua de `sgcPersonaAtual`) → `frontend/src/pages/coberturas/CoberturasPage.tsx`
-- [ ] **T-031** — grid com `Nível`, `Alvo`, `Situação` (`Status` com texto, inativo nunca em vermelho) e as três colunas de curva (`35 d · 20 %` / `máx. 42 d`), `numeric`, ações em `IconButton`; `SelectMenu` de situação na `Toolbar` (Todas / Ativas / Inativas, padrão Ativas) alimentando `{{situacao}}` → idem
-- [ ] **T-032** — diálogo com três painéis de curva numa `GradeKpi`, cada um com alvo, tolerância e o máximo sem justificativa num `Kpi` (`tetoDaCurva`, `Dash` quando devolver `null`); Salvar desabilitado sem código ou sem os três alvos > 0 → idem
-- [ ] **T-033** — salvar: `sgcEscCoberturaGravar` e, em seguida, uma chamada de `sgcEscCoberturaLogInserir` por entrada de `diferencasDeCobertura`, com a `acaoDaCobertura` derivada do `antes` que veio da listagem (inclusive inativo → `reativou`), e a releitura da lista ao fim; desativar grava a linha `ATIVO` com ação `desativou` → idem
-- [ ] **T-034** — abas `Parâmetros` / `Auditoria` (`Tabs` do `page.tsx`); a aba de auditoria carrega `sgcCoberturaLogListar` só quando aberta, com `SelectMenu` de recorte por parametrização e paginação → idem
-- [ ] **T-035** `[P]` — botão Exportar CSV sobre as linhas já carregadas (`textoCsv`/`baixarCsv`), nome `coberturas-<AAAA-MM-DD>.csv` → idem
+- [x] **T-030** — `CoberturasPage`: porteiro de rota por `usePersona()`/`permissoes.verCoberturas` e `podeManter = verCoberturas && !somenteLeitura` (sai a lista local `PERSONAS_QUE_MANTEM` e a leitura crua de `sgcPersonaAtual`) → `frontend/src/pages/coberturas/CoberturasPage.tsx`
+- [x] **T-031** — grid com `Nível`, `Alvo`, `Situação` (`Status` com texto, inativo nunca em vermelho) e as três colunas de curva (`35 d · 20 %` / `máx. 42 d`), `numeric`, ações em `IconButton`; `SelectMenu` de situação na `Toolbar` (Todas / Ativas / Inativas, padrão Ativas) alimentando `{{situacao}}` → idem
+- [x] **T-032** — diálogo com três painéis de curva numa `GradeKpi`, cada um com alvo, tolerância e o máximo sem justificativa num `Kpi` (`tetoDaCurva`, `Dash` quando devolver `null`); Salvar desabilitado sem código ou sem os três alvos > 0 → idem
+- [x] **T-033** — salvar: `sgcEscCoberturaGravar` e, em seguida, uma chamada de `sgcEscCoberturaLogInserir` por entrada de `diferencasDeCobertura`, com a `acaoDaCobertura` derivada do `antes` que veio da listagem (inclusive inativo → `reativou`), e a releitura da lista ao fim; desativar grava a linha `ATIVO` com ação `desativou` → idem
+- [x] **T-034** — abas `Parâmetros` / `Auditoria` (`Tabs` do `page.tsx`); a aba de auditoria carrega `sgcCoberturaLogListar` só quando aberta, com `SelectMenu` de recorte por parametrização e paginação → idem
+- [x] **T-035** `[P]` — botão Exportar CSV sobre as linhas já carregadas (`textoCsv`/`baixarCsv`), nome `coberturas-<AAAA-MM-DD>.csv` → idem
 
 ## Testes
 
 Uma task por linha da seção **Testes** do `plan.md`; o título de cada `teste()`/`test()`
 começa pelo id do cenário ou da regra.
 
-- [ ] **T-080** `[P]` — `test('C-001: …')` em `frontend/tests/cobertura.test.mjs`: departamento 2 (A 35/20, B 45/10, C 60/5) → 42, 49,5 e 63 conforme a curva do item
-- [ ] **T-081** `[P]` — `test('C-002: …')`: sku 5001 em B 25/0 vence o departamento em B 45/10 → `{ limiteDias: 25, nivel: 'sku' }`
-- [ ] **T-082** `[P]` — `test('C-003: …')`: item sem curva → coluna C → 63, `curva: 'C'`
-- [ ] **T-083** `[P]` — `test('C-004: …')`: produto sem nada → `{ alvoDias: 35, toleranciaPct: 0, limiteDias: 35, nivel: 'padrao' }`
-- [ ] **T-084** `[P]` — `test('C-005: …')`: seção 21 só com A → item de curva B cai no departamento (49,5); de curva A fica na seção (10)
-- [ ] **T-085** — `teste('C-006: …')` em `backend/simulator/smoke/012-coberturas.mjs`: item curva A com 45 dias contra teto 42 sem justificativa → `PODE = 0` com a frase "Justifique os itens com cobertura acima do limite (1), a começar por" e a descrição; com justificativa → `PODE = 1`, `MOTIVO` vazio
-- [ ] **T-085b** — `teste('C-006b: …')` no mesmo arquivo: `sgcItensGravar` com um item de **curva B**, `coberturaDias: 49.2` e `coberturaLimite: 49.5` → `SELECT COBERTURA_LIMITE` devolve **49.5** e `sgcAnaliseSaidaVerificar` devolve `PODE = 1`. É o teste de T-003 + T-005b: sem os dois o teto chega 49 e a verificação recusa. **Nunca** escrever este teste com o 42 da curva A — redondo, ele passa quebrado
-- [ ] **T-086** `[P]` — `test('C-007: …')`: a resolução devolve `alvoDias` 35 ao lado de `limiteDias` 42 (é o alvo que a 011 usa no estoque máximo)
-- [ ] **T-087** — `test('C-008: …')` (6 entradas, ação `alterou`) e `teste('C-008: …')` no smoke (seis `sgcEscCoberturaLogInserir` + `sgcCoberturaLogListar` devolve as 6 com `ANTES`/`DEPOIS` e `POR_NOME`)
-- [ ] **T-088** — `test('C-009: …')` (7 entradas com `antes` vazio, ação `criou`) e `teste('C-009: …')` no smoke (gravar `sku 5004` + 7 logs)
-- [ ] **T-089** — `teste('C-010: …')` no smoke: desativar o sku 5001 → some de `situacao: 'ativa'`, aparece em `'inativa'` com `ATIVO = 0`, e a régua sobre `situacao: ''` resolve 49,5 na curva B; regravar → volta a 25 e reaparece em `'ativa'`. Mais `test('C-010: …')` puro: `acaoDaCobertura` sobre o `antes` inativo lido da listagem devolve `'reativou'` (a ação é derivada; o smoke não grava log à mão)
-- [ ] **T-090** — `teste('C-011: …')` no smoke (as duas escritas por `ana` e `leo` não alteram contagem; por `gil`, alteram) e `test('C-011: …')` em `frontend/tests/permissoes.test.mjs` (gestor READ_ONLY vê e não grava; analista não vê)
-- [ ] **T-091** `[P]` — `test('C-012: …')`: a linha de CSV da parametrização de referência traz 35; 20; 42; 45; 10; 49,5; 60; 5; 63
-- [ ] **T-092** `[P]` — `test('C-013: …')`: `tetoDaCurva(45, 10)` → 49,5; tolerância vazia → `null`; alvo 0 → `null`
-- [ ] **T-093** — `teste('C-014: …')` no smoke: `sgcCoberturaLogListar` em ordem decrescente de `ID`, contagem apurada por `SELECT COUNT(*)` no próprio banco (R-045), e o recorte por `idCobertura` só com as linhas do alvo
-- [ ] **T-094** — `teste('C-015: …')` no smoke: alterada a parametrização para 30/0 depois da gravação, o item de curva B mantém `COBERTURA_LIMITE` 49.5 e `sgcAnaliseSaidaVerificar` continua com `PODE = 1`
-- [ ] **T-095** `[P]` — `test('RN-001: …')`: (35,20)→42; (45,10)→49,5; (60,5)→63; (35,0)→35; (0,20)→`null`
-- [ ] **T-096** `[P]` — `test('RN-002: …')`: sku 20 / seção 45 / departamento 60 / fornecedor 90 → 20; sem o sku → 45; só o fornecedor → 90; lista vazia → 35
-- [ ] **T-097** `[P]` — `test('RN-003: …')`: `''`, `'D'` e `undefined` → `'C'`; `'b'` → `'B'`
-- [ ] **T-098** `[P]` — `test('RN-004: …')`: toda resolução devolve `alvoDias` e `limiteDias`; no padrão, 35 e 35
-- [ ] **T-099** — `teste('RN-005: …')`: revalidar RN-012 em `backend/simulator/smoke/003-itens.mjs` — as cinco mensagens, na mesma ordem, com o seed e o schema novos
-- [ ] **T-100** `[P]` — `test('RN-006: …')`: objeto igual a si mesmo → `[]`; um número diferente → 1 entrada
-- [ ] **T-101** `[P]` — `test('RN-007: …')`: `criou` / `desativou` / `reativou` / `alterou`
-- [ ] **T-102** — `teste('RN-008: …')` no smoke: `ana`, `leo` e `dora` não gravam; `gil` e `admin` gravam
-- [ ] **T-103** — `test('RN-009: …')` em `frontend/tests/compras.test.mjs` (o teste `C-001/C-004: montarItens …`, `:97-115`): coberturas com os três pares → `itens[0]` (5001, curva A, sku) espera **20** e `itens[1]` (5002, curva C, departamento) espera **63**
-- [ ] **T-104** — `teste('RN-010: …')` no smoke: desativada some da listagem; regravada volta com `ALVO_B_DIAS` 25
-- [ ] **T-105** — emendar `teste('C-020: …')` em `backend/simulator/smoke/003-itens.mjs:345-362`: a entrada de `sgcEscCoberturaGravar` passa a ter os seis campos e os asserts leem `ALVO_B_DIAS` 45 / `TOLERANCIA_B_PCT` 10 no lugar de `LIMITE_DIAS` 45; e a **última** chamada (a que espera lista vazia depois da exclusão) passa `situacao: 'ativa'` — sem o `WHERE ATIVO = 1` fixo, `''` traria a linha desativada de volta
-- [ ] **T-106** — revalidar `teste('C-007: …')` (`smoke/003-itens.mjs:210-224`) e o trecho de cobertura de RN-012 (`:265-267`) sem mudança de texto: o item continua com `COBERTURA_DIAS` 40 contra `COBERTURA_LIMITE` 35
+- [x] **T-080** `[P]` — `test('C-001: …')` em `frontend/tests/cobertura.test.mjs`: departamento 2 (A 35/20, B 45/10, C 60/5) → 42, 49,5 e 63 conforme a curva do item
+- [x] **T-081** `[P]` — `test('C-002: …')`: sku 5001 em B 25/0 vence o departamento em B 45/10 → `{ limiteDias: 25, nivel: 'sku' }`
+- [x] **T-082** `[P]` — `test('C-003: …')`: item sem curva → coluna C → 63, `curva: 'C'`
+- [x] **T-083** `[P]` — `test('C-004: …')`: produto sem nada → `{ alvoDias: 35, toleranciaPct: 0, limiteDias: 35, nivel: 'padrao' }`
+- [x] **T-084** `[P]` — `test('C-005: …')`: seção 21 só com A → item de curva B cai no departamento (49,5); de curva A fica na seção (10)
+- [x] **T-085** — `teste('C-006: …')` em `backend/simulator/smoke/012-coberturas.mjs`: item curva A com 45 dias contra teto 42 sem justificativa → `PODE = 0` com a frase "Justifique os itens com cobertura acima do limite (1), a começar por" e a descrição; com justificativa → `PODE = 1`, `MOTIVO` vazio
+- [x] **T-085b** — `teste('C-006b: …')` no mesmo arquivo: `sgcItensGravar` com um item de **curva B**, `coberturaDias: 49.2` e `coberturaLimite: 49.5` → `SELECT COBERTURA_LIMITE` devolve **49.5** e `sgcAnaliseSaidaVerificar` devolve `PODE = 1`. É o teste de T-003 + T-005b: sem os dois o teto chega 49 e a verificação recusa. **Nunca** escrever este teste com o 42 da curva A — redondo, ele passa quebrado
+- [x] **T-086** `[P]` — `test('C-007: …')`: a resolução devolve `alvoDias` 35 ao lado de `limiteDias` 42 (é o alvo que a 011 usa no estoque máximo)
+- [x] **T-087** — `test('C-008: …')` (6 entradas, ação `alterou`) e `teste('C-008: …')` no smoke (seis `sgcEscCoberturaLogInserir` + `sgcCoberturaLogListar` devolve as 6 com `ANTES`/`DEPOIS` e `POR_NOME`)
+- [x] **T-088** — `test('C-009: …')` (7 entradas com `antes` vazio, ação `criou`) e `teste('C-009: …')` no smoke (gravar `sku 5004` + 7 logs)
+- [x] **T-089** — `teste('C-010: …')` no smoke: desativar o sku 5001 → some de `situacao: 'ativa'`, aparece em `'inativa'` com `ATIVO = 0`, e a régua sobre `situacao: ''` resolve 49,5 na curva B; regravar → volta a 25 e reaparece em `'ativa'`. Mais `test('C-010: …')` puro: `acaoDaCobertura` sobre o `antes` inativo lido da listagem devolve `'reativou'` (a ação é derivada; o smoke não grava log à mão)
+- [x] **T-090** — `teste('C-011: …')` no smoke (as duas escritas por `ana` e `leo` não alteram contagem; por `gil`, alteram) e `test('C-011: …')` em `frontend/tests/permissoes.test.mjs` (gestor READ_ONLY vê e não grava; analista não vê)
+- [x] **T-091** `[P]` — `test('C-012: …')`: a linha de CSV da parametrização de referência traz 35; 20; 42; 45; 10; 49,5; 60; 5; 63
+- [x] **T-092** `[P]` — `test('C-013: …')`: `tetoDaCurva(45, 10)` → 49,5; tolerância vazia → `null`; alvo 0 → `null`
+- [x] **T-093** — `teste('C-014: …')` no smoke: `sgcCoberturaLogListar` em ordem decrescente de `ID`, contagem apurada por `SELECT COUNT(*)` no próprio banco (R-045), e o recorte por `idCobertura` só com as linhas do alvo
+- [x] **T-094** — `teste('C-015: …')` no smoke: alterada a parametrização para 30/0 depois da gravação, o item de curva B mantém `COBERTURA_LIMITE` 49.5 e `sgcAnaliseSaidaVerificar` continua com `PODE = 1`
+- [x] **T-095** `[P]` — `test('RN-001: …')`: (35,20)→42; (45,10)→49,5; (60,5)→63; (35,0)→35; (0,20)→`null`
+- [x] **T-096** `[P]` — `test('RN-002: …')`: sku 20 / seção 45 / departamento 60 / fornecedor 90 → 20; sem o sku → 45; só o fornecedor → 90; lista vazia → 35
+- [x] **T-097** `[P]` — `test('RN-003: …')`: `''`, `'D'` e `undefined` → `'C'`; `'b'` → `'B'`
+- [x] **T-098** `[P]` — `test('RN-004: …')`: toda resolução devolve `alvoDias` e `limiteDias`; no padrão, 35 e 35
+- [x] **T-099** — `teste('RN-005: …')`: revalidar RN-012 em `backend/simulator/smoke/003-itens.mjs` — as cinco mensagens, na mesma ordem, com o seed e o schema novos
+- [x] **T-100** `[P]` — `test('RN-006: …')`: objeto igual a si mesmo → `[]`; um número diferente → 1 entrada
+- [x] **T-101** `[P]` — `test('RN-007: …')`: `criou` / `desativou` / `reativou` / `alterou`
+- [x] **T-102** — `teste('RN-008: …')` no smoke: `ana`, `leo` e `dora` não gravam; `gil` e `admin` gravam
+- [x] **T-103** — `test('RN-009: …')` em `frontend/tests/compras.test.mjs` (o teste `C-001/C-004: montarItens …`, `:97-115`): coberturas com os três pares → `itens[0]` (5001, curva A, sku) espera **20** e `itens[1]` (5002, curva C, departamento) espera **63**
+- [x] **T-104** — `teste('RN-010: …')` no smoke: desativada some da listagem; regravada volta com `ALVO_B_DIAS` 25
+- [x] **T-105** — emendar `teste('C-020: …')` em `backend/simulator/smoke/003-itens.mjs:345-362`: a entrada de `sgcEscCoberturaGravar` passa a ter os seis campos e os asserts leem `ALVO_B_DIAS` 45 / `TOLERANCIA_B_PCT` 10 no lugar de `LIMITE_DIAS` 45; e a **última** chamada (a que espera lista vazia depois da exclusão) passa `situacao: 'ativa'` — sem o `WHERE ATIVO = 1` fixo, `''` traria a linha desativada de volta
+- [x] **T-106** — revalidar `teste('C-007: …')` (`smoke/003-itens.mjs:210-224`) e o trecho de cobertura de RN-012 (`:265-267`) sem mudança de texto: o item continua com `COBERTURA_DIAS` 40 contra `COBERTURA_LIMITE` 35
 
 ## Verificação
 
-- [ ] **T-110** — `cd backend && npm test` verde (`sim:check` + `sim:smoke`), com as suítes 003 e 012
-- [ ] **T-111** — `cd frontend && npm test` verde; `npm run build` e `npm run lint` limpos (a assinatura nova não pode deixar chamador para trás)
+- [x] **T-110** — `cd backend && npm test` verde (`sim:check` + `sim:smoke`), com as suítes 003 e 012
+- [x] **T-111** — `cd frontend && npm test` verde; `npm run build` e `npm run lint` limpos (a assinatura nova não pode deixar chamador para trás)
 - [ ] **T-112** — Verificação manual no simulador: C-013 (três painéis lado a lado no desktop, empilhados a ~400 px, com o máximo sem justificativa), C-010 (inativa por texto, nunca só por cor, nunca em vermelho), C-011 (formulário desabilitado, não escondido, com o motivo no `title`), C-014 (aba de auditoria rolando sem empurrar o cabeçalho)
 - [ ] **T-113** — Os dois temas (claro e escuro) nas duas abas
 

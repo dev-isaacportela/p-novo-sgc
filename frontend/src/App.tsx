@@ -23,6 +23,7 @@ import NfsAtrasoPage from '@/pages/fiscal/NfsAtrasoPage';
 import BoPage from '@/pages/bo/BoPage';
 import SolicitacoesPage from '@/pages/solicitacoes/SolicitacoesPage';
 import AnalisesPage from '@/pages/analises/AnalisesPage';
+import ComprasInteligentesPage from '@/pages/compras-inteligentes/ComprasInteligentesPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -82,7 +83,9 @@ function Autenticado() {
   // (002), fornecedores (001), itens e coberturas (003), agenda (004); onda 2 —
   // notas fiscais e faturamentos pendentes (005), NFs em atraso (006), produtos
   // em B.O. (007); onda 3 — solicitações do comercial (008), análises e
-  // relatórios (009), as três ainda em construção. Quem barra persona sem
+  // relatórios (009); onda 4 — compras inteligentes (011), ainda em
+  // construção (as coberturas por curva, 012, moram na rota `/coberturas` que
+  // já existe). Quem barra persona sem
   // acesso é cada página, no topo, com a mesma frase do servidor; o menu
   // (AdminLayout) só esconde.
   return (
@@ -92,6 +95,7 @@ function Autenticado() {
         <Route path="quadro" element={<QuadroPage />} />
         <Route path="quadro/admin" element={<QuadroAdminPage />} />
         <Route path="pedidos/novo" element={<NovoPedidoPage />} />
+        <Route path="compras-inteligentes" element={<ComprasInteligentesPage />} />
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="fornecedores/:codfornec" element={<FornecedorPage />} />
         <Route path="coberturas" element={<CoberturasPage />} />

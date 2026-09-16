@@ -1,0 +1,413 @@
+// Régua de ressuprimento da spec 011 (compras inteligentes): o que a medida do
+// WinThor mais os parâmetros de compra dizem sobre comprar ou não comprar.
+//
+// R-083: o servidor devolve MEDIDA (estoque, trânsito, venda, consumo ponderado,
+// lead medido) e a FÓRMULA roda aqui — é o único jeito de o parâmetro por SKU
+// valer, porque o parâmetro vive no Mitra e a medida no Oracle. Módulo puro,
+// sem React e sem SDK: é o que `frontend/tests/ressuprimento.test.mjs` exercita.
+//
+// R-111: este módulo **não importa** `lib/cobertura.ts`. O alvo por curva chega
+// como função injetada pela tela (`alvoDaCurvaDias`), e assim a 011 e a 012
+// param de depender da ordem de merge — o teste puro usa um stub de três linhas.
+//
+// Nenhuma régua é reimplementada: a curva ABC, o arredondamento por caixa e as
+// unidades por caixa são as da 003 (R-088).
+
+// Extensão explícita, como em `compras.ts`: `allowImportingTsExtensions` está
+// ligado e é assim que o `node --test` de frontend/tests/ resolve o módulo.
+import { arredondarPorCaixa, curvaAbc, unidadesPorCaixa } from './compras.ts';
+import type { CurvaAbc, ItemPedido } from './compras.ts';
+
+export type StatusRessuprimento =
+  'ruptura' | 'excesso' | 'elevada_exposicao' | 'baixa_exposicao' | 'adequado';
+
+export const JANELA_DIAS = 153;              // R-082
+export const PESO_RECENCIA_DIA = 0.85;       // R-082 (aplicado na consulta)
+export const LEAD_TIME_PADRAO_DIAS = 9;      // O4-02 / R-086
+export const COBERTURA_PADRAO_DIAS = 35;     // RN-004, na falta de regra alcançável
+export const GATILHO_PADRAO_DIAS = 15;       // O4-02 / R-086
+export const SILENCIO_PADRAO_DIAS = 30;      // O4-02 / R-086
+export const TOLERANCIA_ADERENCIA = 0.2;     // R-092 / RN-018
+
+const numero = (valor: unknown): number => {
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Linha de `sgcWintRessuprimento` (colunas UPPERCASE) — medida, nunca decisão. */
+export interface MedidaRessuprimento {
+  CODPROD: number; DESCRICAO: string; EMBALAGEM: string; UNIDADE: string;
+  CODEPTO: number; CODSEC: number; UN_POR_CAIXA_ERP: number;
+  CUSTO_ULT_ENTRADA: number; DT_ULT_ENTRADA: string; DT_ULT_SAIDA: string;
+  ESTOQUE_TOTAL: number; QT_BLOQUEADA: number; QT_INDENIZ: number; QT_RESERV: number;
+  ESTOQUE_ATUAL: number; QT_PEDIDA_ERP: number; QT_TRANSITO: number; ESTOQUE_EM_TRANSITO: number;
+  LEAD_TIME_MEDIDO: number;          // 0 = não medido
+  VENDA_PERIODO: number; VENDA_PUBLICA: number;
+  CONSUMO_DIARIO: number; CONSUMO_DIARIO_PUBLICO: number; VOLATILIDADE_DIARIA: number;
+}
+
+/** Linha de `sgcParametrosCompraListar`; `codprod 0` é a linha do fornecedor. */
+export interface ParametroCompra {
+  codprod: number; coberturaDias: number; leadTimeDias: number; gatilhoDias: number;
+  silenciadoAte: string; motivoSilencio: string;
+}
+
+export interface ParametrosResolvidos {
+  coberturaDias: number; leadTimeDias: number; gatilhoDias: number;
+  origemCobertura: 'sku' | 'fornecedor' | 'curva';
+  origemLeadTime: 'sku' | 'fornecedor' | 'medido' | 'padrao';
+}
+
+/** Linha de `sgcParametrosCompraListar` (UPPERCASE) -> o objeto da regra. */
+export function parametroDeLinha(linha: Record<string, unknown>): ParametroCompra {
+  return {
+    codprod: numero(linha.CODPROD),
+    coberturaDias: numero(linha.COBERTURA_DIAS),
+    leadTimeDias: numero(linha.LEAD_TIME_DIAS),
+    gatilhoDias: numero(linha.GATILHO_DIAS),
+    silenciadoAte: String(linha.SILENCIADO_ATE ?? ''),
+    motivoSilencio: String(linha.MOTIVO_SILENCIO ?? ''),
+  };
+}
+
+/**
+ * RN-003/RN-004/RN-005. `0` em qualquer campo significa "herda" — é por isso
+ * que a precedência é por valor, não por existência da linha: o legado guardava
+ * a linha do SKU com zeros e o ignorava.
+ */
+export function resolverParametros(
+  doSku: ParametroCompra | null,
+  doFornecedor: ParametroCompra | null,
+  leadTimeMedido: number,
+  alvoDaCurvaEmDias: number,
+): ParametrosResolvidos {
+  const skuCobertura = numero(doSku?.coberturaDias);
+  const fornCobertura = numero(doFornecedor?.coberturaDias);
+  const alvo = numero(alvoDaCurvaEmDias);
+
+  const cobertura = skuCobertura > 0
+    ? { coberturaDias: skuCobertura, origemCobertura: 'sku' as const }
+    : fornCobertura > 0
+      ? { coberturaDias: fornCobertura, origemCobertura: 'fornecedor' as const }
+      : { coberturaDias: alvo > 0 ? alvo : COBERTURA_PADRAO_DIAS, origemCobertura: 'curva' as const };
+
+  const skuLead = numero(doSku?.leadTimeDias);
+  const fornLead = numero(doFornecedor?.leadTimeDias);
+  const medido = numero(leadTimeMedido);
+
+  const lead = skuLead > 0
+    ? { leadTimeDias: skuLead, origemLeadTime: 'sku' as const }
+    : fornLead > 0
+      ? { leadTimeDias: fornLead, origemLeadTime: 'fornecedor' as const }
+      : medido > 0
+        // RN-003: lead medido tem mínimo de 1 dia — entrega no mesmo dia da
+        // emissão não é "lead zero", é um dia.
+        ? { leadTimeDias: Math.max(1, Math.ceil(medido)), origemLeadTime: 'medido' as const }
+        : { leadTimeDias: LEAD_TIME_PADRAO_DIAS, origemLeadTime: 'padrao' as const };
+
+  const skuGatilho = numero(doSku?.gatilhoDias);
+  const fornGatilho = numero(doFornecedor?.gatilhoDias);
+  const gatilhoDias = skuGatilho > 0 ? skuGatilho : fornGatilho > 0 ? fornGatilho : GATILHO_PADRAO_DIAS;
+
+  return { ...cobertura, ...lead, gatilhoDias };
+}
+
+/** RN-013: `''` não silencia; comparação de texto AAAA-MM-DD, sem fuso. */
+export function estaSilenciado(silenciadoAte: string, hoje: string): boolean {
+  const ate = String(silenciadoAte ?? '').slice(0, 10);
+  if (ate.trim() === '') return false;
+  return ate >= String(hoje ?? '').slice(0, 10);
+}
+
+/** RN-013: o padrão são 30 dias a partir de hoje. */
+export function dataDeSilencio(hoje: string, dias = SILENCIO_PADRAO_DIAS): string {
+  const base = Date.parse(`${String(hoje ?? '').slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(base)) return '';
+  return new Date(base + dias * 86400000).toISOString().slice(0, 10);
+}
+
+export interface Ressuprimento {
+  consumoDiario: number; estoqueAtual: number; emTransito: number;
+  leadTimeDias: number; coberturaDias: number; gatilhoDias: number;
+  estoqueSeguranca: number; pontoDePedido: number; estoqueMaximo: number;
+  sugerida: number;
+  coberturaAtualDias: number | null; diasDeGatilho: number | null;
+  status: StatusRessuprimento; urgente: boolean;
+}
+
+/**
+ * RN-006 a RN-009 e RN-011. O consumo já vem medido do servidor (RN-001); aqui
+ * só se decide se a parte pública fica dentro ou fora (o seletor da tela, que
+ * recalcula sem nova consulta).
+ */
+export function calcularRessuprimento(
+  medida: MedidaRessuprimento,
+  parametros: ParametrosResolvidos,
+  opcoes: { unidadesPorCaixa: number; desconsiderarLicitacao: boolean },
+): Ressuprimento {
+  const total = numero(medida?.CONSUMO_DIARIO);
+  const publico = numero(medida?.CONSUMO_DIARIO_PUBLICO);
+  // RN-011: nunca negativo — medida pública maior que a total é dado sujo, não
+  // demanda negativa.
+  const consumoDiario = opcoes.desconsiderarLicitacao ? Math.max(0, total - publico) : total;
+
+  const estoqueAtual = Math.max(0, numero(medida?.ESTOQUE_ATUAL));
+  const emTransito = Math.max(0, numero(medida?.ESTOQUE_EM_TRANSITO));
+  const { leadTimeDias, coberturaDias, gatilhoDias } = parametros;
+
+  // RN-006.
+  const estoqueSeguranca = leadTimeDias * consumoDiario;
+  const pontoDePedido = 2 * leadTimeDias * consumoDiario;
+  const estoqueMaximo = coberturaDias * consumoDiario;
+
+  // RN-007. Trânsito manda: o que já está a caminho não se compra de novo.
+  const vendaPeriodo = opcoes.desconsiderarLicitacao
+    ? Math.max(0, numero(medida?.VENDA_PERIODO) - numero(medida?.VENDA_PUBLICA))
+    : numero(medida?.VENDA_PERIODO);
+  const bruta = emTransito > 0 || (vendaPeriodo <= 0 && consumoDiario <= 0)
+    ? 0
+    : Math.max(0, Math.ceil(estoqueMaximo - estoqueAtual - emTransito));
+  const sugerida = arredondarPorCaixa(bruta, opcoes.unidadesPorCaixa);
+
+  // RN-008: sem consumo as duas NÃO EXISTEM — é `null`, nunca o 9999 do legado.
+  const coberturaAtualDias = consumoDiario > 0 ? estoqueAtual / consumoDiario : null;
+  const diasDeGatilho = consumoDiario > 0
+    ? Math.floor((estoqueAtual + emTransito - estoqueSeguranca) / consumoDiario - leadTimeDias)
+    : null;
+
+  // RN-009: a ordem é a regra. Ruptura antes de excesso (disponível 0 com
+  // máximo 0 é ruptura, não excesso); elevada antes de baixa.
+  const status: StatusRessuprimento = estoqueAtual <= 0
+    ? 'ruptura'
+    : estoqueAtual + emTransito > estoqueMaximo
+      ? 'excesso'
+      : estoqueAtual <= pontoDePedido && coberturaAtualDias !== null && coberturaAtualDias < leadTimeDias
+        ? 'elevada_exposicao'
+        : estoqueAtual <= pontoDePedido
+          ? 'baixa_exposicao'
+          : 'adequado';
+
+  // RF-015: o gatilho não recorta a lista, sinaliza e ordena (D-011).
+  const urgente = diasDeGatilho !== null && diasDeGatilho <= gatilhoDias;
+
+  return {
+    consumoDiario, estoqueAtual, emTransito,
+    leadTimeDias, coberturaDias, gatilhoDias,
+    estoqueSeguranca, pontoDePedido, estoqueMaximo,
+    sugerida, coberturaAtualDias, diasDeGatilho, status, urgente,
+  };
+}
+
+const inteiro = (valor: number) => Math.round(valor).toLocaleString('pt-BR');
+
+/** "Por que comprar" do carrinho — a frase que explica a sugestão. */
+export function motivoDaSugestao(r: Ressuprimento): string {
+  if (r.status === 'ruptura') {
+    return `Ruptura — sem estoque, consumo de ${r.consumoDiario.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} un./dia`;
+  }
+  if (r.estoqueAtual <= r.pontoDePedido) {
+    const cobertura = r.coberturaAtualDias === null ? 'sem giro' : `cobertura de ${inteiro(r.coberturaAtualDias)} dias`;
+    return `Abaixo do ponto de pedido (${inteiro(r.pontoDePedido)} un.); ${cobertura}`;
+  }
+  if (r.urgente && r.diasDeGatilho !== null) return `Gatilho em ${r.diasDeGatilho} dias`;
+  return `Estoque máximo de ${inteiro(r.estoqueMaximo)} un. não atingido`;
+}
+
+/** A cobertura que o item terá com a quantidade escolhida (R-112). Sem consumo, `null`. */
+export function coberturaFuturaComCompra(r: Ressuprimento, quantidade: number): number | null {
+  if (r.consumoDiario <= 0) return null;
+  return (r.estoqueAtual + r.emTransito + Math.max(0, numero(quantidade))) / r.consumoDiario;
+}
+
+/** RN-018: sugerida > 0 e 0,8 × sugerida <= pedida <= 1,2 × sugerida (inclusive). */
+export function aderenteASugestao(qtSugerida: number, qtPedida: number): boolean {
+  const sugerida = numero(qtSugerida);
+  const pedida = numero(qtPedida);
+  if (sugerida <= 0) return false;
+  return pedida >= sugerida * (1 - TOLERANCIA_ADERENCIA) && pedida <= sugerida * (1 + TOLERANCIA_ADERENCIA);
+}
+
+export interface LinhaRessuprimento extends Ressuprimento {
+  medida: MedidaRessuprimento; curva: CurvaAbc;
+  parametros: ParametrosResolvidos; unidadesPorCaixa: number; silenciado: boolean;
+  silenciadoAte: string; motivoSilencio: string;
+}
+
+/** O alvo em dias da curva do item. A TELA injeta; esta lib não conhece `SGC_COBERTURA`. */
+export type AlvoDaCurva = (
+  alvo: { codprod: number; codsec: number; codepto: number; codfornec: number },
+  curva: CurvaAbc,
+) => number;
+
+/**
+ * A única chamada que a tela faz por carga: curva (régua da 003) -> alvo da
+ * curva (injetado) -> precedência dos parâmetros -> as sete grandezas.
+ * RN-004, RN-010.
+ */
+export function montarRessuprimento(
+  medidas: MedidaRessuprimento[],
+  parametros: ParametroCompra[],
+  alvoDaCurvaDias: AlvoDaCurva,
+  unidadesPorCaixaPorProduto: Map<number, number>,
+  opcoes: { codfornec: number; hoje: string; desconsiderarLicitacao: boolean },
+): LinhaRessuprimento[] {
+  const lista = medidas ?? [];
+  const curvas = curvaAbc(lista);
+  const doFornecedor = (parametros ?? []).find((p) => numero(p.codprod) === 0) ?? null;
+  const porSku = new Map((parametros ?? []).filter((p) => numero(p.codprod) > 0).map((p) => [numero(p.codprod), p]));
+
+  return lista.map((medida) => {
+    const codprod = numero(medida.CODPROD);
+    const curva = curvas.get(codprod) ?? 'C';
+    const doSku = porSku.get(codprod) ?? null;
+    const alvo = alvoDaCurvaDias(
+      { codprod, codsec: numero(medida.CODSEC), codepto: numero(medida.CODEPTO), codfornec: numero(opcoes.codfornec) },
+      curva,
+    );
+    const resolvidos = resolverParametros(doSku, doFornecedor, numero(medida.LEAD_TIME_MEDIDO), alvo);
+    const porCaixa = unidadesPorCaixa(medida, unidadesPorCaixaPorProduto?.get(codprod));
+    const calculo = calcularRessuprimento(medida, resolvidos, {
+      unidadesPorCaixa: porCaixa,
+      desconsiderarLicitacao: opcoes.desconsiderarLicitacao,
+    });
+    return {
+      ...calculo,
+      medida,
+      curva,
+      parametros: resolvidos,
+      unidadesPorCaixa: porCaixa,
+      silenciado: estaSilenciado(doSku?.silenciadoAte ?? '', opcoes.hoje),
+      silenciadoAte: doSku?.silenciadoAte ?? '',
+      motivoSilencio: doSku?.motivoSilencio ?? '',
+    };
+  });
+}
+
+/**
+ * RF-014 / D-012: "a comprar" é sugestão > 0 e não silenciado — sugestão zero é
+ * "não há o que comprar", e listar seria oferecer um botão que não faz nada.
+ * Urgentes primeiro (RF-015), depois por dias de gatilho.
+ */
+export function aComprar(linhas: LinhaRessuprimento[]): LinhaRessuprimento[] {
+  return (linhas ?? [])
+    .filter((l) => l.sugerida > 0 && !l.silenciado)
+    .sort((a, b) => {
+      if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
+      const ga = a.diasDeGatilho ?? Number.POSITIVE_INFINITY;
+      const gb = b.diasDeGatilho ?? Number.POSITIVE_INFINITY;
+      if (ga !== gb) return ga - gb;
+      if (a.sugerida !== b.sugerida) return b.sugerida - a.sugerida;
+      return String(a.medida.DESCRICAO).localeCompare(String(b.medida.DESCRICAO), 'pt-BR');
+    });
+}
+
+/**
+ * R-112: o item nascido do carrinho é gravado INTEIRO. A remontagem da Análise
+ * preserva o item existente (RN-017), então campo que nascer vazio fica vazio
+ * para sempre — e um `COBERTURA_LIMITE` zerado deixaria a trava de cobertura da
+ * 003 cega.
+ */
+export function itemDoCarrinho(
+  linha: LinhaRessuprimento,
+  quantidade: number,
+  coberturaLimite: number,
+): ItemPedido {
+  const m = linha.medida;
+  return {
+    codprod: numero(m.CODPROD),
+    descricao: String(m.DESCRICAO ?? ''),
+    embalagem: String(m.EMBALAGEM ?? ''),
+    unidade: String(m.UNIDADE ?? ''),
+    codepto: numero(m.CODEPTO),
+    codsec: numero(m.CODSEC),
+    unPorCaixa: linha.unidadesPorCaixa,
+    qtVendaTotal: numero(m.VENDA_PERIODO),
+    qtVendaLicitacao: numero(m.VENDA_PUBLICA),
+    qtEstoque: linha.estoqueAtual,
+    qtTransito: linha.emTransito,
+    qtSugerida: linha.sugerida,
+    qtPedida: Math.max(0, numero(quantidade)),
+    precoCusto: numero(m.CUSTO_ULT_ENTRADA),
+    tipoPreco: 'padrao',
+    curvaAbc: linha.curva,
+    coberturaDias: coberturaFuturaComCompra(linha, quantidade) ?? 0,
+    coberturaLimite: numero(coberturaLimite),
+    coberturaJustificativa: '',
+    observacao: '',
+    status: 'montagem',
+    // Onda 3 (008): item do carrinho nunca nasce de solicitação.
+    idSolicitacao: 0,
+    solicitacaoDe: '',
+  };
+}
+
+export interface EntradaCarrinho {
+  linha: LinhaRessuprimento;
+  quantidade: number;
+  codfornec: number;
+  codfilial: string;
+  fornecedor: string;
+  filial: string;
+}
+
+export interface GrupoCarrinho {
+  codfornec: number; codfilial: string; fornecedor: string; filial: string;
+  prioridade: 'normal' | 'alta'; total: number;
+  itens: { linha: LinhaRessuprimento; quantidade: number }[];
+}
+
+/** RN-015: um grupo por fornecedor + filial; prioridade alta com ruptura no grupo. */
+export function agruparCarrinho(itens: EntradaCarrinho[]): GrupoCarrinho[] {
+  const grupos = new Map<string, GrupoCarrinho>();
+  for (const entrada of itens ?? []) {
+    const chave = `${numero(entrada.codfornec)}|${String(entrada.codfilial)}`;
+    const grupo = grupos.get(chave) ?? {
+      codfornec: numero(entrada.codfornec),
+      codfilial: String(entrada.codfilial),
+      fornecedor: String(entrada.fornecedor ?? ''),
+      filial: String(entrada.filial ?? ''),
+      prioridade: 'normal' as const,
+      total: 0,
+      itens: [],
+    };
+    grupo.itens.push({ linha: entrada.linha, quantidade: Math.max(0, numero(entrada.quantidade)) });
+    grupo.total += Math.max(0, numero(entrada.quantidade)) * numero(entrada.linha.medida.CUSTO_ULT_ENTRADA);
+    if (entrada.linha.status === 'ruptura') grupo.prioridade = 'alta';
+    grupos.set(chave, grupo);
+  }
+  for (const grupo of grupos.values()) grupo.total = Math.round(grupo.total * 100) / 100;
+  return [...grupos.values()];
+}
+
+/* ── RF-023 / C-024: a exportação é do que está na tela, por lib/csv.ts (R-037) ── */
+
+export const COLUNAS_CSV: string[] = [
+  'Produto', 'Situação', 'Curva', 'Consumo diário', 'Estoque disponível',
+  'Trânsito', 'Cobertura atual', 'Dias de gatilho', 'Sugestão', 'Custo',
+];
+
+export const ROTULO_STATUS: Record<StatusRessuprimento, string> = {
+  ruptura: 'Ruptura',
+  excesso: 'Excesso',
+  elevada_exposicao: 'Elevada exposição',
+  baixa_exposicao: 'Baixa exposição',
+  adequado: 'Adequado',
+};
+
+/** Vírgula decimal — o que o Excel em pt-BR lê sem configurar nada. */
+const decimal = (valor: number, casas = 2) => valor.toFixed(casas).replace('.', ',');
+
+export function linhaCsv(l: LinhaRessuprimento): (string | number)[] {
+  return [
+    `${l.medida.DESCRICAO} (${l.medida.CODPROD})`,
+    ROTULO_STATUS[l.status],
+    l.curva,
+    decimal(l.consumoDiario, 4),
+    decimal(l.estoqueAtual, 3),
+    decimal(l.emTransito, 3),
+    l.coberturaAtualDias === null ? 'sem giro' : decimal(l.coberturaAtualDias, 1),
+    l.diasDeGatilho === null ? 'sem giro' : l.diasDeGatilho,
+    decimal(l.sugerida, 3),
+    decimal(numero(l.medida.CUSTO_ULT_ENTRADA), 2),
+  ];
+}

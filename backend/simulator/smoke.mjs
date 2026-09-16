@@ -18,6 +18,8 @@ import { suite as transito } from './smoke/006-transito.mjs';
 import { suite as bo } from './smoke/007-bo.mjs';
 import { suite as solicitacoes } from './smoke/008-solicitacoes.mjs';
 import { suite as indicadores } from './smoke/009-indicadores.mjs';
+import { suite as comprasInteligentes } from './smoke/011-compras-inteligentes.mjs';
+import { suite as coberturas } from './smoke/012-coberturas.mjs';
 
 const ctx = await abrirContexto();
 
@@ -27,12 +29,16 @@ await dialeto(ctx);
 await fornecedores(ctx);
 await quadro(ctx);
 await itens(ctx);
+// A 012 revalida o smoke da 003 e é dona das linhas de SGC_COBERTURA do seed
+// dela nesta onda (R-096/R-107): vem logo depois de `itens`.
+await coberturas(ctx);
 await agenda(ctx);
 await notasFiscais(ctx);
 await transito(ctx);
 await bo(ctx);
 await solicitacoes(ctx);
 await indicadores(ctx);
+await comprasInteligentes(ctx);
 
 console.log(`\n  ${ctx.contagem()} verificacoes passaram.`);
 ctx.fechar();

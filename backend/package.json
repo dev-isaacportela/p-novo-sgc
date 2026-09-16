@@ -16,6 +16,8 @@
 		"publish:010": "node add-010-bo.mjs",
 		"publish:011": "node add-011-solicitacoes.mjs",
 		"publish:012": "node add-012-indicadores.mjs",
+		"publish:013": "node add-013-compras-inteligentes.mjs",
+		"publish:014": "node add-014-coberturas-abc.mjs",
 		"sync:function-map": "node sync-server-function-map.mjs",
 		"sim": "node simulator/server.mjs",
 		"sim:seed": "node simulator/seed-cli.mjs",

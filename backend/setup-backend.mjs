@@ -1,7 +1,7 @@
 // Schema do projeto — SGC 2 (Sistema de Gestão de Compras da Benenutri).
 //
-// Todo o DDL SGC_* das ondas 1 (specs 001-004), 2 (specs 005-007) e 3 (specs
-// 008-009; a 010 nao tem tabela nem coluna), tabela por
+// Todo o DDL SGC_* das ondas 1 (specs 001-004), 2 (specs 005-007), 3 (specs
+// 008-009; a 010 nao tem tabela nem coluna) e 4 (specs 011-012), tabela por
 // tabela — cada uma num template literal proprio comecando pela frase de
 // criacao idempotente, sem repetir a frase com parentese em comentario: e
 // assim que o simulador local le o DDL por texto (backend/simulator/schema.mjs),
@@ -117,6 +117,11 @@ const DDL_002 = [
 ];
 
 // spec 003 — itens do pedido, alertas de análise e limites de cobertura.
+//
+// COBERTURA_LIMITE é DECIMAL(15,2), não INT (spec 012, R-101): o teto da curva
+// B (45 dias + 10 % de tolerância) é 49,5, e um INT o truncaria para 49 — a
+// trava de saída passaria a barrar meio dia antes. É o mesmo tipo de
+// COBERTURA_DIAS, com quem ele é comparado.
 const DDL_003 = [
   `CREATE TABLE IF NOT EXISTS SGC_PEDIDO_ITEM (
     ID INT AUTO_INCREMENT PRIMARY KEY,
@@ -139,7 +144,7 @@ const DDL_003 = [
     TIPO_PRECO VARCHAR(10) DEFAULT 'padrao',
     CURVA_ABC VARCHAR(1),
     COBERTURA_DIAS DECIMAL(15,2),
-    COBERTURA_LIMITE INT,
+    COBERTURA_LIMITE DECIMAL(15,2),
     COBERTURA_JUSTIFICATIVA VARCHAR(500),
     OBSERVACAO VARCHAR(500),
     STATUS VARCHAR(20) DEFAULT 'montagem',
@@ -168,13 +173,23 @@ const DDL_003 = [
     INDEX IX_SGC_ALERTA_CARD (ID_CARD, LIDO)
   )`,
 
-  // Sem linha aplicavel, o limite padrao e 35 dias (AN-07) — resolvido na regra pura.
+  // Tres pares alvo/tolerancia, um por curva ABC (spec 012, R-089): o alvo e
+  // quantos dias a compra mira, a tolerancia e a folga que passa sem
+  // justificativa. Teto = alvo x (1 + tolerancia / 100), resolvido na regra
+  // pura (lib/cobertura.ts). Alvo 0 significa que a linha NAO vale para
+  // aquela curva: a resolucao cai para o nivel seguinte (D-006), nunca para
+  // um teto 0. Sem linha aplicavel, alvo 35 dias e tolerancia 0 (AN-07).
   `CREATE TABLE IF NOT EXISTS SGC_COBERTURA (
     ID INT AUTO_INCREMENT PRIMARY KEY,
     NIVEL VARCHAR(20),
     CODIGO VARCHAR(20),
     DESCRICAO VARCHAR(200),
-    LIMITE_DIAS INT NOT NULL,
+    ALVO_A_DIAS INT NOT NULL DEFAULT 0,
+    TOLERANCIA_A_PCT DECIMAL(5,2) NOT NULL DEFAULT 0,
+    ALVO_B_DIAS INT NOT NULL DEFAULT 0,
+    TOLERANCIA_B_PCT DECIMAL(5,2) NOT NULL DEFAULT 0,
+    ALVO_C_DIAS INT NOT NULL DEFAULT 0,
+    TOLERANCIA_C_PCT DECIMAL(5,2) NOT NULL DEFAULT 0,
     ATIVO BOOLEAN DEFAULT TRUE,
     CRIADO_EM VARCHAR(19),
     ATUALIZADO_POR INT,
@@ -522,8 +537,63 @@ const DDL_008 = [
 // com a tela /relatorios, adiada por decisao do usuario em 2026-09-16 (R-114);
 // volta com ela, no CREATE, quando a feature entrar numa onda futura.
 
+// spec 011 — compras inteligentes (onda 4, R-086/R-087/R-113). Parametro de
+// compra por fornecedor+filial (CODPROD 0) ou por SKU; 0 em cada numero quer
+// dizer "herda" (SKU > fornecedor > curva > padrao). A UNIQUE e o que faz o
+// upsert do parametro e o do silenciamento conviverem na mesma linha.
+const DDL_011 = [
+  `CREATE TABLE IF NOT EXISTS SGC_PARAMETRO_COMPRA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    CODFORNEC INT NOT NULL,
+    CODFILIAL VARCHAR(10) NOT NULL,
+    CODPROD INT NOT NULL DEFAULT 0,
+    COBERTURA_DIAS INT NOT NULL DEFAULT 0,
+    LEAD_TIME_DIAS INT NOT NULL DEFAULT 0,
+    GATILHO_DIAS INT NOT NULL DEFAULT 0,
+    SILENCIADO_ATE VARCHAR(10),
+    MOTIVO_SILENCIO VARCHAR(500),
+    ATUALIZADO_POR INT,
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_PARAMETRO_COMPRA (CODFORNEC, CODFILIAL, CODPROD),
+    INDEX IX_SGC_PARAMETRO_COMPRA_FORN (CODFORNEC, CODFILIAL)
+  )`,
+
+  // Venda que nao conta como demanda (R-087). DTMOV e QUANTIDADE sao foto do
+  // ERP, para a lista da tela nao reconsultar o Oracle.
+  `CREATE TABLE IF NOT EXISTS SGC_VENDA_DESCONSIDERADA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    NUMTRANSITEM INT NOT NULL,
+    CODPROD INT NOT NULL,
+    CODFILIAL VARCHAR(10) NOT NULL,
+    DTMOV VARCHAR(10),
+    QUANTIDADE DECIMAL(15,3),
+    MOTIVO VARCHAR(500),
+    POR INT,
+    EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_VENDA_DESCONSIDERADA (NUMTRANSITEM),
+    INDEX IX_SGC_VENDA_DESCONSIDERADA_PROD (CODFILIAL, CODPROD)
+  )`,
+];
+
+// spec 012 — coberturas por curva (onda 4, R-090). Auditoria campo a campo de
+// SGC_COBERTURA, uma linha por campo alterado, acao derivada pela tela. As
+// colunas de curva da propria SGC_COBERTURA sao da 012 na S3 (R-113).
+const DDL_012 = [
+  `CREATE TABLE IF NOT EXISTS SGC_COBERTURA_LOG (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_COBERTURA INT NOT NULL,
+    CAMPO VARCHAR(120) NOT NULL,
+    ANTES VARCHAR(100),
+    DEPOIS VARCHAR(100),
+    ACAO VARCHAR(20) NOT NULL,
+    POR INT,
+    EM VARCHAR(19),
+    INDEX IX_SGC_COBERTURA_LOG (ID_COBERTURA, ID)
+  )`,
+];
+
 export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007,
-  ...DDL_008];
+  ...DDL_008, ...DDL_011, ...DDL_012];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

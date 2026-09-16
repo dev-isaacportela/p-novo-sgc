@@ -206,12 +206,18 @@ export function seed003(db, cenario) {
   inserirCusto.run(5001, 12);
   inserirCusto.run(5002, 24);
 
-  /* ── SGC: limites de cobertura (C-008) ── */
+  /* ── SGC: coberturas por curva (C-008 da 003; C-001/C-002 da 012) ──
+     Valores de referencia de R-089: departamento 2 = A 35/20 %, B 45/10 %,
+     C 60/5 % (tetos 42, 49,5 e 63) e sku 5001 = A 20/0, B 25/0, C 30/0.
+     A secao 21 NAO e semeada: o C-020 do smoke da 003 cria e apaga uma linha
+     de `secao`/`21`, que colidiria na chave unica; ela so existe como fixture
+     dos testes puros. */
   const inserirCobertura = db.prepare(`INSERT INTO SGC_COBERTURA
-    (NIVEL, CODIGO, DESCRICAO, LIMITE_DIAS, ATIVO, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
-    VALUES (?, ?, ?, ?, 1, '2026-09-15T08:00:00', 1, '2026-09-15T08:00:00')`);
-  inserirCobertura.run('departamento', '2', 'NUTRICAO CLINICA', 60);
-  inserirCobertura.run('sku', '5001', 'CREME NUTRICIONAL MORANGO 200 ML', 20);
+    (NIVEL, CODIGO, DESCRICAO, ALVO_A_DIAS, TOLERANCIA_A_PCT, ALVO_B_DIAS, TOLERANCIA_B_PCT,
+     ALVO_C_DIAS, TOLERANCIA_C_PCT, ATIVO, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '2026-09-15T08:00:00', 1, '2026-09-15T08:00:00')`);
+  inserirCobertura.run('departamento', '2', 'NUTRICAO CLINICA', 35, 20, 45, 10, 60, 5);
+  inserirCobertura.run('sku', '5001', 'CREME NUTRICIONAL MORANGO 200 ML', 20, 0, 25, 0, 30, 0);
 
   /* ── SGC: os pedidos de teste, todos na fase Análise ── */
 
