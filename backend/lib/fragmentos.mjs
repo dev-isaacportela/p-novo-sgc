@@ -9,17 +9,20 @@
 // Existe para que a régua more num arquivo só: dois `CASE` copiados divergem no
 // primeiro ajuste, e nenhum teste pega a divergência — os dois passam.
 //
-// O arquivo traz uma ou mais colunas, cada uma começando com `COALESCE(` na
-// coluna 0; as linhas de comentário, a vírgula entre as colunas e a vírgula
-// final são deste carregador, não do arquivo.
+// O carregador faz UMA coisa: lê o arquivo, tira as linhas de comentário do
+// cabeçalho e devolve o texto. A vírgula entre colunas é convenção dos blocos
+// de pendência (lista de colunas) e mora em quem os consome — a régua de
+// situação é uma expressão escalar e uma vírgula no fim a quebraria.
 
 import { readFileSync } from 'node:fs';
 
-/** `fragmento('pendencias-analise')` -> o corpo de backend/sql/pendencias-analise.sql. */
+/**
+ * `fragmento('situacao-solicitacao.sql')` -> o corpo de
+ * backend/sql/situacao-solicitacao.sql, sem as linhas `--`. O `.sql` é
+ * opcional: `fragmento('situacao-solicitacao')` lê o mesmo arquivo.
+ */
 export function fragmento(nome) {
-  const corpo = readFileSync(new URL(`../sql/${nome}.sql`, import.meta.url), 'utf8')
+  const arquivo = String(nome).endsWith('.sql') ? nome : `${nome}.sql`;
+  return readFileSync(new URL(`../sql/${arquivo}`, import.meta.url), 'utf8')
     .split('\n').filter((linha) => !linha.trimStart().startsWith('--')).join('\n').trim();
-  // A vírgula entre as colunas e a final são daqui: fragmento que já venha com
-  // vírgula no fim de uma coluna não a duplica.
-  return `${corpo.split(/\n(?=COALESCE\()/).map((coluna) => coluna.trim().replace(/,$/, '')).join(',\n')},`;
 }

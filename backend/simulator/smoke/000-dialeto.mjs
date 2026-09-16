@@ -7,7 +7,11 @@
 // isso `REGEXP_SUBSTR` só aceita as duas formas que os plans usam e LANÇA em
 // qualquer outra, em vez de devolver um pedaço qualquer.
 
+// S0-014 mora aqui pelo mesmo motivo: é contrato de BASE do SQL (o carregador
+// de backend/sql/ e a régua que 008 e 009 compõem), não regra de nenhuma spec.
+
 import { toSqlite } from '../mysql-dialect.mjs';
+import { fragmento } from '../../lib/fragmentos.mjs';
 import { assert } from './base.mjs';
 
 export async function suite(ctx) {
@@ -85,5 +89,21 @@ ON DUPLICATE KEY UPDATE STATUS = CASE WHEN VALUES(QT) = 0 THEN 'removido' ELSE V
     const voltou = db.prepare('SELECT STATUS, QT FROM D0_DIALETO_UPSERT WHERE ID_CARD = 91 AND CODPROD = 5301').get();
     assert.equal(voltou.STATUS, 'enviado', 'com quantidade > 0 o ELSE VALUES(STATUS) vale');
     assert.equal(voltou.QT, 7);
+  });
+
+  await teste('S0-014 (R-070/R-074/R-075): fragmento() carrega a régua de situacao-solicitacao.sql como expressão escalar, e ela COMPÕE com os aliases do contrato (S/C/SF/I)', async () => {
+    const situacao = fragmento('situacao-solicitacao.sql');
+    assert.ok(situacao.startsWith('CASE') && situacao.endsWith('END'), `a régua é uma expressão escalar, do CASE ao END:\n${situacao.slice(0, 80)}…`);
+    assert.ok(!situacao.includes('--'), 'o cabeçalho de contrato não entra no SQL');
+
+    // Só a COMPOSIÇÃO (aliases, junções, nomes de coluna): a semântica dos 9
+    // valores é da 008 (S3), que semeia as solicitações. Sem linha semeada
+    // ainda, o que se prova aqui é que a expressão colada roda.
+    const sql = `SELECT ${situacao} AS SITUACAO
+FROM SGC_SOLICITACAO S
+LEFT JOIN KB_CARD C ON C.ID = S.ID_CARD AND C.EXCLUIDO_EM IS NULL
+LEFT JOIN SGC_FASE SF ON SF.BOARD_ID = C.BOARD_ID AND SF.FASE_ID = C.FASE_ID
+LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD AND I.STATUS <> 'removido'`;
+    assert.deepEqual(db.prepare(toSqlite(sql)).all(), [], 'a régua composta roda; sem seed da 008 não há linha');
   });
 }
