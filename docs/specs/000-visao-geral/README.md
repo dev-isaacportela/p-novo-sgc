@@ -557,6 +557,22 @@ pode reverter qualquer uma antes da S3.
 | R-095 | **Personas**: `verComprasInteligentes` (admin, analista, gestor, diretoria), `operarComprasInteligentes` (admin, analista, gestor; zerado por READ_ONLY; RESTRICTED opera — o card que ele cria é dele), `parametrizarCompras` (admin, gestor: parâmetros por fornecedor/SKU e silenciar); `verCoberturas` continua (admin, gestor) e passa a cobrir as curvas. Comercial não vê. Menu: grupo **Compras** ganha "Compras inteligentes" (`/compras-inteligentes`) depois de "Novo pedido". |
 | R-096 | **Simulador**: `schema-winthor.mjs` ganha `PCEST.QTBLOQUEADA/QTINDENIZ/QTRESERV` (só DDL); shims novos no dialeto (base da onda 4, S2, depois da base da onda 3): `POWER`, `SQRT`, `STDDEV_POP`, `ADD_MONTHS`, `INSTR` e o gerador de calendário `FROM DUAL CONNECT BY LEVEL <= n` (reescrita exata no plan da 011; falha alto sem ele). Seeds: 011 usa produtos 5401–5420 (fornecedor 1015, curva inteira), clientes 9301–9305, `NUMTRANSITEM` ≥ 960001, `PCPEDIDO.NUMPED` ≥ 970001 (entradas casadas para o lead time medido); 012 **é dona, nesta onda**, das linhas de `SGC_COBERTURA` do `seed/003-itens.mjs`, de `lib/cobertura.ts`, de `pages/coberturas/**` e do bloco de coberturas do `add-006` (SFs `sgcCobertura*`), e revalida o smoke da 003. `CHECK_INPUT` ganha só chaves novas (`leadTimeDias`, `coberturaDias`, `diasPeriodo`, `curva`, `excluir`, `compradorId`…; D-17). |
 
+### Decisões tomadas na S1 da onda 4 (R-097..R-105, 2026-09-16)
+
+Pedidos ao 000 vindos dos plans 011 e 012, aceitos pelo integrador:
+
+| Id | Decisão |
+|---|---|
+| R-097 | R-096 emendada: o seed da 011 usa o **fornecedor 1042** (não o 1015 — `smoke/003-itens.mjs` assere 18 linhas de `sgcWintAnaliseMontagem` para o 1015 e vinte produtos novos lá quebrariam C-001 da 003); faixas 5401–5420, 9301–9305, `NUMTRANSITEM` ≥ 960001 e `PCPEDIDO.NUMPED` ≥ 970001 mantidas. |
+| R-098 | R-091 emendada: a escrita de tela que cria a capa é **`sgcEscPedidoCriar`** (7250, `add-005`), não "`sgcEscPedidoCapaSalvar`"; ela passa a receber `{{origem}}` no lugar do literal `'manual'` (integrador, S4; `/pedidos/novo` envia `manual`, o carrinho envia `compras_inteligentes`; o cron da agenda continua por id com o seu valor). `SGC_PEDIDO.ORIGEM` é `VARCHAR(20)`: `compras_inteligentes` tem 20 caracteres — cabe; nenhum valor novo pode passar disso. |
+| R-099 | SFs a mais na 011: `sgcPedidoAbertoDoFornecedor` (bloqueio do carrinho: pedido do fornecedor + filial em fase anterior a `enviado`) e `sgcWintProdutoVendas` (vendas do produto no período, para desconsiderar). Ids fixados pelo plan: leituras 8101–8109, escritas 8150–8154. |
+| R-100 | R-096 emendada: `INSTR` e `STDDEV_POP` **saem** dos shims (a volatilidade é `SQRT(AVG(x²) − AVG(x)²)`; o dialeto só registra escalares). Ficam `POWER`, `SQRT`, `ADD_MONTHS` e a reescrita exata do gerador de calendário `FROM DUAL CONNECT BY LEVEL <= n` (código no plan 011: `reescreverCalendarioOracle`, antes do `mapOutsideStrings`), com teste no `smoke/000-dialeto.mjs`. `CHECK_INPUT` da 011 não recebe `leadTimeDias`/`coberturaDias`/`curva` (com R-083 deixaram de ser parâmetro de SQL); 012 recebe só `idCobertura`. |
+| R-101 | `SGC_PEDIDO_ITEM.COBERTURA_LIMITE` passa de `INT` a **`DECIMAL(15,2)`** (no `CREATE`): o teto 49,5 da curva B truncaria para 49. A trava de saída da Análise **não ganha SQL novo** — `pendencias-analise.sql` e `add-006` comparam `COBERTURA_DIAS > COBERTURA_LIMITE`, e o limite já é gravado resolvido no item pela montagem; a curva entra só na régua pura (`lib/compras.ts`, duas linhas). |
+| R-102 | 012: ids `sgcCoberturaLogListar` 8201 e `sgcEscCoberturaLogInserir` 8250; o log recebe `nivel` + `codigo` e resolve `ID_COBERTURA` pela chave única (escrita guardada não devolve id, D-03); uma linha por campo alterado, ação derivada. `limiteDeCobertura` só considera a linha cujo alvo da curva é > 0 (o `DEFAULT 0` senão barraria tudo). |
+| R-103 | 011 consome da 012 só `alvoDias` (estoque máximo = alvo × consumo, sem tolerância — R-089); no merge das duas features o integrador troca `limiteDias` por `alvoDias` em `montarRessuprimento` (uma linha). |
+| R-104 | Dívida achada pela 012 na 003 (**D-32**): `abas/Itens.tsx` chama `itemDeProdutoBuscado(linha, [], …)` com a lista de coberturas vazia — produto adicionado por busca cai sempre no padrão 35 mesmo com parametrização. Corrigida pelo integrador na S4 da onda 4 (passar a lista carregada), com teste. |
+| R-105 | Base da onda 4 (S2) só depois do merge da S4 da onda 3 (os dois tocam `config.mjs`, `mysql-dialect.mjs`, `permissoes.ts`, `App.tsx`, `server-functions.ts`); a base **não** troca as colunas de `SGC_COBERTURA` nem o tipo de `COBERTURA_LIMITE` — isso é da 012 na S3, junto do código que os lê (senão a 003 quebra no meio). A base cria só `SGC_PARAMETRO_COMPRA`, `SGC_VENDA_DESCONSIDERADA`, `SGC_COBERTURA_LOG`, as colunas de `PCEST`, os shims, stubs, mapa, permissões, rota e menu. |
+
 ### Modelo de dados da onda 4
 
 | Tabela | Conteúdo | Spec |
@@ -565,13 +581,14 @@ pode reverter qualquer uma antes da S3.
 | `SGC_VENDA_DESCONSIDERADA` | `ID`, `NUMTRANSITEM INT UNIQUE`, `CODPROD`, `CODFILIAL`, `DTMOV VARCHAR(10)`, `QUANTIDADE DECIMAL(15,3)`, `MOTIVO VARCHAR(500)`, `POR`, `EM` | 011 |
 | `SGC_COBERTURA` (onda 1, emendada) | `LIMITE_DIAS` sai; entram `ALVO_A_DIAS`, `TOLERANCIA_A_PCT`, `ALVO_B_DIAS`, `TOLERANCIA_B_PCT`, `ALVO_C_DIAS`, `TOLERANCIA_C_PCT` (`INT NOT NULL DEFAULT 0`; `DECIMAL(5,2)` para as tolerâncias) | 012 |
 | `SGC_COBERTURA_LOG` | `ID`, `ID_COBERTURA`, `CAMPO`, `ANTES VARCHAR(100)`, `DEPOIS VARCHAR(100)`, `ACAO` (`criou`/`alterou`/`desativou`/`reativou`), `POR`, `EM` | 012 |
-| `SGC_PEDIDO.ORIGEM` | ganha o valor `compras_inteligentes` (VARCHAR, só no comentário) | 011 |
+| `SGC_PEDIDO.ORIGEM` | ganha o valor `compras_inteligentes` (`VARCHAR(20)`, só no comentário; R-098) | 011 |
+| `SGC_PEDIDO_ITEM.COBERTURA_LIMITE` | `INT` → `DECIMAL(15,2)` (R-101) | 012 |
 
 ### Server functions da onda 4 (nomes fixos; detalhes nos plans)
 
 | Spec | Leitura / JS | Escrita (SQL) |
 |---|---|---|
-| 011 | `sgcWintRessuprimento` (Oracle: `{{codfornec}}`, `{{codfilial}}`, `{{dataInicio}}`, `{{dataFim}}`, `{{excluir}}` → uma linha por produto ativo com descrição, embalagem, unidade, depto, seção, custo, últimas entrada/saída, estoque líquido e parcelas, trânsito, lead medido, consumo ponderado, volatilidade, venda total e pública do período), `sgcWintProdutoHistorico` (12 meses), `sgcWintProdutoUltimasCompras`, `sgcWintProdutoEstoqueFiliais`, `sgcParametrosCompraListar` (fornecedor + filial → linha do fornecedor e linhas de SKU), `sgcVendasDesconsideradasListar`, `sgcEficienciaComprador` | `sgcEscParametroCompraSalvar` (upsert), `sgcEscParametroCompraSilenciar`, `sgcEscParametroCompraRestaurar`, `sgcEscVendaDesconsiderar`, `sgcEscVendaReconsiderar` |
+| 011 | `sgcWintRessuprimento` (Oracle: `{{codfornec}}`, `{{codfilial}}`, `{{dataInicio}}`, `{{dataFim}}`, `{{excluir}}` → uma linha por produto ativo com descrição, embalagem, unidade, depto, seção, custo, últimas entrada/saída, estoque líquido e parcelas, trânsito, lead medido, consumo ponderado, volatilidade, venda total e pública do período), `sgcWintProdutoHistorico` (12 meses), `sgcWintProdutoUltimasCompras`, `sgcWintProdutoEstoqueFiliais`, `sgcWintProdutoVendas` (R-099), `sgcParametrosCompraListar` (fornecedor + filial → linha do fornecedor e linhas de SKU), `sgcVendasDesconsideradasListar`, `sgcPedidoAbertoDoFornecedor` (R-099), `sgcEficienciaComprador` | `sgcEscParametroCompraSalvar` (upsert), `sgcEscParametroCompraSilenciar`, `sgcEscParametroCompraRestaurar`, `sgcEscVendaDesconsiderar`, `sgcEscVendaReconsiderar` |
 | 012 | `sgcCoberturaLogListar`; as SFs `sgcCobertura*` do `add-006` ganham as colunas novas (mesmo nome, mesmo id) | `sgcEscCoberturaLogInserir` |
 
 Quem chama o quê: tudo pela tela, `:VAR_USER`; nenhuma SF JavaScript, nenhum cron. Consultas Oracle no
