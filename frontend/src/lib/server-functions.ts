@@ -10,7 +10,10 @@
 // itens do pedido (7301–7311, 7350–7361), 004 agenda de análises (7401–7405,
 // 7450–7458), 005 notas fiscais e faturamento (7501–7515, 7550–7559), 006
 // trânsito e recebimento (7601–7606, 7650–7651), 007 produtos em B.O.
-// (7701–7709, 7750–7756).
+// (7701–7709, 7750–7756); 78xx e 79xx por spec da onda 3: 008 solicitações do
+// comercial (7801–7807, 7850–7857), 009 indicadores e relatórios (7901–7917,
+// 7950–7952). A 010 (extrato do pedido) não tem SF própria: lê
+// sgcPedidoCarregar (002) e sgcNfListar (005).
 
 
 export const SERVER_FUNCTION_NAMES = {
@@ -205,6 +208,43 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscPedidoPrevisaoBo: 'sgcEscPedidoPrevisaoBo',
   sgcEscBoDocumentoInserir: 'sgcEscBoDocumentoInserir',
   sgcEscPedidoAlertaBo: 'sgcEscPedidoAlertaBo',
+
+  sgcWintClienteBuscar: 'sgcWintClienteBuscar',
+  sgcWintRastreioSolicitacoes: 'sgcWintRastreioSolicitacoes',
+  sgcSolicitacoesListar: 'sgcSolicitacoesListar',
+  sgcSolicitacoesListarTotal: 'sgcSolicitacoesListarTotal',
+  sgcSolicitacoesDaMontagem: 'sgcSolicitacoesDaMontagem',
+  sgcSolicitacaoCarregar: 'sgcSolicitacaoCarregar',
+  sgcSolicitacaoIncluirNoPedido: 'sgcSolicitacaoIncluirNoPedido',
+  sgcEscSolicitacaoInserir: 'sgcEscSolicitacaoInserir',
+  sgcEscSolicitacaoAvaliar: 'sgcEscSolicitacaoAvaliar',
+  sgcEscSolicitacaoCancelar: 'sgcEscSolicitacaoCancelar',
+  sgcEscSolicitacaoVincular: 'sgcEscSolicitacaoVincular',
+  sgcEscSolicitacaoDesvincular: 'sgcEscSolicitacaoDesvincular',
+  sgcEscSolicitacaoHistoricoInserir: 'sgcEscSolicitacaoHistoricoInserir',
+  sgcEscItemDeSolicitacaoInserir: 'sgcEscItemDeSolicitacaoInserir',
+  sgcEscSolicitacaoHistoricoRegistrar: 'sgcEscSolicitacaoHistoricoRegistrar',
+
+  sgcIndResumo: 'sgcIndResumo',
+  sgcIndPedidosPorFase: 'sgcIndPedidosPorFase',
+  sgcIndAgendaAtrasos: 'sgcIndAgendaAtrasos',
+  sgcIndProdutosBo: 'sgcIndProdutosBo',
+  sgcIndPerfilFornecedor: 'sgcIndPerfilFornecedor',
+  sgcIndLeadTime: 'sgcIndLeadTime',
+  sgcWintComprasVsVendas: 'sgcWintComprasVsVendas',
+  sgcSlaPedidosKpis: 'sgcSlaPedidosKpis',
+  sgcSlaPedidosListar: 'sgcSlaPedidosListar',
+  sgcSlaPedidosListarTotal: 'sgcSlaPedidosListarTotal',
+  sgcSlaPedidoFases: 'sgcSlaPedidoFases',
+  sgcSolicitacoesFunil: 'sgcSolicitacoesFunil',
+  sgcSolicitacoesPorVendedor: 'sgcSolicitacoesPorVendedor',
+  sgcRelatoriosListar: 'sgcRelatoriosListar',
+  sgcRelatorioPedidos: 'sgcRelatorioPedidos',
+  sgcRelatorioPedidosTotal: 'sgcRelatorioPedidosTotal',
+  sgcRelatorioAgregar: 'sgcRelatorioAgregar',
+  sgcEscRelatorioInserir: 'sgcEscRelatorioInserir',
+  sgcEscRelatorioAtualizar: 'sgcEscRelatorioAtualizar',
+  sgcEscRelatorioExcluir: 'sgcEscRelatorioExcluir',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -399,4 +439,41 @@ export const SERVER_FUNCTIONS = {
   sgcEscPedidoPrevisaoBo: '7754',
   sgcEscBoDocumentoInserir: '7755',
   sgcEscPedidoAlertaBo: '7756',
+
+  sgcWintClienteBuscar: '7801',
+  sgcWintRastreioSolicitacoes: '7802',
+  sgcSolicitacoesListar: '7803',
+  sgcSolicitacoesListarTotal: '7804',
+  sgcSolicitacoesDaMontagem: '7805',
+  sgcSolicitacaoCarregar: '7806',
+  sgcSolicitacaoIncluirNoPedido: '7807',
+  sgcEscSolicitacaoInserir: '7850',
+  sgcEscSolicitacaoAvaliar: '7851',
+  sgcEscSolicitacaoCancelar: '7852',
+  sgcEscSolicitacaoVincular: '7853',
+  sgcEscSolicitacaoDesvincular: '7854',
+  sgcEscSolicitacaoHistoricoInserir: '7855',
+  sgcEscItemDeSolicitacaoInserir: '7856',
+  sgcEscSolicitacaoHistoricoRegistrar: '7857',
+
+  sgcIndResumo: '7901',
+  sgcIndPedidosPorFase: '7902',
+  sgcIndAgendaAtrasos: '7903',
+  sgcIndProdutosBo: '7904',
+  sgcIndPerfilFornecedor: '7905',
+  sgcIndLeadTime: '7906',
+  sgcWintComprasVsVendas: '7907',
+  sgcSlaPedidosKpis: '7908',
+  sgcSlaPedidosListar: '7909',
+  sgcSlaPedidosListarTotal: '7910',
+  sgcSlaPedidoFases: '7911',
+  sgcSolicitacoesFunil: '7912',
+  sgcSolicitacoesPorVendedor: '7913',
+  sgcRelatoriosListar: '7914',
+  sgcRelatorioPedidos: '7915',
+  sgcRelatorioPedidosTotal: '7916',
+  sgcRelatorioAgregar: '7917',
+  sgcEscRelatorioInserir: '7950',
+  sgcEscRelatorioAtualizar: '7951',
+  sgcEscRelatorioExcluir: '7952',
 };
