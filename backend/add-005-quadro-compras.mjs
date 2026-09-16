@@ -30,36 +30,28 @@ import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { idsDoMapa } from './ids-do-mapa.mjs';
+import { fragmento } from './lib/fragmentos.mjs';
 
 const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', import.meta.url));
 
-/**
- * Blocos de pendência do gancho, entregues por cada spec em backend/sql/ e
- * colados aqui (R-030/R-044). O arquivo traz uma ou mais colunas, cada uma
- * começando com `COALESCE(` na coluna 0; as linhas de comentário, a vírgula
- * entre as colunas e a vírgula final são deste carregador, não do arquivo.
- */
-function fragmentoDePendencias(arquivo) {
-  const corpo = readFileSync(new URL(`./sql/${arquivo}`, import.meta.url), 'utf8')
-    .split('\n').filter((linha) => !linha.trimStart().startsWith('--')).join('\n').trim();
-  // A vírgula entre as colunas e a final são daqui: fragmento que já venha com
-  // vírgula no fim de uma coluna não a duplica.
-  return `${corpo.split(/\n(?=COALESCE\()/).map((coluna) => coluna.trim().replace(/,$/, '')).join(',\n')},`;
-}
-
+// Blocos de pendência do gancho, entregues por cada spec em backend/sql/ e
+// colados aqui (R-030/R-044). O carregador é o `fragmento(nome)` compartilhado
+// de backend/lib/fragmentos.mjs (R-070/R-074), que a onda 3 também usa para a
+// régua de situação da solicitação.
+//
 // Saída da Análise (spec 003, RF-022/RN-012): PENDENCIAS e PENDENCIAS_MOTIVO —
 // o MESMO texto de sgcAnaliseSaidaVerificar (add-006), com {{cardId}} = C.ID.
-const SQL_PENDENCIAS = fragmentoDePendencias('pendencias-analise.sql');
+const SQL_PENDENCIAS = fragmento('pendencias-analise');
 // Onda 2, spec 005 (R-030): entrada em Trânsito exige ≥ 1 nota vinculada
 // (RN-012) e a conclusão, vindo de Faturamento ou de B.O., exige zero
 // conferência de nota sem decisão (RN-011).
-const SQL_PENDENCIAS_NF = fragmentoDePendencias('pendencias-transito.sql')
-  + '\n' + fragmentoDePendencias('pendencias-conclusao-nf.sql');
+const SQL_PENDENCIAS_NF = fragmento('pendencias-transito')
+  + '\n' + fragmento('pendencias-conclusao-nf');
 // Onda 2, spec 007 (R-030): entrar em B.O. exige ≥ 1 item marcado (RN-003) e
 // a conclusão exige zero item de B.O. em aberto (RN-008); os ramos de MOTIVO
 // vêm depois dos da NF (R-044).
-const SQL_PENDENCIAS_BO = fragmentoDePendencias('pendencias-bo-entrada.sql')
-  + '\n' + fragmentoDePendencias('pendencias-conclusao-bo.sql');
+const SQL_PENDENCIAS_BO = fragmento('pendencias-bo-entrada')
+  + '\n' + fragmento('pendencias-conclusao-bo');
 // Onda 2, R-023: o quarto ramo do feed de notificações (avisos de processo),
 // de backend/sql/notificacoes-avisos.sql (spec 005), sem as linhas de comentário.
 const SQL_AVISOS = readFileSync(new URL('./sql/notificacoes-avisos.sql', import.meta.url), 'utf8')
