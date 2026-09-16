@@ -157,7 +157,7 @@ test('C-021 / R-056 e R-061 (onda 3): chaves novas por persona — o comercial r
   assert.equal(menuParaPersona(permissoesDe('comercial', 'MEMBER')).length, 2, 'o comercial tem exatamente 2 itens de menu');
 });
 
-test('R-095 (onda 4): chaves novas de compras inteligentes — ver inclui a diretoria e atravessa READ_ONLY (como verCoberturas), operar é de admin/analista/gestor, parametrizar só de admin e gestor, e o item de menu entra logo depois de "Novo pedido"', () => {
+test('C-023 / RN-019 (011, R-095): chaves novas de compras inteligentes — ver inclui a diretoria e atravessa READ_ONLY (como verCoberturas), operar é de admin/analista/gestor, parametrizar só de admin e gestor, e o item de menu entra logo depois de "Novo pedido"', () => {
   const chave = (nome) => PERSONAS.filter((p) => permissoesDe(p, 'MEMBER')[nome]);
 
   assert.deepEqual(chave('verComprasInteligentes'), ['admin', 'analista', 'gestor', 'diretoria']);
