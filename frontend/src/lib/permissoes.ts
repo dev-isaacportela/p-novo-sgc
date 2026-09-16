@@ -70,9 +70,10 @@ export interface Permissoes {
   verNfsAtraso: boolean;
   verBo: boolean;
   operarBo: boolean;
-  // Onda 3 (R-056/R-061 do 000): solicitações do comercial (008) e análises/
-  // relatórios (009). `ver*` não zera com READ_ONLY; `criar*`/`avaliar*`/
-  // `salvar*` zeram, como toda escrita. `criarSolicitacao` NÃO vai para
+  // Onda 3 (R-056/R-061 do 000): solicitações do comercial (008) e análises
+  // (009). `ver*` não zera com READ_ONLY; `criar*`/`avaliar*` zeram, como toda
+  // escrita. `verRelatorios`/`salvarRelatorio` saíram com a tela de relatórios
+  // salvos, adiada em 2026-09-16 (R-114). `criarSolicitacao` NÃO vai para
   // analista nem gestor: o autor É o vendedor (RN-002 da 008) — comprador
   // registrando criaria demanda sem vendedor por trás. O recorte "o comercial
   // só vê as suas" não é chave: é o recorte do servidor (RF-019 da 008).
@@ -80,8 +81,6 @@ export interface Permissoes {
   criarSolicitacao: boolean;
   avaliarSolicitacao: boolean;
   verAnalises: boolean;
-  verRelatorios: boolean;
-  salvarRelatorio: boolean;
 }
 
 /** Quem faz o quê, por persona (a tabela do plan.md § Regras puras). */
@@ -93,7 +92,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNotasFiscais: true, operarNf: true, verFaturamentoPendente: true, registrarContato: true,
     verNfsAtraso: true, verBo: true, operarBo: true,
     verSolicitacoes: true, criarSolicitacao: true, avaliarSolicitacao: true,
-    verAnalises: true, verRelatorios: true, salvarRelatorio: true,
+    verAnalises: true,
   },
   analista: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: false, aprovarDiretoria: false,
@@ -102,7 +101,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNotasFiscais: true, operarNf: true, verFaturamentoPendente: true, registrarContato: true,
     verNfsAtraso: true, verBo: true, operarBo: true,
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: true,
-    verAnalises: true, verRelatorios: true, salvarRelatorio: true,
+    verAnalises: true,
   },
   gestor: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: false,
@@ -111,7 +110,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNotasFiscais: true, operarNf: true, verFaturamentoPendente: true, registrarContato: true,
     verNfsAtraso: true, verBo: true, operarBo: true,
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: true,
-    verAnalises: true, verRelatorios: true, salvarRelatorio: true,
+    verAnalises: true,
   },
   diretoria: {
     // CA-01 + P-07: a diretoria cancela, mas só na fase dela — quem cobra a
@@ -123,7 +122,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNotasFiscais: true, operarNf: false, verFaturamentoPendente: true, registrarContato: false,
     verNfsAtraso: true, verBo: true, operarBo: false,
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: false,
-    verAnalises: true, verRelatorios: true, salvarRelatorio: false,
+    verAnalises: true,
   },
   comercial: {
     // D-017: a única persona sem acesso ao quadro — fora do menu, fora da rota
@@ -135,7 +134,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verNotasFiscais: false, operarNf: false, verFaturamentoPendente: false, registrarContato: false,
     verNfsAtraso: false, verBo: true, operarBo: false,
     verSolicitacoes: true, criarSolicitacao: true, avaliarSolicitacao: false,
-    verAnalises: false, verRelatorios: false, salvarRelatorio: false,
+    verAnalises: false,
   },
 };
 
@@ -173,8 +172,6 @@ export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes 
     criarSolicitacao: operar(base.criarSolicitacao),
     avaliarSolicitacao: operar(base.avaliarSolicitacao),
     verAnalises: base.verAnalises,
-    verRelatorios: base.verRelatorios,
-    salvarRelatorio: operar(base.salvarRelatorio),
     somenteProprios: acesso === 'RESTRICTED',
     somenteLeitura,
   };
@@ -204,9 +201,9 @@ const MENU: readonly (ItemDeMenu & { exige: keyof Permissoes })[] = [
   { grupo: 'Fiscal', to: '/faturamentos-pendentes', label: 'Faturamentos pendentes', exige: 'verFaturamentoPendente' },
   { grupo: 'Fiscal', to: '/nfs-em-atraso', label: 'NFs em atraso', exige: 'verNfsAtraso' },
   // Onda 3 (R-061/R-063): grupo novo, entre Fiscal e Administração. O comercial
-  // não chega às rotas — fora do menu E porteiro na tela.
+  // não chega à rota — fora do menu E porteiro na tela. "Relatórios" entraria
+  // aqui ao lado; a tela foi adiada (R-114) e o grupo fica só com Análises.
   { grupo: 'Gestão', to: '/analises', label: 'Análises', exige: 'verAnalises' },
-  { grupo: 'Gestão', to: '/relatorios', label: 'Relatórios', exige: 'verRelatorios' },
   { grupo: 'Administração', to: '/seguranca', label: 'Segurança', exige: 'verSeguranca' },
 ];
 

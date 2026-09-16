@@ -23,7 +23,6 @@ import NfsAtrasoPage from '@/pages/fiscal/NfsAtrasoPage';
 import BoPage from '@/pages/bo/BoPage';
 import SolicitacoesPage from '@/pages/solicitacoes/SolicitacoesPage';
 import AnalisesPage from '@/pages/analises/AnalisesPage';
-import RelatoriosPage from '@/pages/relatorios/RelatoriosPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -105,7 +104,6 @@ function Autenticado() {
         <Route path="bo" element={<BoPage />} />
         <Route path="solicitacoes" element={<SolicitacoesPage />} />
         <Route path="analises" element={<AnalisesPage />} />
-        <Route path="relatorios" element={<RelatoriosPage />} />
         <Route path="*" element={<Navigate to="/quadro" replace />} />
       </Route>
     </Routes>

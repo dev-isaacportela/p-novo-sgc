@@ -11,8 +11,10 @@
 // 7450–7458), 005 notas fiscais e faturamento (7501–7515, 7550–7559), 006
 // trânsito e recebimento (7601–7606, 7650–7651), 007 produtos em B.O.
 // (7701–7709, 7750–7756); 78xx e 79xx por spec da onda 3: 008 solicitações do
-// comercial (7801–7807, 7850–7857), 009 indicadores e relatórios (7901–7917,
-// 7950–7952). A 010 (extrato do pedido) não tem SF própria: lê
+// comercial (7801–7807, 7850–7857), 009 indicadores (7901–7913). Os ids
+// 7914–7917 e 7950–7952 eram de `/relatorios`, adiado em 2026-09-16 (R-114):
+// a faixa fica reservada para quando a tela voltar. A 010 (extrato do pedido)
+// não tem SF própria: lê
 // sgcPedidoCarregar (002) e sgcNfListar (005).
 
 
@@ -238,13 +240,6 @@ export const SERVER_FUNCTION_NAMES = {
   sgcSlaPedidoFases: 'sgcSlaPedidoFases',
   sgcSolicitacoesFunil: 'sgcSolicitacoesFunil',
   sgcSolicitacoesPorVendedor: 'sgcSolicitacoesPorVendedor',
-  sgcRelatoriosListar: 'sgcRelatoriosListar',
-  sgcRelatorioPedidos: 'sgcRelatorioPedidos',
-  sgcRelatorioPedidosTotal: 'sgcRelatorioPedidosTotal',
-  sgcRelatorioAgregar: 'sgcRelatorioAgregar',
-  sgcEscRelatorioInserir: 'sgcEscRelatorioInserir',
-  sgcEscRelatorioAtualizar: 'sgcEscRelatorioAtualizar',
-  sgcEscRelatorioExcluir: 'sgcEscRelatorioExcluir',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -469,11 +464,4 @@ export const SERVER_FUNCTIONS = {
   sgcSlaPedidoFases: '7911',
   sgcSolicitacoesFunil: '7912',
   sgcSolicitacoesPorVendedor: '7913',
-  sgcRelatoriosListar: '7914',
-  sgcRelatorioPedidos: '7915',
-  sgcRelatorioPedidosTotal: '7916',
-  sgcRelatorioAgregar: '7917',
-  sgcEscRelatorioInserir: '7950',
-  sgcEscRelatorioAtualizar: '7951',
-  sgcEscRelatorioExcluir: '7952',
 };

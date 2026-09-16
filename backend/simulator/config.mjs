@@ -112,9 +112,10 @@ export const CHECK_INPUT = {
   // — um par válido, para o gerador do CONNECT BY render 1 linha. busca/limite/
   // offset/status/situacao/codfornec/codfilial/cardId já vêm das specs acima.
   codcli: '0', pares: '5301:3:2026-08-01:9201', minhas: '0', vendedor: '0',
-  // spec 009 (indicadores e relatórios): só chaves NOVAS. Nomes escolhidos
-  // para não colidir — `campoAgrupar` em vez de `campo`, `responsavelId` em vez
-  // de `responsavel`, `fase` em vez de `faseId` (002). dataInicio/dataFim/hoje/
-  // idCard/codfilial/codfornec já vêm com valores que servem aqui.
-  fase: '', soVencidos: '', campoAgrupar: 'fase', responsavelId: '0', prioridade: '',
+  // spec 009 (indicadores): só chaves NOVAS. `fase` em vez de `faseId` (002)
+  // para não colidir; dataInicio/dataFim/hoje/idCard/codfilial/codfornec já vêm
+  // com valores que servem aqui. `campoAgrupar` e `responsavelId` saíram com
+  // `/relatorios` (R-114) — nenhuma SF viva as usa. `prioridade` FICA: quem a
+  // usa é o sgcEscSolicitacaoInserir da 008.
+  fase: '', soVencidos: '', prioridade: '',
 };

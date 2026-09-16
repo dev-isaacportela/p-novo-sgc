@@ -24,7 +24,10 @@ import { seed005 } from './seed/005-notas-fiscais.mjs';
 import { seed006 } from './seed/006-transito.mjs';
 import { seed007 } from './seed/007-bo.mjs';
 import { seed008 } from './seed/008-solicitacoes.mjs';
-import { seed009 } from './seed/009-indicadores.mjs';
+// A 009 não tem seed: os indicadores leem o que as ondas 1 e 2 e a 008 já
+// semearam (R-062), e as quatro linhas de SGC_RELATORIO saíram com
+// `/relatorios` (R-114). Os estados de SLA e agenda que os cenários precisam
+// são arranjados dentro do próprio teste, em `smoke/009-indicadores.mjs`.
 
 const iso = (data) => data.toISOString().slice(0, 19);
 
@@ -104,7 +107,6 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
   seed006(db, CENARIO);
   seed007(db, CENARIO);
   seed008(db, CENARIO);
-  seed009(db, CENARIO);
 
   db.close();
   return counts;
