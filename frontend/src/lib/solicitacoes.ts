@@ -357,15 +357,34 @@ export function resumoRastreio(itens: RastreioSolicitacao[]): Record<string, num
 
 /* ─────────────── CSV do rastreio (C-023, R-037) ─────────────── */
 
+/** Uma linha de `sgcSolicitacoesListar` — o contrato que a tela inteira consome. */
 export interface LinhaSolicitacao {
   ID: number;
   CODPROD: number;
   DESCRICAO: string;
+  EMBALAGEM: string;
+  UNIDADE: string;
+  CODFORNEC: number;
+  FORNECEDOR: string;
   CODFILIAL: string;
-  FILIAL?: string;
+  FILIAL: string;
+  QUANTIDADE: number;
+  JUSTIFICATIVA: string;
   CODCLI: number;
   CLIENTE: string;
+  CNPJ_CLIENTE: string;
+  PRIORIDADE: string;
+  STATUS: string;
+  SITUACAO: string;
+  MOTIVO: string;
+  ID_CARD: number;
+  TITULO_CARD: string;
+  ID_ITEM: number;
+  AVALIADO_POR_NOME: string;
   AVALIADO_EM: string;
+  CRIADO_POR: number;
+  CRIADO_POR_NOME: string;
+  CRIADO_EM: string;
 }
 
 /** As MESMAS colunas da tabela do painel, na mesma ordem. */
