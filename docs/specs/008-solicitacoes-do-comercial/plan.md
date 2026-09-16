@@ -12,7 +12,7 @@
 | Backend escrito local, executado no sandbox | sim | arquivo novo `backend/add-011-solicitacoes.mjs` (R-051). As 2 tabelas novas e a coluna nova de `SGC_PEDIDO_ITEM` entram no `setup-backend.mjs` pela **base da onda 3 (S2)**, **no `CREATE`** (nada foi publicado ainda — R-051/onda 3), antes do fan-out. Nada do `mitra-sdk` roda da máquina local |
 | Migrations append-only | sim | nada em `backend/migrations/`; o DDL vive no `CREATE TABLE` do `setup-backend.mjs` e a migration é gerada pelo sandbox |
 | Leitura e escrita por Server Function | sim | tela e bloco usam `linhas()`/`acao()` de `src/lib/mitra-api.ts`; zero `listRecords`/`patchRecord`. Escrita de pessoa é SF SQL guardada por `:VAR_USER` chamada direto da tela; escrita chamada de dentro de um JS recebe `{{usuarioId}}` e leva a **mesma** guarda (R-013, achado A1 da onda 1) mais a checagem de fase e dono (`pedidoEmAnalise`, A2) |
-| Simulador cobre a feature | sim | `simulator/seed/008-solicitacoes.mjs` só insere linhas (5 produtos e 5 clientes próprios, vendas com `NUMTRANSITEM ≥ 950001`, 3 cards e 13 solicitações); `PC*` são do integrador (R-017/R-062); `sim:check` roda as 5 SQL de leitura |
+| Simulador cobre a feature | sim | `simulator/seed/008-solicitacoes.mjs` só insere linhas (5 produtos e 5 clientes próprios, vendas com `NUMTRANSITEM ≥ 950001`, 3 cards próprios (R-073) e 15 solicitações); `PC*` são do integrador (R-017/R-062); `sim:check` roda as 5 SQL de leitura |
 | Testes automatizados obrigatórios | sim | 23 cenários e 18 regras mapeados em `backend/simulator/smoke/008-solicitacoes.mjs` e em `frontend/tests/solicitacoes.test.mjs` |
 | Design tokens, sem cor literal | sim | tela, diálogos e bloco montados com o vocabulário de `components/page.tsx` (`PageHeader`, `Panel`, `Toolbar`, `FilterChip`, `SearchInput`, `SelectMenu`, `Table`, `Status`, `Code`, `Dash`, `Badge`, `Pagination`, `EmptyState`, `Alert`, `Dialog`, `LabelledField`) e `DatePicker` onde houver data; zero hex, zero `style={{}}`, zero classe Tailwind solta |
 | Simplicidade | sim | nenhuma dependência nova; a regra de classificação do rastreio é um módulo puro de ~130 linhas com um consumidor real (o painel); nenhuma abstração com uma implementação só; a situação de atendimento é **uma expressão SQL**, não uma tabela de estado |
@@ -137,32 +137,87 @@ As escritas **internas** (7853, 7856, 7857) levam a **mesma** guarda sobre `{{us
 o perfil business libera todas as SFs, e "só o JS confere" não protege quem chama a escrita
 por fora da tela (achado A1 da onda 1).
 
-### A expressão da situação de atendimento (R-052)
-
-Constante do módulo (`SITUACAO`), usada literalmente em três lugares — a coluna de
-`sgcSolicitacoesListar`, o filtro `{{situacao}}` dela e o `sgcSolicitacoesListarTotal` —,
-nunca copiada à mão:
+**Fase e dono, nas duas escritas que recebem um card** (C-12 da revisão cruzada; é o achado
+A-6/D-19 da onda 2 aplicado aqui): `sgcEscSolicitacaoDesvincular` (7854) e
+`sgcEscSolicitacaoHistoricoInserir` (7855) recebem `{{idCard}}` da tela e, só com a guarda
+de persona, um analista `RESTRICTED` desvincularia solicitação de card alheio e um pedido
+fora da montagem seria alterado. A guarda ganha um terceiro trecho **dentro do mesmo
+`EXISTS`** (reusando o alias `IU` já filtrado), no formato de `guardaFaseEDono` do
+`add-010-bo.mjs`:
 
 ```sql
+AND EXISTS (
+      SELECT 1 FROM KB_CARD C
+      JOIN SGC_FASE SF ON SF.BOARD_ID = C.BOARD_ID AND SF.FASE_ID = C.FASE_ID AND SF.CHAVE = 'analise'
+      WHERE C.ID = {{idCard}} AND C.EXCLUIDO_EM IS NULL
+        AND (COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'RESTRICTED' OR C.CRIADO_POR = :VAR_USER)
+    )
+```
+
+Em 7854 o trecho é incondicional (`{{idCard}}` é sempre o card em montagem). Em 7855, que
+tem os dois ramos, ele entra como `AND ({{idCard}} = 0 OR EXISTS (…))`: o ramo por
+`{{id}}` (aprovação, recusa, cancelamento) não toca card nenhum e não pode ser barrado por
+um `C.ID = 0` que nunca casa.
+
+É a mesma condição de `pedidoEmAnalise` (003) que o `sgcSolicitacaoIncluirNoPedido` já
+aplica em JS, agora também em SQL — os dois caminhos do vínculo passam pela mesma régua. As
+escritas por id (7853, 7856) continuam protegidas pelo `pedidoEmAnalise` do JS que as
+chama; 7850, 7851 e 7852 operam uma solicitação e não recebem card.
+
+### A régua da situação de atendimento — `backend/sql/situacao-solicitacao.sql` (R-052, R-070, R-075)
+
+A régua **não é constante deste módulo**: é um arquivo, no mesmo formato de
+`backend/sql/pendencias-transito.sql` (005) — cabeçalho em `--` com o contrato, e o corpo
+com uma expressão escalar. A 008 entrega o arquivo (S3); `add-011` **e** `add-012` (009) o
+carregam pelo loader generalizado da base:
+
+```js
+import { fragmento } from './lib/fragmentos.mjs';   // R-074, entrega da base (S2)
+const SITUACAO = fragmento('situacao-solicitacao.sql');
+```
+
+`fragmento(nome)` lê `backend/sql/<nome>`, tira as linhas de comentário e devolve o texto —
+é o `fragmentoDePendencias()` do `add-005` movido para `backend/lib/fragmentos.mjs` pela
+base (R-074), pré-requisito desta spec. Uma régua, um arquivo: a 009 **compõe o mesmo
+arquivo** no `sgcSolicitacoesFunil` (R-076), e o teste RN-010 dela cruza o funil com
+`sgcSolicitacoesListar` — se as duas divergissem, o cruzamento falharia.
+
+**Contrato de composição declarado no cabeçalho do arquivo (R-075).** Quem compõe a régua
+usa estes aliases e estes três `LEFT JOIN`, sem exceção:
+
+| Alias | Tabela | Junção obrigatória |
+|---|---|---|
+| `S` | `SGC_SOLICITACAO` | a tabela de origem da consulta |
+| `C` | `KB_CARD` | `LEFT JOIN KB_CARD C ON C.ID = S.ID_CARD AND C.EXCLUIDO_EM IS NULL` |
+| `SF` | `SGC_FASE` | `LEFT JOIN SGC_FASE SF ON SF.BOARD_ID = C.BOARD_ID AND SF.FASE_ID = C.FASE_ID` |
+| `I` | `SGC_PEDIDO_ITEM` | `LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD AND I.STATUS <> 'removido'` |
+
+`SF` (e não `F`) porque `F` já é o alias de `SGC_FORNECEDOR` em consultas da 009 que
+compõem a mesma régua; o nome vem do contrato, não da consulta.
+
+```sql
+-- backend/sql/situacao-solicitacao.sql — corpo
 CASE
-  WHEN S.ID_CARD = 0 OR C.ID IS NULL       THEN 'sem_pedido'
-  WHEN F.CHAVE = 'cancelado'               THEN 'nao_atendida'
-  WHEN COALESCE(I.STATUS, '') = 'bo'       THEN 'nao_atendida'
-  WHEN F.CHAVE = 'concluido'               THEN 'atendida'
-  WHEN F.CHAVE = 'analise'                 THEN 'em_analise'
-  WHEN F.CHAVE IN ('tecnica', 'diretoria') THEN 'em_aprovacao'
-  WHEN F.CHAVE = 'envio'                   THEN 'em_envio'
-  WHEN F.CHAVE = 'enviado'                 THEN 'enviada'
-  WHEN F.CHAVE = 'transito'                THEN 'em_transito'
-  WHEN F.CHAVE IN ('faturamento', 'bo')    THEN 'em_faturamento'
+  WHEN S.ID_CARD = 0 OR C.ID IS NULL        THEN 'sem_pedido'
+  WHEN SF.CHAVE = 'cancelado'               THEN 'nao_atendida'
+  WHEN COALESCE(I.STATUS, '') = 'bo'        THEN 'nao_atendida'
+  WHEN SF.CHAVE = 'concluido'               THEN 'atendida'
+  WHEN SF.CHAVE = 'analise'                 THEN 'em_analise'
+  WHEN SF.CHAVE IN ('tecnica', 'diretoria') THEN 'em_aprovacao'
+  WHEN SF.CHAVE = 'envio'                   THEN 'em_envio'
+  WHEN SF.CHAVE = 'enviado'                 THEN 'enviada'
+  WHEN SF.CHAVE = 'transito'                THEN 'em_transito'
+  WHEN SF.CHAVE IN ('faturamento', 'bo')    THEN 'em_faturamento'
   ELSE 'sem_pedido'
 END
 ```
 
-`C` é `KB_CARD` (com `EXCLUIDO_EM IS NULL`), `F` é `SGC_FASE` pelo `(BOARD_ID, FASE_ID)` do
-card e `I` é o item do pedido pelo par `(ID_CARD, CODPROD)` com `STATUS <> 'removido'`.
-Card excluído cai em `sem_pedido` — a solicitação volta a ser demanda em aberto, e não
-herda a fase de um card que não existe mais.
+Dentro da 008 a régua entra em três lugares — a coluna `SITUACAO` de
+`sgcSolicitacoesListar`, o filtro `{{situacao}}` dela e o `sgcSolicitacoesListarTotal` —,
+sempre por `${SITUACAO}`, nunca copiada à mão. Card excluído cai em `sem_pedido`: a
+solicitação volta a ser demanda em aberto, e não herda a fase de um card que não existe
+mais. R-076: a régua devolve `sem_pedido` também para `pendente`, `recusada` e `cancelada`
+— é por isso que o funil da 009 agrega por `STATUS` **e** `SITUACAO`, e não só por uma.
 
 ### Leituras — WinThor (Oracle, `jdbcId` resolvido por nome)
 
@@ -277,7 +332,7 @@ SELECT S.ID, S.CODPROD, S.DESCRICAO, S.EMBALAGEM, S.UNIDADE,
   S.CRIADO_POR, COALESCE(UC.NOME, '') AS CRIADO_POR_NOME, COALESCE(S.CRIADO_EM, '') AS CRIADO_EM
 FROM SGC_SOLICITACAO S
 LEFT JOIN KB_CARD C          ON C.ID = S.ID_CARD AND C.EXCLUIDO_EM IS NULL
-LEFT JOIN SGC_FASE F         ON F.BOARD_ID = C.BOARD_ID AND F.FASE_ID = C.FASE_ID
+LEFT JOIN SGC_FASE SF        ON SF.BOARD_ID = C.BOARD_ID AND SF.FASE_ID = C.FASE_ID
 LEFT JOIN SGC_PEDIDO_ITEM I  ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD AND I.STATUS <> 'removido'
 LEFT JOIN INT_USER UC        ON UC.ID = S.CRIADO_POR
 LEFT JOIN INT_USER UA        ON UA.ID = S.AVALIADO_POR
@@ -294,6 +349,10 @@ WHERE ('{{status}}'    = '' OR S.STATUS = '{{status}}')
 ORDER BY S.CRIADO_EM DESC, S.ID DESC
 LIMIT {{limite}} OFFSET {{offset}}
 ```
+
+Os três primeiros `LEFT JOIN` são o **contrato de composição de R-075**, não escolha desta
+consulta: `C`, `SF` e `I` com essas junções são o que a régua de `situacao-solicitacao.sql`
+pressupõe, e o `add-012` da 009 repete os mesmos aliases.
 
 `RECORTE_COMERCIAL` é o único recorte por autoria de uma listagem do projeto (RF-019), e
 mora **no servidor** — esconder na tela não é recorte:
@@ -353,10 +412,27 @@ guarda SQL (R-013) e chamam as escritas **por id**, passando `usuarioId` explíc
 `inteiro`, `numero`, `texto`, `agora`, `persona`, `pedidoEmAnalise`, `FORA_DA_ANALISE`) é o
 do `add-006-itens.mjs`, copiado como o `add-010` copiou o do `add-006`.
 
-**`sgcSolicitacaoCarregar`** — o detalhe em uma execução. Dois `runQueryMitra`: a linha de
-`sgcSolicitacoesListar` com `{{id}}` no lugar dos filtros (mesmo texto, mesma constante
-`SITUACAO`, mesmo `RECORTE_COMERCIAL` — o comercial não lê a solicitação de outro nem por
-id) e o histórico:
+**`sgcSolicitacaoCarregar`** — o detalhe em uma execução, dois `runQueryMitra`.
+
+A consulta da linha **não** reusa o texto publicado de `sgcSolicitacoesListar`: dentro de um
+`runQueryMitra` o simulador troca marcador sem valor por string vazia, e as condições
+numéricas de filtro (`{{codfornec}} = 0`, `{{vendedor}} = 0`, `{{minhas}} = 0`) virariam
+` = 0` sem operando esquerdo e quebrariam a consulta (C-11 da revisão cruzada). O texto é
+montado por uma **função** do módulo, que o `add-011` usa nos dois lugares:
+
+```js
+// `filtros` são as cláusulas com {{}} (só a SF publicada as passa);
+// `whereExtra` é SQL já interpolado em JS (o JS as passa).
+function selectSolicitacoes(filtros, whereExtra = '') { /* SELECT … FROM … WHERE 1=1 */ }
+
+const SQL_LISTAR = selectSolicitacoes(FILTROS_PUBLICADOS);                 // a SF 7803
+const sql = selectSolicitacoes('', `AND S.ID = ${inteiro(event.id)}`);     // dentro do JS
+```
+
+Nos dois caminhos entram os mesmos `${SITUACAO}`, os mesmos três `LEFT JOIN` de R-075 e o
+mesmo `RECORTE_COMERCIAL` com `:VAR_USER` — o comercial não lê a solicitação de outro nem
+por id. É o desenho de `sgcPedidoCarregar` (002), que também interpola o `cardId` saneado
+em JS em vez de reusar marcadores. A segunda consulta é o histórico:
 
 ```sql
 SELECT H.ID, H.EVENTO, COALESCE(H.DETALHE, '') AS DETALHE,
@@ -419,10 +495,10 @@ zero e o `sgcItensGravar` da 003 recalcula quando a compradora gravar a lista �
 | `sgcEscSolicitacaoAvaliar` | 7851 | `:VAR_USER` + `AVALIAR` | `id`, `status`, `motivo`, `avaliadoEm` | `UPDATE … WHERE ID = {{id}} AND STATUS = 'pendente' AND …` | RF-005, RF-006 |
 | `sgcEscSolicitacaoCancelar` | 7852 | `:VAR_USER` + `REGISTRAR` | `id`, `canceladoEm` | `UPDATE … WHERE ID = {{id}} AND STATUS = 'pendente' AND CRIADO_POR = :VAR_USER` | RF-007 |
 | `sgcEscSolicitacaoVincular` | 7853 | `{{usuarioId}}` + `AVALIAR` | `id`, `idCard`, `idItem`, `vinculadoEm`, `usuarioId` | `UPDATE … WHERE ID = {{id}} AND ID_CARD = 0 AND STATUS IN ('pendente','aprovada')` | RF-009, RN-009 |
-| `sgcEscSolicitacaoDesvincular` | 7854 | `:VAR_USER` + `AVALIAR` | `idCard`, `atualizadoEm` | `UPDATE … WHERE ID_CARD = {{idCard}} AND NOT EXISTS (item vivo)` | RF-011, RN-011 |
-| `sgcEscSolicitacaoHistoricoInserir` | 7855 | `:VAR_USER` + `HISTORICO` | `id`, `idCard`, `evento`, `detalhe`, `em` | `INSERT … SELECT … FROM SGC_SOLICITACAO WHERE …` | RF-013 |
+| `sgcEscSolicitacaoDesvincular` | 7854 | `:VAR_USER` + `AVALIAR` + **fase e dono** | `idCard`, `atualizadoEm` | `UPDATE … WHERE ID_CARD = {{idCard}} AND NOT EXISTS (item vivo)` | RF-011, RN-011 (R-066) |
+| `sgcEscSolicitacaoHistoricoInserir` | 7855 | `:VAR_USER` + `HISTORICO` + **fase e dono no ramo do card** | `id`, `idCard`, `evento`, `detalhe`, `em` | `INSERT … SELECT … FROM SGC_SOLICITACAO WHERE …` | RF-013 |
 | `sgcEscItemDeSolicitacaoInserir` | 7856 | `{{usuarioId}}` + `AVALIAR` | `idCard`, `codprod`, `descricao`, `embalagem`, `unidade`, `quantidade`, `idSolicitacao`, `quando`, `usuarioId` | `INSERT … SELECT … FROM DUAL WHERE … ON DUPLICATE KEY UPDATE` | RF-009, RN-010 |
-| `sgcEscSolicitacaoHistoricoRegistrar` | 7857 | `{{usuarioId}}` + `AVALIAR` | `id`, `evento`, `detalhe`, `em`, `usuarioId` | `INSERT … SELECT … FROM SGC_SOLICITACAO WHERE S.ID = {{id}}` | RF-013 |
+| `sgcEscSolicitacaoHistoricoRegistrar` | 7857 | `{{usuarioId}}` + `AVALIAR` | `id`, `evento`, `detalhe`, `em`, `usuarioId` | `INSERT … SELECT … FROM SGC_SOLICITACAO WHERE S.ID = {{id}}` | RF-013 (R-065) |
 
 ```sql
 -- sgcEscSolicitacaoInserir (7850): as regras de RN-001 moram no WHERE, então
@@ -478,7 +554,7 @@ WHERE ID_CARD = {{idCard}} AND {{idCard}} > 0 AND STATUS = 'aprovada'
                    WHERE I.ID_CARD  = SGC_SOLICITACAO.ID_CARD
                      AND I.CODPROD  = SGC_SOLICITACAO.CODPROD
                      AND I.STATUS  <> 'removido' AND I.QT_PEDIDA > 0)
-  AND <guarda(AVALIAR)>
+  AND <guarda(AVALIAR) + faseEDono('{{idCard}}')>
 
 -- sgcEscSolicitacaoHistoricoInserir (7855): por id (avaliação, cancelamento) OU
 -- pelo card, com o mesmo critério do desvínculo — chamada SEMPRE antes dele,
@@ -493,7 +569,7 @@ WHERE '{{evento}}' IN ('aprovada', 'recusada', 'vinculada', 'desvinculada', 'can
          AND NOT EXISTS (SELECT 1 FROM SGC_PEDIDO_ITEM I
                           WHERE I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD
                             AND I.STATUS <> 'removido' AND I.QT_PEDIDA > 0)) )
-  AND <guarda(HISTORICO)>
+  AND <guarda(HISTORICO) + ({{idCard}} = 0 OR faseEDono('{{idCard}}'))>
 
 -- sgcEscItemDeSolicitacaoInserir (7856)
 INSERT INTO SGC_PEDIDO_ITEM
@@ -509,11 +585,14 @@ SELECT {{idCard}}, {{codprod}}, '{{descricao}}', '{{embalagem}}', '{{unidade}}',
 FROM DUAL
 WHERE {{codprod}} > 0 AND {{quantidade}} > 0 AND {{idSolicitacao}} > 0
   AND <guardaInterna(AVALIAR)>
+-- B-4: a ORDEM da cláusula é regra, não estilo — todo VALUES() vem antes do
+-- único literal, que fica na última atribuição.
 ON DUPLICATE KEY UPDATE
   ID_SOLICITACAO = VALUES(ID_SOLICITACAO),
-  QT_PEDIDA = CASE WHEN QT_PEDIDA > 0 AND STATUS <> 'removido' THEN QT_PEDIDA ELSE VALUES(QT_PEDIDA) END,
-  STATUS    = CASE WHEN STATUS = 'removido' THEN 'montagem' ELSE STATUS END,
-  ATUALIZADO_POR = VALUES(ATUALIZADO_POR), ATUALIZADO_EM = VALUES(ATUALIZADO_EM)
+  QT_PEDIDA      = CASE WHEN QT_PEDIDA > 0 THEN QT_PEDIDA ELSE VALUES(QT_PEDIDA) END,
+  ATUALIZADO_POR = VALUES(ATUALIZADO_POR),
+  ATUALIZADO_EM  = VALUES(ATUALIZADO_EM),
+  STATUS         = CASE WHEN STATUS = 'removido' THEN 'montagem' ELSE STATUS END
 
 -- sgcEscSolicitacaoHistoricoRegistrar (7857): a gêmea interna de 7855, só por id
 INSERT INTO SGC_SOLICITACAO_HISTORICO (ID_SOLICITACAO, EVENTO, DETALHE, POR, EM)
@@ -523,6 +602,14 @@ WHERE S.ID = {{id}}
   AND '{{evento}}' IN ('aprovada', 'recusada', 'vinculada', 'desvinculada', 'cancelada')
   AND <guardaInterna(AVALIAR)>
 ```
+
+A ordem da cláusula acima é exigência de B-4 da revisão cruzada: o revisor provou que o
+`toSqlite` de hoje só troca `VALUES(col)` por `excluded.col` até o primeiro literal da
+cláusula, deixando cru todo `VALUES()` que venha depois de um `'texto'`. A base corrige o
+dialeto (R-079) e **mesmo assim** esta instrução não depende da correção — todos os
+`VALUES()` vêm antes e a única atribuição com literal é a última. O efeito de desenho é
+aceito e está em RN-010/D-008: item **removido com quantidade** mantém a quantidade em vez
+de receber a da solicitação; só o item zerado recebe a quantidade solicitada.
 
 `CODEPTO`/`CODSEC`/`UN_POR_CAIXA`/`PRECO_CUSTO` nascem em zero no item criado pela
 solicitação: são dados da análise do ERP, e quem os traz é o `sgcItensGravar` da 003 na
@@ -793,10 +880,13 @@ Só **INSERT**. Fornecedores (1015, 1042 ativos, 1088 inativo), filiais (1 Benen
   | 950004 | 5304 | 3 | 9205 | hoje−30 | 30 | venda a terceiro: contexto, nunca resposta (RN-013) |
   | 950005 | 5301 | 3 | 9201 | hoje−5 | 100 | controle: `CODOPER = 'E'`, entrada não conta |
 
-- **3 cards** no quadro `compras`, fornecedor **1042 Nestlé**, criados por `ana` e com `ana`
-  como responsável, exportados em `CARDS_008` (como `CARDS_003`/`CARDS_007`), todos com
-  **`DT_ENVIO` vazio**, **sem `SGC_NF`** e **sem `SGC_BO_ITEM`** — é o que os mantém fora
-  das listagens globais da 005 e da 007 (R-045):
+- **3 cards próprios** (**R-073**, que emenda R-062: a 008 cria os seus cards em vez de
+  vincular solicitações aos de 002/003, porque as datas do rastreio são relativas a hoje e
+  as dos seeds 003/007 são fixas — D-014 — e porque cards próprios preservam as listagens
+  globais de 005/007, R-045) no quadro `compras`, fornecedor **1042 NESTLE BRASIL LTDA**
+  (o nome exato do seed da 001), criados por `ana` e com `ana` como responsável, exportados
+  em `CARDS_008` (como `CARDS_003`/`CARDS_007`), todos com **`DT_ENVIO` vazio**, **sem
+  `SGC_NF`** e **sem `SGC_BO_ITEM`**:
 
   | Chave em `CARDS_008` | Fase | Filial | Serve a |
   |---|---|---|---|
@@ -808,7 +898,7 @@ Só **INSERT**. Fornecedores (1015, 1042 ativos, 1088 inativo), filiais (1 Benen
   `ID_SOLICITACAO` da solicitação `vinculada`) — é o item cujo `STATUS` o teste muda para
   `bo` para provar o ramo `nao_atendida` da fase B.O.
 
-- **14 solicitações** (`SGC_SOLICITACAO`), exportadas em `SOLICITACOES_008` — 4 pendentes,
+- **15 solicitações** (`SGC_SOLICITACAO`), exportadas em `SOLICITACOES_008` — 5 pendentes,
   7 aprovadas sem pedido, 1 aprovada e vinculada, 1 recusada e 1 cancelada (os números de
   C-020):
 
@@ -816,6 +906,7 @@ Só **INSERT**. Fornecedores (1015, 1042 ativos, 1088 inativo), filiais (1 Benen
   |---|---|---|---|---|---|---|---|
   | `pendenteAlta` | 5301 | 1042 / 1 | 9201 | alta | pendente | leo | C-007, C-008, C-009, C-013 |
   | `pendenteNormal` | 5302 | 1042 / 1 | 9202 | normal | pendente | leo | C-007, C-010 |
+  | `pendenteMesmoProduto` | 5301 | 1042 / 1 | 9205 | normal | pendente (criada depois da `pendenteNormal`) | admin | C-007 (desempate por data), C-013, RN-009 |
   | `pendenteFilial2` | 5302 | 1042 / **2** | 9202 | normal | pendente | leo | C-012, C-004 |
   | `pendenteOutroFornec` | 5001 | **1015** / 1 | 9204 | normal | pendente | admin | C-012, C-005, C-006 |
   | `filaUrgente` | 5303 | 1042 / 1 | 9203 | urgente | aprovada (sem pedido) | leo | C-007 (ordem) |
@@ -830,10 +921,16 @@ Só **INSERT**. Fornecedores (1015, 1042 ativos, 1088 inativo), filiais (1 Benen
   | `cancelada` | 5304 | 1042 / 1 | 9204 | normal | cancelada | gil | C-020 |
 
   As **4 de Leo** que C-021 exige são `pendenteAlta`, `pendenteNormal`, `pendenteFilial2` e
-  `filaUrgente`; `recusada`, `cancelada` e `vinculada` nascem de `gil` e as do rastreio de
-  `admin`, justamente para o recorte por autoria ter o que separar. O teste afirma "as de
-  Leo" comparando o conjunto devolvido com o conjunto do seed, nunca por literal solto
-  (R-045).
+  `filaUrgente`; `recusada`, `cancelada` e `vinculada` nascem de `gil`, e
+  `pendenteMesmoProduto`, `pendenteOutroFornec` e as seis do rastreio, de `admin` —
+  justamente para o recorte por autoria ter o que separar. O teste afirma "as de Leo"
+  comparando o conjunto devolvido com o conjunto do seed, nunca por literal solto (R-045).
+
+  `pendenteMesmoProduto` existe por C-2 da revisão cruzada: C-013 e RN-009 precisam de uma
+  **segunda** solicitação ativa do 5301 em 1042/filial 1 para provar "duas solicitações, um
+  item só", e a `pendenteAlta` é consumida em C-008. Ela nasce com prioridade `normal` e
+  `CRIADO_EM` posterior ao da `pendenteNormal`, o que faz o bloco da montagem ter **4**
+  linhas e exercitar também o desempate por data dentro da mesma prioridade (RN-012).
 
 - **Histórico** (`SGC_SOLICITACAO_HISTORICO`) só onde o cenário precisa: a `vinculada`
   nasce com `aprovada`, `vinculada`, `desvinculada`, `vinculada` (4 linhas gravadas + a
@@ -871,26 +968,26 @@ C-019.
 
 | Cenário / regra | Arquivo | O que o `assert` verifica |
 |---|---|---|
-| C-001 · RN-002 · RN-004 | `smoke/008-solicitacoes.mjs` | `sgcEscSolicitacaoInserir` como `leo` com 5301, quantidade 24, cliente 9201 e justificativa de 90 caracteres: `SELECT` na tabela devolve 1 linha nova com `STATUS='pendente'`, `CRIADO_POR = leo`, `CODFORNEC = 1042`, `FORNECEDOR = 'Nestlé'`, `CODCLI = 9201`, `CLIENTE`, `CNPJ_CLIENTE = '12345678000190'`, `AVALIADO_EM = ''`; `sgcSolicitacaoCarregar` devolve `historico[0].EVENTO = 'criada'` com o nome de Leo |
+| C-001 · RN-002 · RN-004 | `smoke/008-solicitacoes.mjs` | `sgcEscSolicitacaoInserir` como `leo` com 5301, quantidade 24, cliente 9201 e justificativa de 90 caracteres: `SELECT` na tabela devolve 1 linha nova com `STATUS='pendente'`, `CRIADO_POR = leo`, `CODFORNEC = 1042`, `FORNECEDOR = 'NESTLE BRASIL LTDA'` (o nome exato do seed da 001 — C-1 da revisão cruzada), `CODCLI = 9201`, `CLIENTE`, `CNPJ_CLIENTE = '12345678000190'`, `AVALIADO_EM = ''`; `sgcSolicitacaoCarregar` devolve `historico[0].EVENTO = 'criada'` com o nome de Leo |
 | C-002 · RN-003 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | inserir sem cliente grava `CODCLI = 0` e `CLIENTE = ''`; `classificarRastreio` de uma linha com `CODCLI 0` devolve `venda: 'sem_cliente'`, e `rotuloVenda('sem_cliente').label` contém "Sem cliente informado" |
 | C-003 · RN-001 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | `sgcEscSolicitacaoInserir` com `quantidade: 0` e com justificativa de 9 caracteres não muda a contagem da tabela (medida no próprio teste, antes e depois); `validarSolicitacao` devolve as duas mensagens de uma vez, e `[]` com tudo preenchido |
 | C-004 · RN-005 | `smoke/008-solicitacoes.mjs` | `sgcEscSolicitacaoAvaliar` como `ana` com `status: 'aprovada'` sobre a `pendenteFilial2`: fica `aprovada`, `ID_CARD = 0`, `AVALIADO_POR = ana`, `AVALIADO_EM` preenchido; `COUNT(*)` de `KB_CARD` e de `SGC_PEDIDO_ITEM` idêntico antes e depois; `sgcEscSolicitacaoHistoricoInserir` grava 1 linha `aprovada` |
 | C-005 · RN-006 | `smoke/008-solicitacoes.mjs` | recusar a `pendenteOutroFornec` com motivo de 9 caracteres a deixa `pendente`; com 10, fica `recusada` com `MOTIVO`, `AVALIADO_POR` e `AVALIADO_EM`, e o histórico ganha `recusada` com o motivo no detalhe |
 | C-006 · RN-007 | `smoke/008-solicitacoes.mjs` | `leo` cancela a solicitação que ele criou em C-001 (fica `cancelada`); `leo` cancelando a `pendenteOutroFornec`, de `admin`, não muda o status; `leo` cancelando a `filaUrgente`, dele mas já `aprovada`, não muda o status |
-| C-007 · RN-012 · RN-017 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacoesDaMontagem({ cardId: CARDS_008.montagem })` devolve exatamente 3 linhas, na ordem `5303`, `5301`, `5302`, com `CRIADO_POR_NOME`, `CLIENTE` e `JUSTIFICATIVA` preenchidos; `recusada`, `cancelada` e `vinculada` não aparecem |
-| C-008 · RNF-002 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacaoIncluirNoPedido({ cardId: montagem, id: pendenteAlta })` como `gil` devolve `{ ok: true, aprovouAgora: true }`; `SGC_PEDIDO_ITEM` do card ganha 1 linha `5301` com `QT_PEDIDA = 24`, `STATUS='montagem'` e `ID_SOLICITACAO` correto; a solicitação fica `aprovada` com `ID_CARD`/`ID_ITEM`; `sgcSolicitacoesDaMontagem` passa a devolver 2; `KB_LOG` do card ganha 1 nota com `'Leo'` no texto; o histórico ganha `aprovada` **e** `vinculada` |
-| C-009 · RN-011 | `smoke/008-solicitacoes.mjs` | depois de C-008: `sgcEscSolicitacaoHistoricoInserir({ id: 0, idCard, evento: 'desvinculada' })` + `sgcEscSolicitacaoDesvincular({ idCard })` **sem** remover o item não muda nada (item vivo); `sgcEscItemRemover` (003) e o mesmo par devolvem a solicitação à fila (`ID_CARD = 0`, `ID_ITEM = 0`, `STATUS='aprovada'`), `sgcSolicitacoesDaMontagem` volta a 3 e o histórico ganha `desvinculada`; zerar o item (`QT_PEDIDA = 0`) e repetir o par produz o mesmo resultado |
-| C-010 | `smoke/008-solicitacoes.mjs` | recusar a `pendenteNormal` pelas mesmas SFs da tela deixa `STATUS='recusada'` e `sgcSolicitacoesDaMontagem` passa a devolver 2 |
+| C-007 · RN-012 · RN-017 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacoesDaMontagem({ cardId: CARDS_008.montagem })` devolve exatamente 4 linhas, na ordem `filaUrgente` (5303), `pendenteAlta` (5301), `pendenteNormal` (5302) e `pendenteMesmoProduto` (5301, mais nova) — prioridade e, dentro dela, `CRIADO_EM` —, com `CRIADO_POR_NOME`, `CLIENTE` e `JUSTIFICATIVA` preenchidos; `recusada`, `cancelada`, `vinculada`, `pendenteFilial2` e `pendenteOutroFornec` não aparecem |
+| C-008 · RNF-002 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacaoIncluirNoPedido({ cardId: montagem, id: pendenteAlta })` como `gil` devolve `{ ok: true, aprovouAgora: true }`; `SGC_PEDIDO_ITEM` do card ganha 1 linha `5301` com `QT_PEDIDA = 24`, `STATUS='montagem'` e `ID_SOLICITACAO` correto; a solicitação fica `aprovada` com `ID_CARD`/`ID_ITEM`; `sgcSolicitacoesDaMontagem` passa a devolver 3; `KB_LOG` do card ganha 1 nota com `'Leo'` no texto; o histórico ganha `aprovada` **e** `vinculada` |
+| C-009 · RN-011 | `smoke/008-solicitacoes.mjs` | depois de C-008 e C-013 (duas solicitações no mesmo item): `sgcEscSolicitacaoHistoricoInserir({ id: 0, idCard, evento: 'desvinculada' })` + `sgcEscSolicitacaoDesvincular({ idCard })` **sem** remover o item não muda nada (item vivo); `sgcEscItemRemover` (003) e o mesmo par devolvem **as duas** à fila (`ID_CARD = 0`, `ID_ITEM = 0`, `STATUS='aprovada'`), `sgcSolicitacoesDaMontagem` volta a 4 e o histórico de cada uma ganha `desvinculada`; zerar o item (`QT_PEDIDA = 0`) e repetir o par produz o mesmo resultado |
+| C-010 | `smoke/008-solicitacoes.mjs` | recusar a `pendenteNormal` pelas mesmas SFs da tela deixa `STATUS='recusada'` e `sgcSolicitacoesDaMontagem` passa a devolver 3 |
 | C-011 · RN-008 | `smoke/008-solicitacoes.mjs` | com a solicitação `vinculada` no card `vinculado`, mover o card por `UPDATE KB_CARD SET FASE_ID` nas 10 fases e ler `SITUACAO` em `sgcSolicitacoesListar` devolve, na ordem: `em_analise`, `em_aprovacao`, `em_aprovacao`, `em_envio`, `enviada`, `em_transito`, `em_faturamento`, `em_faturamento`, `atendida`, `nao_atendida`; com o item em `STATUS='bo'` e o card em `bo`, devolve `nao_atendida`; com `ID_CARD = 0`, `sem_pedido`; ao fim o card volta à fase e o item ao status originais |
 | C-012 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacoesDaMontagem` do card `montagem` não traz `pendenteFilial2` nem `pendenteOutroFornec`; `sgcSolicitacaoIncluirNoPedido` com cada uma delas devolve `ok: false` citando fornecedor e filial, e `SGC_PEDIDO_ITEM` do card não cresce |
-| C-013 · RN-009 · RN-010 | `smoke/008-solicitacoes.mjs` | incluir a mesma solicitação duas vezes devolve `ok: false` na segunda citando o título do pedido, e o card continua com 1 item `5301`; com o item `5301` já em `QT_PEDIDA = 30`, incluir uma segunda solicitação do mesmo produto mantém `QT_PEDIDA = 30`, grava o `ID_SOLICITACAO` novo e continua com **1** item |
+| C-013 · RN-009 · RN-010 | `smoke/008-solicitacoes.mjs` | incluir a `pendenteAlta` de novo devolve `ok: false` citando o título do pedido, e o card continua com 1 item `5301`; incluir a `pendenteMesmoProduto` (a segunda solicitação ativa do 5301, C-2 da revisão cruzada) devolve `ok: true`, mantém `QT_PEDIDA = 24` (a quantidade que C-008 deixou), grava o `ID_SOLICITACAO` novo no mesmo item e o card continua com **1** item; `sgcSolicitacoesDaMontagem` passa a devolver 2 |
 | C-014 · RN-013 · RN-015 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | `sgcWintRastreioSolicitacoes` com os 6 pares devolve **6 linhas (> 0)**, e `classificarRastreio` sobre elas devolve, na ordem do seed: `comprou` (12 ao cliente), `comprou_outra_filial` (8 fora da filial, 0 na filial), `nao_comprou`, `nao_comprou` (com `qtVendidaFilial = 30` no contexto), `sem_cliente`, `carencia`; a venda de hoje−70 e a entrada `CODOPER='E'` não entram em nenhuma soma |
 | C-015 · RN-014 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | as mesmas 6 linhas classificam o estoque como `girando`, `sem_estoque`, `parado`, `excesso`, `sem_estoque`, `girando`; `QT_VENDA_90D` de 5304 é 90 e a cobertura calculada é 300 |
 | C-016 · RF-017 | `tests/solicitacoes.test.mjs` | `classificarRastreio(null, hoje)` devolve `{ venda: 'sem_dado', estoque: 'sem_dado' }`; `indexarRastreio([])` devolve mapa vazio e `resumoRastreio` conta as `sem_dado` |
 | C-017 · RNF-004 | `tests/solicitacoes.test.mjs` | a mesma linha (estoque 100, giro 1/dia, saída há 2 dias) classifica `girando` com `coberturaDias: 120` e `excesso` com `coberturaDias: 60`, sem nenhuma entrada nova |
 | C-018 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | `sgcWintClienteBuscar({ codcli: 9201, busca: '' })`, `({ codcli: 0, busca: 'nutrivida' })` e `({ codcli: 0, busca: '12345678000190' })` devolvem, cada uma, **≥ 1 linha (> 0)** com `CODCLI = 9201`, `CLIENTE` e `CNPJ`; `buscaDeCliente('12.345.678/0001-90')` devolve `{ codcli: 0, busca: '12345678000190' }` e `buscaDeCliente('9201')` devolve `{ codcli: 9201, busca: '9201' }` |
-| C-019 · RN-018 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | `sgcEscSolicitacaoInserir` como `ana` e como `gil` não grava; `sgcEscSolicitacaoAvaliar` como `leo` e como `dora` não muda o status; `sgcSolicitacaoIncluirNoPedido` como `leo`, `dora` e um `READ_ONLY` devolve `ok: false` citando o perfil; como um analista `RESTRICTED` num card criado por `ana`, devolve a frase de acesso restrito; `permissoesDe` devolve a matriz da tabela para as 5 personas e para `READ_ONLY`, e `menuParaPersona(permissoesDe('comercial','MEMBER'))` devolve exatamente 2 itens (`/solicitacoes` e `/bo`) |
-| C-020 · RF-018 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacoesListar` como `gil`, **recortada no teste por `SOLICITACOES_008`** (R-045): 14 linhas; `status: 'pendente'` devolve 4 e `status: 'recusada'` devolve 1; `codfornec: 1042` recorta; `busca: 'BEBIDA LACTEA'` devolve só as do 5301; `sgcSolicitacoesListarTotal` bate com o `SELECT COUNT(*)` feito no próprio teste com os mesmos filtros; `limite: 5` devolve 5 e a soma das páginas é o total |
+| C-019 · RN-018 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | `sgcEscSolicitacaoInserir` como `ana` e como `gil` não grava; `sgcEscSolicitacaoAvaliar` como `leo` e como `dora` não muda o status; `sgcSolicitacaoIncluirNoPedido` como `leo`, `dora` e um `READ_ONLY` devolve `ok: false` citando o perfil; como um analista `RESTRICTED` num card criado por `ana`, devolve a frase de acesso restrito; `permissoesDe` devolve a matriz da tabela para as 5 personas e para `READ_ONLY`, e `menuParaPersona(permissoesDe('comercial','MEMBER'))` devolve exatamente 2 itens (`/solicitacoes` e `/bo`); `sgcEscSolicitacaoDesvincular` e `sgcEscSolicitacaoHistoricoInserir` sobre o card `vinculado` (fase `enviado`) devolvem 0 linhas, e como analista `RESTRICTED` num card criado por outro também — a guarda de fase e dono de C-12 (A-6 da onda 2) é a mesma nas duas |
+| C-020 · RF-018 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacoesListar` como `gil`, **recortada no teste por `SOLICITACOES_008`** (R-045): 15 linhas; `status: 'pendente'` devolve 5 e `status: 'recusada'` devolve 1; `codfornec: 1042` recorta; `busca: 'BEBIDA LACTEA'` devolve só as do 5301; `sgcSolicitacoesListarTotal` bate com o `SELECT COUNT(*)` feito no próprio teste com os mesmos filtros; `limite: 5` devolve 5 e a soma das páginas é o total |
 | C-021 · RF-019 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacoesListar` sem filtro **como `leo`** devolve só linhas com `CRIADO_POR = leo` (as 4 dele), inclusive com `minhas: 0`; como `gil`, devolve as de todos; `minhas: 1` como `gil` devolve as de `gil`; `sgcSolicitacaoCarregar` de uma solicitação de `gil` chamada por `leo` devolve `ok: false` |
 | C-022 · RF-013 | `smoke/008-solicitacoes.mjs` | `sgcSolicitacaoCarregar` da solicitação `vinculada` devolve 5 linhas de histórico na ordem `criada`, `aprovada`, `vinculada`, `desvinculada`, `vinculada`, cada uma com `POR_NOME` e `EM`, e o detalhe do vínculo citando o título do pedido |
 | C-023 · RF-021 | `tests/solicitacoes.test.mjs` | `colunasDoCsv()` devolve as 9 colunas na ordem da tela e `linhaDoCsv` de uma linha com detalhe devolve os 9 valores correspondentes; com detalhe `null`, os dois eixos saem como "Sem dado" |
@@ -952,8 +1049,15 @@ buscado pelo código) e `sgcWintFiliais` (seletor de filial) — as mesmas que a
 - `SGC_SOLICITACAO` e `SGC_SOLICITACAO_HISTORICO` — é o que a **009** lê para a aderência
   das solicitações, o funil e o ranking por vendedor (R-057). O contrato que a 009 recebe:
   `STATUS` tem só os 4 valores gravados; a **situação de atendimento não é coluna** — é a
-  expressão `SITUACAO` documentada acima, que a 009 copia ou recalcula sobre as mesmas
-  junções; `AVALIADO_EM` é a data de decisão; `CRIADO_POR` é o vendedor.
+  régua de `backend/sql/situacao-solicitacao.sql`, que **a 009 compõe** (o `add-012` faz
+  `fragmento('situacao-solicitacao.sql')` e repete os aliases `S`/`C`/`SF`/`I` de R-075),
+  nunca copia nem recalcula: uma régua, um arquivo (R-070). O teste RN-010 da 009 cruza o
+  `sgcSolicitacoesFunil` com o `sgcSolicitacoesListar` desta spec, e é esse cruzamento que
+  prova que as duas leem a mesma coisa. `AVALIADO_EM` é a data de decisão; `CRIADO_POR` é o
+  vendedor.
+- `backend/sql/situacao-solicitacao.sql` — o arquivo da régua, com o contrato de composição
+  no cabeçalho (R-075), carregado pelo `fragmento(nome)` de `backend/lib/fragmentos.mjs`
+  (R-074, base).
 - `sgcEscSolicitacaoDesvincular` e `sgcEscSolicitacaoHistoricoInserir` — o par que o
   integrador chama no fluxo de remoção e de zeragem de item da 003 (R-063), nesta ordem:
   **histórico primeiro** (precisa do `ID_CARD` ainda preenchido), desvínculo depois. Ambas
@@ -970,14 +1074,14 @@ buscado pelo código) e `sgcWintFiliais` (seletor de filial) — as mesmas que a
 
 | # | Decisão | Alternativa descartada | Por quê |
 |---|---|---|---|
-| D-001 | O rastreio reusa a **forma** da consulta do p-45547 (`{{pares}}` + `CONNECT BY`), e o simulador ganha dois shims | Reescrever a explosão como tabela derivada `SELECT … UNION ALL SELECT …` montada pela tela | A tela montando `SELECT` é SQL montado na tela, que R-059 proíbe no projeto; e a forma legada está provada em Oracle de produção. O custo é um shim escalar e uma reescrita textual num arquivo do integrador, exatamente o que a 005 pediu em R-043 |
+| D-001 | O rastreio reusa a **forma** da consulta do p-45547 (`{{pares}}` + `CONNECT BY`), e o simulador ganha dois shims (aceito como **R-064**) | Reescrever a explosão como tabela derivada `SELECT … UNION ALL SELECT …` montada pela tela | A tela montando `SELECT` é SQL montado na tela, que R-059 proíbe no projeto; e a forma legada está provada em Oracle de produção. O custo é um shim escalar e uma reescrita textual num arquivo do integrador, exatamente o que a 005 pediu em R-043 |
 | D-002 | A situação de atendimento é **expressão SQL derivada**, não coluna | Gravar a situação e sincronizar por cron, como os 13 status do legado | O legado tinha 13 status gravados e um script de correção retroativa (`update-sf-status-solic.mjs`) porque eles envelheciam: card movido sem passar pela rotina deixava a solicitação mentindo. Derivar custa três `LEFT JOIN` e nunca desatualiza. É também o que tira da onda 3 o "cron que conta sem reler" (dívida da revisão) |
-| D-003 | A linha `criada` do histórico é **derivada** de `CRIADO_POR`/`CRIADO_EM`; só as outras cinco são gravadas | Gravar `criada` junto do registro | Gravar exigiria descobrir o id recém-inserido (uma releitura a mais) ou uma segunda instrução dentro da mesma SF; a linha da solicitação **é** o registro da criação, e derivá-la não perde nada. Todos os seis eventos continuam existindo na leitura |
+| D-003 (R-067) | A linha `criada` do histórico é **derivada** de `CRIADO_POR`/`CRIADO_EM`; só as outras cinco são gravadas | Gravar `criada` junto do registro | Gravar exigiria descobrir o id recém-inserido (uma releitura a mais) ou uma segunda instrução dentro da mesma SF; a linha da solicitação **é** o registro da criação, e derivá-la não perde nada. Todos os seis eventos continuam existindo na leitura |
 | D-004 | Duas SFs de histórico — `…HistoricoInserir` (`:VAR_USER`) e `…HistoricoRegistrar` (`{{usuarioId}}`) | Uma só, com `COALESCE(NULLIF(:VAR_USER, 0), {{usuarioId}})` | Aceitar `usuarioId` como identidade quando a sessão não resolve é literalmente a dívida D-06 da onda 1. Duas SFs, duas identidades, uma instrução cada — o mesmo arranjo de `sgcEscItemRemover`/`sgcEscItemRemoverZerados` (003) e `sgcEscPedidoPrevisaoBo`/`sgcEscPedidoAlertaBo` (007) |
 | D-005 | O desvínculo tem **uma** SF, e o critério é "não existe item vivo com quantidade", não o `CODPROD` | Uma SF por caminho (remoção de item × zeragem ao sair da Análise), com `codprod` | O mesmo predicado cobre os dois caminhos (o item removido já está `removido`; o zerado já foi removido pelo `sgcAnaliseSair`), é idempotente, e evita que o chamador precise saber qual produto era de qual solicitação. É também o que permite chamar o par com só `{ idCard }` |
 | D-006 | Incluir no pedido **não** recalcula o total | Chamar `sgcEscPedidoTotal` (003) ao fim do `sgcSolicitacaoIncluirNoPedido` | O item nasce com custo zero (o custo vem da análise do ERP): o recálculo somaria zero e gastaria uma execução do orçamento de RNF-002. O `sgcItensGravar` recalcula na primeira gravação da lista |
 | D-007 | O item criado pela solicitação nasce com `CODEPTO`/`CODSEC`/`PRECO_CUSTO` zerados | Consultar o ERP dentro do `sgcSolicitacaoIncluirNoPedido` para preencher | Seria uma execução a mais numa ação frequente, para um dado que o `sgcItensGravar` da 003 traz na primeira gravação da lista — e que a compradora precisa revisar de qualquer modo. O único efeito de borda é o limite de cobertura cair no do fornecedor até lá, que é o comportamento correto para item não analisado |
-| D-008 | Quantidade **preservada** quando o produto já está no pedido | A inclusão sobrescrever a quantidade com a solicitada | Quem decide quanto comprar é a montagem: sobrescrever apagaria uma decisão já tomada por causa de uma demanda de 24 unidades. Item removido ou zerado não é decisão viva, e por isso volta a valer a quantidade solicitada (RN-010) |
+| D-008 | Quantidade **preservada** sempre que o item já tem quantidade — inclusive removido; só o item zerado recebe a quantidade solicitada | A inclusão sobrescrever a quantidade com a solicitada, ou distinguir "removido" dentro do `CASE` | Quem decide quanto comprar é a montagem: sobrescrever apagaria uma decisão tomada por causa de uma demanda de 24 unidades. Distinguir o removido exigiria o literal `'removido'` **antes** dos `VALUES()` da cláusula, que é exatamente o que B-4/R-079 manda evitar; o item removido que volta aparece na lista com a quantidade antiga e a compradora ajusta (RN-010) |
 | D-009 | `criarSolicitacao` fica com admin e comercial | Dar também a analista e gestor | O autor **é** o vendedor (RN-002): uma solicitação registrada por um comprador seria uma demanda sem cliente comercial por trás, e envenenaria o ranking por vendedor da 009. Admin entra porque admin tem tudo |
 | D-010 | O recorte "o comercial só vê as suas" é **cláusula de SQL**, não filtro de tela | Filtrar na tela pelo `usuarioId` da sessão | Filtro de tela não é recorte: a SF continuaria devolvendo tudo a quem chamasse pelo SDK (é o achado A8 da onda 2, telas Fiscal sem porteiro). No servidor custa um `EXISTS` que a guarda de persona já usa |
 | D-011 | "Comprou em outra filial" é **classe própria** | Manter a marca dentro de "atendido", como no legado | R-055 fixa as cinco classes do eixo do cliente; e a distinção é acionável: um cliente atendido por outra filial diz que a demanda existia e que o estoque foi para o lugar errado — conclusão diferente de "comprou aqui" |
