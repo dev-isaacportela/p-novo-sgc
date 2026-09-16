@@ -14,14 +14,14 @@
 | Leitura e escrita por Server Function | sim | a tela usa `linhas()`/`acao()` de `src/lib/mitra-api.ts`; **toda** escrita é SF SQL guardada por `:VAR_USER`, chamada direto da tela — nenhuma SF JavaScript, nenhum cron (R-081, contrato da onda 4) |
 | Simulador cobre a feature | sim | `simulator/seed/011-compras-inteligentes.mjs` só insere linhas; as três colunas novas de `PCEST` e os shims do dialeto são pedidos à base (R-096); `sim:check` roda as 9 leituras |
 | Testes automatizados obrigatórios | sim | 25 cenários e 19 regras mapeados em `backend/simulator/smoke/011-compras-inteligentes.mjs` e em `frontend/tests/ressuprimento.test.mjs`; toda consulta Oracle assere contagem > 0 |
-| Design tokens, sem cor literal | sim | `page.tsx` (`PageHeader`, `Panel`, `Toolbar`, `Tabs`, `Table`, `Status`, `Code`, `Dash`, `Stat`…); zero hex, zero `style={{}}`, zero classe Tailwind solta na página |
+| Design tokens, sem cor literal | sim | `page.tsx` (`PageHeader`, `Panel`, `Toolbar`, `Tabs`, `Table`, `Status`, `Code`, `Dash`, `GradeKpi`, `Kpi`…); zero hex, zero `style={{}}`, zero classe Tailwind solta na página |
 | Simplicidade | sim | nenhuma dependência nova; nenhuma tabela de resultado (o cálculo é recalculado, nunca persistido); a fórmula é uma função pura em `src/lib/ressuprimento.ts`; o carrinho reusa o caminho de `/pedidos/novo` e o upsert em lote da 003, sem SF de orquestração |
 
 ## Contexto técnico
 
 - **Frontend:** React 19 · Vite 7 · Tailwind 4 · react-router 7 · `mitra-interactions-sdk`
 - **Backend:** tabelas e Server Functions na plataforma Mitra, provisionadas por `backend/*.mjs` com `mitra-sdk`; leitura do WinThor por JDBC Oracle (`jdbcId` resolvido por nome no `isEntrypoint()`, como em `add-006-itens.mjs`)
-- **Reuso identificado:** `lib/compras.ts` da 003 (`curvaAbc`, `arredondarPorCaixa`, `unidadesPorCaixa`, `itemDeLinha`), `lib/cobertura.ts` da 012 (`limiteDeCobertura` com a curva), `lib/csv.ts` (`textoCsv`/`baixarCsv`, R-037), `lib/permissoes.ts`, `lib/formato.ts`, `lib/mitra-api.ts`, `lib/quadro.ts`; `sgcCustoUnidadesPorCaixa` (7306, 003), `sgcCoberturaListar` (7307, 003), `sgcFornecedorListar`/`sgcFornecedorCarregar` (001), `sgcEscPedidoCriar` (7250, 002), `sgcItensGravar` (7309, 003), `api.cardCriar` da lib; `page.tsx` inteiro
+- **Reuso identificado:** `lib/compras.ts` da 003 (`curvaAbc`, `arredondarPorCaixa`, `unidadesPorCaixa`, `itemDeLinha`), `lib/cobertura.ts` da 012 (`limiteDeCobertura` com a curva — chamado **só pela tela**, R-111), `lib/csv.ts` (`textoCsv`/`baixarCsv`, R-037), `lib/permissoes.ts`, `lib/formato.ts`, `lib/mitra-api.ts`, `lib/quadro.ts`; `sgcCustoUnidadesPorCaixa` (7306, 003), `sgcCoberturaListar` (7307, 003), `sgcFornecedorListar`/`sgcFornecedorCarregar` (001), `sgcEscPedidoCriar` (7250, 002), `sgcItensGravar` (7309, 003), `api.cardCriar` da lib; `page.tsx` inteiro
 - **Dependência nova:** nenhuma
 
 ## Modelo de dados
@@ -230,11 +230,11 @@ Sete decisões dentro dessa SQL, todas com motivo:
    aritmética de inteiro e roda igual nos dois bancos. `{{diasPeriodo}}` vem da tela
    (`fim − início + 1`), pelo mesmo motivo.
 3. **Lead time com `TRUNC(M.DTMOV - O.DTEMISSAO)`**, e não `TRUNC(a) − TRUNC(b)`: é a forma
-   que o dialeto já traduz (`mysql-dialect.mjs:404-405`, `TRUNC(alias.COL - alias.COL)` →
+   que o dialeto já traduz (`mysql-dialect.mjs:482-483`, `TRUNC(alias.COL - alias.COL)` →
    `JULIANDAY`). Mesmo resultado em Oracle, zero shim novo.
-4. **`AVG(x²) − AVG(x)²` no lugar de `STDDEV_POP`** (R-096 previa o shim). `STDDEV_POP` é
+4. **`AVG(x²) − AVG(x)²` no lugar de `STDDEV_POP`** (R-100 tirou o shim). `STDDEV_POP` é
    função de **agregação**, e o simulador registra funções escalares (`db.function` em
-   `mysql-dialect.mjs:166`); um agregado exigiria `db.aggregate`, que é mais novo no
+   `mysql-dialect.mjs:171-172`); um agregado exigiria `db.aggregate`, que é mais novo no
    `node:sqlite` que o resto do arquivo. A identidade da variância populacional dá o mesmo
    número com `AVG` (nativo nos dois) + `SQRT` e `GREATEST` (shims que R-096 já pede).
 5. **Sem `LIMIT/OFFSET`.** A curva ABC (RN-010) é acumulada **sobre o fornecedor inteiro**:
@@ -518,17 +518,26 @@ JavaScript nem cron aqui (R-081). Todo `INSERT … SELECT … WHERE` leva `FROM 
 
 | Tela / rota | Responsabilidade | Componentes reusados | Novos |
 |---|---|---|---|
-| `/compras-inteligentes` | fornecedor + filial, KPIs, três abas, grid, seletor de licitação, parâmetros, carrinho, CSV | `PageHeader`, `Panel`, `PanelHeader`, `Toolbar`, `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`, `SearchInput`, `SelectMenu`, `FilterChip`, `Table`/`Th`/`Td` (`numeric`), `Tr`, `RowTitle`, `RowMeta`, `Code`, `Dash`, `Status`, `Badge`, `Stat`, `MetaDot`, `Button`, `IconButton`, `TextLink`, `Alert`, `EmptyState`, `Pagination`, `Dialog`, `Field`, `LabelledField`, `Input`, `Textarea`, `CheckRow`, `DatePicker` | `ComprasInteligentesPage`, `Carrinho`, `DetalheSku`, `ParametrosDialogo`, `SilenciarDialogo`, `VendasDialogo` |
+| `/compras-inteligentes` | fornecedor + filial, KPIs, três abas, grid, seletor de licitação, parâmetros, carrinho, CSV | `PageHeader`, `Panel`, `PanelHeader`, `Toolbar`, `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`, `SearchInput`, `SelectMenu`, `FilterChip`, `GradeKpi`, `Kpi`, `Table`/`Th`/`Td` (`numeric`), `Tr`, `RowTitle`, `RowMeta`, `Code`, `Dash`, `Status`, `Badge`, `MetaDot`, `Button`, `IconButton`, `TextLink`, `Alert`, `EmptyState`, `Pagination`, `Dialog`, `Field`, `LabelledField`, `Input`, `Textarea`, `CheckRow`, `DatePicker` | `ComprasInteligentesPage`, `GradeRessuprimento`, `Carrinho`, `DetalheSku`, `ParametrosDialogo`, `SilenciarDialogo`, `VendasDialogo` |
 
-Arquivos (`max-lines` 800 em cada):
+Arquivos — quatro, e não um, porque a tela inteira num arquivo só passa das 800 linhas do
+`max-lines` (C-13 da revisão; é a mesma divisão que a 007 fez entre aba e diálogos):
 
 | Arquivo | Conteúdo |
 |---|---|
 | `frontend/src/lib/ressuprimento.ts` | regra pura: fórmula, precedência de parâmetros, status, silenciamento, agrupamento do carrinho, aderência, colunas do CSV |
-| `frontend/src/pages/compras-inteligentes/ComprasInteligentesPage.tsx` | carga, KPIs, abas, grid, filtros, seletor de licitação, CSV, porteiro de rota |
+| `frontend/src/pages/compras-inteligentes/ComprasInteligentesPage.tsx` | porteiro de rota, seleção de fornecedor e filial, carga, KPIs, abas, filtros, seletor de licitação, CSV |
+| `frontend/src/pages/compras-inteligentes/grid.tsx` | `GradeRessuprimento`: cabeçalho, linha, `Status`/`Badge`/`Dash`, edição da sugestão com arredondamento por caixa, ações da linha |
 | `frontend/src/pages/compras-inteligentes/Carrinho.tsx` | painel do carrinho, bloqueio por pedido aberto e criação do pedido |
 | `frontend/src/pages/compras-inteligentes/dialogos.tsx` | `DetalheSku`, `ParametrosDialogo` (fornecedor e SKU), `SilenciarDialogo`, `VendasDialogo` |
 | `frontend/src/lib/server-functions.ts` | bloco 81xx (nomes e ids locais) |
+
+A **rota** `/compras-inteligentes` e a primeira versão de `ComprasInteligentesPage.tsx` são da
+**base (S2)**, não desta spec (C-2 da revisão, R-113): uma página-stub com porteiro, no padrão
+do commit `99e87a5` da onda 3 (`SolicitacoesPage.tsx`) — comentário `STUB DA BASE (S2)`,
+`usePersona()`, `Alert tone="error"` para quem não tem `verComprasInteligentes` e
+`EmptyState title="Em construção — spec 011"` para quem tem. Assim `App.tsx` (arquivo
+compartilhado) é tocado uma vez só, e a S3 troca o corpo do arquivo sem mexer na rota.
 
 Desenho (`design.md` §8, §9.1, §9.2, §9.4, §9.5, §14):
 
@@ -549,9 +558,10 @@ Desenho (`design.md` §8, §9.1, §9.2, §9.4, §9.5, §14):
   trânsito". A troca de aba e o filtro são locais (RNF-005).
 - **Seletor de licitação**: `CheckRow` na `Toolbar`, com o texto "Desconsiderar venda para
   órgãos públicos" e o total público do fornecedor ao lado. Ligar/desligar recalcula na tela.
-- **KPIs**: uma faixa de `Panel` + `Stat` (sugestão total em R$, rupturas, silenciados,
-  aderência do comprador). Se a base entregar os primitivos de gráfico/KPI de R-080, esta
-  faixa passa a usá-los sem mudar a regra — hoje não existem em `develop` e não se inventa um.
+- **KPIs**: `GradeKpi` com **quatro** `Kpi` (`page.tsx:1026-1066`, §8.7 do `design.md`,
+  entregues pela base da onda 3 em R-080): sugestão total em R$, rupturas, silenciados e
+  aderência do comprador. Quatro é o teto da grade (`xl:grid-cols-4`); sem dado, o `Kpi`
+  mostra `Dash`, nunca 0.
 - **Diálogos** (`max-h-[90vh]`, só o miolo rola, rodapé `flex-col-reverse` no mobile): detalhe
   do SKU (3 blocos, 3 consultas), parâmetros (fornecedor e SKU, com o `title` dizendo o que
   `0` significa), silenciar (`DatePicker` do projeto — **nunca** `<input type="date">`, UI-03 B
@@ -579,18 +589,21 @@ Item de menu novo, no grupo **Compras**, **depois de "Novo pedido"** (R-095):
 ## Fluxo
 
 1. A compradora abre `/compras-inteligentes`. A tela carrega `sgcFornecedorListar`
-   (ativos) e `sgcEficienciaComprador` — 2 execuções, uma vez só.
+   (ativos), `sgcEficienciaComprador` e `api.boardCarregar({ slug: 'compras' })` — 3
+   execuções, uma vez só. O board vem aqui, e não no carrinho, porque o id é o mesmo para
+   todos os grupos: assim "criar pedido" custa 3 por grupo e não 4 (C-1 da revisão).
 2. Ela escolhe o fornecedor: `sgcFornecedorCarregar` traz as filiais atendidas (1 execução,
    o mesmo caminho de `/pedidos/novo`). Escolhida a filial, a tela dispara **em paralelo**
    `sgcParametrosCompraListar`, `sgcVendasDesconsideradasListar` (`codprod: 0`),
    `sgcCoberturaListar` (003) e `sgcPedidoAbertoDoFornecedor` — 4 execuções.
 3. Com a lista de `NUMTRANSITEM` desconsiderados em mãos, a tela chama
    `sgcWintRessuprimento` **uma** vez, com a janela de 153 dias encerrada hoje
-   (`diasPeriodo` = 153) e `excluir` = a lista (ou `0`). São as 8 execuções do RNF-001, e
+   (`diasPeriodo` = 153) e `excluir` = a lista (ou `0`). São as 9 execuções do RNF-001, e
    6 quando só o fornecedor ou a filial muda.
-4. `montarRessuprimento()` (regra pura) calcula tudo: curva por `curvaAbc()` da 003, alvo por
-   `limiteDeCobertura()` da 012, parâmetros por precedência, e as sete grandezas por produto.
-   Nada disso volta ao servidor.
+4. `montarRessuprimento()` (regra pura) calcula tudo: curva por `curvaAbc()` da 003, alvo
+   pela função `alvoDaCurvaDias` que a **tela injeta** (`limiteDeCobertura(...).alvoDias` da
+   012 — R-111), parâmetros por precedência, e as sete grandezas por produto. Nada disso
+   volta ao servidor.
 5. A compradora filtra, ordena, troca de aba e liga o seletor de licitação — zero execução
    (RNF-005). Editar a quantidade sugerida arredonda por caixa na hora (RF-016).
 6. "Detalhe": `sgcWintProdutoHistorico`, `sgcWintProdutoUltimasCompras` e
@@ -599,33 +612,52 @@ Item de menu novo, no grupo **Compras**, **depois de "Novo pedido"** (R-095):
    (`sgcEscParametroCompraRestaurar`) e "Parâmetros" (`sgcEscParametroCompraSalvar`) gravam e
    a tela recarrega só `sgcParametrosCompraListar` (a medida do ERP não mudou).
 8. "Desconsiderar venda": `sgcWintProdutoVendas` ao abrir o diálogo (1),
-   `sgcEscVendaDesconsiderar` ao confirmar (1) e **`sgcWintRessuprimento` de novo** (1) — a
-   exclusão acontece na origem (RN-012), então a medida precisa ser refeita.
+   `sgcEscVendaDesconsiderar` (ou `sgcEscVendaReconsiderar`) ao confirmar (1),
+   **`sgcVendasDesconsideradasListar` de novo** (1) e **`sgcWintRessuprimento` de novo** (1)
+   — 4 execuções. A releitura da lista não é enfeite: escrita SQL guardada recusada devolve
+   0 linhas e nenhum erro (D-03), então o `{{excluir}}` é montado do que **voltou do banco**,
+   nunca do que a tela achou que gravou. A exclusão acontece na origem (RN-012), e por isso a
+   medida precisa ser refeita.
 9. **Carrinho.** Cada produto jogado no carrinho passa por `pedidoAbertoDe(codfornec,
    codfilial)` na memória da tela (a lista veio no passo 2): havendo pedido aberto, `Alert`
    com o título e a fase, e nada acontece (RF-018). "Criar pedido", por grupo de fornecedor +
    filial:
-   1. `api.cardCriar` da lib (`boardId` do quadro `compras`, título `FILIAL · FORNECEDOR` em
-      maiúsculas — RN-014 da 002 —, `valores: { fornecedor, filial, prioridade, valor_total }`,
-      responsável = quem cria). O card nasce na primeira fase, `analise`.
+   1. `api.cardCriar` da lib (`boardId` já em memória desde o passo 1, título
+      `FILIAL · FORNECEDOR` em maiúsculas — RN-014 da 002 —,
+      `valores: { fornecedor, filial, prioridade, valor_total }`, responsável = quem cria).
+      O card nasce na primeira fase, `analise`.
    2. `sgcEscPedidoCriar` (7250, 002) com `origem: 'compras_inteligentes'`, fornecedor,
       filial e o período da janela.
    3. `sgcItensGravar` (7309, 003) com o `itensJson` do grupo — **um** upsert em lote, que
-      já recalcula `SGC_PEDIDO.VL_TOTAL` por dentro.
+      já recalcula `SGC_PEDIDO.VL_TOTAL` por dentro. Cada item vai como o **`ItemPedido`
+      inteiro** de `lib/compras.ts` (R-112), não só quantidade e custo: `descricao`,
+      `embalagem`, `unidade`, `codepto`, `codsec`, `unPorCaixa`, `qtVendaTotal`,
+      `qtVendaLicitacao`, `qtEstoque`, `qtTransito` (as medidas da linha),
+      `qtSugerida`, `qtPedida`, `precoCusto`, `curvaAbc`, `coberturaDias` (a cobertura futura
+      **com a quantidade do carrinho**, por `coberturaFuturaComCompra`), `coberturaLimite`
+      (o limite resolvido para o item), `tipoPreco: 'padrao'`, `observacao: ''`,
+      `status: 'montagem'`. O motivo é o passo 10: a remontagem da Análise **preserva o item
+      existente inteiro**, então campo que nascer zerado fica zerado para sempre — e um
+      `COBERTURA_LIMITE` zerado deixaria a trava de cobertura da 003 cega (`COBERTURA_DIAS >
+      COBERTURA_LIMITE` nunca seria falso, ou nunca verdadeiro, conforme o zero).
 
    São as 3 execuções do RNF-002. O `valor_total` da capa vai no próprio `cardCriar` porque a
    tela já sabe a soma — nenhum `kbCardAtualizar` a mais.
 10. A compradora abre o pedido no `/quadro` e monta a análise normalmente (003). O
-    `Itens.tsx:106-109` já garante RN-017: `jaNaLista.get(item.codprod) ?? item` mantém o item
+    `Itens.tsx:107-109` já garante RN-017: `jaNaLista.get(item.codprod) ?? item` mantém o item
     que veio do carrinho com a quantidade dele, e `setAlterados(...)` só marca os produtos
     **novos** — o upsert de `sgcEscItemGravar` (`add-006-itens.mjs:278-290`, que traz
     `QT_PEDIDA = VALUES(QT_PEDIDA)`) nem chega a receber os itens do carrinho.
 
 ## Regra pura — `frontend/src/lib/ressuprimento.ts`
 
+R-111: este módulo **não importa** `lib/cobertura.ts`. O alvo por curva chega como função
+injetada pela tela — assim as duas features param de depender da ordem de merge, e o teste
+puro usa um stub de três linhas em vez da tabela da 012.
+
 ```ts
 import { arredondarPorCaixa, curvaAbc, unidadesPorCaixa } from './compras';
-import { limiteDeCobertura, type Cobertura } from './cobertura';
+import type { CurvaAbc } from './compras';
 
 export type StatusRessuprimento =
   'ruptura' | 'excesso' | 'elevada_exposicao' | 'baixa_exposicao' | 'adequado';
@@ -665,7 +697,7 @@ export function resolverParametros(
   doSku: ParametroCompra | null,
   doFornecedor: ParametroCompra | null,
   leadTimeMedido: number,
-  alvoDaCurvaDias: number,
+  alvoDaCurvaEmDias: number,
 ): ParametrosResolvidos;
 // RN-003/004/005. `0` em qualquer campo = herda. Lead medido < 1 vira 1.
 
@@ -702,20 +734,28 @@ export function aderenteASugestao(qtSugerida: number, qtPedida: number): boolean
 // RN-018: sugerida > 0 e 0,8 x sugerida <= pedida <= 1,2 x sugerida (limites inclusive).
 
 export interface LinhaRessuprimento extends Ressuprimento {
-  medida: MedidaRessuprimento; curva: 'A' | 'B' | 'C';
+  medida: MedidaRessuprimento; curva: CurvaAbc;
   parametros: ParametrosResolvidos; unidadesPorCaixa: number; silenciado: boolean;
 }
+
+/** O alvo em dias da curva do item. A TELA injeta; esta lib não conhece SGC_COBERTURA. */
+export type AlvoDaCurva = (
+  alvo: { codprod: number; codsec: number; codepto: number; codfornec: number },
+  curva: CurvaAbc,
+) => number;
 
 export function montarRessuprimento(
   medidas: MedidaRessuprimento[],
   parametros: ParametroCompra[],
-  coberturas: Cobertura[],
+  alvoDaCurvaDias: AlvoDaCurva,
   unidadesPorCaixaPorProduto: Map<number, number>,
   opcoes: { codfornec: number; hoje: string; desconsiderarLicitacao: boolean },
 ): LinhaRessuprimento[];
-// Orquestra: curvaAbc() da 003 sobre todas as medidas -> limiteDeCobertura() da 012 com a
-// curva (usa o ALVO, nunca o limite) -> resolverParametros -> calcularRessuprimento.
-// É a única chamada que a tela faz por carga. RN-010, RN-004.
+// Orquestra: curvaAbc() da 003 sobre todas as medidas -> alvoDaCurvaDias(alvo, curva)
+// -> resolverParametros -> calcularRessuprimento. É a única chamada que a tela faz por
+// carga. RN-010, RN-004. A tela injeta
+// `(alvo, curva) => limiteDeCobertura(coberturas, alvo, curva).alvoDias` (012, R-111);
+// o teste injeta um stub de três linhas.
 
 export function aComprar(linhas: LinhaRessuprimento[]): LinhaRessuprimento[];
 // RF-014: sugerida > 0 e não silenciado; urgentes primeiro, depois por dias de gatilho,
@@ -782,7 +822,7 @@ Três contas abertas, para quem for implementar conferir o resto:
 ### Tabelas
 
 Nenhuma tabela nasce nesta spec. `SGC_PARAMETRO_COMPRA` e `SGC_VENDA_DESCONSIDERADA` vêm do
-`setup-backend.mjs` (base da onda 4); as `PC*` vêm do `schema-winthor.mjs` (integrador), que
+`setup-backend.mjs` (base da onda 4); as `PC*` vêm do `schema-winthor.mjs` (base da onda 4), que
 ganha **três colunas em `PCEST`** (R-096):
 
 ```sql
@@ -795,13 +835,15 @@ Nada mais: `PCPEDIDO` (`NUMPED`, `DTEMISSAO`), `PCMOV` (`NUMTRANSITEM`, `NUMPED`
 `DTMOV`, `QT`, `PUNIT`, `NUMTRANSENT`, `NUMNOTA`), `PCPRODUT`, `PCCLIENT` (`CODATV1`),
 `PCESTTRANSITO` e `PCFILIAL` já têm tudo. `PCPRODUT.DTEXCLUSAO` **não** é portada (R-085).
 
-### Dialeto — a reescrita exata do gerador de calendário (R-096)
+### Dialeto — a reescrita exata do gerador de calendário (R-096, R-100, R-113)
 
 `backend/simulator/mysql-dialect.mjs` (arquivo da base) ganha **três shims escalares** e
 **uma reescrita textual**. Sem a reescrita a suíte falha alto, como o `REGEXP_SUBSTR` da
-R-064 — nunca um shim que devolva linha plausível.
+R-064 — nunca um shim que devolva linha plausível. **Nenhuma reescrita existente sai**
+(R-113): as da onda 3 (`reescreverGeradorConnectBy` de R-064, `reescreverUpsert` de R-079,
+`reescreverJsonUnquote` de R-071) continuam, e a nova entra no fim da cadeia.
 
-Escalares, ao lado dos de `registerMysqlFunctions`:
+Escalares, ao lado dos de `registerMysqlFunctions` (`mysql-dialect.mjs:171-172`):
 
 ```js
 def('POWER', 2, (base, expoente) => (
@@ -828,15 +870,15 @@ def('ADD_MONTHS', 2, (valor, meses) => {
 `AVG`/`SQRT` em vez do agregado (decisão 4 da consulta principal). `NULLIF` é nativo do
 SQLite; as funções de janela não são usadas.
 
-A reescrita, ao lado de `reescreverDateAddComExpressao` e chamada **antes** dela em
-`toSqlite()` (precisa rodar sobre o SQL inteiro, fora do `mapOutsideStrings`, porque a
-projeção tem literais de aspas, e **antes** da remoção de `FROM DUAL`):
+A reescrita roda sobre o SQL **inteiro**, fora do `mapOutsideStrings` (a projeção tem
+literais de aspas) e antes de `FROM DUAL` ser apagado lá embaixo — o mesmo motivo do
+`reescreverGeradorConnectBy` de R-064 (`mysql-dialect.mjs:386-404`):
 
 ```js
 /**
- * Gerador de calendário do Oracle (spec 011, R-096). A consulta de ressuprimento precisa de
- * UMA linha por dia do período, inclusive nos dias sem venda — é o denominador do consumo
- * ponderado. No Oracle:
+ * Gerador de calendário do Oracle (spec 011, R-096/R-100). A consulta de ressuprimento
+ * precisa de UMA linha por dia do período, inclusive nos dias sem venda — é o denominador do
+ * consumo ponderado. No Oracle:
  *
  *   SELECT TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') + (LEVEL - 1) AS DIA,
  *          GREATEST({{diasPeriodo}}, 1) - LEVEL AS DIAS_ATE_FIM
@@ -845,18 +887,24 @@ projeção tem literais de aspas, e **antes** da remoção de `FROM DUAL`):
  *
  * No SQLite, uma CTE recursiva com a MESMA coluna LEVEL (1..N):
  *
- *   WITH RECURSIVE NIVEL(LEVEL) AS (
- *     SELECT 1 UNION ALL SELECT LEVEL + 1 FROM NIVEL WHERE LEVEL + 1 <= (GREATEST(153, 1))
+ *   WITH RECURSIVE CALENDARIO(LEVEL) AS (
+ *     SELECT 1 UNION ALL SELECT LEVEL + 1 FROM CALENDARIO WHERE LEVEL + 1 <= (GREATEST(153, 1))
  *   )
  *   SELECT date(TO_DATE('2026-04-17', 'YYYY-MM-DD'), '+' || (LEVEL - 1) || ' days') AS DIA,
  *          GREATEST(153, 1) - LEVEL AS DIAS_ATE_FIM
- *   FROM NIVEL
+ *   FROM CALENDARIO
  *
- * Só esta forma é traduzida. Qualquer outro CONNECT BY continua sem tradução: melhor quebrar
- * alto do que devolver linha plausível e errada (é a regra do cabeçalho deste arquivo).
+ * `CALENDARIO`, e não `NIVEL`: o gerador de R-064 já usa `NIVEL(LVL)` e as duas reescritas
+ * podem conviver no mesmo arquivo. Só esta forma (`CONNECT BY LEVEL <= …`) é traduzida —
+ * a de R-064 (`CONNECT BY <expr> IS NOT NULL`) continua com o dono dela, e qualquer outro
+ * `CONNECT BY` segue sem tradução: melhor quebrar alto do que devolver linha plausível e
+ * errada (é a regra do cabeçalho do arquivo).
  */
 function reescreverCalendarioOracle(sql) {
-  const ABERTURA = /\bSELECT\b([\s\S]*?)\bFROM\s+DUAL\s+CONNECT\s+BY\s+LEVEL\s*<=\s*/gi;
+  // B-2: o `((?:(?!\bSELECT\b)[\s\S])*?)` impede o casamento de começar num SELECT
+  // anterior e atravessar outras CTEs (PRODUTOS_BASE, RESSUPRIMENTO_PRODUTO) até chegar
+  // ao FROM DUAL de DIAS — o que apagaria meia consulta.
+  const ABERTURA = /\bSELECT\b((?:(?!\bSELECT\b)[\s\S])*?)\bFROM\s+DUAL\s+CONNECT\s+BY\s+LEVEL\s*<=\s*/gi;
   let saida = '';
   let cursor = 0;
   let m;
@@ -864,20 +912,24 @@ function reescreverCalendarioOracle(sql) {
     if (m.index < cursor) continue;
     const inicioLimite = ABERTURA.lastIndex;
     const fimLimite = fimDoBlocoForaDeAspas(sql, inicioLimite);
-    if (fimLimite === -1) continue;
     const projecao = comDataDoNivel(m[1].trim().replace(/,\s*$/, ''));
     const limite = sql.slice(inicioLimite, fimLimite).trim();
     saida += sql.slice(cursor, m.index);
-    saida += `WITH RECURSIVE NIVEL(LEVEL) AS (\n`
-      + `  SELECT 1 UNION ALL SELECT LEVEL + 1 FROM NIVEL WHERE LEVEL + 1 <= (${limite})\n`
-      + `)\nSELECT ${projecao} FROM NIVEL`;
+    saida += 'WITH RECURSIVE CALENDARIO(LEVEL) AS (\n'
+      + `  SELECT 1 UNION ALL SELECT LEVEL + 1 FROM CALENDARIO WHERE LEVEL + 1 <= (${limite})\n`
+      + `)\nSELECT ${projecao} FROM CALENDARIO`;
     cursor = fimLimite;
     ABERTURA.lastIndex = cursor;
   }
   return saida + sql.slice(cursor);
 }
 
-/** Do início da expressão até o `)` que fecha o bloco que a contém, ignorando aspas. */
+/**
+ * Do início da expressão até o `)` que fecha o bloco que a contém, ignorando aspas.
+ * B-4: sem parêntese envolvente (o gerador solto, fora de uma CTE), o fim da INSTRUÇÃO é o
+ * fim do bloco — devolver −1 e desistir deixaria o `CONNECT BY` cru chegar ao SQLite, já
+ * sem o `FROM DUAL` que é apagado depois. Não existe caminho de desistência.
+ */
 function fimDoBlocoForaDeAspas(texto, inicio) {
   let profundidade = 0;
   let aspa = null;
@@ -894,8 +946,9 @@ function fimDoBlocoForaDeAspas(texto, inicio) {
       if (profundidade === 0) return i;
       profundidade -= 1;
     }
+    else if (c === ';' && profundidade === 0) return i;
   }
-  return -1;
+  return texto.length;
 }
 
 /** `TO_DATE(x, f) + (LEVEL - 1)` -> `date(TO_DATE(x, f), '+' || (LEVEL - 1) || ' days')`. */
@@ -907,20 +960,29 @@ function comDataDoNivel(projecao) {
 }
 ```
 
-e, dentro de `toSqlite()`:
+e, dentro de `toSqlite()` (`mysql-dialect.mjs:422-428`), **acrescentando** um elo à cadeia
+que a onda 3 já montou, sem tirar nenhum (B-3, R-113):
 
 ```js
-const resultado = mapOutsideStrings(
-  reescreverDateAddComExpressao(reescreverCalendarioOracle(String(sql))),
-  (chunk) => { /* … como hoje … */ },
+const preparado = reescreverCalendarioOracle(
+  reescreverGeradorConnectBy(
+    reescreverUpsert(reescreverJsonUnquote(reescreverDateAddComExpressao(String(sql)))),
+  ),
 );
+
+const resultado = mapOutsideStrings(preparado, (chunk) => { /* … como hoje … */ });
 ```
+
+`reescreverGeradorConnectBy` (R-064) vem antes e não toca nesta forma: ele só casa
+`CONNECT BY <expr> IS NOT NULL`.
 
 `ponytail:` a reescrita produz um `WITH RECURSIVE` **dentro** do corpo de uma CTE (`DIAS AS
 ( … )`), que o SQLite aceita porque `WITH` faz parte do `select-stmt`. Se alguma versão
 recusar, a saída sobe para o `WITH` do topo — muda o lugar, não o conteúdo. O teste
-`smoke/000-dialeto.mjs` (base) é onde isso aparece primeiro: a reescrita ganha um caso lá,
-comparando 153 linhas geradas com as datas esperadas.
+`smoke/000-dialeto.mjs` (base) é onde isso aparece primeiro, como o S0-011 de R-064 fez:
+**duas** formas, as duas com 153 linhas — o gerador dentro de `WITH DIAS AS (…)` precedido de
+**duas outras CTEs** (é o caso que B-2 pega) e o gerador solto, sem parêntese envolvente (o
+caso de B-4).
 
 ### Seed — `backend/simulator/seed/011-compras-inteligentes.mjs`
 
@@ -928,8 +990,8 @@ Só **INSERT**. Fornecedores (1015, 1042 ativos, 1088 inativo) e filiais (1, 2, 
 `seed/001-fornecedores.mjs`; `SGC_USUARIO_PERSONA` é do `seed/002-quadro.mjs` (R-017). As
 datas são **relativas a hoje**, como no seed da 007 — a janela da tela termina hoje.
 
-- **20 produtos `CODPROD` 5401–5420, do fornecedor 1042** (não do 1015, ver *Pedidos ao 000*
-  nº 1), departamentos 2 e 3, seções 21 e 31, embalagens "CX 12", "CAIXA COM 24" e
+- **20 produtos `CODPROD` 5401–5420, do fornecedor 1042** (não do 1015 — R-097),
+  departamentos 2 e 3, seções 21 e 31, embalagens "CX 12", "CAIXA COM 24" e
   "FRASCO 100 ML", descrições sem a palavra "CREME" (para não mexer na busca do C-009 da
   003): **5419** com `OBS2 = 'INATIVO'` e **5420** com `CODEPTO = 4` — os dois que provam o
   recorte de RN-014 e fazem C-001 esperar **18** dos 20.
@@ -951,7 +1013,13 @@ datas são **relativas a hoje**, como no seed da 007 — a janela da tela termin
   | 5408 | 60 num dia (cliente 9303) + 30 espalhados | C-013: venda 90 → 30 com a exclusão |
   | 5409 | 12 privadas + 6 de cliente público (9304, `CODATV1` 12) | RN-011: venda 18 com pública 6 |
   | 5410..5414 | volumes e custos que dão valor 500 / 250 / 150 / 70 / 30 | C-015 (a curva também é testada pura) |
+  | 5410 | **mais uma linha com `QT = -5`** (devolução), dentro da janela | RN-014: quantidade negativa fica fora de `VENDA_PERIODO` |
   | 5415 | nenhuma venda, estoque 40 | C-025 sem giro |
+
+  A linha negativa do 5410 é o que dá dente à RN-014 (C-7 da revisão): sem ela o `QT > 0` da
+  consulta nunca seria exercido, e uma devolução passaria a **descontar** demanda — o produto
+  de maior valor da curva encolheria em silêncio. Como o 5410 é o topo da curva de C-015, ela
+  também prova que a soma positiva continua 500: o `-5` não entra em lugar nenhum.
 - **3 clientes próprios** `PCCLIENT` **9301** (privado, `CODATV1` 1), **9302** (privado),
   **9303** (privado) e **9304**/**9305** públicos (`CODATV1` 12 e 20) — fora das faixas
   9001–9003 (003), 9101–9105 (007) e 9201–9205 (onda 3).
@@ -974,8 +1042,9 @@ datas são **relativas a hoje**, como no seed da 007 — a janela da tela termin
 
 ### `CHECK_INPUT`
 
-Acrescentar em `backend/simulator/config.mjs` (arquivo do integrador), na seção 011, **só
-chaves novas** (D-17): `diasPeriodo: '153'`, `excluir: '0'`, `meses: '12'`,
+Acrescentar em `backend/simulator/config.mjs` (arquivo compartilhado, entregue pela **base
+(S2)** junto do `PUBLISH_ORDER` — sem a chave o próprio `sim:check` da base falha ao varrer o
+`add-013`), na seção 011, **só chaves novas** (D-17): `diasPeriodo: '153'`, `excluir: '0'`, `meses: '12'`,
 `compradorId: '0'`, `numtransitem: '960001'`. `codfornec`, `codfilial`, `dataInicio`,
 `dataFim`, `codprod`, `limite` e `offset` já existem com valores que servem (o `sim:check`
 cobre sintaxe; o conteúdo é do smoke). **Não** entram `leadTimeDias`, `coberturaDias` nem
@@ -998,7 +1067,7 @@ cobre sintaxe; o conteúdo é do smoke). **Não** entram `leadTimeDias`, `cobert
 | C-017 | `tests/ressuprimento.test.mjs` | `arredondarPorCaixa(50, 12)` → 60; `(48, 12)` → 48; `(0, 12)` → 0 (linha 19 cobre caixa 1) |
 | C-018 | `smoke/011-compras-inteligentes.mjs` | `kbCardCriar` + `sgcEscPedidoCriar` (`origem: 'compras_inteligentes'`) + `sgcItensGravar` com 3 itens: 1 card na fase `analise`, `SGC_PEDIDO.ORIGEM` = `compras_inteligentes`, `PERIODO_INICIO/FIM` iguais à janela, `VALORES_JSON` com prioridade `alta`, 3 linhas em `SGC_PEDIDO_ITEM` com `QT_PEDIDA`, `QT_SUGERIDA`, `PRECO_CUSTO` e `CURVA_ABC`, e `VL_TOTAL` = soma |
 | C-019 | `smoke/011-compras-inteligentes.mjs` | `sgcPedidoAbertoDoFornecedor` (1042, filial 1) devolve 1 linha com `TITULO` e `FASE_CHAVE = 'analise'`; para a filial 2 (card em `enviado`) devolve 0 |
-| C-020 | `smoke/011-compras-inteligentes.mjs` | no card criado pelo carrinho, o 5403 tem `QT_PEDIDA` 24; gravar em lote **só os produtos novos** (que é o que `Itens.tsx:106-109` manda ao montar a análise, porque `setAlterados` só marca quem não estava na lista) e reler: 5403 continua com 24 e os novos entram com 0. É a prova de RN-017 sobre o código real, não sobre uma cópia da regra |
+| C-020 | `smoke/011-compras-inteligentes.mjs` | no card criado pelo carrinho, o 5403 tem `QT_PEDIDA` 24; gravar em lote **só os produtos novos** e reler: 5403 continua com 24 e os novos entram com 0. O que o smoke prova é o **upsert**: item que não entra no lote não é tocado. Quem decide mandar só os novos é `Itens.tsx:107-109` (003), citado, não reimplementado aqui — esta spec não cria cópia dessa regra |
 | C-021 | `smoke/011-compras-inteligentes.mjs` | as três consultas do detalhe do 5403 devolvem contagem > 0: histórico com ≤ 12 meses, ≥ 1 compra e ≥ 2 filiais com estoque |
 | C-022 | `smoke/…` + `tests/ressuprimento.test.mjs` | `sgcEficienciaComprador` recortada por `codfornec: 1042` e `compradorId` do criador devolve `ITENS` 5, `ADERENTES` 3 e `PERC_ADERENCIA` 60,0 (R-045: nada de literal absoluto sobre a listagem global); `aderenteASugestao` devolve o mesmo para os 5 pares |
 | C-023 | `smoke/…` + `tests/permissoes.test.mjs` | matriz: `verComprasInteligentes` para admin/analista/gestor/diretoria e não para comercial; `operarComprasInteligentes` zerada em `READ_ONLY`; `parametrizarCompras` só admin/gestor; no servidor, `sgcEscParametroCompraSalvar` grava como `gil` e não grava como `ana` nem como `leo` |
@@ -1014,7 +1083,7 @@ cobre sintaxe; o conteúdo é do smoke). **Não** entram `leadTimeDias`, `cobert
 | RN-014 | `smoke/011-compras-inteligentes.mjs` | a consulta não traz 5419 (inativo) nem 5420 (departamento 4); venda com `QT` negativa não entra em `VENDA_PERIODO` |
 | RN-015 | `tests/ressuprimento.test.mjs` | `agruparCarrinho` com 3 itens do mesmo fornecedor/filial e 1 em ruptura → 1 grupo, `prioridade: 'alta'`, total certo; sem ruptura → `'normal'`; com 2 filiais → 2 grupos |
 | RN-016 | `smoke/011-compras-inteligentes.mjs` | a consulta lista o card em `analise` e não lista o de `enviado`; movendo o primeiro para `tecnica`, continua listando |
-| RN-017 | `smoke/011-compras-inteligentes.mjs` | a mesma gravação de C-020, com um item existente e dois novos: o upsert de `sgcEscItemGravar` nem chega a receber o item do carrinho |
+| RN-017 | `smoke/011-compras-inteligentes.mjs` | a mesma gravação de C-020, com um item existente e dois novos: `sgcEscItemGravar` nem chega a receber o item do carrinho, e por isso `QT_PEDIDA = VALUES(QT_PEDIDA)` (`add-006-itens.mjs:286`) não o alcança |
 | RN-018 | `tests/ressuprimento.test.mjs` | (100,100), (100,80), (100,120) → true; (100,79), (100,121), (0,10) → false |
 | RN-019 | `tests/permissoes.test.mjs` | a matriz de C-023, persona a persona e nível a nível |
 
@@ -1031,10 +1100,12 @@ cobre sintaxe; o conteúdo é do smoke). **Não** entram `leadTimeDias`, `cobert
 **Consome da 002 (quadro):**
 
 - `sgcEscPedidoCriar` (7250) — precisa aceitar **`{{origem}}`** no lugar do literal `'manual'`
-  (`add-005-quadro-compras.mjs:399`), com a lista fechada
-  `AND '{{origem}}' IN ('manual', 'compras_inteligentes')`. É a única mudança que esta spec
-  pede num arquivo de outra feature; mesmo nome, mesmo id, mesma guarda. O trecho pronto está
-  em `tasks.md` (T-013).
+  (`add-005-quadro-compras.mjs:396`), com a lista fechada
+  `AND '{{origem}}' IN ('manual', 'compras_inteligentes')`. **É entrega da base (S2)**, não
+  desta spec (R-106): trocar o literal por parâmetro quebra `NovoPedidoPage.tsx:128` e
+  `smoke/002-quadro.mjs` se os três pontos não mudarem no mesmo commit — a SQL, a chamada da
+  tela e a chamada do smoke, todas com `origem: 'manual'`. Os três trechos prontos estão em
+  `tasks.md` (T-013). A 011 consome o parâmetro já existente.
 - `SGC_PEDIDO`, `SGC_FASE`, `KB_CARD` para o bloqueio do carrinho (RN-016) e para a eficiência.
 - O título do card segue a RN-014 da 002 (`FILIAL · FORNECEDOR` em maiúsculas), pela mesma
   função que `/pedidos/novo` usa.
@@ -1042,7 +1113,15 @@ cobre sintaxe; o conteúdo é do smoke). **Não** entram `leadTimeDias`, `cobert
 **Consome da 003 (itens):** `lib/compras.ts` (`curvaAbc` — a régua única de R-088 —,
 `arredondarPorCaixa`, `unidadesPorCaixa`), `sgcCustoUnidadesPorCaixa` (7306),
 `sgcCoberturaListar` (7307), `sgcItensGravar` (7309) e a estrutura de `SGC_PEDIDO_ITEM`
-(`QT_SUGERIDA`, `QT_PEDIDA`, `PRECO_CUSTO`, `CURVA_ABC`). **Nada muda na 003.**
+(`QT_SUGERIDA`, `QT_PEDIDA`, `PRECO_CUSTO`, `CURVA_ABC`).
+
+**Nada muda no comportamento da 003, mas uma assinatura estreita na base (R-110):**
+`curvaAbc(linhas: LinhaAnalise[])` hoje exige o registro inteiro da montagem (`ESTOQUE`,
+`TRANSITO`, `VENDA_LICITACAO`…), e a `MedidaRessuprimento` desta spec não tem esses campos —
+`tsc -b` recusaria a chamada. A base (S2) troca o parâmetro por
+`Pick<LinhaAnalise, 'CODPROD' | 'VENDA_PERIODO' | 'CUSTO_ULT_ENTRADA'>[]`, que é exatamente o
+que a função lê. É alargamento de tipo: todo chamador atual continua válido, o corpo não muda
+e a régua continua única. Trecho pronto em `tasks.md` (T-014).
 
 **Consome da 012 (coberturas por curva):** `limiteDeCobertura(coberturas, alvo, curva)` de
 `frontend/src/lib/cobertura.ts`, que a 012 é dona nesta onda (R-096). O contrato de que esta
@@ -1058,8 +1137,19 @@ limiteDeCobertura(
 
 A 011 usa **`alvoDias`** — o alvo da curva, sem tolerância (R-089) — e ignora `limiteDias`
 (que é o teto sem justificativa da montagem, 003). Sem linha alcançável, `alvoDias` é 35.
-Enquanto a 012 não integrar, a 011 chama a assinatura atual (`{ limiteDias }`) e o integrador
-troca a leitura por `alvoDias` no merge — uma linha em `montarRessuprimento`.
+
+**`lib/ressuprimento.ts` não importa `lib/cobertura.ts`** (R-111). A dependência é por
+**injeção**: `montarRessuprimento` recebe `alvoDaCurvaDias: (alvo, curva) => number` e só a
+tela conhece `limiteDeCobertura`. Três consequências, todas boas:
+
+- os testes de `frontend/tests/ressuprimento.test.mjs` rodam com um *stub* de três linhas
+  (`() => 35`, ou uma tabela `{ A: 20, B: 35, C: 50 }`), sem depender do arquivo da 012 nem do
+  seu seed — a 011 fica testável antes de a 012 existir;
+- se a 012 atrasar, a tela injeta `() => 35` e nada mais muda (uma linha em
+  `ComprasInteligentesPage.tsx`, T-038);
+- quando a 012 integrar, a mesma linha vira
+  `(alvo, curva) => limiteDeCobertura(coberturas, alvo, curva).alvoDias`. O merge não toca na
+  regra pura.
 
 **Consome da 001 (fornecedores):** `sgcFornecedorListar` e `sgcFornecedorCarregar` (filiais
 atendidas), exatamente como `/pedidos/novo` (`NovoPedidoPage.tsx:55-98`). Nenhuma SF nova.
@@ -1090,7 +1180,7 @@ atendidas), exatamente como `/pedidos/novo` (`NovoPedidoPage.tsx:55-98`). Nenhum
 | D-012 | "A comprar" = sugestão > 0 e não silenciado | Incluir também quem tem gatilho baixo e sugestão 0 | Sugestão 0 é "não há o que comprar" (há trânsito, ou o estoque já passou do máximo): listar seria oferecer um botão que não faz nada |
 | D-013 | Nenhuma tabela guarda o resultado do cálculo | Tabela de sugestão persistida | O legado criou `SUGESTAO_COMPRA` e **nunca escreveu nela** (`add-compras-inteligentes.mjs:111-134`). O cálculo é barato e muda a cada venda; persistir só criaria uma segunda verdade |
 | D-014 | Silenciamento e parâmetros na **mesma linha** de `SGC_PARAMETRO_COMPRA`, com duas escritas que não se pisam | Tabela separada de silenciamento | A chave é a mesma (fornecedor + filial + produto) e o `ON DUPLICATE KEY UPDATE` de cada escrita toca só as suas colunas — é o que o legado já fazia com duas SFs sobre `PRODUTO_PARAMETROS_COMPRA` |
-| D-015 | O seed usa o fornecedor **1042** | 1015, como sugere R-096 | Ver *Pedidos ao 000* nº 1: `smoke/003-itens.mjs:59` assere que `sgcWintAnaliseMontagem` do 1015 devolve **18** linhas; 20 produtos novos no 1015 quebrariam a 003 |
+| D-015 | O seed usa o fornecedor **1042** | 1015, como sugeria R-096 | **R-097** (R-096 emendada): `smoke/003-itens.mjs:59` assere que `sgcWintAnaliseMontagem` do 1015 devolve **18** linhas; 20 produtos novos no 1015 quebrariam a 003 |
 | D-016 | A janela de 153 dias é fixa, mostrada e não editável | Campo de período na tela | É o padrão do legado (`ComprasInteligentesPage.tsx:1766-1767`) e o que R-082 fixa. Um campo a mais aqui só criaria uma segunda janela para explicar na curva e no consumo — se o usuário pedir, entra depois |
 
 ## Riscos
@@ -1101,7 +1191,7 @@ atendidas), exatamente como `/pedidos/novo` (`NovoPedidoPage.tsx:55-98`). Nenhum
 | Um shim de data devolver número plausível e errado (peso 1 em todo dia) | consumo errado em silêncio, sugestão errada | D-004 tirou a subtração de datas do caminho; o teste de C-008 assere 10,0000 / 9,1892 / 10,8108, que só batem se o peso estiver certo |
 | `{{excluir}}` passar de 500 itens | `ORA-01795` na consulta principal | a tela corta nos 500 mais recentes e mostra `Alert`; `ponytail:` acima disso o recorte teria de ir por produto |
 | `PCEST` sem `QTBLOQUEADA`/`QTINDENIZ`/`QTRESERV` no sandbox | a consulta quebra na primeira publicação | as três colunas existem no WinThor real (é de lá que o legado as lê, `:52-54`); no simulador entram por R-096 |
-| A 012 atrasar e `limiteDeCobertura` não receber a curva | o estoque máximo cairia para 35 fixo | a 011 lê `alvoDias` por uma função só; enquanto a 012 não integra, o valor é o `limiteDias` atual e a troca é de uma linha (seção *Dependências*) |
+| A 012 atrasar e `limiteDeCobertura` não existir no merge | o estoque máximo cairia para 35 fixo | a regra pura não importa a 012 (R-111): recebe `alvoDaCurvaDias` injetado. Sem a 012, a tela injeta `() => 35` e os testes usam um *stub*; com a 012, a mesma linha passa a chamar `limiteDeCobertura(...).alvoDias` |
 | Fornecedor com 2.000+ produtos | carga lenta e memória na tela | `ponytail:` teto declarado em D-006; a saída seria calcular a curva numa passada e paginar na segunda |
 | `sgcItensGravar` recusar por fase ou por dono | o pedido nasce sem itens | o card acabou de nascer em `analise` e o criador é quem opera (`pedidoEmAnalise`, `add-006-itens.mjs:467-476`); a tela relê o pedido e mostra `Alert` se o retorno vier `ok: false` |
 
@@ -1109,30 +1199,29 @@ atendidas), exatamente como `/pedidos/novo` (`NovoPedidoPage.tsx:55-98`). Nenhum
 
 Vazio: nenhuma violação de princípio.
 
-## Pedidos ao 000
+## Pedidos ao 000 — todos respondidos
 
-1. **Seed no fornecedor 1042, não no 1015 (emenda a R-096).** `backend/simulator/smoke/003-itens.mjs:59`
-   assere `assert.equal(rows.length, 18)` para `sgcWintAnaliseMontagem` do fornecedor **1015**,
-   que filtra só por `CODFORNEC` (`add-006-itens.mjs`, `WHERE P.CODFORNEC = {{codfornec}}`).
-   Semear 20 produtos ativos no 1015, como R-096 sugere, faria a 003 ver 36 linhas e quebraria
-   o C-001 dela. É o mesmo motivo pelo qual a 007 escolheu o 1042 (plan da 007, seção *Seed*).
-   A faixa de `CODPROD` (5401–5420), os clientes (9301–9305), o `NUMTRANSITEM` (≥ 960001) e o
-   `NUMPED` (≥ 970001) continuam como R-096 fixou.
-2. **`sgcEscPedidoCapaSalvar` não existe (correção de nome em R-091).** A escrita da capa do
-   pedido criado pela tela chama-se **`sgcEscPedidoCriar`** (7250,
-   `add-005-quadro-compras.mjs:393`); `sgcEscPedidoCapaInserir` (7260) é a do cron da agenda,
-   sem `:VAR_USER` (R-010). Esta spec usa a primeira, e pede a ela um `{{origem}}`
-   parametrizado com lista fechada — hoje o valor é o literal `'manual'` (`:399`).
-3. **Duas SFs a mais na linha 011 do 000:** `sgcPedidoAbertoDoFornecedor` (8108) e
-   `sgcWintProdutoVendas` (8105), justificadas em D-009 e D-010. As demais são exatamente as
-   da tabela do 000.
-4. **`INSTR` e `STDDEV_POP` saem da lista de shims de R-096**, e `SQRT` fica: nenhuma SQL desta
-   spec usa `INSTR` (o "completar compra" está fora de escopo, R-094) e a volatilidade usa
-   `AVG` + `SQRT` porque `STDDEV_POP` é agregado e o dialeto só registra escalares (D-005).
-   Entram `POWER`, `SQRT`, `ADD_MONTHS` e o gerador de calendário.
-5. **`CHECK_INPUT` não recebe `leadTimeDias`, `coberturaDias` nem `curva`** (citadas em R-096):
-   com R-083 esses três deixaram de ser parâmetro de SQL. As chaves novas são `diasPeriodo`,
-   `excluir`, `meses`, `compradorId` e `numtransitem`.
-6. **`SGC_PEDIDO.ORIGEM` cabe em `VARCHAR(20)`** por um caractere: `compras_inteligentes` tem
-   exatamente 20. Fica registrado — se algum valor de origem futuro passar disso, o `CREATE` do
-   `setup-backend.mjs` muda antes da primeira publicação, não depois.
+Os seis pedidos da S1 voltaram aceitos no 000 (tabelas *Decisões tomadas na S1 da onda 4* e
+*Revisão cruzada da S1 da onda 4*). Ficam aqui com a resposta ao lado, porque o plan cita os
+números; **não há pedido aberto**.
+
+| # | Pedido | Resposta |
+|---|---|---|
+| 1 | Seed no fornecedor **1042**, não no 1015 (`smoke/003-itens.mjs:59` assere 18 linhas de `sgcWintAnaliseMontagem` para o 1015; 20 produtos novos lá quebrariam C-001 da 003) | **R-097** — aceito; faixas 5401–5420, 9301–9305, `NUMTRANSITEM` ≥ 960001 e `NUMPED` ≥ 970001 mantidas |
+| 2 | `sgcEscPedidoCapaSalvar` não existe: a escrita é **`sgcEscPedidoCriar`** (7250, `add-005-quadro-compras.mjs:390`), e ela precisa de `{{origem}}` no lugar do literal `'manual'` (`:396`) | **R-098**, emendada por **R-106** — o nome está corrigido, e o `{{origem}}` virou entrega da **base (S2)** com os três pontos de chamada no mesmo commit (T-013) |
+| 3 | Duas SFs a mais na linha 011: `sgcPedidoAbertoDoFornecedor` (8108) e `sgcWintProdutoVendas` (8105) | **R-099** — aceitas, com os ids 8101–8109 (leitura) e 8150–8154 (escrita) fixados por este plan |
+| 4 | `INSTR` e `STDDEV_POP` saem dos shims de R-096; entram `POWER`, `SQRT`, `ADD_MONTHS` e o gerador de calendário | **R-100** — aceito; a reescrita exata está na seção *Simulador* e ganha caso próprio no `smoke/000-dialeto.mjs` |
+| 5 | `CHECK_INPUT` sem `leadTimeDias`, `coberturaDias` e `curva` (com R-083 deixaram de ser parâmetro de SQL); chaves novas `diasPeriodo`, `excluir`, `meses`, `compradorId`, `numtransitem` | **R-100** — aceito |
+| 6 | `SGC_PEDIDO.ORIGEM` cabe em `VARCHAR(20)` por um caractere (`compras_inteligentes` = 20) | **R-098** — registrado; nenhum valor de origem futuro pode passar de 20 |
+
+A revisão cruzada acrescentou quatro entregas da base que esta spec consome e **não**
+implementa — estão em `tasks.md` como tarefas de base, cada uma com o trecho pronto:
+
+- **R-106** — `{{origem}}` em `sgcEscPedidoCriar`, com `add-005`, `NovoPedidoPage.tsx` e
+  `smoke/002-quadro.mjs` no mesmo commit (T-013);
+- **R-107** — `seed011` em `seed.mjs` e a suíte 011 em `smoke.mjs` (depois de `indicadores`),
+  com stub vazio (T-015);
+- **R-110** — `curvaAbc()` aceitando `Pick<LinhaAnalise, 'CODPROD' | 'VENDA_PERIODO' | 'CUSTO_ULT_ENTRADA'>[]` (T-014);
+- **R-113** — os shims encadeados em `toSqlite` sem remover nenhuma reescrita da onda 3, as
+  colunas de `PCEST`, a chave de `CHECK_INPUT`, as permissões, a rota, o menu e a página-stub
+  (T-020 a T-024, T-037).

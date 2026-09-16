@@ -140,7 +140,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 **C-018 — Carrinho vira pedido no quadro**
 - **Dado que** o carrinho tem 3 produtos do mesmo fornecedor e filial, um deles em ruptura, e a janela da tela é de 153 dias
 - **Quando** a compradora clica em criar o pedido
-- **Então** nasce **um** pedido na primeira fase do quadro, com o título no padrão do sistema, prioridade **alta** (por causa da ruptura), o período igual à janela da tela, o valor total do carrinho na capa e os 3 itens já na lista, cada um com a quantidade escolhida, a quantidade sugerida, o custo e a curva — e o pedido fica marcado como originado das compras inteligentes
+- **Então** nasce **um** pedido na primeira fase do quadro, com o título no padrão do sistema, prioridade **alta** (por causa da ruptura), o período igual à janela da tela, o valor total do carrinho na capa e os 3 itens já na lista **completos** — quantidade escolhida, quantidade sugerida, custo, curva, descrição, embalagem, unidade, departamento, seção, unidades por caixa, venda, estoque, trânsito, cobertura futura e limite de cobertura, nenhum campo em branco —, e o pedido fica marcado como originado das compras inteligentes
 
 **C-019 — Já existe pedido aberto para esse fornecedor e filial**
 - **Dado que** existe um pedido daquele fornecedor e filial ainda não enviado à indústria
@@ -209,9 +209,9 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 
 | ID | Requisito | Como se mede |
 |---|---|---|
-| RNF-001 | Abrir a tela custa no máximo **8** chamadas ao servidor, e trocar de fornecedor ou de filial no máximo **6**, qualquer que seja o número de produtos — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
+| RNF-001 | Abrir a tela custa no máximo **9** chamadas ao servidor, e trocar de fornecedor ou de filial no máximo **6**, qualquer que seja o número de produtos — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
 | RNF-002 | Criar o pedido a partir do carrinho custa **3** chamadas por fornecedor e filial, qualquer que seja o número de itens | Contador com 1 e com 60 itens no carrinho: sempre 3 |
-| RNF-003 | Abrir o detalhe de um produto custa **3** chamadas; a lista de vendas para desconsiderar, mais **1**, e só quando esse diálogo é aberto | Contador ao abrir o detalhe e ao abrir o diálogo de vendas |
+| RNF-003 | Abrir o detalhe de um produto custa **3** chamadas; abrir a lista de vendas para desconsiderar, mais **1**; desconsiderar ou reconsiderar uma venda, **3** (gravar, reler a lista do que ficou desconsiderado e refazer a medida) | Contador ao abrir o detalhe, ao abrir o diálogo de vendas e ao marcar uma venda |
 | RNF-004 | A lista de um fornecedor com 300 produtos volta em uma consulta e é desenhada em até 3 s | Cronômetro sobre o fornecedor com mais produtos |
 | RNF-005 | Ligar e desligar o seletor de licitação, trocar de aba, filtrar por situação e ordenar não DEVEM custar nenhuma chamada ao servidor | Contador durante a interação: zero |
 | RNF-006 | Nenhuma operação desta tela escreve no ERP | Revisão das consultas: todas são leitura |
@@ -241,7 +241,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **RN-012 — Venda desconsiderada.** A venda marcada é tirada da demanda na origem, antes de qualquer média — não é descontada depois. No máximo 500 vendas desconsideradas por consulta.
 - **RN-013 — Silenciamento.** Silenciar guarda a data até quando e o motivo; o padrão são **30 dias** a partir de hoje. Produto silenciado sai da aba "a comprar" e continua na aba "todos" com a marca, o motivo e a data. Restaurar apaga a data.
 - **RN-014 — Recorte do ERP.** Produto ativo (sem marcação de inativo) e fora dos departamentos 4 e 7; o fornecedor genérico nunca entra; venda é só saída com quantidade positiva.
-- **RN-015 — Carrinho.** Um pedido por fornecedor e filial. Título no padrão do sistema (filial e fornecedor em maiúsculas). Prioridade alta quando houver ao menos um produto em ruptura no grupo, normal nos demais casos. Período igual à janela da tela. Cada item nasce com a quantidade escolhida, a quantidade sugerida no momento da escolha, o custo e a curva.
+- **RN-015 — Carrinho.** Um pedido por fornecedor e filial. Título no padrão do sistema (filial e fornecedor em maiúsculas). Prioridade alta quando houver ao menos um produto em ruptura no grupo, normal nos demais casos. Período igual à janela da tela. Cada item nasce **completo**: a quantidade escolhida, a quantidade sugerida no momento da escolha, o custo, a curva e tudo o que a lista já sabe do produto — descrição, embalagem, unidade, departamento, seção, unidades por caixa, venda do período, venda pública, estoque e trânsito medidos, a cobertura futura calculada com a quantidade escolhida e o limite de cobertura que vale para ele. Campo que nascer vazio continua vazio quando o pedido for reaberto e a análise remontada (RN-017) — e some das verificações de saída da montagem.
 - **RN-016 — Pedido aberto bloqueia.** Existe pedido aberto quando há pedido daquele fornecedor e filial em qualquer fase anterior ao envio à indústria (análise, aprovação técnica, aprovação da diretoria ou envio). A recusa cita o pedido e a fase.
 - **RN-017 — O carrinho manda.** Ao montar a análise dentro do pedido, o produto que já está na lista mantém a quantidade que tem; só os produtos novos entram zerados.
 - **RN-018 — Aderência.** Um item é aderente quando a quantidade pedida fica entre 80 % e 120 % da sugerida, limites inclusive, e a sugerida é maior que zero. A aderência é o percentual de itens aderentes entre os itens de pedidos originados das compras inteligentes, no período e por comprador.
@@ -268,7 +268,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-015 | 5 produtos com valores 500, 250, 150, 70 e 30 → A, A, B, C, C | regra de tela |
 | C-016 | sem parâmetro nenhum, alvo da curva A = 35 → máximo 70; curva B = 45 → 90; curva C = 60 → 120; sem regra alcançável → 35 | regra de tela |
 | C-017 | sugestão 48 e caixa 12: quantidade digitada 50 → 60; digitada 48 → 48; digitada 0 → 0 | regra de tela |
-| C-018 | criar o pedido a partir de um carrinho de 3 itens (um em ruptura) devolve 1 card na fase de análise, com origem `compras_inteligentes`, prioridade `alta`, período da janela, 3 itens gravados com quantidade pedida, sugerida, custo e curva, e valor total igual à soma | regra de negócio |
+| C-018 | criar o pedido a partir de um carrinho de 3 itens (um em ruptura) devolve 1 card na fase de análise, com origem `compras_inteligentes`, prioridade `alta`, período da janela, valor total igual à soma e 3 itens gravados completos: quantidade pedida, sugerida, custo e curva, **e** descrição não vazia e limite de cobertura maior que zero nos três | regra de negócio |
 | C-019 | com pedido do mesmo fornecedor e filial na fase de análise, a consulta de pedido aberto devolve 1 linha com o título e a fase; com o pedido em "enviado", devolve 0 | regra de negócio |
 | C-020 | pedido nascido do carrinho com quantidade 24 no produto X: depois de montar a análise, o produto X continua com 24 e os demais entram com 0 | regra de tela |
 | C-021 | as três consultas do detalhe devolvem contagem > 0 para um produto semeado: 12 linhas de histórico mensal no máximo, ao menos 1 compra e ao menos 2 filiais com estoque | regra de negócio |
@@ -289,7 +289,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RN-011 | a consulta devolve venda pública 6 dentro de venda total 18 e consumo público dentro do consumo total; a regra subtrai um do outro e nunca fica negativa | regra de negócio + regra de tela |
 | RN-012 | a exclusão acontece na consulta: com a venda na lista, ela não aparece em nenhuma das colunas de venda nem no consumo | regra de negócio |
 | RN-013 | silenciado até amanhã com hoje → silenciado; até ontem → não; data vazia → não | regra de tela |
-| RN-014 | a consulta não traz produto marcado como inativo nem de departamento 4 ou 7; venda com quantidade negativa não entra | regra de negócio |
+| RN-014 | a consulta não traz produto marcado como inativo nem de departamento 4 ou 7; o produto que tem uma devolução de 5 unidades na janela (quantidade negativa) mostra só as saídas positivas na venda do período | regra de negócio |
 | RN-015 | 3 itens do mesmo fornecedor e filial com 1 em ruptura → 1 grupo, prioridade `alta`; sem ruptura → `normal`; 2 filiais → 2 grupos | regra de tela |
 | RN-016 | a consulta lista pedido nas fases análise, técnica, diretoria e envio, e não lista nas fases enviado, trânsito, faturamento, B.O., concluído e cancelado | regra de negócio |
 | RN-017 | mesclar a lista montada com a existente mantém a quantidade da existente e zera só as novas | regra de tela |
