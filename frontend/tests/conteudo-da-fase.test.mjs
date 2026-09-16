@@ -14,8 +14,12 @@ test('R-050: toda fase do quadro tem ao menos um bloco, sem repetição, e nenhu
   assert.deepEqual(blocosDaFase(null), [], 'mapa de fases ainda não carregado');
 });
 
-test('R-050: montagem e aprovações mostram itens e alertas; expedição mostra notas fiscais e recebimento; faturamento e B.O. mostram B.O. e notas', () => {
-  for (const fase of ['analise', 'tecnica', 'diretoria']) assert.deepEqual(blocosDaFase(fase), ['itens', 'alertas'], fase);
+test('R-050/R-054: a montagem abre com as solicitações do comercial, depois itens e alertas; as aprovações só itens e alertas; expedição mostra notas fiscais e recebimento; faturamento e B.O. mostram B.O. e notas', () => {
+  // R-054: só a Análise mostra a fila do comercial, e antes de Itens.
+  assert.deepEqual(blocosDaFase('analise'), ['solicitacoes', 'itens', 'alertas']);
+  for (const fase of ['tecnica', 'diretoria']) {
+    assert.deepEqual(blocosDaFase(fase), ['itens', 'alertas'], fase);
+  }
   assert.deepEqual(blocosDaFase('envio'), ['itens']);
   for (const fase of ['enviado', 'transito']) {
     assert.ok(blocosDaFase(fase).includes('notas-fiscais'), fase);
