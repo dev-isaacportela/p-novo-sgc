@@ -270,6 +270,18 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
     return date ? formatOracle(date, formato) : null;
   });
 
+  // TO_NUMBER(texto) — o par de REGEXP_SUBSTR no rastreio da 008 (R-064): o
+  // pedaco do par volta como texto e entra numa juncao por CODPROD/CODCLI.
+  // Texto que nao e numero LANCA, como o Oracle (ORA-01722), em vez de virar 0:
+  // 0 casaria com "sem cliente informado" e o rastreio mentiria.
+  def('TO_NUMBER', 1, (valor) => {
+    if (valor == null) return null;
+    if (typeof valor === 'number') return valor;
+    const texto = String(valor).trim();
+    if (!NUMERO.test(texto)) throw new Error(`TO_NUMBER recebeu um texto que nao e numero: ${texto}`);
+    return Number(texto);
+  });
+
   // REGEXP_SUBSTR(texto, padrao, inicio, ocorrencia) — o explodidor de lista do
   // rastreio da 008 (R-064). So as duas formas que os plans usam ('[^,]+' e
   // '[^:]+', sempre a partir da posicao 1): o n-esimo pedaco separado por

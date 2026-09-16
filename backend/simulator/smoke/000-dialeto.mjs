@@ -96,14 +96,20 @@ ON DUPLICATE KEY UPDATE STATUS = CASE WHEN VALUES(QT) = 0 THEN 'removido' ELSE V
     assert.ok(situacao.startsWith('CASE') && situacao.endsWith('END'), `a régua é uma expressão escalar, do CASE ao END:\n${situacao.slice(0, 80)}…`);
     assert.ok(!situacao.includes('--'), 'o cabeçalho de contrato não entra no SQL');
 
-    // Só a COMPOSIÇÃO (aliases, junções, nomes de coluna): a semântica dos 9
-    // valores é da 008 (S3), que semeia as solicitações. Sem linha semeada
-    // ainda, o que se prova aqui é que a expressão colada roda.
+    // Só a COMPOSIÇÃO (aliases, junções, nomes de coluna): a semântica de cada
+    // um dos 9 valores é da 008 (C-011/RN-008, sobre o seed dela). Aqui se
+    // prova que a expressão colada roda e que não devolve valor fora do
+    // contrato — sem literal de total (R-045).
     const sql = `SELECT ${situacao} AS SITUACAO
 FROM SGC_SOLICITACAO S
 LEFT JOIN KB_CARD C ON C.ID = S.ID_CARD AND C.EXCLUIDO_EM IS NULL
 LEFT JOIN SGC_FASE SF ON SF.BOARD_ID = C.BOARD_ID AND SF.FASE_ID = C.FASE_ID
 LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD AND I.STATUS <> 'removido'`;
-    assert.deepEqual(db.prepare(toSqlite(sql)).all(), [], 'a régua composta roda; sem seed da 008 não há linha');
+    const VALORES = ['sem_pedido', 'em_analise', 'em_aprovacao', 'em_envio', 'enviada',
+      'em_transito', 'em_faturamento', 'atendida', 'nao_atendida'];
+    const linhas = db.prepare(toSqlite(sql)).all();
+    for (const linha of linhas) {
+      assert.ok(VALORES.includes(linha.SITUACAO), `valor fora do contrato da régua: ${linha.SITUACAO}`);
+    }
   });
 }
