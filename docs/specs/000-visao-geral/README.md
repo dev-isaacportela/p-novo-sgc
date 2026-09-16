@@ -412,3 +412,311 @@ Revisão feita sobre `develop` depois da S4 (integração das três features), c
 | D-25 | O histórico (`KB_LOG`/`KB_MOVIMENTO`) não distingue "pelo sistema em nome de X" de "X fez": o cron da 006 move e a 005 atualiza a capa com `atualizadoPor`/`movidoPor` do responsável. | lib `kbCardMover`/`kbCardAtualizar` (spec 014), telas de histórico |
 | D-26 | Anexar documento de B.O. (upload pelo `uploadFilePublicMitra`) e a busca híbrida do diálogo "Registrar NF" não foram ensaiados no navegador (o pane não abre seletor de arquivo); cobertos só pelo smoke (C-006 da 007) e pela SF `sgcWintNfBuscar` no `sim:check`. Ensaiar no sandbox (T-092/T-093 da 007). | `abas/bo-dialogos.tsx`, `abas/nf-dialogos.tsx` |
 | D-27 | `sim:check` devolve 0 linhas para `sgcNfsRecebimentoCard`/`sgcNfsRecebimentoPendente` com o `CHECK_INPUT` atual (cobre só a sintaxe); o smoke 006 é quem prova o conteúdo. | `simulator/config.mjs` |
+
+## Onda 3 — contrato (2026-09-15)
+
+Continua valendo o que abriu a onda 2: nada foi publicado na plataforma, então a onda 3 **edita o
+`CREATE TABLE`** das tabelas existentes (sem `ALTER`) e a lib pode mudar sem migração. Vale também
+a R-050: conteúdo de card entra como **bloco de fase** dentro de "Nesta fase", nunca como aba.
+
+### Specs
+
+| Spec | Assunto | Regras (`regras.md`) | Origem no p-45547 |
+|---|---|---|---|
+| `008-solicitacoes-do-comercial` | registro pelo comercial (produto e cliente do WinThor, quantidade, justificativa, prioridade, filial), avaliação por compras (aprovar / recusar com motivo, histórico), situação de atendimento derivada da fase do pedido, bloco "Solicitações" na Análise (mesmo fornecedor + filial, "Incluir no pedido"), rastreio pós-aprovação em dois eixos (o cliente comprou? o estoque encalhou?) com limites da tela | O3-01, O3-02 | `.specs/004-solicitacoes-comercial`, 001 RN-8, `add-rastreio-venda-solicitacoes.mjs`, `add-solicitacoes-analise-v1.mjs` |
+| `009-indicadores-e-relatorios` | `/analises` com quatro abas (indicadores operacionais, compras × vendas, SLA dos pedidos por etapa contra as metas do fornecedor, aderência das solicitações e ranking por vendedor) e `/relatorios` (relatórios salvos sobre os pedidos: filtros, colunas, agrupamento, gráfico barra/linha, tabela, CSV) | O3-03 | `.specs/005-indicadores-relatorios`, `add-indicadores-compras.mjs`, `add-acompanhamento-indicadores.mjs`, `pages/ReportsPage.tsx` |
+| `010-extrato-do-pedido` | extrato do pedido em PDF em qualquer fase, pela janela de impressão: logo embutida, marca d'água por fase, linhas de assinatura em decisão, prazo padrão × acordado com justificativa, itens e totais; e o mesmo extrato em CSV | O3-05 | 001 HU-12, `PipeWorkspace.tsx` (extrato) |
+
+Ordem lógica: 008 → 009 (a aderência das solicitações lê a tabela da 008); 010 é independente. Na
+prática as três rodam em paralelo sobre este contrato; o integrador liga o bloco da Análise, o botão
+do extrato, rotas, menu e permissões (S4).
+
+### Decisões da onda 3 (R-051..R-063)
+
+| Id | Decisão |
+|---|---|
+| R-051 | **Faixas de id e scripts**: 008 → 78xx (`add-011-solicitacoes.mjs`), 009 → 79xx (`add-012-indicadores.mjs`); leituras/JS em x01–x30, escritas em x50–x79. A 010 **não tem script nem SF**: lê `sgcPedidoCarregar` (002/003) e `sgcNfListar` (005); se o plan provar que precisa de uma consulta própria, ela entra no `add-012` em 7990–7999. `PUBLISH_ORDER` cresce na ordem; `add-002` continua por último e fora dele. |
+| R-052 | **Solicitação**: tabela `SGC_SOLICITACAO` + `SGC_SOLICITACAO_HISTORICO` (modelo abaixo). O **vendedor é quem registra** (`CRIADO_POR` → `INT_USER`; o Comercial 360 está fora do SGC 2). Cliente vem do WinThor (`PCCLIENT`: código, nome, CNPJ) por busca — `CODCLI = 0` é "sem cliente informado", nunca "cliente não comprou". Produto vem do WinThor pela mesma busca da 003 (`sgcWintBuscarProduto`); fornecedor é o do produto (`PCPRODUT.CODFORNEC`) e a filial é escolhida pelo comercial. `STATUS` próprio só `pendente` / `aprovada` / `recusada` / `cancelada`; a **situação de atendimento é derivada** a cada consulta da fase do card vinculado e do item (`em_analise`, `em_aprovacao`, `em_envio`, `enviada`, `em_transito`, `em_faturamento`, `nao_atendida` = item em B.O. ou pedido cancelado, `atendida` = pedido concluído) — sem cron de sincronização e sem os 13 status gravados do legado. |
+| R-053 | **Aprovar não é vincular**: aprovar na tela `/solicitacoes` só põe a solicitação na fila (`aprovada`, `ID_CARD = 0`); recusar exige motivo. O vínculo acontece na montagem, pelo bloco da Análise (R-054): "Incluir no pedido" aprova (se ainda pendente) e cria o item em `SGC_PEDIDO_ITEM` com `ID_SOLICITACAO` (coluna nova, no `CREATE`) e `QT_PEDIDA` = quantidade solicitada (o analista ajusta como qualquer item); uma solicitação → um item → um pedido. Item removido ou zerado na Análise desfaz o vínculo (`ID_CARD`/`ID_ITEM` = 0, histórico `desvinculada`) e a solicitação volta à fila; a 008 entrega `sgcEscSolicitacaoDesvincular` e o integrador a chama do fluxo de remoção da 003 (S4). O comercial pode cancelar a própria solicitação enquanto `pendente`. |
+| R-054 | **Bloco "Solicitações" na Análise** (R-050): entra em `BLOCOS_POR_FASE.analise` **antes** de Itens; lista as ativas (`pendente`, ou `aprovada` sem pedido) do mesmo fornecedor e filial do pedido, com produto, quantidade, cliente, prioridade, vendedor e justificativa; ações "Incluir no pedido" e "Recusar" (motivo); UMA execução ao abrir; só quem edita o pedido (`podeEditar`, mesma regra da 003) opera. Nas outras fases o bloco não aparece; as solicitações já vinculadas ao pedido aparecem como origem do item na lista de Itens (etiqueta "Solicitação de <vendedor>"). |
+| R-055 | **Rastreio pós-aprovação**: UMA consulta Oracle loteada `sgcWintRastreioSolicitacoes` (`{{pares}}` = `CODPROD:CODFILIAL:AAAA-MM-DD:CODCLI,…`, lotes de 120, data de referência = aprovação) devolvendo por par: venda ao cliente desde a referência na filial e em qualquer filial, venda total da filial, estoque atual (`PCEST.QTEST`), última saída (`PCEST.DTULTSAIDA`) e giro dos últimos 90 dias (`PCEST.QTVENDMES/1/2`). Dois eixos **independentes**, classificados na tela por `lib/solicitacoes.ts` (puro, testado): cliente = `comprou` / `comprou_outra_filial` / `nao_comprou` / `sem_cliente` / `carencia` (aprovação mais nova que o limite) / `sem_dado` (lote falhou); estoque = `parado` (sem saída há mais que o limite) / `excesso` (cobertura maior que o limite) / `girando` / `sem_estoque` / `sem_dado`. Os três limites (carência, parado, cobertura em dias) são parâmetros da tela com padrão definido na spec; mudar limite reclassifica sem nova consulta. Lote que falha vira `sem_dado`, nunca "sem alerta". |
+| R-056 | **Personas da 008**: comercial registra, acompanha e cancela as **suas**; admin, analista e gestor veem todas e avaliam; diretoria lê tudo; `READ_ONLY` não opera; `RESTRICTED` (analista) avalia e vincula só nos pedidos que criou. Chaves novas em `lib/permissoes.ts` (base): `verSolicitacoes`, `criarSolicitacao`, `avaliarSolicitacao`; o menu do comercial passa a ter **Solicitações** e **Produtos em B.O.**. |
+| R-057 | **Indicadores**: agregação **no backend**, uma SF SQL por bloco, blocos independentes carregados em paralelo (`Promise.allSettled`) — falha de um não derruba a tela; filtro de filial no cabeçalho (vazio = todas, exceto compras × vendas, que exige filial e assume a primeira, dizendo qual); período por aba (intervalo livre nos indicadores, mês/trimestre fechado em compras × vendas, derivados da data corrente). **SLA por etapa** contra `SGC_FORNECEDOR` (001): Análise = criação → `DT_ENVIO`, meta `SLA_ANALISE_DIAS` (padrão 1, dias úteis); Faturamento = `DT_ENVIO` → `DT_PRIMEIRO_FATURAMENTO`, meta `SLA_FATURAMENTO_DIAS` (padrão 5, úteis); Entrega = primeiro faturamento → última `DT_RECEBIMENTO` com todas as NFs recebidas e 100 % em valor, ou card em `concluido`, meta `PRAZO_ENTREGA_DIAS`/`PRAZO_ENTREGA_TIPO` (sem parametrização = `sem_meta`, não pontua). Dias úteis por R-025 (`backend/lib/dias-uteis.mjs`). Status por etapa `ok` / `estourou` / `andamento` / `atencao` (último dia) / `vencida` / `nao_iniciada` / `sem_meta`; SLA do pedido `atrasado_compras` (análise vencida) / `atrasado_fornecedor` / `atencao` / `no_prazo` / `concluido`; score 0–100 = média de `LEAST(100, 100 × meta ÷ dias)` das etapas iniciadas com meta; `cancelado` fica fora. Aderência à agenda: `SGC_AGENDA.DATA_ANALISE` × `DT_ENVIO`. KPIs e lista saem da **mesma** cadeia de CTEs. Aderência de solicitações = % `atendida` por contagem (sem R$); geral = todas do período, de fluxo = sem pendentes e recusadas. Compras × vendas por fornecedor lê o WinThor (`PCMOV` `CODOPER` `E` × `S` por `PCPRODUT.CODFORNEC`, filial obrigatória). |
+| R-058 | **Gráficos**: `recharts` entra no frontend (o `design.md` §1.2 já o prevê) com o `chart.tsx` do kit (`npx shadcn add chart`), instalado pela base (S2); cor de série só de `--data-*` (§12); tipos barra e linha; **toda** visualização tem a alternativa em tabela (acessibilidade); nada de pizza. |
+| R-059 | **Relatórios salvos**: tabela `SGC_RELATORIO` (modelo abaixo) com `CONFIG_JSON` = filtros (fase, fornecedor, filial, responsável, período de criação, prioridade), colunas, agrupamento, gráfico (`barra`/`linha`, eixo, medida) e visão (`grafico`/`tabela`). A consulta é **fixa**: `sgcRelatorioPedidos`/`Total` (paginada, sobre `KB_CARD` + `SGC_PEDIDO` + `SGC_FASE`, filtros desligados com `''`/`0`) e `sgcRelatorioAgregar` (contagem, soma de valor e média de dias na fase por campo de agrupamento) — nenhum SQL montado na tela. Edita quem criou ou admin; `COMPARTILHADO = 1` fica visível a todos com `verRelatorios`; CSV pelo `lib/csv.ts` (R-037). Sem `xlsx`. |
+| R-060 | **Extrato do pedido** (010): gerado na tela, sem SF nova, a partir de `sgcPedidoCarregar` (capa, itens, aprovações, prazo) e `sgcNfListar` (faturamento, quando houver). Documento HTML numa janela de impressão (`window.print()`), retrato, monocromático (hierarquia por peso e tamanho, sem cor), logo **embutida** no documento (data URI de `src/assets/logo-benenutri.png`, nunca por URL), marca d'água `NÃO APROVADO` nas fases `analise`/`tecnica`/`diretoria` e `CANCELADO` em `cancelado`, sem marca nas demais — a **fase** manda, nunca `TEC_EM`/`DIR_EM` sozinhas; três linhas de assinatura (comprador, aprovação técnica, diretoria) só nas fases de decisão; cabeçalho (fornecedor, filial, período, número do pedido WinThor quando houver, criador, data e hora locais da emissão), prazo padrão × acordado + justificativa, itens (código, descrição, embalagem, quantidade, custo, total), total do pedido, decisões registradas (técnica, diretoria, cancelamento com motivo). Regra pura em `lib/extrato.ts` (modelo do extrato: marca d'água, assinaturas, totais, nome do arquivo `extrato-pedido-<id>`), testada; o HTML em `pages/quadros/extrato-html.ts` (template de texto, ≤ 800 linhas). Botões "Extrato (PDF)" e "Extrato (CSV)" em `AcoesDoPedido`, em **qualquer fase**, para toda persona com `verQuadro`; pop-up bloqueado vira `Alert`, não toast. |
+| R-061 | **Personas de 009/010**: `/analises` e `/relatorios` para admin, gestor, diretoria e analista (leitura; analista consulta o próprio recorte); comercial não. Chaves `verAnalises`, `verRelatorios`, `salvarRelatorio` (admin, gestor, analista). Extrato: todas as personas que abrem o quadro. |
+| R-062 | **Simulador (integrador)**: `schema-winthor.mjs` ganha `PCCLIENT.CGCENT` (se faltar) e o que os plans pedirem de `PCEST`/`PCMOV`; a 008 semeia solicitações (pendentes, aprovadas na fila, vinculadas a cards de 002/003, recusadas, canceladas) e vendas `CODOPER = 'S'` com `CODCLI` e datas relativas à aprovação (`NUMTRANSITEM` a partir de 950001, clientes 9201–9205 — fora das faixas da 003 e da 007); a 009 **não semeia pedido novo** (lê os cards e NFs das ondas 1 e 2; R-045: nenhuma asserção literal sobre totais globais) e semeia só relatórios salvos; a 010 não semeia. `CHECK_INPUT` ganha as seções 008 e 009 (D-17: sem chave duplicada). |
+| R-063 | **Integração (S4)**: bloco `solicitacoes` em `BLOCOS_POR_FASE.analise`; `sgcEscSolicitacaoDesvincular` no fluxo de remoção/zeragem de item da 003; botões do extrato em `AcoesDoPedido`; rotas `/solicitacoes`, `/analises`, `/relatorios`; menu — grupo **Compras** ganha "Solicitações", grupo novo **Gestão** (Análises, Relatórios); `PUBLISH_ORDER`, `schema-winthor`, `CHECK_INPUT`, `recharts` + `chart.tsx`; nota no card (`kbNotaRegistrar`) ao vincular/desvincular solicitação. |
+
+### Decisões tomadas na S1 da onda 3 (R-064..R-072, 2026-09-16)
+
+Pedidos ao 000 vindos dos plans 008, 009 e 010, aceitos pelo integrador:
+
+| Id | Decisão |
+|---|---|
+| R-064 | **Rastreio mantém a forma Oracle do legado**: `{{pares}}` explodido por `REGEXP_SUBSTR(…, '[^,]+', 1, LEVEL)` + `CONNECT BY … IS NOT NULL` (provada em produção). O simulador ganha, na base (S2), os dois shims exatos da seção *Dialeto* do plan 008: `REGEXP_SUBSTR(texto, padrão, início, ocorrência)` como função escalar registrada no SQLite e a reescrita textual do gerador `FROM DUAL CONNECT BY <x> IS NOT NULL` em `WITH RECURSIVE`. Sem os shims a suíte 008 **falha alto**; nunca um shim que devolva linha plausível. Alternativa recusada: a tela montar `UNION ALL … FROM DUAL` (SQL montado na tela, R-059). |
+| R-065 | SF a mais na 008: `sgcEscSolicitacaoHistoricoRegistrar` (por id, `{{usuarioId}}` + guarda única R-013), gêmea de `sgcEscSolicitacaoHistoricoInserir` (tela, `:VAR_USER`) — uma identidade por SF, precedente `sgcEscItemRemover`/`RemoverZerados` da 003. |
+| R-066 | `sgcEscSolicitacaoDesvincular` é escrita de **tela** (`:VAR_USER`, persona que avalia), idempotente: `UPDATE … WHERE ID_CARD = {{idCard}} AND NOT EXISTS (item vivo com QT_PEDIDA > 0)` — o critério é "o item sumiu", não um id passado pela tela. `Itens.tsx` chama o par `HistoricoInserir('desvinculada')` + `Desvincular` depois de `sgcEscItemRemover` e depois de `sgcAnaliseSair` (zerados). O `add-006` não muda; R-053 fica satisfeita na tela (S4). |
+| R-067 | A linha `criada` do histórico da solicitação é **derivada** de `CRIADO_POR`/`CRIADO_EM` na leitura, não gravada. |
+| R-068 | `sgcPedidoCarregar` (add-005) ganha, na base (S2): `CRIADOR_NOME` na capa (010 RF-010) e `ID_SOLICITACAO` + `SOLICITACAO_VENDEDOR` nos itens (etiqueta "Solicitação de <vendedor>" da R-054). Nenhuma execução a mais. |
+| R-069 | R-062 emendada: `schema-winthor.mjs` ganha `PCCLIENT.CGCENT` e `PCMOV.DTCANCEL`; a 008 semeia produtos 5301–5305 (fornecedor 1042), clientes 9201–9205, `PCEST` da filial 3, `PCMOV` a partir de `NUMTRANSITEM` 950001. |
+| R-070 | **Uma régua de situação**: `backend/sql/situacao-solicitacao.sql` guarda o `CASE` escalar que deriva `SITUACAO` (fase do card × status do item × status da solicitação). A 008 entrega o arquivo (S3); `add-011` e `add-012` o carregam pelo loader generalizado `fragmento(nome)` de `backend/lib/fragmentos.mjs` (a base move para lá o `fragmentoDePendencias()` do add-005). A 009 não escreve régua própria; o teste RN-010 da 009 cruza o funil com `sgcSolicitacoesListar`. |
+| R-071 | 009: `SGC_RELATORIO.COMPARTILHADO BOOLEAN DEFAULT FALSE` (como os outros booleanos do setup); SF a mais `sgcIndPedidosPorFase` (uma linha por fase); reescrita nova no dialeto `JSON_UNQUOTE(JSON_EXTRACT(col, '$.k'))` → `json_extract(col, '$.k')` (prioridade vive só em `KB_CARD.VALORES_JSON`, R-009). |
+| R-072 | Ids fixados pelos plans: 008 leituras/JS 7801–7807, escritas 7850–7857; 009 leituras 7901–7917, escritas 7950–7952. `CHECK_INPUT` ganha só chaves novas — 008: `codcli`, `pares`, `minhas`, `vendedor`; 009: `fase`, `soVencidos`, `campoAgrupar`, `responsavelId`, `prioridade` (D-17: nenhuma repetida, nenhum valor existente alterado). |
+
+Revisão cruzada da S1 (2026-09-16, Opus): 5 bloqueios (B-1..B-5), 13 correções (C-1..C-13) devolvidos aos agentes de spec; registros aceitos:
+
+| Id | Decisão |
+|---|---|
+| R-073 | R-062 emendada: a 008 **cria três cards próprios** (`CARDS_008`: `montagem` analise/filial 1, `montagemFilial2` analise/filial 2, `vinculado` enviado/filial 1), todos do fornecedor 1042, `DT_ENVIO` vazio, sem `SGC_NF` nem `SGC_BO_ITEM`, em vez de vincular solicitações aos cards de 002/003: as datas do rastreio são relativas a hoje e as dos seeds 003/007 são fixas (D-014); cards próprios preservam as listagens globais de 005/007 (R-045). |
+| R-074 | `backend/lib/fragmentos.mjs` com `fragmento(nome)` é entrega da **base (S2)**: move para lá o `fragmentoDePendencias()` do `add-005` e o `add-005` passa a consumi-lo. Pré-requisito de R-070. A base também **cria `backend/sql/situacao-solicitacao.sql`** a partir do texto do plan 008 (cabeçalho com o contrato R-075), para as suítes 008 e 009 rodarem em paralelo na S3; daí em diante o arquivo é da 008. |
+| R-075 | R-070 emendada: `backend/sql/situacao-solicitacao.sql` declara no cabeçalho o **contrato de composição** — aliases `S` (`SGC_SOLICITACAO`), `C` (`KB_CARD`, `EXCLUIDO_EM IS NULL`), `SF` (`SGC_FASE` por `BOARD_ID` + `FASE_ID`), `I` (`SGC_PEDIDO_ITEM` por `ID_CARD` + `CODPROD`, `STATUS <> 'removido'`) e os três `LEFT JOIN` obrigatórios; `add-011` e `add-012` usam os mesmos aliases. |
+| R-076 | `sgcSolicitacoesFunil` (009) agrega por **`STATUS` e `SITUACAO`**: a régua devolve `sem_pedido` para `pendente`, `recusada`, `cancelada` e `aprovada` sem pedido, e a aderência de fluxo precisa das duas dimensões. Nenhuma régua nova. |
+| R-077 | R-060 emendada: o extrato custa **2 execuções por clique** (`sgcPedidoCarregar` + `sgcNfListar`, em paralelo, relidas a cada clique porque a capa da tela pode estar `null` ou de outro card). "Sem SF nova" não é "sem execução"; cabe no teto de 300/min. |
+| R-078 | R-060 emendada: exceção declarada ao "nenhuma cor literal" — `extrato-html.ts` usa cores fixas e imprime **sempre claro** (janela `about:blank` sem o CSS do app, saída igual em impressora P&B). Não vale para a tela: botões e `Alert` seguem os tokens. |
+| R-079 | Correção do dialeto (base, S2): em `toSqlite`, a troca `VALUES(col)` → `excluded.col` vale do marcador `ON DUPLICATE KEY UPDATE` até o fim da **instrução**, não até o fim do trecho fora de literal (hoje um `'texto'` dentro da cláusula deixa os `VALUES()` seguintes sem tradução). Teste no `smoke/000-dialeto.mjs`. |
+| R-080 | Primitivos de gráfico e KPI ficam em `frontend/src/components/page.tsx` (arquivo compartilhado) e são entrega da **base (S2)**, conforme a seção do plan 009 que os descreve (`corDeSerie`, `GradeKpi`, `Kpi`, `GradeGraficos`, `PainelGrafico`, `AlternaVisao` e os primitivos do `recharts` reexportados); o `design.md` ganha a seção correspondente (§8.7). |
+| R-114 | **`/relatorios` adiado, salvo se já estivesse pronto** — decisão do usuário em 2026-09-16 ("não vamos criar /relatorios agora … a não ser que tenha finalizado o /relatorios"), tomada durante a S3 da 009: se o agente da 009 já tinha concluído e testado a parte de relatórios quando a decisão chegou, ela fica e é integrada; senão a spec 009 entrega só `/analises` nesta onda e, nesse caso, os cenários, regras e contratos de relatórios salvos (R-059, `SGC_RELATORIO`, `sgcRelatorio*`, `sgcEscRelatorio*`, `verRelatorios`/`salvarRelatorio`) ficam registrados na spec como **adiados**, não implementados. O integrador (S4) retira o que a base criou por antecipação: tabela `SGC_RELATORIO` do setup, chaves de permissão e item de menu "Relatórios", rota e página stub `/relatorios`, entradas do mapa (7915–7917, 7950–7952) e chaves de `CHECK_INPUT` só de relatório (`fase`, `campoAgrupar`, `responsavelId`, `prioridade`). O grupo de menu **Gestão** fica só com "Análises". Quando voltar, entra como item de uma onda futura sobre o mesmo contrato. |
+
+### Integração da onda 3 (2026-09-16)
+
+As três features chegaram a `develop` (010 → 008 → 009) e a S4 ligou o que cada
+uma deixou para o integrador. Quatro blocos:
+
+1. **Bloco "Solicitações" na Análise** (R-054/R-063): `BLOCOS_POR_FASE.analise`
+   passa a `['solicitacoes', 'itens', 'alertas']` e `ConteudoDaFase.tsx` desenha
+   o `BlocoSolicitacoes` da 008 com `fases` e `sessao`, como já fazia com o B.O.
+   As fases de aprovação continuam com itens e alertas.
+2. **Desvínculo** (R-066): `devolverSolicitacoes()` vive em
+   `abas/verificar-saida.ts` e serve aos dois caminhos — a remoção de um item
+   (`Itens.tsx`) e a saída da Análise, que apaga os zerados de uma vez. O par é
+   `sgcEscSolicitacaoHistoricoInserir` (antes, porque casa pelo `ID_CARD` que o
+   desvínculo zera) + `sgcEscSolicitacaoDesvincular`; nenhum id sai da tela. A
+   nota do card (`kbNotaRegistrar`, em `try/catch`) só no caminho da remoção,
+   onde a tela sabe qual item saiu: no caminho da saída da Análise ela custaria
+   uma execução a mais só para descobrir os zerados (RNF-001).
+   **Etiqueta** (R-054/R-068): `ItemPedido` ganha `idSolicitacao`/
+   `solicitacaoDe` (`itemDeLinha` lê `ID_SOLICITACAO`/`SOLICITACAO_VENDEDOR`) e
+   a célula do produto mostra "Solicitação de &lt;vendedor&gt;".
+3. **Órfãos de `/relatorios` retirados** (R-114): `CREATE TABLE SGC_RELATORIO`
+   do `setup-backend.mjs`; os nomes e ids 7914–7917 e 7950–7952 do mapa (o
+   `add-012` já subiu sem eles); `verRelatorios`/`salvarRelatorio` e o item de
+   menu de `permissoes.ts` (+ `tests/permissoes.test.mjs`) — o grupo **Gestão**
+   fica só com "Análises"; a rota `/relatorios`, a página stub e o ícone órfão
+   do `AdminLayout`; as chaves `campoAgrupar` e `responsavelId` do
+   `CHECK_INPUT`; e o `seed009` (já no-op) junto com o arquivo
+   `seed/009-indicadores.mjs`. **Ficam**: `prioridade` no `CHECK_INPUT` (quem a
+   usa é o `sgcEscSolicitacaoInserir` da 008), `fase`/`soVencidos` (filtro de
+   SLA do `add-012`) e o shim `JSON_UNQUOTE` do dialeto (testado e inofensivo).
+4. **009 ligada ao resto**: `BarraConsumo` entra na §8.7 de `page.tsx` (escala
+   fechada de doze passos — o Tailwind não gera classe a partir de variável e
+   `style={{}}` não entra aqui — com o tom do mesmo `STATUS_TONE` do `Status`) e
+   desenha o consumo da meta na aba Pedidos/SLA; o botão "Exportar CSV" da mesma
+   aba usa `COLUNAS_CSV_SLA`/`linhasCsvSla`, que estavam sem consumidor, sobre a
+   página atual e sem execução nova (emenda a D-013 do plan da 009, registrada
+   lá: com `/relatorios` adiado o construtor não existe nesta onda); e o smoke
+   009 passa a cruzar, situação a situação, o funil com `sgcSolicitacoesListar`
+   da 008 (RN-010), o que só era possível depois do merge.
+
+Duas asserções literais do `smoke/009-indicadores.mjs` caíram quando o seed da
+008 chegou ao mesmo banco (a lista fechada de `STATUS` em `sem_pedido`, que
+ganhou `cancelada`, e as três contagens do ranking do `leo`): as duas passam a
+ser contadas no próprio teste, como manda R-045. A-14: nenhum ramo "pendente de
+S4" sobrou nos smokes 008/009 — os dois arquivos não têm `else`.
+
+Notas da base (S2) e da integração, para quem ler o código depois:
+
+| O que | Onde |
+|---|---|
+| `fragmento(nome)` devolve o texto cru, **sem** vírgula de coluna: a vírgula é convenção dos blocos de pendência e mora em `colunasDePendencia()`, no `add-005`. A régua de situação é expressão escalar e uma vírgula a quebraria. | `backend/lib/fragmentos.mjs`, `add-005` |
+| `page.tsx` roda com `max-lines` e `react-refresh/only-export-components` desligados: é vocabulário do kit, e o bloco §8.7 exporta `corDeSerie`/`tomDeIntensidade` ao lado dos componentes (R-080). | `frontend/eslint.config.js` |
+| `recharts ^3.10.1` no frontend (R-058); nenhuma dependência nova no backend. | `frontend/package.json` |
+| `criarSolicitacao` é só de **admin e comercial** — o autor É o vendedor (RN-002 da 008); analista e gestor avaliam, não registram. | `lib/permissoes.ts` |
+| **D-33** (dívida): `tomDeIntensidade`, `Delta` e `Sparkline` do §8.7 não têm consumidor nenhum — só o kit os exporta. Ou uma tela passa a usá-los, ou saem (é o D-16 da onda 2 aplicado ao bloco de gráficos). | `frontend/src/components/page.tsx` |
+| `tests/bo.test.mjs` C-013 afirma **2** itens no menu do comercial (Solicitações e Produtos em B.O.), o mesmo que `tests/permissoes.test.mjs`. | `frontend/tests/bo.test.mjs` |
+
+### Modelo de dados da onda 3
+
+| Tabela | Conteúdo | Spec |
+|---|---|---|
+| `SGC_SOLICITACAO` | `ID`, `CODPROD`, `DESCRICAO`, `EMBALAGEM`, `UNIDADE`, `CODFORNEC`, `FORNECEDOR`, `CODFILIAL`, `FILIAL`, `QUANTIDADE DECIMAL(15,3)`, `JUSTIFICATIVA VARCHAR(1000)`, `CODCLI INT` (0 = sem cliente), `CLIENTE VARCHAR(200)`, `CNPJ_CLIENTE VARCHAR(20)`, `PRIORIDADE` (`normal`/`alta`/`urgente`), `STATUS` (`pendente`/`aprovada`/`recusada`/`cancelada`), `MOTIVO VARCHAR(500)` (recusa), `ID_CARD INT` (0 = sem pedido), `ID_ITEM INT` (0), `AVALIADO_POR`, `AVALIADO_EM`, `CRIADO_POR` (vendedor), `CRIADO_EM`, `ATUALIZADO_EM`; índices por `STATUS`, `CODFORNEC, CODFILIAL`, `ID_CARD`, `CRIADO_POR` | 008 |
+| `SGC_SOLICITACAO_HISTORICO` (N:1) | `ID`, `ID_SOLICITACAO`, `EVENTO` (`criada`/`aprovada`/`recusada`/`vinculada`/`desvinculada`/`cancelada`), `DETALHE VARCHAR(500)`, `POR`, `EM` | 008 |
+| `SGC_PEDIDO_ITEM.ID_SOLICITACAO INT DEFAULT 0` | origem do item (no `CREATE`) | 008 |
+| `SGC_RELATORIO` | `ID`, `TITULO VARCHAR(180)`, `DESCRICAO VARCHAR(500)`, `CONFIG_JSON TEXT`, `COMPARTILHADO BOOLEAN DEFAULT FALSE` (R-071), `CRIADO_POR`, `CRIADO_EM`, `ATUALIZADO_POR`, `ATUALIZADO_EM` | 009 |
+
+### Server functions da onda 3 (nomes fixos; detalhes nos plans)
+
+| Spec | Leitura / JS | Escrita (SQL) |
+|---|---|---|
+| 008 | `sgcWintClienteBuscar` (`PCCLIENT` por código, nome ou CNPJ, 20 linhas), `sgcWintRastreioSolicitacoes` (`{{pares}}`), `sgcSolicitacoesListar`/`Total` (status, situação derivada, fornecedor, filial, vendedor, busca, "minhas"; paginada), `sgcSolicitacoesDaMontagem` (`cardId` → ativas do mesmo fornecedor e filial), `sgcSolicitacaoCarregar` (com histórico), `sgcSolicitacaoIncluirNoPedido` (JS: aprova se pendente, cria o item com `ID_SOLICITACAO`, vincula, histórico, `kbNotaRegistrar`) | `sgcEscSolicitacaoInserir`, `sgcEscSolicitacaoAvaliar` (aprovar/recusar com motivo), `sgcEscSolicitacaoCancelar`, `sgcEscSolicitacaoVincular`, `sgcEscSolicitacaoDesvincular`, `sgcEscSolicitacaoHistoricoInserir` (tela), `sgcEscSolicitacaoHistoricoRegistrar` (por id, R-065), `sgcEscItemDeSolicitacaoInserir` |
+| 009 | `sgcIndResumo` (KPIs escalares: envios atrasados × agenda, faturamentos pendentes, itens em B.O., NFs em atraso, fornecedores ativos), `sgcIndPedidosPorFase` (R-071), `sgcIndAgendaAtrasos`, `sgcIndProdutosBo`, `sgcIndPerfilFornecedor`, `sgcIndLeadTime` (tempo médio por fase de `KB_MOVIMENTO`), `sgcWintComprasVsVendas` (Oracle, filial obrigatória), `sgcSlaPedidosKpis`, `sgcSlaPedidosListar`/`Total`, `sgcSlaPedidoFases` (linha do tempo de `KB_MOVIMENTO`), `sgcSolicitacoesFunil`, `sgcSolicitacoesPorVendedor`, `sgcRelatoriosListar`, `sgcRelatorioPedidos`/`Total`, `sgcRelatorioAgregar` | `sgcEscRelatorioInserir`, `sgcEscRelatorioAtualizar`, `sgcEscRelatorioExcluir` |
+| 010 | — (lê `sgcPedidoCarregar` e `sgcNfListar`) | — |
+
+Quem chama o quê: tela → SQL guardada por `:VAR_USER`; `sgcSolicitacaoIncluirNoPedido` → escritas por id
+com `{{usuarioId}}` e a guarda única (R-013) mais a checagem de fase e dono da 003 (`pedidoEmAnalise`);
+escrita SQL guardada devolve 0 linhas quando recusada (D-03) — a tela relê. Sem cron na onda 3.
+Consultas Oracle no smoke provam contagem > 0.
+
+### Telas da onda 3
+
+| Rota | Tela | Persona | Spec |
+|---|---|---|---|
+| `/solicitacoes` | lista (produto, quantidade, cliente com código, prioridade, vendedor, status, situação de atendimento, pedido), filtros (status, situação, fornecedor, filial, minhas, busca), "Nova solicitação" (diálogo: produto e cliente pelo WinThor, quantidade, justificativa, prioridade, filial), avaliar (aprovar / recusar com motivo), detalhe com histórico, painel de rastreio pós-aprovação (dois eixos, limites da tela, CSV) | comercial (as suas), admin/analista/gestor (todas), diretoria lê | 008 |
+| card · Análise | bloco "Solicitações" (R-054) | quem edita o pedido | 008 |
+| `/analises` | abas Indicadores, Compras × vendas, Pedidos (SLA), Solicitações; filtro de filial no cabeçalho; gráfico com alternativa em tabela | admin, gestor, diretoria, analista | 009 |
+| `/relatorios` | **adiado (R-114, 2026-09-16)** — galeria de relatórios salvos e construtor (filtros, colunas, agrupamento, gráfico barra/linha, tabela paginada, CSV, compartilhar) | idem; salvar = admin, gestor, analista | 009 |
+| card · ações | "Extrato (PDF)" e "Extrato (CSV)" | toda persona com `verQuadro` | 010 |
+
+Menu: grupo **Compras** ganha "Solicitações"; grupo novo **Gestão** com "Análises" e "Relatórios".
+O comercial vê Solicitações e Produtos em B.O.
+
+## Revisão adversarial da onda 3 (2026-09-16) e dívidas abertas
+
+Revisão feita sobre `develop` (2ced922) depois da S4, só leitura, com `npm test` verde nos dois lados (245 verificações no backend, 205 testes no frontend, `tsc`/`eslint` limpos). Dois achados bloqueavam a release (injeção no `LIKE` e escritas internas sem fase/dono), nove pediam correção antes dela e catorze viraram dívida. O ensaio no navegador (S4) tinha achado um (P-1 = 3A-8). Tudo o que é "corrigido" abaixo entrou pela branch `fix/onda-3-p1` (agente de correção + integrador) e foi mergeado em `develop` (a5892e0) antes da `release/onda-3`; depois das correções: 249 verificações no backend, 206 testes no frontend, build e lint limpos. Cada teste novo foi conferido contra o código antigo (falha sem a correção).
+
+**Corrigido antes da release**
+
+| Id | O que era | Como ficou |
+|---|---|---|
+| 3A-1 | `LIKE '%{{busca}}%'` em `sgcWintClienteBuscar` e `sgcWintFornecedores` (as duas Oracle): o runtime só escapa marcador com aspa adjacente — `SANT'ANNA` quebrava a consulta e `a%' OR 1=1 --` a reescrevia. (`sgcFornecedorListar`, MySQL, já usava `CONCAT` de três argumentos.) | Concatenação Oracle `'%' \|\| '{{busca}}' \|\| '%'` (a mesma do `add-006`); `grep "%{{"` nos `add-*` volta vazio. Testes com apóstrofo nos smokes 008 (cliente 9206) e 001 (fornecedor 1099, só em `PCFORNEC`), que falham com o SQL antigo (`near "ANNA": syntax error`). |
+| 3A-2 | `sgcEscSolicitacaoVincular` (7853) e `sgcEscItemDeSolicitacaoInserir` (7856), chamadas por id, só conferiam persona: o `pedidoEmAnalise` do JS era caminho paralelo, não trava (A-6/D-19 da onda 2 de novo). | `faseEDono('{{idCard}}', '{{usuarioId}}')` dentro da `guardaInterna` das duas. Smoke: card fora da Análise e RESTRICTED em card alheio → 0 linhas, nada gravado. |
+| 3A-3 | `sgcEscSolicitacaoHistoricoInserir` por `{{id}}` não conferia autoria: comercial gravava `aprovada`/`vinculada` com detalhe livre em qualquer solicitação. | Ramo por id: `cancelada` só pelo autor (`S.CRIADO_POR = :VAR_USER`); os demais eventos só com a guarda de `AVALIAR`. Smoke com os quatro casos. |
+| 3A-4 | Histórico gravado incondicionalmente depois da escrita principal nos três caminhos (avaliar, cancelar, desvincular): escrita guardada recusada devolve 0 linhas sem erro (D-03) e a linha do histórico dizia que aconteceu. | Servidor: o ramo por card do histórico usa a MESMA guarda do desvínculo (`AVALIAR` + fase e dono) — os dois recusam ou os dois gravam. A falha real era a persona: o ramo usava `HISTORICO` (que inclui o comercial) e o desvínculo exige `AVALIAR`; fase e dono já eram conferidos. Tela: `carimboGravado()` (`pages/solicitacoes/carimbo.ts`, arquivo próprio por causa do `react-refresh/only-export-components`) relê por `sgcSolicitacaoCarregar` e só registra o histórico quando o carimbo confirma que a escrita rodou; recusa vira aviso no diálogo, que não fecha em silêncio (cobre 3A-25). |
+| 3A-5 | `AVALIADO_EM` também é gravado na recusa; o painel de rastreio filtrava só pela data e listava recusadas como "aprovada em". | `alvoDeRastreio()` em `lib/solicitacoes.ts` (`STATUS = 'aprovada'` e data válida), usado pelo painel; teste RN-015b. |
+| 3A-6 | `TO_DATE` do simulador devolvia NULL para texto que não é data e rolava data impossível (`2026-13-45` → `2027-02-14`) — o Oracle lança (ORA-01861/01839); o rastreio classificava par malformado como "cliente não comprou" (R-064 proíbe shim que inventa valor). | `parseOracleDate` faz o round-trip dos componentes e devolve `null` no que não é data (é ela que `readOracleDate`/`TO_CHAR` usam para coluna suja); quem LANÇA é o `def('TO_DATE')`, para texto não nulo que não parseia; NULL/'' → NULL. Caso S0-017 no `000-dialeto`. |
+| 3A-7 / 3A-17 | `remover()` em `Itens.tsx`: o par histórico + desvínculo rodava sem `catch` (falha deixava o item removido na tela com erro) e custava 3 execuções mesmo para item sem origem em solicitação. | Par só quando `idSolicitacao > 0`, com `.catch(() => null)`; `recarregar` sempre roda. Caso comum volta a 1 execução (D-39 resolvida ao nascer). Residual: se o par falhar, a varredura na saída da Análise (`verificar-saida.ts`) devolve a solicitação. |
+| 3A-8 | = P-1 do ensaio: o bloco Solicitações só relia no próprio caminho; remover o item na aba irmã devolvia a solicitação no servidor e o bloco não mostrava até reabrir o card. | O efeito do bloco depende dos itens do pedido (`usePedido`) já carregados para o card: relê quando eles mudam e continua UMA execução ao abrir (RNF-001); `incluir` não relê duas vezes. |
+| 3A-10 | "Funil em números" (aba Solicitações de `/analises`) imprimia `STATUS`/`SITUACAO` crus e em ordem diferente do gráfico que diz espelhar. | `rotuloDecisaoSolicitacao`/`rotuloSituacaoSolicitacao` e a ordem do gráfico. |
+| 3A-11 | Aba Pedidos (SLA) classificava com `hoje = padrao.dataFim` e mandava `hoje: ''` ao servidor (`CURDATE()`): RN-016 só valia enquanto os dois "hojes" coincidissem. | `hoje: padrao.dataFim` em todas as chamadas da aba. |
+| 3A-12 (D-34) | `guarda()` do `add-012` sem consumidor depois de R-114. | Apagada. |
+| 3A-13 (D-35) | `CHECK_INPUT.prioridade` justificada no §Integração por uma escrita — mas o `sim:check` pula escritas; chave sem consumidor. | Removida. |
+| 3A-19 | S0-014 percorria as linhas da régua de situação sem exigir `length > 0`. | `assert.ok(linhas.length > 0)` antes do laço. |
+| 3A-23 (D-44) | `PontoSerie`/`PontoComparativo` redeclarados em `blocos.tsx`. | `import type` de `lib/analises.ts`. |
+| D-48 | `backend/package.json` só tinha `publish:001..007`. | `publish:008..012` no mesmo padrão. |
+
+**Aberto — fazer na primeira publicação**
+
+| Id | O que é | Onde |
+|---|---|---|
+| R-115 (3A-9) | Os dois `package.json` pinam `@benenutri/mitra-kanban ^1.3.0` com a lib linkada em 1.5.0 (R-021 pedia `^1.4.0` na onda 2 e não foi aplicado). Decisão: o bump acontece **junto da publicação da lib**, com `npm i @benenutri/mitra-kanban@1.5.0` nos dois lados (atualiza `package.json` e `package-lock.json` de uma vez), porque o lock não pode apontar para versão que não existe no registry e o `npm ci` dos worktrees precisa continuar funcionando até lá. Passo explícito no README ("Como subir") e no prompt do sandbox. | `frontend/package.json`, `backend/package.json`, `README.md` |
+
+**Aberto — dívida de código (sem risco funcional hoje)**
+
+| Id | O que é | Onde |
+|---|---|---|
+| D-36 | `CODFILIAL` entra cru no `{{pares}}` do rastreio, contra o que o comentário de `montarPares` afirma; `:` ou `,` no valor monta par malformado e, no Oracle, o lote inteiro (até 120) vira `sem_dado`. | `frontend/src/lib/solicitacoes.ts` |
+| D-37 | `sgcSolicitacoesFunil`/`sgcSolicitacoesPorVendedor` não têm recorte de persona: ranking nominal por vendedor executável por id por qualquer usuário business; o porteiro é só de rota. Risco aceito por ora; a solução de fundo é o R-007. | `backend/add-012-indicadores.mjs` |
+| D-38 | `sgcIndProdutosBo` (`JOIN SGC_PEDIDO`) × `sgcIndResumo.ITENS_BO` (`LEFT JOIN`): item de B.O. em card sem linha de pedido conta no KPI e some do gráfico. | `backend/add-012-indicadores.mjs` |
+| D-40 | Extrato: `Promise.all` faz a falha de `sgcNfListar` derrubar o PDF inteiro, sendo a seção de faturamento opcional (RN-008). | `frontend/src/pages/quadros/AcoesDoPedido.tsx` |
+| D-41 | `extrato-html.ts` (marca d'água, assinaturas, `esc()`) sem teste nenhum: o `import …?inline` da logo não roda em `node --test`. Injetar a logo por parâmetro e testar escape e marca. | `frontend/src/pages/quadros/extrato-html.ts` |
+| D-42 | `max-lines` desligado por arquivo em `page.tsx`, hoje com 1195 linhas (teto 800) e crescendo a cada onda. Mover o §8.7 (gráficos) para `components/graficos.tsx` e devolver o limite. | `frontend/eslint.config.js`, `frontend/src/components/page.tsx` |
+| D-43 | Classe Tailwind solta em tela (D-14 cresceu): "Carregando…" repetido em 6 blocos de card e o `rodape` dos painéis de `/analises` em 4 abas. Um `<Carregando>` e `RowMeta` no rodapé. | `abas/*.tsx`, `pages/analises/*.tsx` |
+| D-45 | `{{vendedor}}` é parâmetro publicado de `sgcSolicitacoesListar`/`Total` e a tela manda sempre `'0'` (D-18 aplicado a parâmetro). Ligar o filtro na toolbar ou tirar o parâmetro. | `backend/add-011-solicitacoes.mjs`, `SolicitacoesPage.tsx` |
+| D-46 | Três "hojes" na onda: `intervaloPadrao` (UTC), `hojeIso` (local), `CURDATE()` (fuso do servidor); `AVALIADO_EM`/`CRIADO_EM` gravados em UTC e exibidos crus (D-23/D-24 crescem com `/solicitacoes` e `/analises`). 3A-11 alinhou a aba SLA; o resto continua. | `lib/analises.ts`, `lib/formato.ts`, `solicitacoes-dialogos.tsx`, `SolicitacoesPage.tsx` |
+| D-47 | O gerador `CONNECT BY` do simulador trunca em `LVL < 200` sem erro: lote maior que 200 pares perderia pares em silêncio (hoje protegido por `PARES_POR_LOTE = 120` + 4000 caracteres). | `backend/simulator/mysql-dialect.mjs` |
+
+**Cobertura declaradamente em aberto**: `soVencidos` pelo caminho da tela (nada amarra `OPCOES_VENCIDOS` ao contrato `'{{soVencidos}}' = ''`); `resumoSolicitacoes` contra o funil real (teste usa funil sintético); C-018..C-023 e RN-013 da 009 adiados com `/relatorios` (R-114); C-017 da 010 delegado a `tests/permissoes.test.mjs`.
+
+## Onda 4 — contrato (2026-09-16)
+
+Aberta **em paralelo** com a onda 3 (pedido do usuário). Vale o mesmo regime: nada publicado, então a
+onda 4 **edita o `CREATE TABLE`** (sem `ALTER`), inclusive de `SGC_COBERTURA` da onda 1; R-050 (conteúdo
+de card = bloco de fase) continua — e a onda 4 **não cria bloco de card**: a lista de ressuprimento
+existe antes do card, e a curva age dentro do bloco Itens que já existe. Base de leitura:
+`scratchpad/onda-4-levantamento.md` (legado `002-compras-inteligentes`, `006-parametrizacoes`,
+`update-estoque-centralizado.mjs`, `add-coberturas-abc.mjs`).
+
+### Specs
+
+| Spec | Assunto | Regras (`regras.md`) | Origem no p-45547 |
+|---|---|---|---|
+| `011-compras-inteligentes` | tela `/compras-inteligentes` por fornecedor + filial (abas A comprar · Todos · Em trânsito), consulta WinThor de ressuprimento (estoque líquido, trânsito, consumo com peso de recência, volatilidade, lead time medido, venda do período com a parte pública segregada), regra pura de sugestão (consumo, segurança, ponto de pedido, estoque máximo, sugerida, dias de gatilho, status), parâmetros por fornecedor e por SKU (cobertura, lead time, gatilho, silenciamento), vendas desconsideradas, detalhe do SKU (histórico 12 meses, últimas compras, estoque nas filiais), carrinho que cria o pedido no quadro, eficiência do comprador derivada dos pedidos, CSV | O4-01, O4-02, O4-04 | `.specs/002-compras-inteligentes`, `update-estoque-centralizado.mjs`, `add-compras-inteligentes.mjs`, `add-ci-vendas-desconsideradas.mjs`, `ComprasInteligentesPage.tsx` |
+| `012-coberturas-por-curva` | a curva ABC entra no limite de cobertura: `SGC_COBERTURA` ganha alvo e tolerância por curva, `limiteDeCobertura` recebe a curva do item, `/coberturas` ganha os três painéis com o "máximo sem justificativa", log de auditoria campo a campo, CSV; a trava de saída da Análise (003) passa a comparar contra o limite da curva | O4-03 | `.specs/006-parametrizacoes` (coberturas ABC), `add-coberturas-abc.mjs`, `update-compras-inteligentes-abc-fornecedores.mjs`, `ParametrizacaoCoberturasAbcPage.tsx` |
+
+Ordem lógica: 012 fecha o laço que a 011 abre (o alvo por curva é o "cobertura" do estoque máximo
+quando não há parâmetro mais específico). Na prática rodam em paralelo; o integrador liga rota, menu,
+permissões e a curva no `montarItens` (S4).
+
+### Decisões da onda 4 (R-081..R-096)
+
+Onde o legado diverge do texto de `regras.md`, a decisão abaixo diz qual venceu e por quê; o usuário
+pode reverter qualquer uma antes da S3.
+
+| Id | Decisão |
+|---|---|
+| R-081 | **Faixas e scripts**: 011 → 81xx (`add-013-compras-inteligentes.mjs`), 012 → 82xx (`add-014-coberturas-abc.mjs`); leituras/JS em x01–x30, escritas em x50–x79; `PUBLISH_ORDER` cresce nessa ordem depois de `add-012`; `add-002` continua por último e fora. Nenhuma SF nova das ondas 1–3 muda de id. |
+| R-082 | **Fórmula de sugestão = texto de O4-01 sobre medidas do WinThor**. O legado abandonou a fórmula descrita em O4-01 (geração 1) por uma segunda geração em `update-estoque-centralizado.mjs` que mede o lead time e pondera a tendência, mas fixou "9" no estoque de segurança e calcula um fator Z que nunca usa. O SGC 2 casa as duas: **consumo diário** = tendência ponderada por recência (peso `0,85^dias`, janela de 153 dias, `SUM(qt × peso) / SUM(peso)`); **lead time** = medido (média das entradas dos últimos 12 meses, `PCPEDIDO.DTEMISSAO` → `PCMOV.DTMOV`, mínimo 1 dia) com fallback ao parâmetro (padrão 9); **segurança** = lead × consumo; **ponto de pedido** = 2 × lead × consumo; **estoque máximo** = cobertura × consumo; **sugerida** = trânsito > 0 → 0, sem venda e sem consumo → 0, senão `max(0, ceil(máximo − atual − trânsito))`, arredondada por caixa (regra da 003); **cobertura atual** = atual ÷ consumo (`null` sem consumo, nunca 9999); **dias de gatilho** = `floor((atual + trânsito − segurança) ÷ consumo − lead)`; **status** = `ruptura` (atual ≤ 0) · `excesso` (atual + trânsito > máximo) · `elevada_exposicao` (atual ≤ ponto e cobertura atual < lead) · `baixa_exposicao` (atual ≤ ponto) · `adequado`. Fator Z e volatilidade **fora** da fórmula (a volatilidade é devolvida e exibida; dívida D-28: segurança estatística). |
+| R-083 | **Onde se calcula** (emenda a "cálculo no backend" de O4-01): o WinThor devolve **medidas** (uma linha por produto ativo do fornecedor na filial) e a fórmula com os parâmetros roda em **regra pura da tela** (`lib/ressuprimento.ts`, testada) — é o único jeito de o parâmetro por SKU valer (parâmetros vivem no Mitra, medidas no Oracle; o legado salvava o parâmetro de SKU e o ignorava). Uma execução por carga da tela para a consulta principal; nada por linha. |
+| R-084 | **Licitação**: a consulta devolve a venda total e a parte pública (`PCCLIENT.CODATV1 IN (11..15,20)`, mesmo recorte da 003) em colunas separadas; a demanda padrão da tela é **total** (coerente com AN-04 A) e um seletor "desconsiderar licitação" recalcula na tela subtraindo a parte pública. Nenhuma regra escondida no SQL. |
+| R-085 | **Produto ativo** = mesmo recorte da 003 (`OBS2` vazio, `CODEPTO NOT IN (4,7)`); fornecedor 999999 fora; `PCPRODUT.DTEXCLUSAO` não é portado. Estoque **líquido** = `max(0, QTEST − QTBLOQUEADA − QTINDENIZ − QTRESERV)`; trânsito = `QTPEDIDA + QTTRANSITO`. |
+| R-086 | **Parâmetros de compra** em `SGC_PARAMETRO_COMPRA` (modelo abaixo), um registro por fornecedor + filial (`CODPROD = 0`) ou por SKU + fornecedor + filial; `0` = "herda". Precedência (O4-02): **SKU > fornecedor > cobertura por curva (012) > padrão** para a cobertura; **SKU > fornecedor > medido > 9** para o lead time; **SKU > fornecedor > 15** para o gatilho. Silenciar = `SILENCIADO_ATE` (padrão hoje + 30 dias) + motivo; produto silenciado sai da aba "A comprar" e continua em "Todos" com etiqueta. |
+| R-087 | **Vendas desconsideradas** em `SGC_VENDA_DESCONSIDERADA` (chave `NUMTRANSITEM`); a consulta principal recebe `{{excluir}}` (lista de `NUMTRANSITEM`, `0` = nenhuma, no máximo 500 por chamada — teto do literal Oracle) e as tira da demanda **no WinThor**; a tela lista e reconsidera. |
+| R-088 | **Curva ABC = uma régua só**: a da 003 (`curvaAbc()` de `lib/compras.ts`: valor = venda × custo, acumulado ≤ 80 % A, ≤ 95 % B, resto C), aplicada na 011 sobre a janela da tela e por fornecedor + filial. A curva por rentabilidade e o "pior das duas" do legado **não entram** (dívida D-29). |
+| R-089 | **Limite de cobertura por curva** (O4-03; emenda: a onda 1 nunca teve "90 dias" — tem `SGC_COBERTURA` com padrão 35): `SGC_COBERTURA` troca `LIMITE_DIAS` por três pares `ALVO_A_DIAS/TOLERANCIA_A_PCT`, `ALVO_B_DIAS/TOLERANCIA_B_PCT`, `ALVO_C_DIAS/TOLERANCIA_C_PCT` (no `CREATE`); limite sem justificativa = `alvo × (1 + tolerância ÷ 100)` (35 × 20 % = 42); precedência **continua a do SGC 2** (sku > seção > departamento > fornecedor — a mais específica vale); item sem curva usa a coluna C; sem linha alcançável, padrão 35 dias e tolerância 0. `limiteDeCobertura(coberturas, alvo, curva)` é a única régua, usada pela cobertura futura, pela trava de saída da Análise (003, mesma mensagem) e pelo estoque máximo da 011 (o **alvo**, sem tolerância). Valores de referência do seed: A 35/20, B 45/10, C 60/5. |
+| R-090 | **Auditoria das coberturas** campo a campo em `SGC_COBERTURA_LOG` (precedente `SGC_FORNECEDOR_LOG` da 001), gravada pela tela junto de cada salvamento; ação derivada (criou / alterou / desativou / reativou). |
+| R-091 | **Carrinho cria o pedido pelo mesmo caminho de `/pedidos/novo`**: `kbCardCriar` (tela, `api.cardCriar`) + `sgcEscPedidoCapaSalvar` (002) com `ORIGEM = 'compras_inteligentes'`, um card por fornecedor + filial, prioridade `alta` quando há `ruptura` no grupo, período = janela da tela; itens gravados pelo upsert em lote da 003 com `QT_SUGERIDA` (sugestão da 011), `QT_PEDIDA` (quantidade do carrinho), `PRECO_CUSTO`, `CURVA_ABC`. Ao abrir o pedido, a análise da 003 roda normalmente e **preserva `QT_PEDIDA`** dos itens existentes (o plan da 011 confere isso no upsert do `add-006`). Nenhuma SF JavaScript nova para criar pedido. Carrinho bloqueado para fornecedor + filial com pedido aberto (fases antes de `enviado`) — mensagem cita o card. |
+| R-092 | **Eficiência do comprador** sem tabela: KPI na própria tela (`sgcEficienciaComprador`, SQL sobre `SGC_PEDIDO` com `ORIGEM = 'compras_inteligentes'` × `SGC_PEDIDO_ITEM`): % de itens em que `QT_PEDIDA` fica dentro de ±20 % de `QT_SUGERIDA`, por comprador e período. |
+| R-093 | **Custo** = `PCEST.CUSTOULTENT` (como a 003); custo padrão pela conexão `gestao-de-custos` fica como dívida D-30. Unidades por caixa: `sgcCustoUnidadesPorCaixa` (7306) + `unidadesPorCaixa()` da 003 — nada novo (AN-05 B já feito). |
+| R-094 | **Não se porta**: tabelas legadas sem consumidor (`SUGESTAO_COMPRA`, `MOVIMENTACOES_PRODUTO`, `PEDIDOS_TRANSITO`), previsão Holt-Winters/cinco modelos (dívida D-31, onda 5), oportunidades de custo especial, diálogo de bloqueios de lote, botão "Gerar exportação Winthor" (nunca teve handler), exportação `xlsx`. Exportação = CSV pelo `lib/csv.ts` nas duas telas. |
+| R-095 | **Personas**: `verComprasInteligentes` (admin, analista, gestor, diretoria), `operarComprasInteligentes` (admin, analista, gestor; zerado por READ_ONLY; RESTRICTED opera — o card que ele cria é dele), `parametrizarCompras` (admin, gestor: parâmetros por fornecedor/SKU e silenciar); `verCoberturas` continua (admin, gestor) e passa a cobrir as curvas. Comercial não vê. Menu: grupo **Compras** ganha "Compras inteligentes" (`/compras-inteligentes`) depois de "Novo pedido". |
+| R-096 | **Simulador**: `schema-winthor.mjs` ganha `PCEST.QTBLOQUEADA/QTINDENIZ/QTRESERV` (só DDL); shims novos no dialeto (base da onda 4, S2, depois da base da onda 3): `POWER`, `SQRT`, `STDDEV_POP`, `ADD_MONTHS`, `INSTR` e o gerador de calendário `FROM DUAL CONNECT BY LEVEL <= n` (reescrita exata no plan da 011; falha alto sem ele). Seeds: 011 usa produtos 5401–5420 (fornecedor 1015, curva inteira), clientes 9301–9305, `NUMTRANSITEM` ≥ 960001, `PCPEDIDO.NUMPED` ≥ 970001 (entradas casadas para o lead time medido); 012 **é dona, nesta onda**, das linhas de `SGC_COBERTURA` do `seed/003-itens.mjs`, de `lib/cobertura.ts`, de `pages/coberturas/**` e do bloco de coberturas do `add-006` (SFs `sgcCobertura*`), e revalida o smoke da 003. `CHECK_INPUT` ganha só chaves novas (`leadTimeDias`, `coberturaDias`, `diasPeriodo`, `curva`, `excluir`, `compradorId`…; D-17). |
+
+### Decisões tomadas na S1 da onda 4 (R-097..R-105, 2026-09-16)
+
+Pedidos ao 000 vindos dos plans 011 e 012, aceitos pelo integrador:
+
+| Id | Decisão |
+|---|---|
+| R-097 | R-096 emendada: o seed da 011 usa o **fornecedor 1042** (não o 1015 — `smoke/003-itens.mjs` assere 18 linhas de `sgcWintAnaliseMontagem` para o 1015 e vinte produtos novos lá quebrariam C-001 da 003); faixas 5401–5420, 9301–9305, `NUMTRANSITEM` ≥ 960001 e `PCPEDIDO.NUMPED` ≥ 970001 mantidas. |
+| R-098 | R-091 emendada: a escrita de tela que cria a capa é **`sgcEscPedidoCriar`** (7250, `add-005`), não "`sgcEscPedidoCapaSalvar`"; ela passa a receber `{{origem}}` no lugar do literal `'manual'` (integrador, S4; `/pedidos/novo` envia `manual`, o carrinho envia `compras_inteligentes`; o cron da agenda continua por id com o seu valor). `SGC_PEDIDO.ORIGEM` é `VARCHAR(20)`: `compras_inteligentes` tem 20 caracteres — cabe; nenhum valor novo pode passar disso. |
+| R-099 | SFs a mais na 011: `sgcPedidoAbertoDoFornecedor` (bloqueio do carrinho: pedido do fornecedor + filial em fase anterior a `enviado`) e `sgcWintProdutoVendas` (vendas do produto no período, para desconsiderar). Ids fixados pelo plan: leituras 8101–8109, escritas 8150–8154. |
+| R-100 | R-096 emendada: `INSTR` e `STDDEV_POP` **saem** dos shims (a volatilidade é `SQRT(AVG(x²) − AVG(x)²)`; o dialeto só registra escalares). Ficam `POWER`, `SQRT`, `ADD_MONTHS` e a reescrita exata do gerador de calendário `FROM DUAL CONNECT BY LEVEL <= n` (código no plan 011: `reescreverCalendarioOracle`, antes do `mapOutsideStrings`), com teste no `smoke/000-dialeto.mjs`. `CHECK_INPUT` da 011 não recebe `leadTimeDias`/`coberturaDias`/`curva` (com R-083 deixaram de ser parâmetro de SQL); 012 recebe só `idCobertura`. |
+| R-101 | `SGC_PEDIDO_ITEM.COBERTURA_LIMITE` passa de `INT` a **`DECIMAL(15,2)`** (no `CREATE`): o teto 49,5 da curva B truncaria para 49. A trava de saída da Análise **não ganha SQL novo** — `pendencias-analise.sql` e `add-006` comparam `COBERTURA_DIAS > COBERTURA_LIMITE`, e o limite já é gravado resolvido no item pela montagem; a curva entra só na régua pura (`lib/compras.ts`, duas linhas). |
+| R-102 | 012: ids `sgcCoberturaLogListar` 8201 e `sgcEscCoberturaLogInserir` 8250; o log recebe `nivel` + `codigo` e resolve `ID_COBERTURA` pela chave única (escrita guardada não devolve id, D-03); uma linha por campo alterado, ação derivada. `limiteDeCobertura` só considera a linha cujo alvo da curva é > 0 (o `DEFAULT 0` senão barraria tudo). |
+| R-103 | 011 consome da 012 só `alvoDias` (estoque máximo = alvo × consumo, sem tolerância — R-089); no merge das duas features o integrador troca `limiteDias` por `alvoDias` em `montarRessuprimento` (uma linha). |
+| R-104 | Dívida achada pela 012 na 003 (**D-32**): `abas/Itens.tsx` chama `itemDeProdutoBuscado(linha, [], …)` com a lista de coberturas vazia — produto adicionado por busca cai sempre no padrão 35 mesmo com parametrização. Corrigida pelo integrador na S4 da onda 4 (passar a lista carregada), com teste. |
+| R-105 | Base da onda 4 (S2) nasce de `develop` quando as specs 011/012 estiverem aprovadas, mas o seu **merge em `develop`** só acontece depois da S4 da onda 3 (os dois tocam `config.mjs`, `mysql-dialect.mjs`, `permissoes.ts`, `App.tsx`, `server-functions.ts`; o integrador resolve o merge); a base **não** troca as colunas de `SGC_COBERTURA` nem o tipo de `COBERTURA_LIMITE` — isso é da 012 na S3, junto do código que os lê (senão a 003 quebra no meio). A base cria só `SGC_PARAMETRO_COMPRA`, `SGC_VENDA_DESCONSIDERADA`, `SGC_COBERTURA_LOG`, as colunas de `PCEST`, os shims, stubs, mapa, permissões, rota e menu. |
+
+Revisão cruzada da S1 da onda 4 (2026-09-16, Opus): 10 bloqueios (B-1..B-10), 15 correções (C-1..C-15) devolvidos aos agentes de spec; registros aceitos:
+
+| Id | Decisão |
+|---|---|
+| R-106 | R-098 emendada: o `{{origem}}` de `sgcEscPedidoCriar` (7250) é entrega da **base (S2)**, com lista fechada (`'manual'`, `'compras_inteligentes'`) e os três pontos de chamada no mesmo commit — `add-005` (SQL), `NovoPedidoPage.tsx` (`origem: 'manual'`) e `smoke/002-quadro.mjs` (`criarPedido()`). Parâmetro ausente vira string vazia no runtime do simulador: sem o terceiro ponto a suíte 002 cai inteira. |
+| R-107 | Registro de seed e de suíte é da base (S2), como na onda 3: `seed.mjs` ganha `seed011`; `smoke.mjs` ganha a suíte da 011 (depois de `indicadores`) e a da 012 (depois de `itens`), com stubs vazios; os agentes da S3 só preenchem. Suíte não registrada é `npm test` verde sem a feature. |
+| R-108 | R-101 emendada: `COBERTURA_LIMITE DECIMAL(15,2)` exige também trocar `inteiro(item.coberturaLimite)` por `numero(...)` no lote de `sgcItensGravar` (`add-006`) — a mudança de tipo sozinha não guarda o 49,5 da curva B. O teste que prova isso usa um item de curva B (49,5 × 49,2 → `PODE = 1`), nunca o 42 da curva A. |
+| R-109 | `sgcCoberturaListar` (7307) passa a devolver `ATIVO` e a aceitar `{{situacao}}` (`''` = todas, `ativa`/`inativa`), para a 012 derivar `reativou` e mostrar "Inativa"; `limiteDeCobertura` continua descartando a linha inativa (RN-002), então a aba Itens da 003 não muda de resultado. |
+| R-110 | `curvaAbc()` (`lib/compras.ts`, régua única de R-088) passa a aceitar `Pick<LinhaAnalise, 'CODPROD' \| 'VENDA_PERIODO' \| 'CUSTO_ULT_ENTRADA'>[]` — entrega da base (S2), para a 011 reusar a régua sem duplicar o tipo da 003 e sem quebrar `tsc -b`. |
+| R-111 | R-103 emendada: a 011 **não** importa `Cobertura`/`limiteDeCobertura`. `montarRessuprimento` recebe `alvoDaCurvaDias(alvo, curva)` e a tela injeta `limiteDeCobertura(coberturas, alvo, curva).alvoDias`. As duas features param de depender da ordem de merge. |
+| R-112 | R-091 emendada: o item nascido do carrinho é gravado com o `ItemPedido` **inteiro** da 003 (descrição, embalagem, unidade, depto, seção, un/cx, medidas, `coberturaDias` com a quantidade do carrinho e `coberturaLimite`), porque a remontagem da Análise preserva o item existente inteiro — campo que nascer zerado fica zerado e some da trava de cobertura. C-018 assere `DESCRICAO <> ''` e `COBERTURA_LIMITE > 0`. |
+| R-113 | R-105 reafirmada: a base (S2) cria **só** `SGC_COBERTURA_LOG`, `SGC_PARAMETRO_COMPRA`, `SGC_VENDA_DESCONSIDERADA`, as colunas de `PCEST`, os shims (`POWER`, `SQRT`, `ADD_MONTHS`, calendário — encadeados em `toSqlite` **sem remover** as reescritas da onda 3; regex do gerador sem atravessar outro `SELECT`; fim de instrução conta como fim de bloco), stubs, registros de seed/suíte, mapa, permissões, rota, menu, `CHECK_INPUT`, `PUBLISH_ORDER`, `{{origem}}` (R-106) e `curvaAbc` (R-110). O bloco `SGC_COBERTURA` e o tipo de `COBERTURA_LIMITE` são da 012 na S3, num commit só com o código que os lê. |
+
+### Modelo de dados da onda 4
+
+| Tabela | Conteúdo | Spec |
+|---|---|---|
+| `SGC_PARAMETRO_COMPRA` | `ID`, `CODFORNEC`, `CODFILIAL`, `CODPROD INT DEFAULT 0` (0 = fornecedor), `COBERTURA_DIAS INT DEFAULT 0`, `LEAD_TIME_DIAS INT DEFAULT 0`, `GATILHO_DIAS INT DEFAULT 0` (0 = herda), `SILENCIADO_ATE VARCHAR(10)`, `MOTIVO_SILENCIO VARCHAR(500)`, `ATUALIZADO_POR`, `ATUALIZADO_EM`; `UNIQUE (CODFORNEC, CODFILIAL, CODPROD)` | 011 |
+| `SGC_VENDA_DESCONSIDERADA` | `ID`, `NUMTRANSITEM INT UNIQUE`, `CODPROD`, `CODFILIAL`, `DTMOV VARCHAR(10)`, `QUANTIDADE DECIMAL(15,3)`, `MOTIVO VARCHAR(500)`, `POR`, `EM` | 011 |
+| `SGC_COBERTURA` (onda 1, emendada) | `LIMITE_DIAS` sai; entram `ALVO_A_DIAS`, `TOLERANCIA_A_PCT`, `ALVO_B_DIAS`, `TOLERANCIA_B_PCT`, `ALVO_C_DIAS`, `TOLERANCIA_C_PCT` (`INT NOT NULL DEFAULT 0`; `DECIMAL(5,2)` para as tolerâncias) | 012 |
+| `SGC_COBERTURA_LOG` | `ID`, `ID_COBERTURA`, `CAMPO`, `ANTES VARCHAR(100)`, `DEPOIS VARCHAR(100)`, `ACAO` (`criou`/`alterou`/`desativou`/`reativou`), `POR`, `EM` | 012 |
+| `SGC_PEDIDO.ORIGEM` | ganha o valor `compras_inteligentes` (`VARCHAR(20)`, só no comentário; R-098) | 011 |
+| `SGC_PEDIDO_ITEM.COBERTURA_LIMITE` | `INT` → `DECIMAL(15,2)` (R-101) | 012 |
+
+### Server functions da onda 4 (nomes fixos; detalhes nos plans)
+
+| Spec | Leitura / JS | Escrita (SQL) |
+|---|---|---|
+| 011 | `sgcWintRessuprimento` (Oracle: `{{codfornec}}`, `{{codfilial}}`, `{{dataInicio}}`, `{{dataFim}}`, `{{excluir}}` → uma linha por produto ativo com descrição, embalagem, unidade, depto, seção, custo, últimas entrada/saída, estoque líquido e parcelas, trânsito, lead medido, consumo ponderado, volatilidade, venda total e pública do período), `sgcWintProdutoHistorico` (12 meses), `sgcWintProdutoUltimasCompras`, `sgcWintProdutoEstoqueFiliais`, `sgcWintProdutoVendas` (R-099), `sgcParametrosCompraListar` (fornecedor + filial → linha do fornecedor e linhas de SKU), `sgcVendasDesconsideradasListar`, `sgcPedidoAbertoDoFornecedor` (R-099), `sgcEficienciaComprador` | `sgcEscParametroCompraSalvar` (upsert), `sgcEscParametroCompraSilenciar`, `sgcEscParametroCompraRestaurar`, `sgcEscVendaDesconsiderar`, `sgcEscVendaReconsiderar` |
+| 012 | `sgcCoberturaLogListar`; as SFs `sgcCobertura*` do `add-006` ganham as colunas novas (mesmo nome, mesmo id) | `sgcEscCoberturaLogInserir` |
+
+Quem chama o quê: tudo pela tela, `:VAR_USER`; nenhuma SF JavaScript, nenhum cron. Consultas Oracle no
+smoke provam contagem > 0.
+
+### Telas da onda 4
+
+| Rota | Tela | Persona | Spec |
+|---|---|---|---|
+| `/compras-inteligentes` | fornecedor + filial no topo; KPIs (sugestão total em R$, rupturas, silenciados, eficiência); abas A comprar · Todos (filtro de status) · Em trânsito; grid Produto · Status · Curva · Cobertura atual · Dias de gatilho · Sugestão (un./cx., editável) · Ações (carrinho, detalhe, silenciar, parâmetros do SKU); seletor "desconsiderar licitação"; parâmetros do fornecedor; carrinho (Produto · Por que comprar · Sugerido · Quantidade · Custo · Total · Cobertura futura) → "Criar pedido"; CSV | admin, analista, gestor (operam); diretoria lê | 011 |
+| `/coberturas` (existente) | grid com Alvo · Status · A · B · C (dias e %) e o "máximo sem justificativa"; formulário com três painéis de curva; aba de auditoria (antes → depois); CSV | admin, gestor | 012 |
+
+Menu: grupo **Compras** ganha "Compras inteligentes". Nenhum bloco de card novo (R-050).

@@ -1,7 +1,7 @@
 // Dados simulados do SGC 2 — os 5 usuarios da equipe de compras, o quadro
 // "Compras" e as 10 fases do motor (regra F-01: mesmos nomes e mesma ordem do
 // SGC anterior), mais os dados de cada spec das ondas 1 e 2, um modulo por
-// spec em seed/00N-*.mjs (personas em SGC_USUARIO_PERSONA so pela 002;
+// spec em seed/00N-*.mjs — ondas 1, 2 e 3 (personas em SGC_USUARIO_PERSONA so pela 002;
 // fornecedores e filiais so pela 001 — R-017; as specs 005-007 so inserem
 // linhas suas). Nenhum KB_CAMPO nem card
 // aqui: sao dado da 002 (campos do quadro) em diante.
@@ -23,6 +23,11 @@ import { seed004 } from './seed/004-agenda.mjs';
 import { seed005 } from './seed/005-notas-fiscais.mjs';
 import { seed006 } from './seed/006-transito.mjs';
 import { seed007 } from './seed/007-bo.mjs';
+import { seed008 } from './seed/008-solicitacoes.mjs';
+// A 009 não tem seed: os indicadores leem o que as ondas 1 e 2 e a 008 já
+// semearam (R-062), e as quatro linhas de SGC_RELATORIO saíram com
+// `/relatorios` (R-114). Os estados de SLA e agenda que os cenários precisam
+// são arranjados dentro do próprio teste, em `smoke/009-indicadores.mjs`.
 
 const iso = (data) => data.toISOString().slice(0, 19);
 
@@ -101,6 +106,7 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
   seed005(db, CENARIO);
   seed006(db, CENARIO);
   seed007(db, CENARIO);
+  seed008(db, CENARIO);
 
   db.close();
   return counts;

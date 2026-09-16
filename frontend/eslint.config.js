@@ -63,7 +63,11 @@ export default defineConfig([
   {
     // O vocabulário do design system (page.tsx) e os primitivos vêm do kit da
     // Benenutri e são revisados lá; o teto de linhas é para o código do projeto.
+    // O bloco §8.7 (gráficos) exporta `corDeSerie`/`tomDeIntensidade` ao lado
+    // dos componentes, por decisão do kit (a tela importa cor e moldura do
+    // mesmo lugar, R-080) — a regra de fast refresh não vale aqui, como já não
+    // vale em `ui/`.
     files: ['src/components/page.tsx', 'src/components/ui/**/*.tsx'],
-    rules: { 'max-lines': 'off' },
+    rules: { 'max-lines': 'off', 'react-refresh/only-export-components': 'off' },
   },
 ])

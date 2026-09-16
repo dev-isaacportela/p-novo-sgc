@@ -28,42 +28,39 @@
 
 import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
 import { idsDoMapa } from './ids-do-mapa.mjs';
+import { fragmento } from './lib/fragmentos.mjs';
 
 const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', import.meta.url));
 
 /**
  * Blocos de pendência do gancho, entregues por cada spec em backend/sql/ e
- * colados aqui (R-030/R-044). O arquivo traz uma ou mais colunas, cada uma
- * começando com `COALESCE(` na coluna 0; as linhas de comentário, a vírgula
- * entre as colunas e a vírgula final são deste carregador, não do arquivo.
+ * colados aqui (R-030/R-044). Quem lê o arquivo é o `fragmento(nome)`
+ * compartilhado de backend/lib/fragmentos.mjs (R-070/R-074); a vírgula entre as
+ * colunas e a final são daqui, porque são convenção DESTE uso — o arquivo traz
+ * uma ou mais colunas, cada uma começando com `COALESCE(` na coluna 0, e
+ * fragmento que já venha com vírgula no fim de uma coluna não a duplica.
  */
-function fragmentoDePendencias(arquivo) {
-  const corpo = readFileSync(new URL(`./sql/${arquivo}`, import.meta.url), 'utf8')
-    .split('\n').filter((linha) => !linha.trimStart().startsWith('--')).join('\n').trim();
-  // A vírgula entre as colunas e a final são daqui: fragmento que já venha com
-  // vírgula no fim de uma coluna não a duplica.
-  return `${corpo.split(/\n(?=COALESCE\()/).map((coluna) => coluna.trim().replace(/,$/, '')).join(',\n')},`;
+function colunasDePendencia(arquivo) {
+  return `${fragmento(arquivo).split(/\n(?=COALESCE\()/).map((coluna) => coluna.trim().replace(/,$/, '')).join(',\n')},`;
 }
 
 // Saída da Análise (spec 003, RF-022/RN-012): PENDENCIAS e PENDENCIAS_MOTIVO —
 // o MESMO texto de sgcAnaliseSaidaVerificar (add-006), com {{cardId}} = C.ID.
-const SQL_PENDENCIAS = fragmentoDePendencias('pendencias-analise.sql');
+const SQL_PENDENCIAS = colunasDePendencia('pendencias-analise.sql');
 // Onda 2, spec 005 (R-030): entrada em Trânsito exige ≥ 1 nota vinculada
 // (RN-012) e a conclusão, vindo de Faturamento ou de B.O., exige zero
 // conferência de nota sem decisão (RN-011).
-const SQL_PENDENCIAS_NF = fragmentoDePendencias('pendencias-transito.sql')
-  + '\n' + fragmentoDePendencias('pendencias-conclusao-nf.sql');
+const SQL_PENDENCIAS_NF = colunasDePendencia('pendencias-transito.sql')
+  + '\n' + colunasDePendencia('pendencias-conclusao-nf.sql');
 // Onda 2, spec 007 (R-030): entrar em B.O. exige ≥ 1 item marcado (RN-003) e
 // a conclusão exige zero item de B.O. em aberto (RN-008); os ramos de MOTIVO
 // vêm depois dos da NF (R-044).
-const SQL_PENDENCIAS_BO = fragmentoDePendencias('pendencias-bo-entrada.sql')
-  + '\n' + fragmentoDePendencias('pendencias-conclusao-bo.sql');
+const SQL_PENDENCIAS_BO = colunasDePendencia('pendencias-bo-entrada.sql')
+  + '\n' + colunasDePendencia('pendencias-conclusao-bo.sql');
 // Onda 2, R-023: o quarto ramo do feed de notificações (avisos de processo),
 // de backend/sql/notificacoes-avisos.sql (spec 005), sem as linhas de comentário.
-const SQL_AVISOS = readFileSync(new URL('./sql/notificacoes-avisos.sql', import.meta.url), 'utf8')
-  .split('\n').filter((linha) => !linha.trimStart().startsWith('--')).join('\n').trim();
+const SQL_AVISOS = fragmento('notificacoes-avisos.sql');
 
 /* ─────────────── o quadro: slug, fases, campos, automações ─────────────── */
 
@@ -535,23 +532,33 @@ WHERE {{usuarioId}} > 0 AND TRIM('{{fornecedor}}') <> '' AND TRIM('{{filial}}') 
       code: corpo(async function sgcPedidoCarregar() {
         const cardId = inteiro(event.cardId);
         if (!cardId) return recusar('Informe o pedido.');
+        // CRIADOR_NOME (R-068, 010 RF-010): quem criou o pedido, no mesmo
+        // padrão dos outros quatro joins — o extrato o imprime no cabeçalho.
         const [pedido] = await query(`SELECT P.*,
   COALESCE(UT.NOME, '') AS TEC_NOME, COALESCE(UD.NOME, '') AS DIR_NOME,
-  COALESCE(UC.NOME, '') AS CANC_NOME, COALESCE(UE.NOME, '') AS ENVIO_NOME
+  COALESCE(UC.NOME, '') AS CANC_NOME, COALESCE(UE.NOME, '') AS ENVIO_NOME,
+  COALESCE(UN.NOME, '') AS CRIADOR_NOME
 FROM SGC_PEDIDO P
 LEFT JOIN INT_USER UT ON UT.ID = P.TEC_POR
 LEFT JOIN INT_USER UD ON UD.ID = P.DIR_POR
 LEFT JOIN INT_USER UC ON UC.ID = P.CANC_POR
 LEFT JOIN INT_USER UE ON UE.ID = P.ENVIO_POR
+LEFT JOIN INT_USER UN ON UN.ID = P.CRIADO_POR
 WHERE P.ID_CARD = ${cardId} LIMIT 1`);
         // Colunas fechadas com a 003: a tela não paga o que não usa.
-        const itens = await query(`SELECT ID, CODPROD, DESCRICAO, EMBALAGEM, UNIDADE, CODEPTO, CODSEC,
-  UN_POR_CAIXA, QT_VENDA_TOTAL, QT_VENDA_LICITACAO, QT_ESTOQUE, QT_TRANSITO,
-  QT_SUGERIDA, QT_PEDIDA, PRECO_CUSTO, TIPO_PRECO, CURVA_ABC,
-  COBERTURA_DIAS, COBERTURA_LIMITE, COBERTURA_JUSTIFICATIVA, OBSERVACAO, STATUS
-FROM SGC_PEDIDO_ITEM
-WHERE ID_CARD = ${cardId} AND COALESCE(STATUS, '') <> 'removido'
-ORDER BY ID`);
+        // ID_SOLICITACAO/SOLICITACAO_VENDEDOR (R-068) são a origem do item —
+        // a etiqueta "Solicitação de <vendedor>" da R-054. Item montado pela
+        // análise tem ID_SOLICITACAO 0 e vendedor '', sem execução a mais.
+        const itens = await query(`SELECT I.ID, I.CODPROD, I.DESCRICAO, I.EMBALAGEM, I.UNIDADE, I.CODEPTO, I.CODSEC,
+  I.UN_POR_CAIXA, I.QT_VENDA_TOTAL, I.QT_VENDA_LICITACAO, I.QT_ESTOQUE, I.QT_TRANSITO,
+  I.QT_SUGERIDA, I.QT_PEDIDA, I.PRECO_CUSTO, I.TIPO_PRECO, I.CURVA_ABC,
+  I.COBERTURA_DIAS, I.COBERTURA_LIMITE, I.COBERTURA_JUSTIFICATIVA, I.OBSERVACAO, I.STATUS,
+  COALESCE(I.ID_SOLICITACAO, 0) AS ID_SOLICITACAO, COALESCE(US.NOME, '') AS SOLICITACAO_VENDEDOR
+FROM SGC_PEDIDO_ITEM I
+LEFT JOIN SGC_SOLICITACAO SO ON SO.ID = I.ID_SOLICITACAO AND I.ID_SOLICITACAO > 0
+LEFT JOIN INT_USER US ON US.ID = SO.CRIADO_POR
+WHERE I.ID_CARD = ${cardId} AND COALESCE(I.STATUS, '') <> 'removido'
+ORDER BY I.ID`);
         const alertas = await query(`SELECT ID, CODPROD, TIPO, MENSAGEM, LIDO, LIDO_POR, LIDO_EM, JUSTIFICATIVA
 FROM SGC_ALERTA
 WHERE ID_CARD = ${cardId}

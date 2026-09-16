@@ -876,11 +876,18 @@ GradeKpi({ children })                      // a faixa de números que abre o pa
 Kpi({ rotulo, valor, delta?, hint?, grafico? })
 GradeGraficos({ children })                 // duas colunas a partir de lg
 PainelGrafico({ titulo, hint?, acoes?, altura?, largura?, rodape?, children })
+AlternaVisao({ visao, onVisao })            // o par Gráfico/Tabela que vai em `acoes`
 ```
 
 Mais os primitivos do recharts, reexportados daqui para a tela importar de um
 lugar só: `ChartContainer`, `ChartTooltip`, `ChartTooltipContent`,
-`ChartLegend`, `ChartLegendContent` e o tipo `ChartConfig`.
+`ChartLegend`, `ChartLegendContent`, o tipo `ChartConfig` e os elementos de
+desenho `BarChart`/`Bar`, `LineChart`/`Line`, `XAxis`, `YAxis`,
+`CartesianGrid` — barra e linha só, porque pizza não existe aqui (§12.3).
+
+`AlternaVisao` é o par Gráfico/Tabela do `acoes`, com `aria-pressed` no botão
+ativo. Não é um extra: é a versão acessível do desenho (§12.4), e a tabela sai
+da **mesma** função de série do gráfico, nunca de uma segunda consulta.
 
 `PainelGrafico` é quem define o tamanho, e o gráfico preenche o que recebeu —
 a proporção do desenho é a do componente, não uma constante escrita no arquivo

@@ -53,6 +53,10 @@ export interface ItemPedido {
   coberturaJustificativa: string;
   observacao: string;
   status: string;
+  /** Origem do item (008, R-054/R-068): 0 = item montado pela análise. */
+  idSolicitacao: number;
+  /** Vendedor que pediu o produto; vazio quando o item não veio de solicitação. */
+  solicitacaoDe: string;
 }
 
 const numero = (valor: unknown): number => {
@@ -222,6 +226,8 @@ export function montarItens(
       coberturaJustificativa: '',
       observacao: '',
       status: 'montagem',
+      idSolicitacao: 0,
+      solicitacaoDe: '',
     };
   });
 }
@@ -250,6 +256,8 @@ export function itemDeLinha(linha: Record<string, unknown>): ItemPedido {
     coberturaJustificativa: String(linha.COBERTURA_JUSTIFICATIVA ?? ''),
     observacao: String(linha.OBSERVACAO ?? ''),
     status: String(linha.STATUS ?? 'montagem'),
+    idSolicitacao: numero(linha.ID_SOLICITACAO),
+    solicitacaoDe: String(linha.SOLICITACAO_VENDEDOR ?? ''),
   };
 }
 
@@ -285,5 +293,7 @@ export function itemDeProdutoBuscado(
     coberturaJustificativa: '',
     observacao: '',
     status: 'montagem',
+    idSolicitacao: 0,
+    solicitacaoDe: '',
   };
 }

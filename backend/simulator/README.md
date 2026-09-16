@@ -8,15 +8,19 @@ Ambiente de teste deste projeto, com banco SQLite próprio e dados simulados
 cada `backend/add-00N-*.mjs` do `PUBLISH_ORDER` (`config.mjs`) — `add-001-kanban.mjs`
 reexporta as server functions da lib `@benenutri/mitra-kanban` com os ids do
 `frontend/src/lib/server-functions.ts` deste projeto; `add-004..007` publicam
-as `sgc*` da onda 1 e `add-008..010` as da onda 2 (005 notas fiscais, 006
-trânsito, 007 B.O. — ainda stub, `definitions = []`, até cada feature chegar)
+as `sgc*` da onda 1, `add-008..010` as da onda 2 (005 notas fiscais, 006
+trânsito, 007 B.O.) e `add-011`/`add-012` as da onda 3 (008 solicitações do
+comercial, 009 indicadores e relatórios — ainda stub, `definitions = []`, até
+cada feature chegar; a 010, o extrato, não tem script)
 — e executa o SQL e o JavaScript literais. O schema é lido de três fontes
 (`DDL_SOURCES`, sem execução: leitura de texto por `schema.mjs`): as tabelas
-`SGC_*` de `backend/setup-backend.mjs` (ondas 1 e 2, R-026 — a onda 2 edita o
-`CREATE` das tabelas existentes em vez de `ALTER`, porque nada foi publicado
-ainda), o `schema.mjs` da lib instalada em `node_modules` e as tabelas `PC*`
+`SGC_*` de `backend/setup-backend.mjs` (ondas 1, 2 e 3, R-026/R-051 — as ondas
+novas editam o `CREATE` das tabelas existentes em vez de `ALTER`, porque nada
+foi publicado ainda: é assim que `SGC_PEDIDO_ITEM.ID_SOLICITACAO` entrou), o
+`schema.mjs` da lib instalada em `node_modules` e as tabelas `PC*`
 do WinThor em `backend/simulator/schema-winthor.mjs` (`PCNFENT`/`PCLANC`
-novas e colunas novas em `PCMOV`/`PCPRODUT`, R-027 — só simulador; a
+novas e colunas novas em `PCMOV`/`PCPRODUT`, R-027; onda 3, R-069:
+`PCCLIENT.CGCENT` e `PCMOV.DTCANCEL` — só simulador; a
 plataforma usa o Oracle real, pelo `jdbcId` de `add-003-jdbc-winthor.mjs`).
 Dias úteis (R-025/R-038): `backend/lib/dias-uteis.mjs` exporta os fragmentos
 SQL (`somarDiasUteis`, `somarDiasCorridos`, `diasUteisEntre`), que rodam sem
@@ -24,24 +28,56 @@ alteração no dialeto abaixo — `mysql-dialect.mjs` ganhou `FLOOR`/`MOD` como
 função registrada e `DATE_ADD(col, INTERVAL <expressão> DAY)` como reescrita
 (antes só literal).
 
+## Fragmentos SQL compartilhados (`backend/sql/`, R-070/R-074)
+
+`backend/lib/fragmentos.mjs` exporta `fragmento(nome)`: lê `backend/sql/<nome>`
+(o `.sql` é opcional), tira as linhas de comentário e devolve o texto. É por ele
+que os blocos de pendência do gancho (`pendencias-*.sql`, R-030/R-044) e a régua
+única de situação da solicitação (`situacao-solicitacao.sql`, R-075 — o
+cabeçalho declara os aliases `S`/`C`/`SF`/`I` e os três `LEFT JOIN` que quem
+compõe precisa repetir) chegam ao `add-005`, ao `add-011` e ao `add-012`. A
+vírgula entre colunas **não** é do carregador: é convenção dos blocos de
+pendência e vive no `add-005` (`colunasDePendencia`), porque a régua de situação
+é uma expressão escalar e uma vírgula no fim a quebraria.
+
+## Shims novos do dialeto na onda 3 (`mysql-dialect.mjs`)
+
+- **`REGEXP_SUBSTR(texto, padrão, 1, n)`** (R-064) como função registrada: só as
+  formas `'[^,]+'` e `'[^:]+'` que os plans usam; qualquer outra **lança**, em
+  vez de devolver um pedaço plausível.
+- **O gerador de linhas do Oracle** (R-064) `SELECT <x(LEVEL)> … FROM DUAL
+  CONNECT BY <x(LEVEL)> IS NOT NULL` vira `WITH RECURSIVE NIVEL(LVL) …` (teto de
+  200), fundido com o `WITH` que já abria a consulta. É o que faz o
+  `sgcWintRastreioSolicitacoes` da 008 rodar aqui com o MESMO texto Oracle.
+- **`JSON_UNQUOTE(JSON_EXTRACT(col, '$.k'))` → `json_extract(col, '$.k')`**
+  (R-071): a prioridade vive em `KB_CARD.VALORES_JSON` (R-009).
+- **`VALUES(col)` → `excluded.col` até o fim da INSTRUÇÃO** (R-079), e não até o
+  fim do trecho fora de literal: um `'texto'` no meio do `ON DUPLICATE KEY
+  UPDATE` deixava crus todos os `VALUES()` seguintes.
+
+Os quatro estão provados, um a um, em `smoke/000-dialeto.mjs` (S0-010..S0-013),
+que também carrega a régua de situação (S0-014).
+
 ## Seed e smoke, um arquivo por spec
 
 - `simulator/seed.mjs` cria o schema, os 5 usuários, o quadro e as 10 fases, e
   chama `simulator/seed/00N-*.mjs` nesta ordem: `001-fornecedores`,
   `002-quadro`, `003-itens`, `004-agenda`, `005-notas-fiscais`, `006-transito`,
-  `007-bo`. Cada um exporta `seed00N(db, cenario)`; 001-004 já semeiam a onda 1
-  (fornecedores, quadro/personas/campos, itens/alertas/cobertura,
-  agendamentos); 005-007 são stub até cada feature da onda 2 preencher.
+  `007-bo`, `008-solicitacoes`, `009-indicadores`. Cada um exporta
+  `seed00N(db, cenario)`; 001-007 já semeiam as ondas 1 e 2; 008-009 são stub
+  até cada feature da onda 3 preencher (o cabeçalho de cada um diz o que o plan
+  pede). A 010 não semeia nada.
 - `simulator/smoke.mjs` é o orquestrador: abre **um** banco descartável
   (`smoke/base.mjs`, `abrirContexto()`) e roda, na ordem, `smoke/000-esqueleto.mjs`
   (o esqueleto do projeto — S0-001..S0-006), `smoke/000-dias-uteis.mjs`
   (S0-007..S0-009 — prova o fragmento SQL de `lib/dias-uteis.mjs` contra o
-  dialeto do simulador) e `smoke/00N-*.mjs` de cada spec. Cada um exporta
-  `suite(ctx)`, com `ctx.chamar`/`ctx.teste` prontos; 001-004 já têm os
-  cenários da onda 1; 005-007 são stub (`suite(ctx) {}`) — o `teste()` de cada
-  cenário C-00N/RN-00N do plan entra lá. R-045 (revisão cruzada): como o banco
-  é um só para as sete suítes, nenhuma suíte da onda 2 pode assumir total
-  absoluto de listagem — conta pelo banco, por diferença, ou recorta pelos
+  dialeto do simulador), `smoke/000-dialeto.mjs` (S0-010..S0-014 — os shims da
+  onda 3 e o carregador de `backend/sql/`) e `smoke/00N-*.mjs` de cada spec.
+  Cada um exporta `suite(ctx)`, com `ctx.chamar`/`ctx.teste` prontos; 001-007 já
+  têm os cenários das ondas 1 e 2; 008-009 são stub (`suite(ctx) {}`) — o
+  `teste()` de cada cenário C-00N/RN-00N do plan entra lá. R-045 (revisão
+  cruzada): como o banco é um só para todas as suítes, nenhuma pode assumir
+  total absoluto de listagem — conta pelo banco, por diferença, ou recorta pelos
   próprios cards (`CARDS_00N`).
 
 ```bash

@@ -12,5 +12,10 @@ Uma pasta por feature: `spec.md` (o quê e por quê) → `plan.md` (como) → `t
 | [005-notas-fiscais-e-faturamento](005-notas-fiscais-e-faturamento/spec.md) | detecção automática de NF, registro híbrido, conferência NF × pedido, faturamento e cobrança | 2 | implementada (onda 2, 2026-09-15) |
 | [006-transito-e-recebimento](006-transito-e-recebimento/spec.md) | previsão por nota, sincronização com o WinThor, Trânsito → Faturamento automático, NFs em atraso, conclusão | 2 | implementada (onda 2, 2026-09-15) |
 | [007-produtos-em-bo](007-produtos-em-bo/spec.md) | itens em B.O., previsão de liberação, carta de falta, clientes impactados, painel consolidado | 2 | implementada (onda 2, 2026-09-15) |
+| [008-solicitacoes-do-comercial](008-solicitacoes-do-comercial/spec.md) | registro pelo vendedor, avaliação por compras, bloco "Solicitações" na Análise, situação derivada da fase, rastreio pós-aprovação em dois eixos | 3 | implementada (onda 3, 2026-09-16) |
+| [009-indicadores-e-relatorios](009-indicadores-e-relatorios/spec.md) | `/analises` (indicadores, compras × vendas, SLA por etapa, solicitações) e `/relatorios` (relatórios salvos sobre os pedidos) | 3 | implementada (onda 3, 2026-09-16): `/analises`; `/relatorios` adiado (R-114) |
+| [010-extrato-do-pedido](010-extrato-do-pedido/spec.md) | extrato do pedido em PDF (janela de impressão) e CSV, em qualquer fase, marca d'água pela fase | 3 | implementada (onda 3, 2026-09-16) |
+| [011-compras-inteligentes](011-compras-inteligentes/spec.md) | ressuprimento por fornecedor + filial, parâmetros e silenciamento, vendas desconsideradas, carrinho que cria o pedido, eficiência | 4 | em escrita (S1, 2026-09-16) |
+| [012-coberturas-por-curva](012-coberturas-por-curva/spec.md) | curva ABC no limite de cobertura (`SGC_COBERTURA` por curva), auditoria, trava de saída da Análise pela curva | 4 | em escrita (S1, 2026-09-16) |
 
 Ondas 3–5: ver o mapa em `000-visao-geral/README.md`; a onda 2 tem contrato próprio na seção "Onda 2" do 000.

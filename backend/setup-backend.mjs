@@ -1,6 +1,7 @@
 // Schema do projeto — SGC 2 (Sistema de Gestão de Compras da Benenutri).
 //
-// Todo o DDL SGC_* das ondas 1 (specs 001-004) e 2 (specs 005-007), tabela por
+// Todo o DDL SGC_* das ondas 1 (specs 001-004), 2 (specs 005-007) e 3 (specs
+// 008-009; a 010 nao tem tabela nem coluna), tabela por
 // tabela — cada uma num template literal proprio comecando pela frase de
 // criacao idempotente, sem repetir a frase com parentese em comentario: e
 // assim que o simulador local le o DDL por texto (backend/simulator/schema.mjs),
@@ -9,7 +10,8 @@
 // do zero e o simulador acompanham) — nunca ALTER escondido, nunca DROP, nunca
 // RENAME. Excecao da onda 2 (R-026 do 000): nada foi publicado ainda, entao as
 // colunas novas de SGC_PEDIDO entraram direto no CREATE existente, sem gerar
-// ALTER nenhum.
+// ALTER nenhum. Mesma excecao na onda 3 (R-051 do 000): SGC_PEDIDO_ITEM ganhou
+// ID_SOLICITACAO dentro do CREATE.
 //
 // Convencoes do 000 (docs/specs/000-visao-geral/README.md): colunas em
 // UPPERCASE; datas em VARCHAR(10), carimbos em VARCHAR(19), preenchidos no
@@ -132,6 +134,7 @@ const DDL_003 = [
     QT_TRANSITO DECIMAL(15,3),
     QT_SUGERIDA DECIMAL(15,3),
     QT_PEDIDA DECIMAL(15,3) DEFAULT 0,
+    ID_SOLICITACAO INT NOT NULL DEFAULT 0,
     PRECO_CUSTO DECIMAL(15,4),
     TIPO_PRECO VARCHAR(10) DEFAULT 'padrao',
     CURVA_ABC VARCHAR(1),
@@ -464,7 +467,63 @@ const DDL_007 = [
   )`,
 ];
 
-export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007];
+// spec 008 — solicitacoes do comercial (onda 3, R-052). A situacao de
+// atendimento NAO tem coluna: e derivada da fase do card e do item a cada
+// consulta (backend/sql/situacao-solicitacao.sql, entrega da 008). STATUS
+// gravado so pendente/aprovada/recusada/cancelada. CODCLI 0 = sem cliente
+// informado, nunca "o cliente nao comprou".
+const DDL_008 = [
+  `CREATE TABLE IF NOT EXISTS SGC_SOLICITACAO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    CODPROD INT NOT NULL,
+    DESCRICAO VARCHAR(200),
+    EMBALAGEM VARCHAR(60),
+    UNIDADE VARCHAR(10),
+    CODFORNEC INT,
+    FORNECEDOR VARCHAR(200),
+    CODFILIAL VARCHAR(10),
+    FILIAL VARCHAR(200),
+    QUANTIDADE DECIMAL(15,3),
+    JUSTIFICATIVA VARCHAR(1000),
+    CODCLI INT DEFAULT 0,
+    CLIENTE VARCHAR(200),
+    CNPJ_CLIENTE VARCHAR(20),
+    PRIORIDADE VARCHAR(10) DEFAULT 'normal',
+    STATUS VARCHAR(10) DEFAULT 'pendente',
+    MOTIVO VARCHAR(500),
+    ID_CARD INT DEFAULT 0,
+    ID_ITEM INT DEFAULT 0,
+    AVALIADO_POR INT DEFAULT 0,
+    AVALIADO_EM VARCHAR(19),
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_EM VARCHAR(19),
+    INDEX IX_SGC_SOLICITACAO_STATUS (STATUS),
+    INDEX IX_SGC_SOLICITACAO_FORNEC (CODFORNEC, CODFILIAL),
+    INDEX IX_SGC_SOLICITACAO_CARD (ID_CARD),
+    INDEX IX_SGC_SOLICITACAO_AUTOR (CRIADO_POR)
+  )`,
+
+  // Append-only. A linha `criada` NAO e gravada: sai de CRIADO_POR/CRIADO_EM
+  // na leitura (R-067) — a propria solicitacao ja e o registro da criacao.
+  `CREATE TABLE IF NOT EXISTS SGC_SOLICITACAO_HISTORICO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_SOLICITACAO INT NOT NULL,
+    EVENTO VARCHAR(20),
+    DETALHE VARCHAR(500),
+    POR INT,
+    EM VARCHAR(19),
+    INDEX IX_SGC_SOLICITACAO_HIST (ID_SOLICITACAO, ID)
+  )`,
+];
+
+// spec 009 (indicadores) nao tem tabela propria: os indicadores agregam o que
+// as ondas 1 e 2 ja gravam. A SGC_RELATORIO dos relatorios salvos saiu daqui
+// com a tela /relatorios, adiada por decisao do usuario em 2026-09-16 (R-114);
+// volta com ela, no CREATE, quando a feature entrar numa onda futura.
+
+export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007,
+  ...DDL_008];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

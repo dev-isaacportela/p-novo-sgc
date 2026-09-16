@@ -46,10 +46,14 @@ Commits `tipo: descrição`, em português, **sem trailer de agente**.
 ## Como subir para o Mitra (quando o p-NNNNN existir)
 
 1. `npm test` verde em `backend/` e `frontend/`; `npm run build` e `npm run lint` limpos.
+   Antes da primeira publicação (R-115): com a `@benenutri/mitra-kanban` 1.5.0 já no npm, rodar
+   `npm unlink @benenutri/mitra-kanban && npm i @benenutri/mitra-kanban@1.5.0` em `backend/` e em `frontend/`
+   (atualiza `package.json` e o lock juntos — os dois ainda pinam `^1.3.0` porque o lock não pode
+   apontar para versão inexistente enquanto a lib é linkada) e commitar.
 2. `git fetch origin && git merge origin/main --no-edit`; leia o diff.
 3. Merge da release em `main` e `git push origin main` (sem `--force`, sem `--rebase`).
 4. No chat do projeto no Mitra: *"sincronize com a main e rode
-   `cd backend && npm install && node setup-backend.mjs && node add-001-kanban.mjs && node add-003-jdbc-winthor.mjs && node add-004-fornecedores.mjs && node add-005-quadro-compras.mjs && node add-006-itens.mjs && node add-007-agenda.mjs && node add-008-notas-fiscais.mjs && node add-009-transito.mjs && node add-010-bo.mjs && node add-001-kanban.mjs && node add-002-perfil-acesso.mjs && node sync-server-function-map.mjs`,
+   `cd backend && npm install && node setup-backend.mjs && node add-001-kanban.mjs && node add-003-jdbc-winthor.mjs && node add-004-fornecedores.mjs && node add-005-quadro-compras.mjs && node add-006-itens.mjs && node add-007-agenda.mjs && node add-008-notas-fiscais.mjs && node add-009-transito.mjs && node add-010-bo.mjs && node add-011-solicitacoes.mjs && node add-012-indicadores.mjs && node add-001-kanban.mjs && node add-002-perfil-acesso.mjs && node sync-server-function-map.mjs`,
    depois build e share"*. O `add-001` roda duas vezes de propósito: a segunda liga os ganchos
    `podeMover`/`podeExcluir`, cujas SFs (`sgcPodeMover`/`sgcPodeExcluir`) só existem depois do `add-005`.
    O `add-002` (perfil) fica por último. A plataforma materializa as migrations.

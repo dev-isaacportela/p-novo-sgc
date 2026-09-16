@@ -47,7 +47,9 @@ export const HEALTH_TABLE = 'KB_BOARD';
 // e a 004 lê a 002 e a 003. Cada add-00N publica as SFs da sua spec.
 // Onda 2 (R-024 do 000): 005 -> add-008-notas-fiscais.mjs, 006 ->
 // add-009-transito.mjs, 007 -> add-010-bo.mjs, nessa ordem lógica (006 e 007
-// leem SGC_NF da 005). add-002 continua fora, por último no sandbox.
+// leem SGC_NF da 005). Onda 3 (R-051): 008 -> add-011-solicitacoes.mjs, 009 ->
+// add-012-indicadores.mjs, nessa ordem (a aderência de solicitações da 009 lê a
+// tabela da 008); a 010 não tem script. add-002 continua fora, por último no sandbox.
 export const PUBLISH_ORDER = [
   'add-001-kanban.mjs',
   'add-003-jdbc-winthor.mjs',
@@ -58,6 +60,8 @@ export const PUBLISH_ORDER = [
   'add-008-notas-fiscais.mjs',
   'add-009-transito.mjs',
   'add-010-bo.mjs',
+  'add-011-solicitacoes.mjs',
+  'add-012-indicadores.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -103,4 +107,16 @@ export const CHECK_INPUT = {
   // spec 007 (produtos em B.O.): dias entra sem aspas em sgcWintClientesImpactados
   // (TRUNC(SYSDATE) - {{dias}}) — sem valor, o sim:check quebra por sintaxe.
   dias: '60', status: '',
+  // spec 008 (solicitações do comercial): só as chaves NOVAS (R-072, D-17).
+  // `pares` é o lote do rastreio no formato CODPROD:CODFILIAL:AAAA-MM-DD:CODCLI
+  // — um par válido, para o gerador do CONNECT BY render 1 linha. busca/limite/
+  // offset/status/situacao/codfornec/codfilial/cardId já vêm das specs acima.
+  codcli: '0', pares: '5301:3:2026-08-01:9201', minhas: '0', vendedor: '0',
+  // spec 009 (indicadores): só chaves NOVAS. `fase` em vez de `faseId` (002)
+  // para não colidir; dataInicio/dataFim/hoje/idCard/codfilial/codfornec já vêm
+  // com valores que servem aqui. `campoAgrupar`, `responsavelId` e `prioridade`
+  // saíram: as duas primeiras com `/relatorios` (R-114) e `prioridade` porque o
+  // único `{{prioridade}}` vivo está no sgcEscSolicitacaoInserir, uma ESCRITA —
+  // e o sim:check só executa leitura (a escrita é assunto do smoke).
+  fase: '', soVencidos: '',
 };

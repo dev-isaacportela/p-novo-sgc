@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mesesDoPeriodo, sugestaoDeCompra, unidadesPorCaixa, arredondarPorCaixa,
-  curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens,
+  curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens, itemDeLinha,
 } from '../src/lib/compras.ts';
 
 const linha = (codprod, vendaPeriodo, custo, extra = {}) => ({
@@ -112,4 +112,16 @@ test('C-001/C-004: montarItens junta sugestão, arredondamento, curva e limite d
   assert.equal(itens[0].curvaAbc, 'A');
   assert.equal(itens[1].qtSugerida, 10, 'giro lento, sem caixa: a sugestão não é arredondada');
   assert.equal(itens[1].coberturaLimite, 60, 'sem limite de SKU, vale o do departamento');
+});
+
+// 008 (RF-022, R-054/R-068): a origem do item é dado da linha, não da tela.
+test('RF-022: itemDeLinha lê ID_SOLICITACAO e SOLICITACAO_VENDEDOR; item sem solicitação fica 0 e vazio', () => {
+  const base = { CODPROD: 5301, DESCRICAO: 'CREME', QT_PEDIDA: 24 };
+  const comOrigem = itemDeLinha({ ...base, ID_SOLICITACAO: 7, SOLICITACAO_VENDEDOR: 'Leo Vendas' });
+  assert.equal(comOrigem.idSolicitacao, 7);
+  assert.equal(comOrigem.solicitacaoDe, 'Leo Vendas');
+
+  const semOrigem = itemDeLinha(base);
+  assert.equal(semOrigem.idSolicitacao, 0, 'coluna ausente não vira NaN');
+  assert.equal(semOrigem.solicitacaoDe, '', 'sem vendedor a etiqueta não aparece');
 });

@@ -25,6 +25,7 @@ import { usePedido } from './pedido-contexto';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 import BuscarProduto from './BuscarProduto';
 import PrazoPagamento from './PrazoPagamento';
+import { devolverSolicitacoes } from './verificar-saida';
 
 const TIPOS_DE_PRECO = [
   { value: 'padrao', label: 'Padrão' },
@@ -153,10 +154,15 @@ export default function AbaItens(ctx: ExtensaoContexto) {
       setAlterados((atual) => atual.filter((cod) => cod !== codprod));
       return;
     }
+    const removido = pedido.itens.find((item) => item.codprod === codprod);
     setOcupado(true);
     setErro('');
     try {
       await acao('sgcEscItemRemover', { idCard: ctx.card.id, codprod, atualizadoEm: agora() });
+      // Item sem origem em solicitação não dispara o par (a varredura completa
+      // continua na saída da Análise, verificar-saida.ts); falhar nele não
+      // desfaz a remoção, que o servidor já concedeu.
+      if (removido && removido.idSolicitacao > 0) await devolverSolicitacoes(ctx.card.id, removido).catch(() => null);
       await pedido.recarregar(ctx.card.id);
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : 'Não foi possível remover o item.');
@@ -240,6 +246,9 @@ export default function AbaItens(ctx: ExtensaoContexto) {
                       <span className="block text-[12px] text-ink-secondary">
                         <Code prefix="cód.">{item.codprod}</Code> · {item.embalagem || '—'} · {item.unidade || '—'}
                       </span>
+                      {item.solicitacaoDe ? (
+                        <span className="block text-[12px] text-ink-secondary">Solicitação de {item.solicitacaoDe}</span>
+                      ) : null}
                     </Td>
                     <Td>{item.curvaAbc}</Td>
                     <Td numeric>{item.qtVendaTotal > 0 ? quantidade(item.qtVendaTotal) : <Dash />}</Td>
