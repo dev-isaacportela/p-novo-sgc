@@ -2,23 +2,31 @@
 // três etapas, o pedido expandido com a linha do tempo e o perfil por fornecedor
 // (RF-007..RF-014, RF-025, C-007..C-015, C-026).
 //
+// Exportar CSV é emenda a D-013 do plan (integração da onda 3, 2026-09-16):
+// com `/relatorios` adiado (R-114) a exportação dos pedidos ficou sem casa, e
+// `lib/sla.ts` já tinha `COLUNAS_CSV_SLA`/`linhasCsvSla` sem consumidor. Sai a
+// PÁGINA ATUAL da lista, sem execução nova — o mesmo que `/bo` faz (A-15).
+//
 // Os KPIs e a lista saem da MESMA cadeia de CTEs no servidor (R-057/C-013): o
 // número do topo nunca discorda da linha da tabela. O expandido NÃO pede nada a
 // mais para desenhar as etapas — usa `classificarEtapa` de `lib/sla.ts` sobre os
 // marcos que a listagem já trouxe (D-010), e só a linha do tempo custa uma
 // execução (`sgcSlaPedidoFases`).
 import * as React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { linha as linhaSf, linhas } from '@/lib/mitra-api';
 import {
-  Alert, Code, Dash, Field, GradeGraficos, GradeKpi, IconButton, Kpi, Pagination, Panel,
-  PanelHeader, RowMeta, RowTitle, SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
+  Alert, BarraConsumo, Button, Code, Dash, Field, GradeGraficos, GradeKpi, IconButton, Kpi,
+  Pagination, Panel, PanelHeader, RowMeta, RowTitle, SearchInput, SelectMenu, Status, Table, Td,
+  Th, Toolbar, Tr,
 } from '@/components/page';
+import { baixarCsv, textoCsv } from '@/lib/csv';
 import { intervaloPadrao, resultadosDosBlocos, serieSimples, type Bloco } from '@/lib/analises';
 import { fmtData, moeda } from '@/lib/formato';
 import {
-  classificarEtapa, faixaDoScore, marcosDaLinha, rotuloAgenda, rotuloConsumo, rotuloEtapa,
-  rotuloSla, tomAgenda, tomEtapa, tomSla, type LinhaSla,
+  COLUNAS_CSV_SLA, classificarEtapa, faixaDoScore, linhasCsvSla, marcosDaLinha, rotuloAgenda,
+  rotuloConsumo, rotuloEtapa, rotuloSla, tomAgenda, tomEtapa, tomSla, type LinhaSla,
+  type StatusEtapa,
 } from '@/lib/sla';
 import { PainelSerie } from './blocos';
 
@@ -46,6 +54,24 @@ const OPCOES_VENCIDOS = [
 const inteiro = (valor: unknown) => Number(valor ?? 0);
 const umaCasa = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 
+/**
+ * O consumo da meta de uma etapa. Com meta e com dias medidos vira barra
+ * (§8.7); sem um dos dois não há fração que desenhar — "sem meta" e "não
+ * iniciada" continuam texto, porque barra vazia leria como "no começo".
+ */
+function Consumo({
+  dias, meta, tipo, estado,
+}: {
+  dias: number | null;
+  meta: number;
+  tipo?: 'uteis' | 'corridos';
+  estado: StatusEtapa;
+}) {
+  const rotulo = rotuloConsumo(dias, Number(meta), tipo);
+  if (!Number(meta) || dias === null) return <RowMeta>{rotulo}</RowMeta>;
+  return <BarraConsumo pct={(dias / Number(meta)) * 100} tone={tomEtapa(estado)} rotulo={rotulo} />;
+}
+
 /** As três etapas de um pedido, desenhadas pela régua da TELA (D-010/RN-016). */
 function Etapas({ pedido, hoje }: { pedido: LinhaSla; hoje: string }) {
   const etapas = [
@@ -61,7 +87,7 @@ function Etapas({ pedido, hoje }: { pedido: LinhaSla; hoje: string }) {
           <div key={etapa.chave} className="flex flex-wrap items-center gap-2">
             <span className="min-w-56 text-[13px] font-semibold text-ink">{etapa.nome}</span>
             <Status tone={tomEtapa(estado)}>{rotuloEtapa(estado)}</Status>
-            <RowMeta>{rotuloConsumo(etapa.dias, Number(etapa.meta), etapa.tipo)}</RowMeta>
+            <Consumo dias={etapa.dias} meta={Number(etapa.meta)} tipo={etapa.tipo} estado={estado} />
           </div>
         );
       })}
@@ -176,7 +202,19 @@ export default function PedidosSlaTab({ codfilial }: { codfilial: string }) {
       </GradeKpi>
 
       <Panel>
-        <PanelHeader title="Prazo dos pedidos" hint={`${periodoTexto} · o mesmo recorte dos números acima`} />
+        <PanelHeader title="Prazo dos pedidos" hint={`${periodoTexto} · o mesmo recorte dos números acima`}>
+          <Button
+            onClick={() => baixarCsv(
+              `prazo-dos-pedidos-${padrao.dataFim}.csv`,
+              textoCsv(COLUNAS_CSV_SLA, linhasCsvSla(lista)),
+            )}
+            disabled={carregando || lista.length === 0}
+            title={lista.length === 0 ? 'Nada para exportar neste filtro.' : undefined}
+          >
+            <Download aria-hidden />
+            Exportar CSV
+          </Button>
+        </PanelHeader>
         <Toolbar>
           <SearchInput
             placeholder="Buscar por pedido, fornecedor ou número do WinThor"
@@ -217,15 +255,20 @@ export default function PedidosSlaTab({ codfilial }: { codfilial: string }) {
                     </Td>
                     <Td>
                       <Status tone={tomEtapa(pedido.STATUS_ANALISE)}>{rotuloEtapa(pedido.STATUS_ANALISE)}</Status>
-                      <RowMeta>{rotuloConsumo(pedido.DIAS_ANALISE, Number(pedido.META_ANALISE_DIAS))}</RowMeta>
+                      <Consumo dias={pedido.DIAS_ANALISE} meta={Number(pedido.META_ANALISE_DIAS)} estado={pedido.STATUS_ANALISE} />
                     </Td>
                     <Td>
                       <Status tone={tomEtapa(pedido.STATUS_FATURAMENTO)}>{rotuloEtapa(pedido.STATUS_FATURAMENTO)}</Status>
-                      <RowMeta>{rotuloConsumo(pedido.DIAS_FATURAMENTO, Number(pedido.META_FATURAMENTO_DIAS))}</RowMeta>
+                      <Consumo dias={pedido.DIAS_FATURAMENTO} meta={Number(pedido.META_FATURAMENTO_DIAS)} estado={pedido.STATUS_FATURAMENTO} />
                     </Td>
                     <Td>
                       <Status tone={tomEtapa(pedido.STATUS_ENTREGA)}>{rotuloEtapa(pedido.STATUS_ENTREGA)}</Status>
-                      <RowMeta>{rotuloConsumo(pedido.DIAS_ENTREGA, Number(pedido.META_ENTREGA_DIAS), pedido.META_ENTREGA_TIPO)}</RowMeta>
+                      <Consumo
+                        dias={pedido.DIAS_ENTREGA}
+                        meta={Number(pedido.META_ENTREGA_DIAS)}
+                        tipo={pedido.META_ENTREGA_TIPO}
+                        estado={pedido.STATUS_ENTREGA}
+                      />
                     </Td>
                     <Td>
                       <Status tone={tomAgenda(pedido.STATUS_AGENDA)}>{rotuloAgenda(pedido.STATUS_AGENDA)}</Status>
