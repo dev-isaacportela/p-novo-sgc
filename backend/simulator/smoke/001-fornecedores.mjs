@@ -54,6 +54,13 @@ export async function suite(ctx) {
     const nestle = await chamar('sgcWintFornecedores', { busca: 'nestle' });
     assert.equal(nestle.rows.length, 1);
 
+    // Achado 1 da onda 3: o texto digitado é CONCATENADO, nunca colado dentro
+    // de `'%…%'` — com o literal antigo o apóstrofo fechava a aspa e a consulta
+    // estourava por sintaxe (ou devolvia o que o atacante escrevesse).
+    const apostrofo = await chamar('sgcWintFornecedores', { busca: "SANT'ANNA" });
+    assert.equal(apostrofo.rows.length, 1, 'o fornecedor com apóstrofo é encontrado, e a consulta não quebra');
+    assert.equal(Number(apostrofo.rows[0].CODFORNEC), 1099);
+
     const filiais = await chamar('sgcWintFiliais', {});
     assert.ok(filiais.rows.length > 0, 'vazio não é verde');
     assert.ok(!filiais.rows.some((r) => String(r.CODFILIAL) === '99'));

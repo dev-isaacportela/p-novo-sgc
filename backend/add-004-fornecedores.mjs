@@ -213,8 +213,8 @@ WHERE 1 = 1${FILTROS_LISTAR}`,
     code: `SELECT F.CODFORNEC, F.FORNECEDOR, NVL(F.CGC, ' ') AS CGC
   FROM PCFORNEC F
  WHERE F.CODFORNEC <> 999999
-   AND ('{{busca}}' = '' OR UPPER(F.FORNECEDOR) LIKE UPPER('%{{busca}}%')
-        OR CONCAT('', F.CODFORNEC) LIKE '%{{busca}}%')
+   AND ('{{busca}}' = '' OR UPPER(F.FORNECEDOR) LIKE '%' || UPPER('{{busca}}') || '%'
+        OR CONCAT('', F.CODFORNEC) LIKE '%' || '{{busca}}' || '%')
  ORDER BY F.FORNECEDOR`,
   },
   {

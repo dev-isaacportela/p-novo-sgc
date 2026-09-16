@@ -71,6 +71,13 @@ export async function suite(ctx) {
     assert.ok(tudo.length > 0 && tudo.length <= 20, `a busca devolve no máximo 20 (devolveu ${tudo.length})`);
   });
 
+  await teste("C-018b (achado 1): cliente com apóstrofo no nome é encontrado — o texto digitado é CONCATENADO, nunca colado dentro de '%…%'", async () => {
+    const achados = linhas(await chamar('sgcWintClienteBuscar', { codcli: 0, busca: "SANT'ANNA" }, U.leo));
+    assert.equal(achados.length, 1, 'exatamente o cliente com apóstrofo — e a consulta não estoura por sintaxe');
+    assert.equal(Number(achados[0].CODCLI), 9206);
+    assert.equal(String(achados[0].CLIENTE), "SANT'ANNA NUTRICAO LTDA");
+  });
+
   /* ─────────── T-086 — rastreio pós-aprovação (WinThor) ─────────── */
 
   const ALVOS_RASTREIO = ['rastComprou', 'rastOutraFilial', 'rastNaoComprou', 'rastExcesso', 'rastSemCliente', 'rastCarencia'];

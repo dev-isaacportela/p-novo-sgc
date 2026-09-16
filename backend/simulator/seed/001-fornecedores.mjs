@@ -32,6 +32,12 @@ export function seed001(db, cenario) {
   db.prepare(`INSERT INTO PCFORNEC (CODFORNEC, FORNECEDOR, FANTASIA, CGC, EMAIL, UF) VALUES (?, ?, ?, ?, ?, ?)`).run(
     999999, 'FORNECEDOR GENERICO', 'GENERICO', '00000000000000', '', 'SP',
   );
+  // Nome com apóstrofo: é o que prova que a busca do seletor concatena o texto
+  // em vez de colá-lo dentro de um literal `'%…%'` (achado 1 da onda 3). Só no
+  // WinThor simulado — não entra em SGC_FORNECEDOR, que C-002 conta.
+  db.prepare(`INSERT INTO PCFORNEC (CODFORNEC, FORNECEDOR, FANTASIA, CGC, EMAIL, UF) VALUES (?, ?, ?, ?, ?, ?)`).run(
+    1099, "SANT'ANNA NUTRICAO LTDA", "SANT'ANNA", '33414711000155', 'contato@santanna.com', 'MG',
+  );
 
   db.prepare(`INSERT INTO PCFILIAL (CODIGO, RAZAOSOCIAL, CGC, UF) VALUES (?, ?, ?, ?)`).run('1', 'Benenutri Matriz', '11111111000101', 'SP');
   db.prepare(`INSERT INTO PCFILIAL (CODIGO, RAZAOSOCIAL, CGC, UF) VALUES (?, ?, ?, ?)`).run('2', 'Benenutri Filial Norte', '11111111000202', 'SP');

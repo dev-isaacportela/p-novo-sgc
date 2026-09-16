@@ -96,7 +96,7 @@ const SQL_CLIENTE_BUSCAR = `SELECT * FROM (
        OR ( {{codcli}} = 0
             AND ( UPPER(C.CLIENTE) LIKE '%' || UPPER('{{busca}}') || '%'
                OR REPLACE(REPLACE(REPLACE(NVL(C.CGCENT, ' '), '.', ''), '/', ''), '-', '')
-                  LIKE '%{{busca}}%' ) ) )
+                  LIKE '%' || '{{busca}}' || '%' ) ) )
   ORDER BY C.CLIENTE
 ) WHERE ROWNUM <= 20`;
 

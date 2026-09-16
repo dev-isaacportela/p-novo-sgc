@@ -54,6 +54,9 @@ const CLIENTES = [
   [9203, 'Hospital Sao Lucas SA', '32345678000172'],
   [9204, 'Rede Vida Distribuidora Ltda', '42345678000163'],
   [9205, 'Mercado Central Alimentos Ltda', '52345678000154'],
+  // Apóstrofo no nome (C-018b, achado 1 da onda 3): prova que a busca
+  // concatena o texto digitado em vez de colá-lo dentro de `'%…%'`.
+  [9206, "SANT'ANNA NUTRICAO LTDA", '62345678000145'],
 ];
 
 // CODPROD, QTEST, QTVENDMES(=1=2), dias da última saída — filial 3, o que o
