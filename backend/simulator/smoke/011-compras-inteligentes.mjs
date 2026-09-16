@@ -1,17 +1,390 @@
 // Cenários e regras da spec 011 (compras inteligentes). Ver
 // docs/specs/011-compras-inteligentes/plan.md §Testes.
 //
-// STUB DA BASE (S2): quem escreve os testes é o agente da 011 (S3). Tudo roda
-// sobre as MESMAS definitions que o add-013-compras-inteligentes.mjs publica,
-// no banco compartilhado do smoke — R-045: nenhuma asserção literal sobre
-// totais globais; os cards e produtos desta spec são próprios (`CARDS_011`,
-// 5401-5420 do fornecedor 1042), como a 008 fez em R-073.
+// O que é regra pura de tela (a fórmula, a precedência, o status, a curva, o
+// carrinho, o CSV e a aderência) vive em frontend/tests/ressuprimento.test.mjs;
+// aqui fica o que só a server function real responde. Toda consulta ao WinThor
+// assere contagem > 0 — vazio não é verde.
 //
-// Roda depois de `indicadores` (R-107): é a última suíte da onda 4 a entrar e
-// depende do que as ondas 1-3 já semearam. Os shims que a consulta principal
-// usa (POWER, SQRT, ADD_MONTHS e o gerador de calendário) já estão provados em
-// `smoke/000-dialeto.mjs` (S0-015/S0-016), pela base.
+// R-045: nenhuma asserção literal sobre listagem global. Os produtos
+// (5401-5420 do fornecedor 1042), os clientes (9301-9305) e os cards
+// (CARDS_011) desta spec são próprios, e a eficiência é recortada por
+// fornecedor e por comprador.
+
+import { assert } from './base.mjs';
+import {
+  CARDS_011, FILIAL_011, FILIAL_ENVIADO_011, FORNECEDOR_011, JANELA, JANELA_CURTA, VENDA_ATIPICA,
+} from '../seed/011-compras-inteligentes.mjs';
+
+const FAIXA = [5401, 5402, 5403, 5404, 5405, 5406, 5407, 5408, 5409, 5410,
+  5411, 5412, 5413, 5414, 5415, 5416, 5417, 5418, 5419, 5420];
+
+/** As fases em que um pedido ainda bloqueia o carrinho (RN-016). */
+const FASES_ABERTAS = ['analise', 'tecnica', 'diretoria', 'envio'];
 
 export async function suite(ctx) {
-  // Stub: sem teste até a spec 011 (S3).
+  const { db, chamar, teste, U } = ctx;
+
+  /** Linhas de uma server function SQL. */
+  const linhas = async (nome, input, userId) => (await chamar(nome, input, userId)).rows ?? [];
+
+  /** A consulta principal, na janela da tela; `excluir` é fragmento. */
+  const ressuprimento = (extra = {}) => linhas('sgcWintRessuprimento', {
+    codfornec: FORNECEDOR_011, codfilial: FILIAL_011, ...JANELA, excluir: '0', ...extra,
+  });
+
+  const daFaixa = (rows) => rows.filter((r) => FAIXA.includes(Number(r.CODPROD)));
+  const produto = (rows, codprod) => rows.find((r) => Number(r.CODPROD) === codprod);
+  // A fase sempre pela CHAVE estavel de SGC_FASE, nunca pelo id nem pelo nome.
+  const faseId = (chave) => Number(db.prepare('SELECT FASE_ID AS ID FROM SGC_FASE WHERE CHAVE = ?').get(chave).ID);
+  const emFase = (cardId, chave) => db.prepare('UPDATE KB_CARD SET FASE_ID = ? WHERE ID = ?').run(faseId(chave), cardId);
+
+  /* ── T-080 — o recorte do ERP ────────────────────────────────────────── */
+
+  await teste('C-001 / RN-014: sgcWintRessuprimento (1042 / filial 1 / janela de 153 dias) devolve a lista inteira numa consulta so — 18 dos 20 produtos da faixa desta spec, sem o inativo (5419) e sem o do departamento 4 (5420), e nenhuma linha de departamento 4 ou 7', async () => {
+    const rows = await ressuprimento();
+    assert.ok(rows.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    assert.equal(daFaixa(rows).length, 18, 'os 20 produtos da spec menos o inativo e o do departamento 4');
+    assert.equal(rows.filter((r) => [4, 7].includes(Number(r.CODEPTO))).length, 0);
+    assert.equal(rows.filter((r) => [5419, 5420].includes(Number(r.CODPROD))).length, 0);
+    // Cada linha traz a medida inteira: nenhuma consulta a mais por produto.
+    const p5403 = produto(rows, 5403);
+    assert.equal(Number(p5403.CUSTO_ULT_ENTRADA), 10);
+    assert.equal(String(p5403.EMBALAGEM), 'CX 12');
+    assert.ok(String(p5403.DT_ULT_ENTRADA).length === 10, 'a data da ultima entrada vem formatada');
+  });
+
+  await teste('RN-014: a devolucao de 5 unidades do 5410 (QT negativa, dentro da janela) NAO desconta demanda — VENDA_PERIODO continua 50, a soma so das saidas positivas', async () => {
+    const rows = await ressuprimento();
+    assert.ok(rows.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    assert.equal(Number(produto(rows, 5410).VENDA_PERIODO), 50);
+  });
+
+  /* ── T-081 — consumo ponderado por recência ──────────────────────────── */
+
+  await teste('C-008 / RN-001: na janela de 2 dias (ontem e hoje) os tres produtos vendem 20, mas o consumo diario e 10,0000 (10 + 10), 9,1892 (20 ontem) e 10,8108 (20 hoje) — a venda de ontem vale 85 % da de hoje —, com volatilidade 0, 10 e 10', async () => {
+    const rows = await ressuprimento(JANELA_CURTA);
+    assert.ok(rows.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    const esperado = { 5405: [20, 10, 0], 5406: [20, 9.1892, 10], 5407: [20, 10.8108, 10] };
+    for (const [codprod, [venda, consumo, volatilidade]] of Object.entries(esperado)) {
+      const linha = produto(rows, Number(codprod));
+      assert.equal(Number(linha.VENDA_PERIODO), venda, `venda do ${codprod}`);
+      assert.equal(Number(linha.CONSUMO_DIARIO), consumo, `consumo do ${codprod}`);
+      assert.equal(Number(linha.VOLATILIDADE_DIARIA), volatilidade, `volatilidade do ${codprod}`);
+    }
+    // O dia do fim pesa 1 e o anterior 0,85: 18,5 / 1,85 = 10. Um peso 1 em
+    // todo dia (o erro silencioso da subtracao de datas no SQLite) daria 10,
+    // 10 e 10 — e por isso os tres numeros sao diferentes entre si.
+    assert.notEqual(Number(produto(rows, 5406).CONSUMO_DIARIO), Number(produto(rows, 5407).CONSUMO_DIARIO));
+  });
+
+  /* ── T-082 — estoque líquido, trânsito e lead time medido ────────────── */
+
+  await teste('RN-002: o estoque considerado e o liquido e nunca fica negativo — 5401 tem 100 no total e 80 disponivel (10 bloqueado, 5 avariado, 5 reservado), 5402 tem 5 com 20 reservado e fica em 0; o transito soma o pedido ao ERP e o efetivo (5404: 3 + 7 = 10)', async () => {
+    const rows = await ressuprimento();
+    assert.ok(rows.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    const p5401 = produto(rows, 5401);
+    assert.equal(Number(p5401.ESTOQUE_TOTAL), 100);
+    assert.equal(Number(p5401.QT_BLOQUEADA), 10);
+    assert.equal(Number(p5401.QT_INDENIZ), 5);
+    assert.equal(Number(p5401.QT_RESERV), 5);
+    assert.equal(Number(p5401.ESTOQUE_ATUAL), 80);
+    assert.equal(Number(produto(rows, 5402).ESTOQUE_ATUAL), 0, 'nunca negativo');
+    const p5404 = produto(rows, 5404);
+    assert.equal(Number(p5404.QT_PEDIDA_ERP), 3);
+    assert.equal(Number(p5404.QT_TRANSITO), 7);
+    assert.equal(Number(p5404.ESTOQUE_EM_TRANSITO), 10);
+  });
+
+  await teste('C-009 (servidor): o lead time medido sai da media das entradas casadas dos ultimos 12 meses — 5 dias no 5403 (entradas 4 e 6 dias depois da emissao), 1 no 5416 (entrada no MESMO dia, o minimo da regra) e 0 no 5410, que nao tem entrada casada e cai no padrao da tela', async () => {
+    const rows = await ressuprimento();
+    assert.ok(rows.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    assert.equal(Number(produto(rows, 5403).LEAD_TIME_MEDIDO), 5);
+    assert.equal(Number(produto(rows, 5416).LEAD_TIME_MEDIDO), 1);
+    assert.equal(Number(produto(rows, 5410).LEAD_TIME_MEDIDO), 0, '0 = nao medido, e a tela usa 9');
+  });
+
+  /* ── T-083 — venda desconsiderada e licitação ────────────────────────── */
+
+  await teste('C-013 / RN-012: a venda atipica sai da demanda NA ORIGEM — o 5408 vende 90 na janela, desconsiderar a venda de 60 (gravada e RELIDA do banco, D-03) derruba para 30 com consumo menor, e reconsiderar devolve os 90', async () => {
+    const antes = await ressuprimento();
+    assert.ok(antes.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    const consumoAntes = Number(produto(antes, 5408).CONSUMO_DIARIO);
+    assert.equal(Number(produto(antes, 5408).VENDA_PERIODO), 90);
+
+    const gravado = await chamar('sgcEscVendaDesconsiderar', {
+      numtransitem: VENDA_ATIPICA, codprod: 5408, codfilial: FILIAL_011,
+      dtmov: JANELA.dataFim, quantidade: 60, motivo: 'Cliente de evento, nao se repete',
+      em: `${JANELA.dataFim}T09:00:00`,
+    }, U.ana);
+    assert.ok(gravado, 'a escrita guardada devolve linhas, nunca erro');
+
+    // O {{excluir}} e montado do que VOLTOU do banco, nunca do que a tela achou
+    // que gravou: escrita guardada recusada devolve 0 linhas e nenhum erro.
+    const desconsideradas = await linhas('sgcVendasDesconsideradasListar', {
+      codfilial: FILIAL_011, codprod: 0, limite: 500, offset: 0,
+    }, U.ana);
+    const minhas = desconsideradas.filter((l) => Number(l.NUMTRANSITEM) === VENDA_ATIPICA);
+    assert.equal(minhas.length, 1);
+    assert.equal(String(minhas[0].MOTIVO), 'Cliente de evento, nao se repete');
+    assert.equal(Number(minhas[0].QUANTIDADE), 60);
+
+    const depois = await ressuprimento({ excluir: minhas.map((l) => Number(l.NUMTRANSITEM)).join(', ') });
+    assert.ok(depois.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    const p5408 = produto(depois, 5408);
+    assert.equal(Number(p5408.VENDA_PERIODO), 30);
+    assert.equal(Number(p5408.VENDA_PUBLICA), 0, 'a venda excluida nao aparece em NENHUMA coluna de venda');
+    assert.ok(Number(p5408.CONSUMO_DIARIO) < consumoAntes, 'o consumo ponderado cai junto');
+
+    await chamar('sgcEscVendaReconsiderar', { numtransitem: VENDA_ATIPICA }, U.ana);
+    const relidas = await linhas('sgcVendasDesconsideradasListar', {
+      codfilial: FILIAL_011, codprod: 0, limite: 500, offset: 0,
+    }, U.ana);
+    assert.equal(relidas.filter((l) => Number(l.NUMTRANSITEM) === VENDA_ATIPICA).length, 0);
+    const voltou = await ressuprimento();
+    assert.equal(Number(produto(voltou, 5408).VENDA_PERIODO), 90);
+  });
+
+  await teste('RN-011 (servidor): a venda a orgao publico conta na demanda E aparece a parte — o 5409 vende 18 na janela, sendo 6 publicas, e o consumo publico fica DENTRO do consumo total, para o seletor da tela poder subtrair sem nova consulta', async () => {
+    const rows = await ressuprimento();
+    assert.ok(rows.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    const p5409 = produto(rows, 5409);
+    assert.equal(Number(p5409.VENDA_PERIODO), 18);
+    assert.equal(Number(p5409.VENDA_PUBLICA), 6);
+    assert.ok(Number(p5409.CONSUMO_DIARIO_PUBLICO) > 0);
+    assert.ok(Number(p5409.CONSUMO_DIARIO_PUBLICO) < Number(p5409.CONSUMO_DIARIO));
+  });
+
+  /* ── T-084 — parâmetros, silenciamento e quem pode ───────────────────── */
+
+  await teste('C-012 / C-023 (servidor): o gestor silencia o SKU com data e motivo e a listagem os devolve; o analista e o comercial nao gravam nada (escrita guardada recusada = 0 linha, sem erro); salvar os tres numeros NAO apaga o silenciamento, e restaurar limpa so a data e o motivo', async () => {
+    const chave = { codfornec: FORNECEDOR_011, codfilial: FILIAL_011, codprod: 5418 };
+    const ate = '2026-10-16';
+    const doSku = async () => (await linhas('sgcParametrosCompraListar', {
+      codfornec: FORNECEDOR_011, codfilial: FILIAL_011, limite: 600, offset: 0,
+    }, U.gil)).find((l) => Number(l.CODPROD) === 5418);
+
+    // Analista e comercial: nada grava (parametrizar e de admin e gestor).
+    await chamar('sgcEscParametroCompraSilenciar', {
+      ...chave, silenciadoAte: ate, motivo: 'tentativa do analista', atualizadoEm: `${JANELA.dataFim}T09:00:00`,
+    }, U.ana);
+    assert.equal(await doSku(), undefined, 'analista nao parametriza');
+    await chamar('sgcEscParametroCompraSilenciar', {
+      ...chave, silenciadoAte: ate, motivo: 'tentativa do comercial', atualizadoEm: `${JANELA.dataFim}T09:00:00`,
+    }, U.leo);
+    assert.equal(await doSku(), undefined, 'comercial nao parametriza');
+
+    await chamar('sgcEscParametroCompraSilenciar', {
+      ...chave, silenciadoAte: ate, motivo: 'Industria sem entrega ate o mes que vem',
+      atualizadoEm: `${JANELA.dataFim}T09:00:00`,
+    }, U.gil);
+    const silenciado = await doSku();
+    assert.ok(silenciado, 'o gestor parametriza');
+    assert.equal(String(silenciado.SILENCIADO_ATE), ate);
+    assert.equal(String(silenciado.MOTIVO_SILENCIO), 'Industria sem entrega ate o mes que vem');
+    assert.equal(Number(silenciado.COBERTURA_DIAS), 0, 'silenciar nao inventa parametro');
+
+    // D-014: as duas escritas tocam colunas disjuntas na MESMA linha.
+    await chamar('sgcEscParametroCompraSalvar', {
+      ...chave, coberturaDias: 28, leadTimeDias: 12, gatilhoDias: 7,
+      atualizadoEm: `${JANELA.dataFim}T09:05:00`,
+    }, U.gil);
+    const comNumeros = await doSku();
+    assert.deepEqual(
+      [Number(comNumeros.COBERTURA_DIAS), Number(comNumeros.LEAD_TIME_DIAS), Number(comNumeros.GATILHO_DIAS)],
+      [28, 12, 7],
+    );
+    assert.equal(String(comNumeros.SILENCIADO_ATE), ate, 'salvar nao apaga o silenciamento');
+
+    await chamar('sgcEscParametroCompraRestaurar', {
+      ...chave, atualizadoEm: `${JANELA.dataFim}T09:10:00`,
+    }, U.gil);
+    const restaurado = await doSku();
+    assert.equal(String(restaurado.SILENCIADO_ATE), '');
+    assert.equal(String(restaurado.MOTIVO_SILENCIO), '');
+    assert.equal(Number(restaurado.COBERTURA_DIAS), 28, 'restaurar mexe so no silenciamento');
+  });
+
+  /* ── T-085 — o detalhe do SKU ────────────────────────────────────────── */
+
+  await teste('C-021: as tres consultas do detalhe do 5403 devolvem contagem > 0 — historico mensal de no maximo 12 linhas, ao menos 1 compra e ao menos 2 filiais com estoque —, uma execucao cada e so ao abrir', async () => {
+    const historico = await linhas('sgcWintProdutoHistorico', { codprod: 5403, codfilial: FILIAL_011, meses: 12 }, U.ana);
+    assert.ok(historico.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    assert.ok(historico.length <= 12, `12 meses no maximo, veio ${historico.length}`);
+    assert.ok(historico.some((l) => Number(l.ENTRADAS) > 0), 'as entradas do lead medido aparecem no historico');
+
+    const compras = await linhas('sgcWintProdutoUltimasCompras', { codprod: 5403 }, U.ana);
+    assert.ok(compras.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    assert.ok(compras.length <= 10, 'teto de 10 por ROWNUM');
+    assert.ok(Number(compras[0].VALOR_TOTAL) > 0);
+
+    const filiais = await linhas('sgcWintProdutoEstoqueFiliais', { codprod: 5403 }, U.ana);
+    assert.ok(filiais.length >= 2, `o detalhe mostra o estoque nas outras filiais, veio ${filiais.length}`);
+    const f3 = filiais.find((l) => String(l.CODFILIAL) === '3');
+    assert.equal(Number(f3.ESTOQUE_TOTAL), 35);
+    assert.equal(Number(f3.ESTOQUE_ATUAL), 30, 'o mesmo estoque liquido de R-085 vale nas outras filiais');
+  });
+
+  /* ── T-086 — o carrinho vira pedido ──────────────────────────────────── */
+
+  let DO_CARRINHO = 0;
+
+  await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho de /pedidos/novo — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
+    const medidas = await ressuprimento();
+    assert.ok(medidas.length > 0, 'consulta ao WinThor sem linha nao e verde');
+
+    let execucoes = 0;
+    const contado = (nome, input, userId) => { execucoes += 1; return chamar(nome, input, userId); };
+
+    // O board vem UMA vez na carga da pagina, e nao por grupo (C-1 da revisao).
+    const board = await contado('kbBoardCarregar', { slug: 'compras' }, U.ana);
+    const boardId = Number(board.board.id);
+    assert.ok(boardId > 0);
+    execucoes = 0;
+
+    // O item do carrinho e o ItemPedido INTEIRO (R-112): a remontagem da
+    // Analise preserva o item existente, entao campo que nascer vazio fica
+    // vazio para sempre — e um COBERTURA_LIMITE zerado deixaria a trava de
+    // cobertura da 003 cega.
+    const itemDe = (codprod, qtPedida, qtSugerida) => {
+      const m = medidas.find((r) => Number(r.CODPROD) === codprod);
+      return {
+        codprod, descricao: String(m.DESCRICAO), embalagem: String(m.EMBALAGEM), unidade: String(m.UNIDADE),
+        codepto: Number(m.CODEPTO), codsec: Number(m.CODSEC), unPorCaixa: Number(m.UN_POR_CAIXA_ERP) || 1,
+        qtVendaTotal: Number(m.VENDA_PERIODO), qtVendaLicitacao: Number(m.VENDA_PUBLICA),
+        qtEstoque: Number(m.ESTOQUE_ATUAL), qtTransito: Number(m.ESTOQUE_EM_TRANSITO),
+        qtSugerida, qtPedida, precoCusto: Number(m.CUSTO_ULT_ENTRADA), tipoPreco: 'padrao',
+        curvaAbc: 'A', coberturaDias: 37, coberturaLimite: 42,
+        coberturaJustificativa: '', observacao: '', status: 'montagem',
+      };
+    };
+    // O 5402 esta em ruptura (disponivel 0): e ele que sobe a prioridade do grupo.
+    const itens = [itemDe(5401, 24, 24), itemDe(5402, 72, 72), itemDe(5403, 24, 24)];
+    const total = itens.reduce((soma, item) => soma + item.qtPedida * item.precoCusto, 0);
+
+    const criado = await contado('kbCardCriar', {
+      boardId,
+      titulo: 'BENENUTRI MATRIZ · NESTLE',
+      responsaveisIds: String(U.ana),
+      prazo: '',
+      valoresJson: JSON.stringify({
+        fornecedor: 'Nestle Brasil Ltda', filial: 'Benenutri Matriz',
+        prioridade: 'alta', valor_total: String(total),
+      }),
+    }, U.ana);
+    assert.equal(criado.ok, true, criado.error);
+    DO_CARRINHO = criado.id;
+
+    await contado('sgcEscPedidoCriar', {
+      cardId: DO_CARRINHO, codfornec: FORNECEDOR_011, fornecedor: 'Nestle Brasil Ltda',
+      codfilial: FILIAL_011, filial: 'Benenutri Matriz',
+      periodoInicio: JANELA.dataInicio, periodoFim: JANELA.dataFim,
+      origem: 'compras_inteligentes', agora: `${JANELA.dataFim}T10:00:00`,
+    }, U.ana);
+
+    const gravado = await contado('sgcItensGravar', { cardId: DO_CARRINHO, itensJson: JSON.stringify(itens) }, U.ana);
+    assert.equal(gravado.ok, true, gravado.erro);
+    assert.equal(execucoes, 3, 'tres execucoes por grupo, qualquer que seja o numero de itens (RNF-002)');
+
+    const detalhe = await chamar('kbCardDetalhe', { cardId: DO_CARRINHO }, U.ana);
+    assert.equal(Number(detalhe.card.faseId), faseId('analise'), 'o pedido nasce na primeira fase');
+    assert.equal(detalhe.card.valores.prioridade, 'alta', 'um item em ruptura sobe a prioridade do grupo');
+
+    const capa = db.prepare('SELECT * FROM SGC_PEDIDO WHERE ID_CARD = ?').get(DO_CARRINHO);
+    assert.equal(String(capa.ORIGEM), 'compras_inteligentes');
+    assert.equal(String(capa.PERIODO_INICIO), JANELA.dataInicio);
+    assert.equal(String(capa.PERIODO_FIM), JANELA.dataFim);
+    assert.equal(Number(capa.VL_TOTAL), total, 'o total do carrinho e o total da capa');
+    assert.equal(Number(capa.CRIADO_POR), U.ana);
+
+    const gravados = db.prepare('SELECT * FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? ORDER BY CODPROD').all(DO_CARRINHO);
+    assert.equal(gravados.length, 3);
+    for (const item of gravados) {
+      assert.ok(Number(item.QT_PEDIDA) > 0, `QT_PEDIDA do ${item.CODPROD}`);
+      assert.ok(Number(item.QT_SUGERIDA) > 0, `QT_SUGERIDA do ${item.CODPROD}`);
+      assert.ok(Number(item.PRECO_CUSTO) > 0, `PRECO_CUSTO do ${item.CODPROD}`);
+      assert.ok(['A', 'B', 'C'].includes(String(item.CURVA_ABC)), `CURVA_ABC do ${item.CODPROD}`);
+      assert.notEqual(String(item.DESCRICAO).trim(), '', `DESCRICAO do ${item.CODPROD} (R-112)`);
+      assert.ok(Number(item.COBERTURA_LIMITE) > 0, `COBERTURA_LIMITE do ${item.CODPROD} (R-112)`);
+      assert.ok(Number(item.UN_POR_CAIXA) > 0, `UN_POR_CAIXA do ${item.CODPROD}`);
+    }
+  });
+
+  await teste('C-020 / RN-017: montar a analise dentro do pedido NAO apaga o que o carrinho decidiu — gravando em lote so os produtos novos (o que a aba Itens da 003 manda), o 5403 continua com QT_PEDIDA 24 e os campos do carrinho intactos, e os novos entram com 0', async () => {
+    const antes = db.prepare('SELECT * FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = 5403').get(DO_CARRINHO);
+    assert.equal(Number(antes.QT_PEDIDA), 24);
+
+    const novo = (codprod) => ({
+      codprod, descricao: `PRODUTO ${codprod}`, embalagem: 'CX 12', unidade: 'UN', codepto: 2, codsec: 21,
+      unPorCaixa: 12, qtVendaTotal: 0, qtVendaLicitacao: 0, qtEstoque: 0, qtTransito: 0,
+      qtSugerida: 12, qtPedida: 0, precoCusto: 5, tipoPreco: 'padrao', curvaAbc: 'C',
+      coberturaDias: 0, coberturaLimite: 35, coberturaJustificativa: '', observacao: '', status: 'montagem',
+    });
+    const gravado = await chamar('sgcItensGravar', {
+      cardId: DO_CARRINHO, itensJson: JSON.stringify([novo(5404), novo(5405)]),
+    }, U.ana);
+    assert.equal(gravado.ok, true, gravado.erro);
+
+    const depois = db.prepare('SELECT * FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = 5403').get(DO_CARRINHO);
+    assert.equal(Number(depois.QT_PEDIDA), 24, 'o item que nao entrou no lote nao foi tocado pelo upsert');
+    assert.equal(String(depois.DESCRICAO), String(antes.DESCRICAO));
+    assert.equal(Number(depois.COBERTURA_LIMITE), Number(antes.COBERTURA_LIMITE));
+    for (const codprod of [5404, 5405]) {
+      const item = db.prepare('SELECT * FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = ?').get(DO_CARRINHO, codprod);
+      assert.equal(Number(item.QT_PEDIDA), 0, 'so os produtos novos entram, e zerados');
+    }
+  });
+
+  /* ── T-087 — o bloqueio do carrinho ──────────────────────────────────── */
+
+  await teste('C-019 / RN-016: sgcPedidoAbertoDoFornecedor lista o pedido do 1042 na filial 1 que ainda nao foi enviado a industria, com titulo e fase pela CHAVE, e continua listando depois de ele ir para a aprovacao tecnica; o pedido ja enviado (filial 2) nunca entra', async () => {
+    const abertos = await linhas('sgcPedidoAbertoDoFornecedor', {
+      codfornec: FORNECEDOR_011, codfilial: FILIAL_011, limite: 20, offset: 0,
+    }, U.ana);
+    assert.ok(abertos.length > 0, 'com pedido em analise, o carrinho e recusado');
+    const meu = abertos.find((l) => Number(l.ID_CARD) === CARDS_011.eficiencia);
+    assert.ok(meu, 'o pedido desta spec esta entre os abertos');
+    assert.equal(String(meu.FASE_CHAVE), 'analise');
+    assert.notEqual(String(meu.TITULO).trim(), '', 'a recusa cita o pedido pelo titulo');
+    assert.ok(abertos.every((l) => FASES_ABERTAS.includes(String(l.FASE_CHAVE))),
+      'so fase anterior ao envio a industria bloqueia');
+
+    // A fase vem da CHAVE, nunca do id nem do nome: mover para a tecnica
+    // continua bloqueando.
+    emFase(CARDS_011.eficiencia, 'tecnica');
+    const naTecnica = await linhas('sgcPedidoAbertoDoFornecedor', {
+      codfornec: FORNECEDOR_011, codfilial: FILIAL_011, limite: 20, offset: 0,
+    }, U.ana);
+    assert.equal(String(naTecnica.find((l) => Number(l.ID_CARD) === CARDS_011.eficiencia).FASE_CHAVE), 'tecnica');
+    emFase(CARDS_011.eficiencia, 'analise');
+
+    // R-045: nada de literal sobre a listagem global da filial 2 (outras specs
+    // semeiam cards ali). O que a regra promete e que o pedido ENVIADO some.
+    const daFilial2 = await linhas('sgcPedidoAbertoDoFornecedor', {
+      codfornec: FORNECEDOR_011, codfilial: FILIAL_ENVIADO_011, limite: 20, offset: 0,
+    }, U.ana);
+    assert.equal(daFilial2.filter((l) => Number(l.ID_CARD) === CARDS_011.enviado).length, 0,
+      'pedido ja enviado a industria nao bloqueia');
+    assert.ok(daFilial2.every((l) => FASES_ABERTAS.includes(String(l.FASE_CHAVE))));
+  });
+
+  /* ── T-088 — eficiência do comprador ─────────────────────────────────── */
+
+  await teste('C-022: sgcEficienciaComprador, recortada pelo fornecedor 1042 e pelo comprador do pedido, devolve 5 itens com 3 aderentes e 60,0 % — 80 e 120 estao dentro da faixa de 20 %, 79 e 121 estao fora', async () => {
+    const [medida] = await linhas('sgcEficienciaComprador', {
+      compradorId: U.gil, codfornec: FORNECEDOR_011, dataInicio: '', dataFim: '',
+    }, U.gil);
+    assert.ok(medida, 'a apuracao devolve sempre uma linha');
+    assert.equal(Number(medida.ITENS), 5);
+    assert.equal(Number(medida.ADERENTES), 3);
+    assert.equal(Number(medida.PERC_ADERENCIA), 60);
+
+    // Sem pedido nenhum no recorte, a aderencia nao existe: e Dash na tela,
+    // nunca 0 % (que leria como "o comprador errou tudo").
+    const [vazio] = await linhas('sgcEficienciaComprador', {
+      compradorId: U.dora, codfornec: FORNECEDOR_011, dataInicio: '', dataFim: '',
+    }, U.gil);
+    assert.equal(Number(vazio.ITENS), 0);
+    assert.equal(vazio.PERC_ADERENCIA, null);
+  });
 }

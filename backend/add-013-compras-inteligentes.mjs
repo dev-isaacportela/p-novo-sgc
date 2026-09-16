@@ -4,9 +4,6 @@
 // bloqueio do carrinho por pedido aberto e a eficiência do comprador. Ver
 // docs/specs/011-compras-inteligentes/.
 //
-// STUB DA BASE (S2): o arquivo existe para o `PUBLISH_ORDER` e o mapa de ids
-// nascerem com a onda 4; quem preenche `definitions` é o agente da 011 (S3).
-//
 // Faixa de id local: 81xx (R-081 do 000) — leituras 8101-8109
 // (sgcWintRessuprimento, sgcWintProdutoHistorico, sgcWintProdutoUltimasCompras,
 // sgcWintProdutoEstoqueFiliais, sgcWintProdutoVendas, sgcParametrosCompraListar,
@@ -15,12 +12,16 @@
 // sgcEscParametroCompraSilenciar, sgcEscParametroCompraRestaurar,
 // sgcEscVendaDesconsiderar, sgcEscVendaReconsiderar).
 //
-// O padrão a seguir é o de `add-010-bo.mjs`: guarda de persona única (R-013),
-// `WINTHOR` com os nomes que falam com o Oracle, `montarDefinitions(ids)` +
-// `export const definitions`, publicação em dois passos e `isEntrypoint()`
-// guardado por `MITRA_BASE_URL`. Esta spec não tem JAVASCRIPT nem cron
-// (R-081): a fórmula roda em regra pura da tela (`lib/ressuprimento.ts`,
-// R-083) e o pedido do carrinho nasce pelas SFs da 002 e da 003 (R-091).
+// NENHUMA definição aqui é JAVASCRIPT e nenhuma tem cron (contrato da onda 4,
+// R-081): a fórmula roda em regra pura da tela (`lib/ressuprimento.ts`, R-083)
+// e o pedido do carrinho nasce pelas SFs da 002 e da 003 (R-091) — kbCardCriar
+// + sgcEscPedidoCriar + sgcItensGravar, chamadas da tela.
+//
+// A consulta principal devolve MEDIDAS, não fórmula (R-082): saem FATOR_Z,
+// ESTOQUE_SEGURANCA, ESTOQUE_MAXIMO, QUANTIDADE_SUGERIDA, COBERTURA_ATUAL_DIAS,
+// DIAS_GATILHO e STATUS_COMPRA do legado. A venda pública vem somada e
+// segregada (R-084), o estoque é líquido (R-085) e `{{excluir}}` tira a venda
+// desconsiderada na origem (R-087).
 //
 // As tabelas `SGC_PARAMETRO_COMPRA` e `SGC_VENDA_DESCONSIDERADA` já estão no
 // `setup-backend.mjs`, e os shims que a consulta principal usa (`POWER`,
@@ -31,9 +32,465 @@
 // Uso (no sandbox): cd backend && node add-013-compras-inteligentes.mjs
 
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
+import { jdbcIdWinthor } from './add-003-jdbc-winthor.mjs';
 
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
 export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico',
   'sgcWintProdutoUltimasCompras', 'sgcWintProdutoEstoqueFiliais', 'sgcWintProdutoVendas'];
 
-export const definitions = [];
+/* ──────────────────────────────────────────────────────────────────────────
+   A guarda de persona — UM texto só, o da 002 (R-013), copiado literalmente de
+   add-006-itens.mjs:50-62; só a lista de personas muda. `:VAR_USER` vale porque
+   TODA escrita desta spec é chamada direto da tela: não há JavaScript nem cron
+   aqui (R-081), então não existe variante `{{usuarioId}}`.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function guarda(personas) {
+  const lista = personas.map((p) => `'${p}'`).join(', ');
+  return `EXISTS (
+    SELECT 1 FROM INT_USER IU
+    LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
+    WHERE IU.ID = :VAR_USER
+      AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
+      AND COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
+                                 WHEN 'ADMIN' THEN 'admin'
+                                 WHEN 'RESTRICTED' THEN 'comercial'
+                                 ELSE 'analista' END) IN (${lista})
+  )`;
+}
+
+/** Parametrizar e silenciar: admin e gestor (RN-019). */
+const PARAMETRIZAR = ['admin', 'gestor'];
+/** Operar (desconsiderar venda): admin, analista e gestor (RN-019). */
+const OPERAR = ['admin', 'analista', 'gestor'];
+
+/** Cliente de órgão público — mesmo recorte da 003 (RN-011 daquela spec, R-084). */
+const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15, 20)';
+
+/* ─────────────── leituras — WinThor (Oracle) ─────────────── */
+
+// A consulta principal (RF-001..RF-005, RF-013). Sete decisões, todas no plan:
+//
+// 1. `DIAS` existe para o dia SEM venda entrar na média (RN-001): sem o
+//    calendário, SUM(qt x peso) / SUM(peso) seria a média dos dias COM venda, e
+//    um item que vende 60 uma vez por mês teria consumo 60/dia.
+// 2. O peso vem de `DIAS_ATE_FIM` (inteiro do calendário), não de subtração de
+//    datas: no SQLite `dataFim - D.DIA` daria zero e o peso viraria 1 em todo
+//    dia — erro silencioso. `{{diasPeriodo}}` vem da tela (fim - início + 1).
+// 3. Lead time com `TRUNC(M.DTMOV - O.DTEMISSAO)`: é a forma que o dialeto já
+//    traduz, mesmo resultado no Oracle, zero shim novo.
+// 4. Volatilidade por `AVG(x²) - AVG(x)²` + `SQRT`, e não `STDDEV_POP`
+//    (R-100): o dialeto registra funções escalares, não agregados.
+// 5. Sem `LIMIT/OFFSET` (D-006): a curva ABC é acumulada sobre o fornecedor
+//    inteiro — paginar no servidor daria uma curva por página. A tela pagina o
+//    que já tem em memória. `ponytail:` teto prático de ~2.000 produtos por
+//    fornecedor; acima disso a curva teria de sair numa segunda passada.
+// 6. `{{excluir}}` é FRAGMENTO (lista de inteiros sem aspas), `0` quando não há
+//    nenhuma — `NUMTRANSITEM` começa em 1, então `NOT IN (0)` não exclui nada.
+//    Teto de 500 por chamada (R-087, ORA-01795).
+// 7. A venda pública fica na demanda (R-084) e sai segregada em VENDA_PUBLICA e
+//    CONSUMO_DIARIO_PUBLICO: quem decide é o seletor da tela, sem nova consulta.
+const SQL_RESSUPRIMENTO = `WITH
+  PRODUTOS_BASE AS (
+    SELECT
+      P.CODPROD, P.DESCRICAO, P.EMBALAGEM, P.UNIDADE,
+      NVL(P.CODEPTO, 0) AS CODEPTO,
+      NVL(P.CODSEC, 0)  AS CODSEC,
+      NVL(P.QTUNITCX, 0) AS UN_POR_CAIXA_ERP,
+      NVL(E.CUSTOULTENT, 0) AS CUSTO_ULT_ENTRADA,
+      TO_CHAR(E.DTULTENT, 'YYYY-MM-DD')   AS DT_ULT_ENTRADA,
+      TO_CHAR(E.DTULTSAIDA, 'YYYY-MM-DD') AS DT_ULT_SAIDA,
+      NVL(E.QTEST, 0)        AS ESTOQUE_TOTAL,
+      NVL(E.QTBLOQUEADA, 0)  AS QT_BLOQUEADA,
+      NVL(E.QTINDENIZ, 0)    AS QT_INDENIZ,
+      NVL(E.QTRESERV, 0)     AS QT_RESERV,
+      GREATEST(0, NVL(E.QTEST, 0) - NVL(E.QTBLOQUEADA, 0) - NVL(E.QTINDENIZ, 0) - NVL(E.QTRESERV, 0)) AS ESTOQUE_ATUAL,
+      NVL(E.QTPEDIDA, 0)  AS QT_PEDIDA_ERP,
+      NVL(T.QTTRANSITO, 0) AS QT_TRANSITO,
+      NVL(E.QTPEDIDA, 0) + NVL(T.QTTRANSITO, 0) AS ESTOQUE_EM_TRANSITO
+    FROM PCPRODUT P
+    LEFT JOIN PCEST E ON E.CODPROD = P.CODPROD AND E.CODFILIAL = '{{codfilial}}'
+    LEFT JOIN (
+      SELECT CODPROD, CODFILIAL, SUM(NVL(QTTRANSITO, 0)) AS QTTRANSITO
+      FROM PCESTTRANSITO GROUP BY CODPROD, CODFILIAL
+    ) T ON T.CODPROD = P.CODPROD AND T.CODFILIAL = '{{codfilial}}'
+    WHERE P.CODFORNEC = {{codfornec}}
+      AND P.CODFORNEC <> 999999
+      AND NVL(LENGTH(TRIM(P.OBS2)), 0) = 0
+      AND NVL(P.CODEPTO, 0) NOT IN (4, 7)
+  ),
+  RESSUPRIMENTO_PRODUTO AS (
+    SELECT
+      M.CODPROD,
+      CEIL(AVG(GREATEST(TRUNC(M.DTMOV - O.DTEMISSAO), 1))) AS LEAD_TIME_MEDIDO
+    FROM PCPEDIDO O
+    JOIN PCMOV M ON M.NUMPED = O.NUMPED AND M.CODOPER = 'E'
+    JOIN PRODUTOS_BASE PB ON PB.CODPROD = M.CODPROD
+    WHERE O.CODFORNEC = {{codfornec}}
+      AND M.CODFILIAL = '{{codfilial}}'
+      AND O.DTEMISSAO IS NOT NULL
+      AND M.DTMOV IS NOT NULL
+      AND M.NUMPED IS NOT NULL
+      AND M.DTMOV >= ADD_MONTHS(TRUNC(SYSDATE), -12)
+    GROUP BY M.CODPROD
+  ),
+  DIAS AS (
+    SELECT
+      TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') + (LEVEL - 1) AS DIA,
+      GREATEST({{diasPeriodo}}, 1) - LEVEL AS DIAS_ATE_FIM
+    FROM DUAL
+    CONNECT BY LEVEL <= GREATEST({{diasPeriodo}}, 1)
+  ),
+  VENDAS_DIA AS (
+    SELECT
+      M.CODPROD,
+      TRUNC(M.DTMOV) AS DIA,
+      SUM(M.QT) AS QT_DIA,
+      SUM(CASE WHEN ${PUBLICO} THEN M.QT ELSE 0 END) AS QT_DIA_PUBLICA
+    FROM PCMOV M
+    JOIN PRODUTOS_BASE PB ON PB.CODPROD = M.CODPROD
+    LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+    WHERE M.CODOPER = 'S'
+      AND M.QT > 0
+      AND M.CODFILIAL = '{{codfilial}}'
+      AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
+      AND M.NUMTRANSITEM NOT IN ({{excluir}})
+    GROUP BY M.CODPROD, TRUNC(M.DTMOV)
+  ),
+  DEMANDA_DIA AS (
+    SELECT
+      PB.CODPROD,
+      NVL(V.QT_DIA, 0)         AS QT_DIA,
+      NVL(V.QT_DIA_PUBLICA, 0) AS QT_DIA_PUBLICA,
+      POWER(0.85, D.DIAS_ATE_FIM) AS PESO
+    FROM PRODUTOS_BASE PB
+    CROSS JOIN DIAS D
+    LEFT JOIN VENDAS_DIA V ON V.CODPROD = PB.CODPROD AND V.DIA = D.DIA
+  ),
+  METRICAS AS (
+    SELECT
+      D.CODPROD,
+      SUM(D.QT_DIA)         AS VENDA_PERIODO,
+      SUM(D.QT_DIA_PUBLICA) AS VENDA_PUBLICA,
+      ROUND(SUM(D.QT_DIA * D.PESO)         / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO,
+      ROUND(SUM(D.QT_DIA_PUBLICA * D.PESO) / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO_PUBLICO,
+      ROUND(SQRT(GREATEST(AVG(D.QT_DIA * D.QT_DIA) - AVG(D.QT_DIA) * AVG(D.QT_DIA), 0)), 4) AS VOLATILIDADE_DIARIA
+    FROM DEMANDA_DIA D
+    GROUP BY D.CODPROD
+  )
+SELECT
+  PB.CODPROD, PB.DESCRICAO, PB.EMBALAGEM, PB.UNIDADE, PB.CODEPTO, PB.CODSEC,
+  PB.UN_POR_CAIXA_ERP, PB.CUSTO_ULT_ENTRADA, PB.DT_ULT_ENTRADA, PB.DT_ULT_SAIDA,
+  PB.ESTOQUE_TOTAL, PB.QT_BLOQUEADA, PB.QT_INDENIZ, PB.QT_RESERV, PB.ESTOQUE_ATUAL,
+  PB.QT_PEDIDA_ERP, PB.QT_TRANSITO, PB.ESTOQUE_EM_TRANSITO,
+  NVL(R.LEAD_TIME_MEDIDO, 0)       AS LEAD_TIME_MEDIDO,
+  NVL(M.VENDA_PERIODO, 0)          AS VENDA_PERIODO,
+  NVL(M.VENDA_PUBLICA, 0)          AS VENDA_PUBLICA,
+  NVL(M.CONSUMO_DIARIO, 0)         AS CONSUMO_DIARIO,
+  NVL(M.CONSUMO_DIARIO_PUBLICO, 0) AS CONSUMO_DIARIO_PUBLICO,
+  NVL(M.VOLATILIDADE_DIARIA, 0)    AS VOLATILIDADE_DIARIA
+FROM PRODUTOS_BASE PB
+LEFT JOIN RESSUPRIMENTO_PRODUTO R ON R.CODPROD = PB.CODPROD
+LEFT JOIN METRICAS M ON M.CODPROD = PB.CODPROD
+ORDER BY PB.DESCRICAO`;
+
+// 12 meses de venda e entrada (RF-020). O legado usava `TRUNC(SYSDATE, 'MM')`
+// (TRUNC de dois argumentos); aqui é `TRUNC(SYSDATE)`, que o dialeto já tem, e
+// a janela passa a ser "12 meses a partir de hoje".
+const SQL_PRODUTO_HISTORICO = `SELECT
+  TO_CHAR(M.DTMOV, 'YYYY-MM') AS MES,
+  SUM(CASE WHEN M.CODOPER = 'S' THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS,
+  SUM(CASE WHEN M.CODOPER = 'E' THEN NVL(M.QT, 0) ELSE 0 END) AS ENTRADAS,
+  SUM(CASE WHEN M.CODOPER = 'S' AND ${PUBLICO}
+           THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS_PUBLICAS
+FROM PCMOV M
+LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+WHERE M.CODPROD = {{codprod}}
+  AND M.CODFILIAL = '{{codfilial}}'
+  AND M.CODOPER IN ('S', 'E')
+  AND M.DTMOV >= ADD_MONTHS(TRUNC(SYSDATE), -{{meses}})
+GROUP BY TO_CHAR(M.DTMOV, 'YYYY-MM')
+ORDER BY MES`;
+
+// `ROWNUM` literal dentro da subconsulta ordenada, como em sgcWintBuscarProduto
+// da 003 — é a forma que o dialeto traduz em LIMIT.
+const SQL_PRODUTO_ULTIMAS_COMPRAS = `SELECT * FROM (
+  SELECT
+    TO_CHAR(M.DTMOV, 'YYYY-MM-DD') AS DT_ENTRADA,
+    NVL(M.NUMTRANSENT, 0) AS NUMTRANSENT,
+    NVL(M.NUMNOTA, 0)     AS NUMNOTA,
+    NVL(M.CODFILIAL, '')  AS CODFILIAL,
+    NVL(M.QT, 0)          AS QUANTIDADE,
+    NVL(M.PUNIT, 0)       AS PRECO_UNITARIO,
+    NVL(M.QT, 0) * NVL(M.PUNIT, 0) AS VALOR_TOTAL
+  FROM PCMOV M
+  WHERE M.CODPROD = {{codprod}} AND M.CODOPER = 'E' AND M.QT > 0
+  ORDER BY M.DTMOV DESC
+) WHERE ROWNUM <= 10`;
+
+// A posição do produto em todas as filiais, com o mesmo estoque líquido de R-085.
+const SQL_PRODUTO_ESTOQUE_FILIAIS = `SELECT
+  E.CODFILIAL,
+  NVL(F.RAZAOSOCIAL, E.CODFILIAL) AS FILIAL,
+  NVL(E.QTEST, 0) AS ESTOQUE_TOTAL,
+  GREATEST(0, NVL(E.QTEST, 0) - NVL(E.QTBLOQUEADA, 0) - NVL(E.QTINDENIZ, 0) - NVL(E.QTRESERV, 0)) AS ESTOQUE_ATUAL,
+  NVL(E.QTPEDIDA, 0) + NVL(T.QTTRANSITO, 0) AS ESTOQUE_EM_TRANSITO,
+  NVL(E.QTVENDMES, 0) + NVL(E.QTVENDMES1, 0) + NVL(E.QTVENDMES2, 0) AS VENDA_3_MESES,
+  TO_CHAR(E.DTULTSAIDA, 'YYYY-MM-DD') AS DT_ULT_SAIDA
+FROM PCEST E
+LEFT JOIN PCFILIAL F ON F.CODIGO = E.CODFILIAL
+LEFT JOIN (
+  SELECT CODPROD, CODFILIAL, SUM(NVL(QTTRANSITO, 0)) AS QTTRANSITO
+  FROM PCESTTRANSITO GROUP BY CODPROD, CODFILIAL
+) T ON T.CODPROD = E.CODPROD AND T.CODFILIAL = E.CODFILIAL
+WHERE E.CODPROD = {{codprod}}
+ORDER BY E.CODFILIAL`;
+
+// As vendas da janela, MAIORES PRIMEIRO (a venda atípica é a grande), com o
+// NUMTRANSITEM que vira a chave de SGC_VENDA_DESCONSIDERADA (R-087).
+const SQL_PRODUTO_VENDAS = `SELECT * FROM (
+  SELECT
+    M.NUMTRANSITEM,
+    TO_CHAR(M.DTMOV, 'YYYY-MM-DD') AS DTMOV,
+    NVL(M.QT, 0)    AS QUANTIDADE,
+    NVL(M.PUNIT, 0) AS PRECO_VENDA,
+    NVL(M.QT, 0) * NVL(M.PUNIT, 0) AS VALOR_TOTAL,
+    NVL(M.CODCLI, 0) AS CODCLI,
+    NVL(C.CLIENTE, '') AS CLIENTE,
+    CASE WHEN ${PUBLICO} THEN 1 ELSE 0 END AS PUBLICO
+  FROM PCMOV M
+  LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+  WHERE M.CODPROD = {{codprod}}
+    AND M.CODFILIAL = '{{codfilial}}'
+    AND M.CODOPER = 'S'
+    AND M.QT > 0
+    AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
+  ORDER BY M.QT DESC, M.DTMOV DESC
+) WHERE ROWNUM <= 50`;
+
+/* ─────────────── leituras — banco interno ─────────────── */
+
+// A linha do fornecedor (CODPROD = 0) e as linhas de SKU numa consulta só; a
+// tela separa as duas pela coluna (RF-010, RF-011).
+const SQL_PARAMETROS_LISTAR = `SELECT ID, CODFORNEC, CODFILIAL, CODPROD, COBERTURA_DIAS, LEAD_TIME_DIAS, GATILHO_DIAS,
+       COALESCE(SILENCIADO_ATE, '') AS SILENCIADO_ATE,
+       COALESCE(MOTIVO_SILENCIO, '') AS MOTIVO_SILENCIO,
+       ATUALIZADO_POR, ATUALIZADO_EM
+FROM SGC_PARAMETRO_COMPRA
+WHERE CODFORNEC = {{codfornec}} AND CODFILIAL = '{{codfilial}}'
+ORDER BY CODPROD
+LIMIT {{limite}} OFFSET {{offset}}`;
+
+// codprod 0 = todas as da filial (é o que alimenta o {{excluir}} da consulta
+// principal); codprod > 0 = as do diálogo do SKU (RF-012).
+const SQL_VENDAS_DESCONSIDERADAS = `SELECT ID, NUMTRANSITEM, CODPROD, CODFILIAL, DTMOV, QUANTIDADE,
+       COALESCE(MOTIVO, '') AS MOTIVO, POR, EM
+FROM SGC_VENDA_DESCONSIDERADA
+WHERE CODFILIAL = '{{codfilial}}'
+  AND ({{codprod}} = 0 OR CODPROD = {{codprod}})
+ORDER BY DTMOV DESC, NUMTRANSITEM DESC
+LIMIT {{limite}} OFFSET {{offset}}`;
+
+// RN-016: pedido do mesmo fornecedor e filial em qualquer fase ANTES do envio à
+// indústria. A fase vem por SGC_FASE.CHAVE, nunca por id nem por nome.
+const SQL_PEDIDO_ABERTO = `SELECT P.ID_CARD, C.TITULO, F.CHAVE AS FASE_CHAVE, P.CRIADO_EM
+FROM SGC_PEDIDO P
+JOIN KB_CARD C ON C.ID = P.ID_CARD AND C.EXCLUIDO_EM IS NULL
+JOIN SGC_FASE F ON F.FASE_ID = C.FASE_ID
+WHERE P.CODFORNEC = {{codfornec}}
+  AND P.CODFILIAL = '{{codfilial}}'
+  AND F.CHAVE IN ('analise', 'tecnica', 'diretoria', 'envio')
+ORDER BY P.ID_CARD DESC
+LIMIT {{limite}} OFFSET {{offset}}`;
+
+// R-092/RN-018: sem tabela própria — a foto da sugestão já está em
+// SGC_PEDIDO_ITEM.QT_SUGERIDA, gravada pelo carrinho.
+const ADERENTE = `I.QT_SUGERIDA > 0
+             AND I.QT_PEDIDA >= I.QT_SUGERIDA * 0.8
+             AND I.QT_PEDIDA <= I.QT_SUGERIDA * 1.2`;
+
+const SQL_EFICIENCIA = `SELECT
+  COUNT(*) AS ITENS,
+  SUM(CASE WHEN ${ADERENTE} THEN 1 ELSE 0 END) AS ADERENTES,
+  ROUND(100.0 * SUM(CASE WHEN ${ADERENTE} THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS PERC_ADERENCIA
+FROM SGC_PEDIDO P
+JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = P.ID_CARD AND I.STATUS <> 'removido'
+WHERE P.ORIGEM = 'compras_inteligentes'
+  AND ({{compradorId}} = 0 OR P.CRIADO_POR = {{compradorId}})
+  AND ({{codfornec}} = 0 OR P.CODFORNEC = {{codfornec}})
+  AND ('{{dataInicio}}' = '' OR P.CRIADO_EM >= '{{dataInicio}}')
+  AND ('{{dataFim}}' = '' OR P.CRIADO_EM <= CONCAT('{{dataFim}}', 'T23:59:59'))`;
+
+/* ─────────────── escritas SQL (uma instrução por SF, todas com :VAR_USER) ─────────────── */
+
+// D-014: salvar NÃO toca em SILENCIADO_ATE/MOTIVO_SILENCIO e silenciar não toca
+// nos três números — as duas escritas convivem na MESMA linha (UK por
+// fornecedor + filial + produto) sem se apagarem.
+const SQL_PARAMETRO_SALVAR = `INSERT INTO SGC_PARAMETRO_COMPRA
+  (CODFORNEC, CODFILIAL, CODPROD, COBERTURA_DIAS, LEAD_TIME_DIAS, GATILHO_DIAS, ATUALIZADO_POR, ATUALIZADO_EM)
+SELECT {{codfornec}}, '{{codfilial}}', {{codprod}},
+       {{coberturaDias}}, {{leadTimeDias}}, {{gatilhoDias}}, :VAR_USER, '{{atualizadoEm}}'
+FROM DUAL
+WHERE {{codfornec}} > 0 AND TRIM('{{codfilial}}') <> ''
+  AND {{coberturaDias}} >= 0 AND {{leadTimeDias}} >= 0 AND {{gatilhoDias}} >= 0
+  AND ${guarda(PARAMETRIZAR)}
+ON DUPLICATE KEY UPDATE
+  COBERTURA_DIAS = VALUES(COBERTURA_DIAS),
+  LEAD_TIME_DIAS = VALUES(LEAD_TIME_DIAS),
+  GATILHO_DIAS   = VALUES(GATILHO_DIAS),
+  ATUALIZADO_POR = VALUES(ATUALIZADO_POR),
+  ATUALIZADO_EM  = VALUES(ATUALIZADO_EM)`;
+
+const SQL_PARAMETRO_SILENCIAR = `INSERT INTO SGC_PARAMETRO_COMPRA
+  (CODFORNEC, CODFILIAL, CODPROD, SILENCIADO_ATE, MOTIVO_SILENCIO, ATUALIZADO_POR, ATUALIZADO_EM)
+SELECT {{codfornec}}, '{{codfilial}}', {{codprod}},
+       '{{silenciadoAte}}', '{{motivo}}', :VAR_USER, '{{atualizadoEm}}'
+FROM DUAL
+WHERE {{codprod}} > 0 AND TRIM('{{silenciadoAte}}') <> '' AND TRIM('{{motivo}}') <> ''
+  AND ${guarda(PARAMETRIZAR)}
+ON DUPLICATE KEY UPDATE
+  SILENCIADO_ATE  = VALUES(SILENCIADO_ATE),
+  MOTIVO_SILENCIO = VALUES(MOTIVO_SILENCIO),
+  ATUALIZADO_POR  = VALUES(ATUALIZADO_POR),
+  ATUALIZADO_EM   = VALUES(ATUALIZADO_EM)`;
+
+const SQL_PARAMETRO_RESTAURAR = `UPDATE SGC_PARAMETRO_COMPRA
+SET SILENCIADO_ATE = '', MOTIVO_SILENCIO = '', ATUALIZADO_POR = :VAR_USER, ATUALIZADO_EM = '{{atualizadoEm}}'
+WHERE CODFORNEC = {{codfornec}} AND CODFILIAL = '{{codfilial}}' AND CODPROD = {{codprod}}
+  AND ${guarda(PARAMETRIZAR)}`;
+
+const SQL_VENDA_DESCONSIDERAR = `INSERT INTO SGC_VENDA_DESCONSIDERADA
+  (NUMTRANSITEM, CODPROD, CODFILIAL, DTMOV, QUANTIDADE, MOTIVO, POR, EM)
+SELECT {{numtransitem}}, {{codprod}}, '{{codfilial}}', '{{dtmov}}', {{quantidade}}, '{{motivo}}', :VAR_USER, '{{em}}'
+FROM DUAL
+WHERE {{numtransitem}} > 0 AND {{codprod}} > 0 AND TRIM('{{motivo}}') <> ''
+  AND ${guarda(OPERAR)}
+ON DUPLICATE KEY UPDATE MOTIVO = VALUES(MOTIVO), POR = VALUES(POR), EM = VALUES(EM)`;
+
+const SQL_VENDA_RECONSIDERAR = `DELETE FROM SGC_VENDA_DESCONSIDERADA
+WHERE NUMTRANSITEM = {{numtransitem}}
+  AND ${guarda(OPERAR)}`;
+
+/* ─────────────── a lista publicada ─────────────── */
+
+const LEITURAS = [
+  {
+    name: 'sgcWintRessuprimento',
+    code: SQL_RESSUPRIMENTO,
+    resumo: 'RF-001..RF-005/RF-013 (R-082..R-087) - uma linha por produto ativo do fornecedor na filial, com MEDIDAS: estoque liquido e parcelas, transito, lead time medido, venda do periodo (publica a parte), consumo ponderado por recencia e volatilidade. Sem formula e sem paginacao (a curva ABC e acumulada sobre o fornecedor inteiro). Params: codfornec int, codfilial string, dataInicio string, dataFim string, diasPeriodo int, excluir lista de NUMTRANSITEM (fragmento, 0 = nenhuma, teto 500)',
+  },
+  {
+    name: 'sgcWintProdutoHistorico',
+    code: SQL_PRODUTO_HISTORICO,
+    resumo: 'RF-020 - saidas, entradas e saidas publicas por mes nos ultimos N meses. Params: codprod int, codfilial string, meses int',
+  },
+  {
+    name: 'sgcWintProdutoUltimasCompras',
+    code: SQL_PRODUTO_ULTIMAS_COMPRAS,
+    resumo: 'RF-020 - as 10 ultimas entradas do produto, com nota, quantidade e preco. Params: codprod int',
+  },
+  {
+    name: 'sgcWintProdutoEstoqueFiliais',
+    code: SQL_PRODUTO_ESTOQUE_FILIAIS,
+    resumo: 'RF-020 - a posicao do produto em todas as filiais, com o mesmo estoque liquido de R-085. Params: codprod int',
+  },
+  {
+    name: 'sgcWintProdutoVendas',
+    code: SQL_PRODUTO_VENDAS,
+    resumo: 'RF-012 - as vendas do produto na janela, maiores primeiro (teto 50), com o NUMTRANSITEM que identifica a venda a desconsiderar. Params: codprod int, codfilial string, dataInicio string, dataFim string',
+  },
+  {
+    name: 'sgcParametrosCompraListar',
+    code: SQL_PARAMETROS_LISTAR,
+    resumo: 'RF-010/RF-011 - parametros de compra do fornecedor + filial: a linha do fornecedor (CODPROD = 0) e as linhas de SKU. Params: codfornec int, codfilial string, limite int, offset int',
+  },
+  {
+    name: 'sgcVendasDesconsideradasListar',
+    code: SQL_VENDAS_DESCONSIDERADAS,
+    resumo: 'RF-012 - vendas desconsideradas da filial (codprod 0 = todas, e o que alimenta o {{excluir}} da consulta principal). Params: codfilial string, codprod int, limite int, offset int',
+  },
+  {
+    name: 'sgcPedidoAbertoDoFornecedor',
+    code: SQL_PEDIDO_ABERTO,
+    resumo: 'RF-018/RN-016 - pedido do mesmo fornecedor e filial em fase anterior ao envio a industria (analise, tecnica, diretoria, envio), para o carrinho recusar citando o card e a fase. Params: codfornec int, codfilial string, limite int, offset int',
+  },
+  {
+    name: 'sgcEficienciaComprador',
+    code: SQL_EFICIENCIA,
+    resumo: 'RF-021/RN-018 (R-092) - aderencia do comprador: % de itens de pedidos originados das compras inteligentes com QT_PEDIDA dentro de +-20% da QT_SUGERIDA. Params: compradorId int, codfornec int, dataInicio string, dataFim string',
+  },
+];
+
+const ESCRITAS = [
+  {
+    name: 'sgcEscParametroCompraSalvar',
+    code: SQL_PARAMETRO_SALVAR,
+    resumo: 'RF-010 - upsert de cobertura, lead time e gatilho por fornecedor (codprod 0) ou por SKU; 0 = herda. NAO toca no silenciamento (D-014). Params: codfornec int, codfilial string, codprod int, coberturaDias int, leadTimeDias int, gatilhoDias int, atualizadoEm string',
+  },
+  {
+    name: 'sgcEscParametroCompraSilenciar',
+    code: SQL_PARAMETRO_SILENCIAR,
+    resumo: 'RF-011/RN-013 - upsert so do silenciamento do SKU (data ate quando e motivo, os dois obrigatorios). NAO toca nos tres numeros (D-014). Params: codfornec int, codfilial string, codprod int, silenciadoAte string, motivo string, atualizadoEm string',
+  },
+  {
+    name: 'sgcEscParametroCompraRestaurar',
+    code: SQL_PARAMETRO_RESTAURAR,
+    resumo: 'RF-011 - limpa o silenciamento do SKU e devolve o produto a fila de compra. Params: codfornec int, codfilial string, codprod int, atualizadoEm string',
+  },
+  {
+    name: 'sgcEscVendaDesconsiderar',
+    code: SQL_VENDA_DESCONSIDERAR,
+    resumo: 'RF-012/RN-012 - tira uma venda da demanda, com motivo; idempotente por NUMTRANSITEM. Params: numtransitem int, codprod int, codfilial string, dtmov string, quantidade decimal, motivo string, em string',
+  },
+  {
+    name: 'sgcEscVendaReconsiderar',
+    code: SQL_VENDA_RECONSIDERAR,
+    resumo: 'RF-012 - devolve a venda a demanda. Params: numtransitem int',
+  },
+];
+
+// T-011: nenhuma definicao desta spec e JAVASCRIPT e nenhuma tem cron (R-081).
+export const definitions = [...LEITURAS, ...ESCRITAS].map((f) => ({
+  name: f.name,
+  type: 'SQL',
+  description: f.resumo,
+  code: f.code,
+}));
+
+function isEntrypoint() {
+  return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+if (isEntrypoint()) {
+  if (!process.env.MITRA_BASE_URL) throw new Error('MITRA_BASE_URL ausente: este script roda no sandbox do Mitra, com o .env real.');
+  const sdk = await import('mitra-sdk');
+  sdk.configureSdkMitra({
+    baseURL: process.env.MITRA_BASE_URL,
+    token: process.env.MITRA_TOKEN,
+    integrationURL: process.env.MITRA_BASE_URL_INTEGRATIONS,
+  });
+  const projectId = Number(process.env.MITRA_PROJECT_ID);
+  const jdbcId = await jdbcIdWinthor(projectId);
+
+  const lista = (await sdk.listServerFunctionsMitra({ projectId })).result ?? [];
+  const mapa = new Map(lista.map((f) => [f.name, f.id]));
+
+  for (const definicao of definitions) {
+    const corpo = {
+      projectId,
+      name: definicao.name,
+      type: definicao.type,
+      code: definicao.code,
+      description: definicao.description,
+      ...(WINTHOR.includes(definicao.name) ? { jdbcId } : {}),
+    };
+    const id = mapa.get(definicao.name);
+    if (id) await sdk.updateServerFunctionMitra({ ...corpo, serverFunctionId: id });
+    else await sdk.createServerFunctionMitra(corpo);
+    console.log(`${id ? 'atualizada' : 'criada'}: ${definicao.name}`);
+  }
+
+  console.log(`Pronto: ${definitions.length} server functions da spec 011 (compras inteligentes).`);
+  console.log('Rode `node sync-server-function-map.mjs` para levar os ids ao frontend.');
+}
