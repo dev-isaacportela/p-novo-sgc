@@ -22,6 +22,7 @@ import {
   type LinhaSolicitacao, type Prioridade, type TomStatus,
 } from '@/lib/solicitacoes';
 import { AvaliarDialogo, DetalheSolicitacaoDialogo, NovaSolicitacaoDialogo } from './solicitacoes-dialogos';
+import { carimboGravado } from './carimbo';
 import RastreioPainel from './RastreioPainel';
 
 const LIMITE = 20;
@@ -151,9 +152,19 @@ export default function SolicitacoesPage() {
     setCarregando(true);
     setErro('');
     try {
-      await acao('sgcEscSolicitacaoCancelar', { id: registro.ID, canceladoEm: agora() });
+      const quando = agora();
+      await acao('sgcEscSolicitacaoCancelar', { id: registro.ID, canceladoEm: quando });
+      // D-03: o cancelamento é guardado (só o autor, só enquanto pendente) e
+      // recusa devolvendo 0 linhas, sem erro. O carimbo é a prova de que rodou
+      // — sem ela, a ficha ganhava a linha "cancelada" de um cancelamento que
+      // não houve.
+      if (!await carimboGravado(registro.ID, 'ATUALIZADO_EM', quando)) {
+        setCarregando(false);
+        setErro('A solicitação não foi cancelada (sem permissão ou já avaliada).');
+        return;
+      }
       await acao('sgcEscSolicitacaoHistoricoInserir', {
-        id: registro.ID, idCard: 0, evento: 'cancelada', detalhe: 'Cancelada pelo vendedor.', em: agora(),
+        id: registro.ID, idCard: 0, evento: 'cancelada', detalhe: 'Cancelada pelo vendedor.', em: quando,
       });
       recarregar();
     } catch (falha) {

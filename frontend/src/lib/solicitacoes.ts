@@ -151,6 +151,7 @@ export interface AlvoRastreio {
   CODFILIAL?: string | null;
   CODCLI?: number | string | null;
   AVALIADO_EM?: string | null;
+  STATUS?: string | null;
 }
 
 export interface RastreioRow {
@@ -206,6 +207,15 @@ export function chaveRastreio(codprod: unknown, codfilial: unknown, dtRef: unkno
 export function dataReferencia(alvo: AlvoRastreio): string {
   const data = String(alvo?.AVALIADO_EM ?? '').slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : '';
+}
+
+/**
+ * RN-015 — quem entra no rastreio pós-aprovação. A data não basta: `recusada` e
+ * `cancelada-depois-de-avaliada` também têm AVALIADO_EM, e o painel perguntaria
+ * "o cliente comprou o que aprovamos?" sobre uma compra que nunca foi aprovada.
+ */
+export function alvoDeRastreio(alvo: AlvoRastreio): boolean {
+  return String(alvo?.STATUS ?? '') === 'aprovada' && dataReferencia(alvo) !== '';
 }
 
 /**

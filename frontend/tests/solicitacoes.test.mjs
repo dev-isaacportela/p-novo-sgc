@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   LIMITES_PADRAO, PARES_POR_LOTE, RASTREIO_MAX_CARACTERES,
   prioridadeDe, ordemDaPrioridade, rotuloSituacao, rotuloStatus, rotuloVenda, rotuloEstoque,
-  validarSolicitacao, buscaDeCliente, chaveRastreio, dataReferencia, montarPares, lotesDePares,
+  validarSolicitacao, buscaDeCliente, alvoDeRastreio, chaveRastreio, dataReferencia, montarPares, lotesDePares,
   classificarRastreio, indexarRastreio, resumoRastreio, colunasDoCsv, linhaDoCsv,
 } from '../src/lib/solicitacoes.ts';
 import { menuParaPersona, permissoesDe, PERSONAS } from '../src/lib/permissoes.ts';
@@ -227,6 +227,18 @@ test('RN-015 / RN-016: montarPares usa a data de APROVAÇÃO, ignora alvo sem el
 
   assert.equal(dataReferencia({ AVALIADO_EM: `${emDias(-45)}T09:00:00` }), emDias(-45));
   assert.equal(dataReferencia({ AVALIADO_EM: '' }), '', 'sem data de aprovação, fora do rastreio');
+});
+
+test('RN-015b: recusada com AVALIADO_EM não é alvo do rastreio — só a aprovada com data de referência', () => {
+  const em = `${emDias(-45)}T09:00:00`;
+  assert.equal(alvoDeRastreio({ STATUS: 'aprovada', AVALIADO_EM: em }), true, 'aprovada com data é alvo');
+  assert.equal(
+    alvoDeRastreio({ STATUS: 'recusada', AVALIADO_EM: em }), false,
+    'recusar também carimba AVALIADO_EM — perguntar se o cliente comprou o que foi recusado é a pergunta errada',
+  );
+  assert.equal(alvoDeRastreio({ STATUS: 'cancelada', AVALIADO_EM: em }), false);
+  assert.equal(alvoDeRastreio({ STATUS: 'pendente', AVALIADO_EM: '' }), false);
+  assert.equal(alvoDeRastreio({ STATUS: 'aprovada', AVALIADO_EM: '' }), false, 'aprovada sem data não tem referência');
 });
 
 test('RN-017: prioridade desconhecida vira normal, e a ordem é urgente, alta, normal', () => {

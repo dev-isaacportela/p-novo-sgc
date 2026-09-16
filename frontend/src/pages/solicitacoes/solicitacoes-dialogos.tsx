@@ -15,6 +15,7 @@ import {
 import { acao, linhas } from '@/lib/mitra-api';
 import { fmtDataHora } from '@/lib/formato';
 import { buscaDeCliente, rotuloStatus, validarSolicitacao, type LinhaSolicitacao } from '@/lib/solicitacoes';
+import { carimboGravado } from './carimbo';
 
 const agora = () => new Date().toISOString().slice(0, 19);
 
@@ -387,6 +388,13 @@ export function AvaliarDialogo({
       await acao('sgcEscSolicitacaoAvaliar', {
         id: solicitacao.ID, status, motivo: status === 'recusada' ? motivo : '', avaliadoEm: quando,
       });
+      // O histórico só documenta o que aconteceu: sem a prova do carimbo, uma
+      // avaliação recusada pelo servidor deixava a linha "recusada" na ficha e
+      // o diálogo fechava como se tivesse gravado.
+      if (!await carimboGravado(solicitacao.ID, 'AVALIADO_EM', quando)) {
+        setErro('A solicitação não foi alterada (sem permissão ou já avaliada).');
+        return;
+      }
       await acao('sgcEscSolicitacaoHistoricoInserir', {
         id: solicitacao.ID, idCard: 0, evento: status,
         detalhe: status === 'recusada' ? motivo : 'Aprovada na fila de solicitações.', em: quando,
