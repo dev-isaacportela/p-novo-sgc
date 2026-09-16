@@ -11,7 +11,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, BarChart3, Bell, CalendarClock, ClipboardList, FileBarChart, FileText, Gauge,
   KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, PlusCircle, Receipt,
-  ShieldCheck, Truck, X, type LucideIcon,
+  ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -31,6 +31,8 @@ const ICONES: Record<string, LucideIcon> = {
   '/notas-fiscais': FileText, '/faturamentos-pendentes': Receipt, '/nfs-em-atraso': AlertTriangle, '/bo': PackageX,
   // Onda 3 (008-009):
   '/solicitacoes': ClipboardList, '/analises': BarChart3, '/relatorios': FileBarChart,
+  // Onda 4 (011):
+  '/compras-inteligentes': ShoppingCart,
 };
 
 function agruparMenu(itens: ItemDeMenu[]) {
