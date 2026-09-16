@@ -9,6 +9,11 @@
 
 // S0-014 mora aqui pelo mesmo motivo: é contrato de BASE do SQL (o carregador
 // de backend/sql/ e a régua que 008 e 009 compõem), não regra de nenhuma spec.
+//
+// S0-015 e S0-016 — os shims da base da onda 4 (R-096/R-100/R-113): POWER,
+// SQRT e ADD_MONTHS escalares, e a reescrita do gerador de calendário
+// `FROM DUAL CONNECT BY LEVEL <= n`, provados antes de a suíte 011 depender
+// deles. As reescritas da onda 3 continuam na cadeia e continuam verdes acima.
 
 import { toSqlite } from '../mysql-dialect.mjs';
 import { fragmento } from '../../lib/fragmentos.mjs';
@@ -111,5 +116,75 @@ LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD A
     for (const linha of linhas) {
       assert.ok(VALORES.includes(linha.SITUACAO), `valor fora do contrato da régua: ${linha.SITUACAO}`);
     }
+  });
+
+  await teste('S0-015 (R-096/R-100): POWER, SQRT e ADD_MONTHS — o peso por recência, a volatilidade e a janela de 12 meses do lead time medido', async () => {
+    const um = db.prepare(toSqlite("SELECT POWER(0.85, 2) AS P, SQRT(9) AS R, ADD_MONTHS('2026-09-16', -12) AS A")).get();
+    // Ponto flutuante: 0,85² sai 0,7224999999999999 em IEEE 754 — a consulta
+    // arredonda, o shim não.
+    assert.ok(Math.abs(um.P - 0.7225) < 1e-9, `peso por recência de 2 dias atrás (0,85^2): ${um.P}`);
+    assert.equal(um.R, 3, 'SQRT(9) = 3 — a volatilidade é SQRT(AVG(x²) - AVG(x)²), sem STDDEV_POP');
+    assert.equal(um.A, '2025-09-16', 'ADD_MONTHS volta 12 meses no mesmo dia');
+
+    // Dia que não existe no mês de destino cai no último dia do mês, como o Oracle.
+    const borda = db.prepare(toSqlite("SELECT ADD_MONTHS('2026-03-31', -1) AS A, ADD_MONTHS('2026-01-31', 1) AS B")).get();
+    assert.equal(borda.A, '2026-02-28', '31/03 menos 1 mês é 28/02, não 03/03');
+    assert.equal(borda.B, '2026-02-28', '31/01 mais 1 mês é 28/02');
+
+    const nulo = db.prepare(toSqlite("SELECT ADD_MONTHS('sem data', 1) AS A, POWER(NULL, 2) AS P, SQRT(NULL) AS R")).get();
+    assert.equal(nulo.A, null, 'texto que não é data volta NULL, nunca uma data plausível');
+    assert.equal(nulo.P, null);
+    assert.equal(nulo.R, null);
+  });
+
+  await teste('S0-016 (R-096/R-100/R-113): FROM DUAL CONNECT BY LEVEL <= n vira WITH RECURSIVE CALENDARIO — 153 dias nas duas formas (dentro de uma CTE precedida de outras duas, e solto), sem destruir as CTEs anteriores', async () => {
+    const PROJECAO = `SELECT TO_DATE('2026-04-17', 'YYYY-MM-DD') + (LEVEL - 1) AS DIA,
+         GREATEST(153, 1) - LEVEL AS DIAS_ATE_FIM
+  FROM DUAL
+  CONNECT BY LEVEL <= GREATEST(153, 1)`;
+
+    // Forma 1: o gerador dentro de `WITH DIAS AS (…)`, com DUAS CTEs antes — é
+    // o caso em que um regex guloso começaria no SELECT de PRODUTOS_BASE e
+    // apagaria meia consulta até o FROM DUAL.
+    const naCte = `WITH PRODUTOS_BASE AS (
+  SELECT 5401 AS CODPROD
+),
+RESSUPRIMENTO_PRODUTO AS (
+  SELECT CODPROD, 12 AS CUSTO FROM PRODUTOS_BASE
+),
+DIAS AS (
+  ${PROJECAO}
+)
+SELECT P.CODPROD, P.CUSTO, D.DIA, D.DIAS_ATE_FIM
+FROM DIAS D
+CROSS JOIN RESSUPRIMENTO_PRODUTO P
+ORDER BY D.DIA`;
+
+    const traduzidoCte = toSqlite(naCte);
+    assert.ok(!/\bCONNECT\s+BY\b/i.test(traduzidoCte), `nenhum CONNECT BY deveria sobrar:\n${traduzidoCte}`);
+    assert.ok(/WITH RECURSIVE CALENDARIO\(LEVEL\) AS \(/.test(traduzidoCte), 'a CTE recursiva do calendário deveria aparecer');
+    assert.ok(/PRODUTOS_BASE AS \(/.test(traduzidoCte) && /RESSUPRIMENTO_PRODUTO AS \(/.test(traduzidoCte),
+      `as CTEs anteriores continuam inteiras:\n${traduzidoCte}`);
+
+    const linhas = db.prepare(traduzidoCte).all();
+    assert.equal(linhas.length, 153, 'uma linha por dia do período, inclusive nos dias sem venda');
+    assert.equal(linhas[0].DIA, '2026-04-17', 'a primeira linha é dataInicio');
+    assert.equal(linhas[0].DIAS_ATE_FIM, 152, 'e está a 152 dias do fim');
+    assert.equal(linhas[152].DIA, '2026-09-16', 'a última linha é dataFim (dataInicio + 152)');
+    assert.equal(linhas[152].DIAS_ATE_FIM, 0);
+    assert.equal(linhas[0].CODPROD, 5401, 'a CTE de produtos sobreviveu à reescrita');
+    assert.equal(linhas[0].CUSTO, 12, 'a segunda CTE também');
+
+    // Forma 2: o gerador solto, sem parêntese envolvente — o fim da INSTRUÇÃO
+    // conta como fim de bloco, senão o CONNECT BY cru chegaria ao SQLite.
+    const solto = `${PROJECAO}`;
+    const traduzidoSolto = toSqlite(solto);
+    assert.ok(!/\bCONNECT\s+BY\b/i.test(traduzidoSolto), `nenhum CONNECT BY deveria sobrar:\n${traduzidoSolto}`);
+    const soltas = db.prepare(traduzidoSolto).all();
+    assert.equal(soltas.length, 153, 'mesmas 153 linhas sem a CTE em volta');
+    assert.equal(soltas[0].DIA, '2026-04-17');
+    assert.equal(soltas[0].DIAS_ATE_FIM, 152);
+    assert.equal(soltas[152].DIA, '2026-09-16');
+    assert.equal(soltas[152].DIAS_ATE_FIM, 0);
   });
 }
