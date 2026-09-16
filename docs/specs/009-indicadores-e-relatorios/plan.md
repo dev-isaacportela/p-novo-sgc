@@ -109,6 +109,24 @@ Todas as leituras são chamadas **direto da tela**, então identificam quem cham
 `:VAR_USER`; nenhuma recebe `{{usuarioId}}`, porque **não há JS nem cron nesta spec**
 (D-001).
 
+**O par `dataInicio`/`dataFim` é obrigatório em tudo que é indicador** (as quatro SFs da
+cadeia de CTEs, `sgcIndResumo`, `sgcIndPedidosPorFase`, `sgcIndAgendaAtrasos`,
+`sgcIndLeadTime`, `sgcSolicitacoesFunil`, `sgcSolicitacoesPorVendedor` e
+`sgcWintComprasVsVendas`): a tela **sempre** manda um período (`intervaloPadrao()` ou o
+mês/trimestre escolhido), e todo bloco diz de que período está falando. Ali o par entra
+como `BETWEEN` seco, sem ramo de desligado — `BETWEEN '' AND ''` devolveria zero linha em
+silêncio, que é pior do que não filtrar. O **único** lugar onde o período é filtro
+desligável é o período de **criação** do relatório (R-059), e lá ele tem a forma de dois
+ramos independentes:
+
+```sql
+AND ('{{dataInicio}}' = '' OR SUBSTRING(P.CRIADO_EM, 1, 10) >= '{{dataInicio}}')
+AND ('{{dataFim}}'    = '' OR SUBSTRING(P.CRIADO_EM, 1, 10) <= '{{dataFim}}')
+```
+
+RN-014 tem um teste só para isso: com o par vazio, o total da consulta do relatório é
+igual ao total sem nenhum filtro contado no próprio teste (D-014).
+
 ### A cadeia de CTEs dos pedidos — `pedidosCte()`
 
 Uma função no `add-012` devolve o mesmo texto para **quatro** SFs (`sgcSlaPedidosKpis`,
@@ -160,7 +178,7 @@ WITH PED AS (
   WHERE COALESCE(SF.CHAVE, '') <> 'cancelado'
     AND ('{{codfilial}}' = '' OR P.CODFILIAL = '{{codfilial}}')
     AND ({{codfornec}} = 0 OR P.CODFORNEC = {{codfornec}})
-    AND SUBSTRING(P.CRIADO_EM, 1, 10) BETWEEN '{{dataInicio}}' AND '{{dataFim}}'
+    AND SUBSTRING(P.CRIADO_EM, 1, 10) BETWEEN '{{dataInicio}}' AND '{{dataFim}}'   -- período OBRIGATÓRIO
     AND ('{{busca}}' = '' OR C.TITULO LIKE '%{{busca}}%'
          OR COALESCE(P.FORNECEDOR, '') LIKE '%{{busca}}%'
          OR COALESCE(P.NUMPED_WINTHOR, '') LIKE '%{{busca}}%')
@@ -259,25 +277,56 @@ CASE WHEN P.DT_AGENDA = '' THEN NULL
                                     ELSE <HOJE> END, P.DT_AGENDA)) END AS DIAS_ATRASO_AGENDA
 ```
 
-O **recorte RESTRICTED** (RN-015) é um bloco só, copiado literal em toda consulta desta
-spec que fala de pedido (o mesmo espírito do R-013):
+O **recorte RESTRICTED** (RN-015) é um bloco só, `RECORTE_RESTRITO`, copiado literal em
+toda consulta desta spec que fala de pedido — as quatro da CTE, `sgcIndResumo`,
+`sgcIndPedidosPorFase`, `sgcIndAgendaAtrasos`, `sgcIndProdutosBo`, `sgcIndLeadTime`,
+`sgcSlaPedidoFases` e as três do relatório (o mesmo espírito do R-013):
 
 ```sql
 AND (NOT EXISTS (SELECT 1 FROM INT_USER IU
                  WHERE IU.ID = :VAR_USER AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') = 'RESTRICTED')
-     OR P.CRIADO_POR = :VAR_USER)
+     OR C.CRIADO_POR = :VAR_USER)
 ```
+
+É **`KB_CARD.CRIADO_POR`**, não `SGC_PEDIDO.CRIADO_POR`: "os próprios cards" é o card em
+todo o projeto — `sgcPodeMover`/`sgcPodeExcluir` (`add-005`) e `pedidoEmAnalise`
+(`add-006`) conferem `C.CRIADO_POR`, e as duas colunas podem divergir (o cron da agenda
+cria o card sem sessão). Toda consulta que cola este bloco tem `KB_CARD C` no escopo.
 
 ### Leituras — indicadores (SQL, banco interno)
 
 | Nome | Entrada (valor desligado) | Saída | Atende |
 |---|---|---|---|
-| `sgcIndResumo` | `codfilial` (''), `dataInicio` (''), `dataFim` (''), `hoje` ('') | **uma** linha: `PEDIDOS_ABERTOS, VL_ABERTO, ENVIOS_ATRASADOS, FATURAMENTOS_PENDENTES, NFS_ATRASADAS, ITENS_BO, FORNECEDORES_COM_PEDIDO` | RF-001, C-001 |
-| `sgcIndPedidosPorFase` | `codfilial` (''), `dataInicio` (''), `dataFim` ('') | uma linha por fase: `FASE_CHAVE, FASE_NOME, ORDEM, QTD, VL_TOTAL` (as 10, inclusive as vazias) | RF-001, C-001 |
-| `sgcIndAgendaAtrasos` | `codfilial` (''), `dataInicio` (''), `dataFim` (''), `hoje` (''), `limite` (50) | `ID_AGENDA, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, DATA_PLANEJADA, DATA_ENVIO, DIAS_ATRASO, STATUS_PRAZO, ID_CARD` | RF-013, C-001 |
+| `sgcIndResumo` | `codfilial` (''), `dataInicio` (**obrigatório**), `dataFim` (**obrigatório**), `hoje` ('') | **uma** linha: `PEDIDOS_ABERTOS, VL_ABERTO, ENVIOS_ATRASADOS, FATURAMENTOS_PENDENTES, NFS_ATRASADAS, ITENS_BO, FORNECEDORES_COM_PEDIDO` | RF-001, C-001 |
+| `sgcIndPedidosPorFase` | `codfilial` (''), `dataInicio` (**obrigatório**), `dataFim` (**obrigatório**) | uma linha por fase: `FASE_CHAVE, FASE_NOME, ORDEM, QTD, VL_TOTAL` (as 10, inclusive as vazias) | RF-001, C-001 |
+| `sgcIndAgendaAtrasos` | `codfilial` (''), `dataInicio` (**obrigatório**), `dataFim` (**obrigatório**), `hoje` (''), `limite` (50) | `ID_AGENDA, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, DATA_PLANEJADA, DATA_ENVIO, DIAS_ATRASO, STATUS_PRAZO, ID_CARD` | RF-013, C-001 |
 | `sgcIndProdutosBo` | `codfilial` (''), `limite` (50) | por fornecedor: `CODFORNEC, FORNECEDOR, ITENS_ABERTOS, QT_PENDENTE, VL_PENDENTE, CARDS` | RF-025, C-001 |
-| `sgcIndPerfilFornecedor` | os da CTE + `limite` (50) | `CODFORNEC, FORNECEDOR, QTD_PEDIDOS, MEDIA_ANALISE, MEDIA_FATURAMENTO, MEDIA_ENTREGA, PERC_NO_PRAZO, SCORE_MEDIO` | RF-025, C-026 |
-| `sgcIndLeadTime` | `codfilial` (''), `dataInicio` (''), `dataFim` (''), `hoje` ('') | por fase: `FASE_CHAVE, FASE_NOME, ORDEM, PASSAGENS, DIAS_MEDIA` | RF-025, C-027 |
+| `sgcIndPerfilFornecedor` | os da CTE (período **obrigatório**) + `limite` (50) | `CODFORNEC, FORNECEDOR, QTD_PEDIDOS, MEDIA_ANALISE, MEDIA_FATURAMENTO, MEDIA_ENTREGA, PERC_NO_PRAZO, SCORE_MEDIO` | RF-025, C-026 |
+| `sgcIndLeadTime` | `codfilial` (''), `dataInicio` (**obrigatório**), `dataFim` (**obrigatório**), `hoje` ('') | por fase: `FASE_CHAVE, FASE_NOME, ORDEM, PASSAGENS, DIAS_MEDIA` | RF-025, C-027 |
+
+**`sgcIndProdutosBo` e o `VL_PENDENTE`:** `SGC_BO_ITEM` não guarda valor (R-026) — o
+pendente em reais é a quantidade parada vezes o custo do item do pedido:
+
+```sql
+SELECT P.CODFORNEC, COALESCE(P.FORNECEDOR, '') AS FORNECEDOR,
+  COUNT(*) AS ITENS_ABERTOS,
+  COALESCE(SUM(B.QT_PENDENTE), 0) AS QT_PENDENTE,
+  COALESCE(SUM(B.QT_PENDENTE * COALESCE(I.PRECO_CUSTO, 0)), 0) AS VL_PENDENTE,
+  COUNT(DISTINCT B.ID_CARD) AS CARDS
+FROM SGC_BO_ITEM B
+JOIN KB_CARD C      ON C.ID = B.ID_CARD AND C.EXCLUIDO_EM IS NULL
+JOIN SGC_PEDIDO P   ON P.ID_CARD = B.ID_CARD
+LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = B.ID_CARD AND I.CODPROD = B.CODPROD
+WHERE B.STATUS = 'aberto'
+  AND ('{{codfilial}}' = '' OR P.CODFILIAL = '{{codfilial}}')
+  AND <RECORTE_RESTRITO>
+GROUP BY P.CODFORNEC, P.FORNECEDOR
+ORDER BY VL_PENDENTE DESC, ITENS_ABERTOS DESC, P.CODFORNEC
+LIMIT {{limite}}
+```
+
+Item sem par em `SGC_PEDIDO_ITEM` (produto que saiu do pedido depois de entrar em B.O.)
+entra com custo 0 e continua contado em `ITENS_ABERTOS`: some do valor, nunca da fila.
 
 **`sgcIndResumo`** é uma linha de subconsultas escalares, porque cinco dos seis números
 não são sobre pedido (nota atrasada, item em falta, fornecedor). Os dois que **são**
@@ -313,7 +362,7 @@ subconsulta custa o mesmo (D-006).
 
 | Nome | Entrada (valor desligado) | Saída | Atende |
 |---|---|---|---|
-| `sgcSlaPedidosKpis` | `codfilial` (''), `codfornec` (0), `dataInicio` (''), `dataFim` (''), `busca` (''), `hoje` ('') | **uma** linha: `TOTAL, NO_PRAZO, ATENCAO, ATRASADOS_COMPRAS, ATRASADOS_FORNECEDOR, CONCLUIDOS, FORA_DA_AGENDA, SCORE_MEDIO` | RF-012, C-013 |
+| `sgcSlaPedidosKpis` | `codfilial` (''), `codfornec` (0), `dataInicio` (**obrigatório**), `dataFim` (**obrigatório**), `busca` (''), `hoje` ('') | **uma** linha: `TOTAL, NO_PRAZO, ATENCAO, ATRASADOS_COMPRAS, ATRASADOS_FORNECEDOR, CONCLUIDOS, FORA_DA_AGENDA, SCORE_MEDIO` | RF-012, C-013 |
 | `sgcSlaPedidosListar` | os mesmos + `fase` (''), `soVencidos` (''), `limite` (20), `offset` (0) | `CARD_ID, TITULO, FASE_CHAVE, FASE_NOME, CONCLUIDO, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, NUMPED_WINTHOR, VL_TOTAL, PERC_FATURADO, QTD_NFS, DT_CRIACAO, DT_ENVIO, DT_PRIMEIRA_NF, DT_ENTREGA, DT_CONCLUSAO, DT_AGENDA, DIAS_ANALISE, META_ANALISE_DIAS, STATUS_ANALISE, DIAS_FATURAMENTO, META_FATURAMENTO_DIAS, STATUS_FATURAMENTO, DIAS_ENTREGA, META_ENTREGA_DIAS, META_ENTREGA_TIPO, STATUS_ENTREGA, STATUS_AGENDA, DIAS_ATRASO_AGENDA, SLA_STATUS, SLA_SCORE` | RF-007..RF-010, C-007..C-011 |
 | `sgcSlaPedidosListarTotal` | os mesmos filtros da listagem | `TOTAL` | RF-012, RNF-002 |
 | `sgcSlaPedidoFases` | `idCard` (0) | uma linha por passagem: `ID, FASE_ID, FASE_CHAVE, FASE_NOME, DT_ENTRADA, DT_SAIDA, DIAS_NA_FASE` | RF-014, C-015 |
@@ -330,19 +379,53 @@ Filtros do lado de fora da CTE (nunca dentro: os KPIs precisam do conjunto intei
 
 ### Leituras — solicitações (SQL)
 
-Uma derivada só, `solicitacoesCte()`, com **uma linha por solicitação** e a coluna
-`SITUACAO` vinda do fragmento da 008 (`backend/sql/situacao-solicitacao.sql`); as duas SFs
-agregam sobre ela. Assim a 009 não tem régua própria de situação (RN-010).
+Uma derivada só, `solicitacoesCte()`, com **uma linha por solicitação**, o `STATUS` próprio
+e a coluna `SITUACAO` derivada; as duas SFs agregam sobre ela. A régua da situação **não é
+escrita aqui**: vem do arquivo `backend/sql/situacao-solicitacao.sql`, entrega da 008
+(R-070/R-075), carregado pelo loader generalizado da base:
+
+```js
+import { fragmento } from './lib/fragmentos.mjs';   // R-074, base (S2)
+const SITUACAO = fragmento('situacao-solicitacao.sql');
+```
+
+O **contrato de composição** do arquivo (R-075) fixa os aliases, e é por isso que a
+derivada desta spec tem os quatro — inclusive o `C`, que a 009 não usaria por conta
+própria (ela agrega, não mostra o card):
+
+```sql
+SELECT S.ID, S.STATUS, S.CRIADO_POR, S.CRIADO_EM, S.AVALIADO_EM, ${SITUACAO} AS SITUACAO
+FROM SGC_SOLICITACAO S
+LEFT JOIN KB_CARD C  ON C.ID = S.ID_CARD AND C.EXCLUIDO_EM IS NULL
+LEFT JOIN SGC_FASE SF ON SF.BOARD_ID = C.BOARD_ID AND SF.FASE_ID = C.FASE_ID
+LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD
+                           AND COALESCE(I.STATUS, '') <> 'removido'
+WHERE ('{{codfilial}}' = '' OR S.CODFILIAL = '{{codfilial}}')
+  AND SUBSTRING(S.CRIADO_EM, 1, 10) BETWEEN '{{dataInicio}}' AND '{{dataFim}}'
+```
+
+Os três `LEFT JOIN` são **obrigatórios** e vêm nesta ordem: o `CASE` do fragmento lê
+`C.ID` (card excluído ou ausente → `sem_pedido`), `SF.CHAVE` e `I.STATUS`. Nenhum filtro
+de persona: solicitação não é card, e o comercial não abre esta tela (R-061).
 
 | Nome | Entrada (valor desligado) | Saída | Atende |
 |---|---|---|---|
-| `sgcSolicitacoesFunil` | `codfilial` (''), `dataInicio` (''), `dataFim` ('') | uma linha por situação: `SITUACAO, QTD, QTD_AVALIADAS, TEMPO_MEDIO_AVALIACAO_DIAS` | RF-015, C-016 |
+| `sgcSolicitacoesFunil` | `codfilial` (''), `dataInicio` (**obrigatório**), `dataFim` (**obrigatório**) | uma linha por par: `STATUS, SITUACAO, QTD, QTD_AVALIADAS, TEMPO_MEDIO_AVALIACAO_DIAS`, com `GROUP BY S.STATUS, SITUACAO` | RF-015, C-016 |
 | `sgcSolicitacoesPorVendedor` | os mesmos + `limite` (50) | `USUARIO_ID, VENDEDOR, TOTAL, PENDENTES, RECUSADAS, ATENDIDAS, NAO_ATENDIDAS, EM_FLUXO, ADERENCIA_PCT, TEMPO_MEDIO_AVALIACAO_DIAS` | RF-016, C-017 |
+
+**Duas dimensões, não uma** (R-076). A régua devolve `sem_pedido` para tudo que ainda não
+tem card — pendente, recusada, cancelada **e** aprovada esperando na fila —, então a
+`SITUACAO` sozinha não distingue "esperando avaliação" de "recusada", e a aderência de
+fluxo (que tira pendentes e recusadas do denominador) ficaria impossível. O funil agrega
+pelo **par** `STATUS × SITUACAO`: o eixo do gráfico é a `SITUACAO`, e `pendentes` e
+`recusadas` saem do `STATUS`. `sgcSolicitacoesPorVendedor` faz a mesma leitura dentro dos
+`SUM(CASE …)`: `PENDENTES`/`RECUSADAS` por `S.STATUS`, `ATENDIDAS`/`NAO_ATENDIDAS`/
+`EM_FLUXO` por `SITUACAO`.
 
 `VENDEDOR` = `COALESCE(NULLIF(TRIM(IU.NOME), ''), 'Sem vendedor')` sobre
 `SGC_SOLICITACAO.CRIADO_POR` (R-052: o vendedor **é** quem registra; não existe coluna de
-nome de vendedor). `ADERENCIA_PCT = ROUND(100.0 * SUM(atendida) / COUNT(*), 1)`. Nenhuma
-coluna de valor em reais (R-057).
+nome de vendedor). `ADERENCIA_PCT = ROUND(100.0 * SUM(CASE WHEN SITUACAO = 'atendida'
+THEN 1 ELSE 0 END) / COUNT(*), 1)`. Nenhuma coluna de valor em reais (R-057).
 
 O resumo consolidado (total, aderência geral e de fluxo, tempo médio) **não** é uma SF: é
 derivado do funil já agregado, em `lib/analises.ts` (`resumoSolicitacoes`) — uma execução
@@ -636,13 +719,20 @@ export function resultadosDosBlocos<T>(nomes: string[], resultados: PromiseSettl
 
 export function serieSimples(linhas, chave, valor): { name: string; value: number }[];
 export function serieComparativa(linhas, chave, a, b): { name: string; a: number; b: number }[];
+/** Uma linha por par STATUS × SITUACAO (R-076). */
+export interface FunilRow { STATUS: string; SITUACAO: string; QTD: number;
+  QTD_AVALIADAS: number; TEMPO_MEDIO_AVALIACAO_DIAS: number | null }
 export function resumoSolicitacoes(funil: FunilRow[]): {
   total; pendentes; recusadas; atendidas; naoAtendidas; emFluxo;
   aderenciaGeralPct: number | null; aderenciaFluxoPct: number | null; tempoMedioAvaliacaoDias: number | null };
+export function serieDoFunil(funil: FunilRow[]): { name: string; value: number }[]; // agrupa por SITUACAO
 ```
 
-`resumoSolicitacoes` é RN-009 (sem solicitação no período, as duas aderências são `null`,
-não 0 — "vazio" e "zero por cento" são leituras diferentes). `serieSimples`/
+`resumoSolicitacoes` é RN-009 e lê **as duas dimensões** (R-076): `pendentes` e `recusadas`
+saem de `STATUS`, `atendidas`, `naoAtendidas` e `emFluxo` saem de `SITUACAO`, e `total` é a
+soma de `QTD` de todas as linhas. Sem solicitação no período, as duas aderências são
+`null`, não 0 — "vazio" e "zero por cento" são leituras diferentes. `serieDoFunil` soma o
+par de volta numa dimensão só para o gráfico, que é por situação. `serieSimples`/
 `serieComparativa` alimentam **o gráfico e a tabela alternativa** do mesmo bloco (C-024).
 
 ### `frontend/src/lib/relatorio.ts`
@@ -750,14 +840,14 @@ Nenhuma função de janela (`LEAD`, `OVER`) é usada (D-006). `WITH` já roda no
 | C-007 | `tests/sla.test.mjs` + `smoke/…` | na régua pura: `classificarEtapa({inicio:'2026-09-08',fimReal:'2026-09-09',meta:1})` → `ok` com 1 dia; `fimReal:'2026-09-11'` → `estourou` com 3. No smoke, o teste arranja um pedido existente com essas duas datas e lê `STATUS_ANALISE`/`DIAS_ANALISE` de `sgcSlaPedidosListar` |
 | C-008 | `tests/sla.test.mjs` + `smoke/…` | `{inicio:'2026-09-09',fimReal:'',meta:5,hoje:'2026-09-18'}` → `vencida` com 7 dias e `slaDoPedido` → `atrasado_fornecedor`; com a análise vencida junto, `atrasado_compras` (precedência) |
 | C-009 | `tests/sla.test.mjs` + `smoke/…` | o mesmo com `hoje:'2026-09-16'` → `atencao` com 5 dias; pedido `atencao` |
-| C-010 | `tests/sla.test.mjs` + `smoke/…` | `meta: 0` na Entrega → `sem_meta`, e `notaDoPedido` ignora a etapa; no smoke, um pedido de fornecedor sem `PRAZO_ENTREGA_DIAS` sai com `STATUS_ENTREGA = 'sem_meta'` |
+| C-010 | `tests/sla.test.mjs` + `smoke/…` | `meta: 0` na Entrega → `sem_meta`, e `notaDoPedido` ignora a etapa. No smoke, os três fornecedores do seed da 001 **têm** prazo de entrega (7, 10 e 5) e o seed da 001 não se toca (R-017): o arranjo é `UPDATE SGC_FORNECEDOR SET PRAZO_ENTREGA_DIAS = 0 WHERE CODFORNEC = 1042`, feito **e desfeito dentro do próprio `teste()`**, com o valor original lido antes; entre os dois, um pedido do 1042 com primeira NF sai com `STATUS_ENTREGA = 'sem_meta'` e `SLA_SCORE` sem a etapa |
 | C-011 | `tests/sla.test.mjs` + `smoke/…` | `notaDoPedido([{dias:2,meta:1},{dias:5,meta:5}])` → 75; `([{1,1},{5,5},{10,7}])` → 90; no smoke, `SLA_SCORE` do pedido arranjado com esses marcos é o mesmo número |
 | C-012 | `smoke/…` | o pedido da fase `cancelado` do seed 002 não aparece em `sgcSlaPedidosListar`, não entra em `sgcSlaPedidosKpis.TOTAL` nem em `sgcIndPerfilFornecedor` |
 | C-013 | `smoke/…` | `sgcSlaPedidosKpis.TOTAL` = `sgcSlaPedidosListarTotal.TOTAL` sem filtro; `ATRASADOS_COMPRAS + ATRASADOS_FORNECEDOR` = total com `soVencidos: '1'`; e continua igual depois de trocar o período |
 | C-014 | `smoke/…` | o teste liga um pedido existente a um agendamento com `DATA_ANALISE` 4 dias antes do `DT_ENVIO` → `STATUS_AGENDA = 'enviada_com_atraso'` e `DIAS_ATRASO_AGENDA = 4`; com a data igual ao envio → `no_planejado` e 0; sem agendamento → `sem_agenda` e `NULL` |
 | C-015 | `smoke/…` | `sgcSlaPedidoFases` de um card com N passagens devolve N linhas, em ordem crescente, com `DT_SAIDA` vazia só na última e `DIAS_NA_FASE` ≥ 0 em todas |
-| C-016 | `tests/analises.test.mjs` | `resumoSolicitacoes` sobre um funil montado à mão (8 atendidas, 4 pendentes, 2 recusadas, 6 em fluxo) → geral 40,0 e fluxo 57,1; funil vazio → as duas `null` |
-| C-017 | `smoke/…` | `sgcSolicitacoesPorVendedor` devolve uma linha por `CRIADO_POR` distinto do período (contado no teste), com `TOTAL` igual à contagem daquele vendedor e nenhuma coluna de valor |
+| C-016 | `tests/analises.test.mjs` | `resumoSolicitacoes` sobre um funil montado à mão com os **pares** `('pendente','sem_pedido') 4`, `('recusada','sem_pedido') 2`, `('aprovada','atendida') 8` e `('aprovada','em_analise'/'enviada') 6` → total 20, pendentes 4 e recusadas 2 lidos do `STATUS`, atendidas 8 e em fluxo 6 lidos da `SITUACAO`, geral **40,0** e fluxo **57,1**; funil vazio → as duas `null` |
+| C-017 | `smoke/…` | `sgcSolicitacoesPorVendedor` devolve uma linha por `CRIADO_POR` distinto do período (contado no teste), com `TOTAL` igual à contagem daquele vendedor, `PENDENTES`/`RECUSADAS` batendo com o `STATUS` e `ATENDIDAS`/`EM_FLUXO` com a `SITUACAO`, e nenhuma coluna de valor |
 | C-018 | `smoke/…` + `tests/relatorio.test.mjs` | `sgcEscRelatorioInserir` cria 1 linha e `sgcRelatoriosListar` a devolve com título, autor e `CONFIG_JSON` idêntico ao enviado; `lerConfig` do relatório "antigo" do seed devolve a config completa, com `visao` no padrão e a chave desconhecida descartada |
 | C-019 | `smoke/…` | `sgcEscRelatorioAtualizar` do relatório do `gil` chamado pela `ana` não muda nada (título e `ATUALIZADO_EM` iguais antes e depois); chamado pelo `gil`, muda; chamado pelo `admin`, muda; `sgcRelatoriosListar` traz `PODE_EDITAR` 1 para o dono e 0 para o colega |
 | C-020 | `smoke/…` | `sgcRelatoriosListar` como `gil` não traz `Meus pedidos em análise`; como `ana`, traz; os compartilhados aparecem para os dois — contagem **recortada por `RELATORIOS_009`** |
@@ -771,17 +861,17 @@ Nenhuma função de janela (`LEAD`, `OVER`) é usada (D-006). `WITH` já roda no
 | RN-001 | `tests/sla.test.mjs` + `smoke/…` | pedido sem envio mede a Análise até `hoje`; pedido concluído sem nota mede o Faturamento até `dtConclusao`, e o número **não** muda quando `hoje` avança |
 | RN-002 | `tests/sla.test.mjs` | os sete estados → os sete rótulos e os quatro tons; estado desconhecido → "Sem estado" e `off`, sem lançar |
 | RN-003 | `tests/sla.test.mjs` + `smoke/…` | `somarDiasUteis('2026-08-24', 15)` → `'2026-09-14'`; `diasUteisEntre('2026-08-24','2026-09-14')` → 15; sex→seg 1; seg→sáb 4; mesmo dia 0; e a mesma conta pelo fragmento SQL, num `SELECT` com as duas datas literais |
-| RN-004 | `smoke/…` | fornecedor sem `SLA_ANALISE_DIAS`/`SLA_FATURAMENTO_DIAS` sai com `META_ANALISE_DIAS = 1` e `META_FATURAMENTO_DIAS = 5`; sem `PRAZO_ENTREGA_DIAS`, `STATUS_ENTREGA = 'sem_meta'` |
+| RN-004 | `smoke/…` | fornecedor sem `SLA_ANALISE_DIAS`/`SLA_FATURAMENTO_DIAS` sai com `META_ANALISE_DIAS = 1` e `META_FATURAMENTO_DIAS = 5` (os dois zerados pelo mesmo arranjo de C-010, feito e desfeito no `teste()`); sem `PRAZO_ENTREGA_DIAS`, `STATUS_ENTREGA = 'sem_meta'` |
 | RN-005 | `tests/sla.test.mjs` | as combinações de precedência, inclusive `vencida` na análise **e** no faturamento → `atrasado_compras`, e concluído com atenção → `concluido` |
 | RN-006 | `tests/sla.test.mjs` | 75 e 90; nenhuma etapa medida → 0; `dias = 0` não divide por zero; etapa sem meta fora da média |
 | RN-007 | `smoke/…` | o pedido cancelado não aparece em `sgcSlaPedidosListar`, `sgcSlaPedidosKpis`, `sgcSlaPedidosListarTotal` nem `sgcIndPerfilFornecedor` |
 | RN-008 | `tests/sla.test.mjs` + `smoke/…` | as cinco situações de agenda; envio antes da data planejada → `no_planejado` e 0 dias (nunca negativo) |
-| RN-009 | `tests/analises.test.mjs` | 8/20 → 40,0 e 8/14 → 57,1; total 0 → `null` nas duas |
-| RN-010 | `smoke/…` | a soma de `QTD` de `sgcSolicitacoesFunil` é igual à contagem de `SGC_SOLICITACAO` do período, e a contagem por situação bate, situação a situação, com a que `sgcSolicitacoesListar` (008) devolve para o mesmo recorte — as duas leem o mesmo fragmento |
+| RN-009 | `tests/analises.test.mjs` | 8/20 → 40,0 e 8/14 → 57,1, com pendentes e recusadas vindo do `STATUS` e atendidas da `SITUACAO` (uma dimensão só não separaria as três — R-076); total 0 → `null` nas duas; `serieDoFunil` soma os pares de volta por situação |
+| RN-010 | `smoke/…` | a soma de `QTD` de `sgcSolicitacoesFunil` é igual à contagem de `SGC_SOLICITACAO` do período, e a soma **por `SITUACAO`** (juntando os pares do mesmo valor) bate, situação a situação, com a que `sgcSolicitacoesListar` (008) devolve para o mesmo recorte — as duas leem o mesmo `situacao-solicitacao.sql`, com os mesmos aliases (R-075) |
 | RN-011 | `tests/analises.test.mjs` | `listarPeriodos` em duas datas; `intervaloPadrao(new Date('2026-09-15'))` → `dataFim` `'2026-09-15'` e 90 dias de intervalo |
 | RN-012 | `smoke/…` + `tests/analises.test.mjs` | `sgcWintComprasVsVendas` com `codfilial: ''` devolve 0 linhas; `filialDoRecorte` nunca devolve `''` quando a lista tem filial |
 | RN-013 | `smoke/…` | título vazio não grava; alterar relatório alheio não grava; excluir o próprio grava e some da listagem |
-| RN-014 | `smoke/…` | filtros desligados não reduzem o total; `sgcIndAgendaAtrasos`, `sgcIndProdutosBo`, `sgcIndPerfilFornecedor` e `sgcSolicitacoesPorVendedor` respeitam `limite` |
+| RN-014 | `smoke/…` | **o par de período desligado não reduz**: `sgcRelatorioPedidosTotal` com `dataInicio`/`dataFim` vazios é igual ao `SELECT COUNT(*)` dos pedidos vivos feito no próprio teste, e igual ao total com um período que cobre tudo; os demais filtros desligados idem; `sgcIndAgendaAtrasos`, `sgcIndProdutosBo`, `sgcIndPerfilFornecedor` e `sgcSolicitacoesPorVendedor` respeitam `limite` |
 | RN-015 | `smoke/…` | as duas consultas chamadas como usuário `RESTRICTED` contam só os pedidos com `CRIADO_POR` dele; como `MEMBER`, contam todos |
 | RN-016 | `smoke/…` | para **cada** linha de `sgcSlaPedidosListar` (sem filtro), `classificarEtapa` de `frontend/src/lib/sla.ts` — importado direto pelo smoke, como o seed da 005 importa `dias-uteis.ts` — reproduz `STATUS_ANALISE`, `STATUS_FATURAMENTO`, `STATUS_ENTREGA` e `notaDoPedido` reproduz `SLA_SCORE` |
 
@@ -833,19 +923,27 @@ linhas, o número é 0 e o bloco fica vazio.
 **Consome da 008 (solicitações) — o único acoplamento novo da onda:**
 
 - as colunas de `SGC_SOLICITACAO` listadas no 000 (R-052), **nenhuma a mais**;
-- `backend/sql/situacao-solicitacao.sql`: o `CASE` escalar que deriva a situação de
-  atendimento a partir da fase do card (`SGC_FASE.CHAVE`) e do estado do item
-  (`SGC_PEDIDO_ITEM.STATUS = 'bo'`), no mesmo formato dos `pendencias-*.sql` da onda 2 —
-  uma coluna, uma expressão, sobre os aliases `S` (solicitação), `SF` (fase) e `I` (item),
-  devolvendo `SITUACAO`. **A 008 é a dona**; a 009 só compõe. Se a 008 mantiver o `CASE`
-  dentro de `sgcSolicitacoesListar`, o integrador o extrai para esse arquivo na S4 (T-021):
-  o que **não** pode acontecer é a 009 escrever uma segunda régua de situação (RN-010), e o
-  teste RN-010 é o que acusa se as duas divergirem.
+- `backend/sql/situacao-solicitacao.sql` (R-070, R-075): o `CASE` escalar que deriva
+  `SITUACAO` da fase do card, do estado do item e do status da solicitação, no mesmo
+  formato dos `pendencias-*.sql` da onda 2. O **contrato de composição** está no cabeçalho
+  do arquivo e é o que a 009 obedece, alias por alias: `S` = `SGC_SOLICITACAO`,
+  `C` = `KB_CARD` com `EXCLUIDO_EM IS NULL`, `SF` = `SGC_FASE` por `(BOARD_ID, FASE_ID)` do
+  card, `I` = `SGC_PEDIDO_ITEM` por `(ID_CARD, CODPROD)` com `STATUS <> 'removido'`, mais
+  os três `LEFT JOIN` obrigatórios. **A 008 é a dona**; a 009 só compõe, e por
+  `fragmento('situacao-solicitacao.sql')` de `backend/lib/fragmentos.mjs` (R-074, base) —
+  nunca por cópia do texto. O que **não** pode acontecer é a 009 escrever uma segunda régua
+  (RN-010), e o teste RN-010 é o que acusa se as duas divergirem;
+- o vocabulário que a régua devolve, inclusive o `sem_pedido` que cobre pendente, recusada,
+  cancelada e aprovada-sem-pedido — é dele que sai a necessidade das duas dimensões no
+  funil (R-076).
 
 **Consome da base (S2):** `recharts` + `components/ui/chart.tsx` + o bloco §8.7 de
 `page.tsx` (`GradeKpi`, `Kpi`, `GradeGraficos`, `PainelGrafico`, `corDeSerie`,
-`AlternaVisao` e os primitivos do recharts reexportados), `SGC_RELATORIO` no
-`setup-backend.mjs`, as três chaves e os dois itens de menu de `lib/permissoes.ts`.
+`AlternaVisao` e os primitivos do recharts reexportados) — **entrega da base** por R-080,
+porque `page.tsx` é arquivo compartilhado; a seção *Superfície de interação* deste plan é a
+especificação que a base segue, e a 009 só consome. Mais `backend/lib/fragmentos.mjs` com
+`fragmento(nome)` (R-074), `SGC_RELATORIO` no `setup-backend.mjs`, as três chaves e os dois
+itens de menu de `lib/permissoes.ts`.
 
 **Fornece:** nada a outras specs da onda. As duas telas são folhas: ninguém lê SF, tabela
 ou módulo desta spec. O integrador liga rotas, menu, `PUBLISH_ORDER`, `CHECK_INPUT` e a
@@ -868,27 +966,33 @@ reescrita de JSON do dialeto (R-063).
 | D-011 | A prioridade sai de `KB_CARD.VALORES_JSON` por `JSON_EXTRACT`, com uma reescrita nova no dialeto | Tirar a prioridade dos filtros do relatório, ou casar por `LIKE` no texto do JSON | R-059 lista a prioridade entre os filtros e R-009 diz que ela vive **só** no campo do quadro. `LIKE '%"prioridade":"alta"%'` quebra com um espaço a mais no JSON. A reescrita é uma linha, do mesmo tipo das que a 005 pediu |
 | D-012 | O recorte `RESTRICTED` é aplicado **no servidor**, em toda consulta que fala de pedido | Filtrar na tela pelo `CRIADO_POR` devolvido | Filtro de tela não protege nada: o perfil business libera a SF, e o número agregado já teria vazado antes de a tela filtrar (é o mesmo achado A1 da onda 1, aplicado a leitura). P-08 B é a regra: acesso restrito opera e enxerga só os próprios cards |
 | D-013 | Nenhuma exportação nas abas de `/analises`; o CSV é do construtor de relatórios | CSV em cada bloco do painel | O R-059 pede CSV no relatório; cada bloco já tem a alternativa em tabela, que é o que a acessibilidade exige. Exportação por bloco seria seis botões para um caso de uso que o relatório salvo cobre melhor |
+| D-014 | **Período obrigatório** em todo indicador; desligável só no filtro de criação do relatório, e lá em dois ramos (`'{{dataInicio}}' = '' OR …`) | O mesmo `BETWEEN` em tudo, com `''` valendo como "desligado" | `BETWEEN '' AND ''` não desliga filtro nenhum: devolve **zero linha em silêncio**, e um painel vazio lê como "não há pedidos", não como "faltou parâmetro". Onde o período é da própria pergunta ("os últimos 90 dias"), exigi-lo é mais honesto do que fingir que ele é opcional; onde ele é filtro de recorte (R-059), o ramo explícito faz o desligado ser desligado. RN-014 prova que o par vazio não reduz |
+| D-015 | O funil agrega pelo par `STATUS × SITUACAO` | Só `SITUACAO`, como o funil do sistema anterior | A régua da 008 devolve `sem_pedido` para pendente, recusada, cancelada **e** aprovada-na-fila (R-075/R-076): com uma dimensão só, "esperando avaliação" e "recusada" viram a mesma barra e a aderência de fluxo fica impossível de calcular. O par custa uma coluna a mais e nenhuma régua nova |
 
 ## Riscos
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| A 008 não entregar `situacao-solicitacao.sql` como arquivo (deixar o `CASE` dentro da SF dela) | a aba Solicitações fica sem régua ou com uma segunda | T-021 é explícita: o integrador extrai o `CASE` para o arquivo na S4. A 009 **não** escreve régua própria, e o teste RN-010 acusa qualquer divergência entre o funil e a listagem da 008 |
+| O arquivo `situacao-solicitacao.sql` mudar de aliases depois de a 009 compor sobre ele | o funil quebra ou, pior, deriva situação errada em silêncio | o contrato de aliases está **no cabeçalho do arquivo** (R-075) e é o mesmo das duas specs; o teste RN-010 cruza o funil com `sgcSolicitacoesListar` da 008 a cada rodada do smoke, então uma mudança de alias aparece como divergência de contagem, não como número plausível |
 | A cadeia de CTEs varrer toda a base a cada carga | painel lento com 10 mil pedidos | o período é obrigatório na cláusula (`BETWEEN` sobre `CRIADO_EM`), a filial recorta, e as quatro SFs que a usam já filtram antes de agregar. RNF-002 mede com 2 mil pedidos; acima disso, a saída é um índice em `SGC_PEDIDO (CRIADO_EM)`, não mudar a régua |
 | `recharts`/`chart.tsx` não estarem instalados quando esta spec for implementada | as telas não compilam | é dependência da base (S2, R-058) e está no `design.md` §1.2 desde a 2.2.0; as tasks de tela dependem de T-002 |
 | Divergência entre a régua do servidor e a de `lib/sla.ts` | o expandido diz uma coisa e o KPI outra | RN-016 compara as duas em **todas** as linhas da listagem a cada rodada do smoke; é o mesmo remédio do teste de 500 combinações da 002 |
 | `ROUND`/divisão inteira darem números diferentes no SQLite e no MySQL | a nota do pedido muda entre simulador e produção | `100.0` em toda divisão, `ROUND` em toda média, e o teste C-011 fixa os dois números (75 e 90) nos dois lados |
 | Um pedido antigo com `CRIADO_EM` fora do período mas ainda aberto sumir do painel | gestor não vê o pedido mais atrasado | é o recorte declarado (todo bloco é "do período"), e o padrão de 90 dias cobre o ciclo real de compra. O filtro de período é da pessoa, e o bloco diz qual período está lendo |
 
-## Pedidos ao 000
+## Pedidos ao 000 — respondidos (R-070, R-071, R-074, R-076, R-080)
 
-| # | Pedido | Situação |
-|---|---|---|
-| 1 | `SGC_RELATORIO.COMPARTILHADO` como `BOOLEAN` em vez de `TINYINT` (mesmo domínio 0/1, convenção do projeto e do tradutor do simulador) | **decidido neste plan**; registrado para o 000 alinhar o texto do modelo |
-| 2 | `sgcIndPedidosPorFase` como SF a mais na linha 009 (D-002) | **decidido neste plan** (o 000 autoriza acrescentar com justificativa) |
-| 3 | O fragmento `backend/sql/situacao-solicitacao.sql` é entrega da **008** (a 009 compõe, não escreve) | **pedido à 008 / ao integrador**, T-021 |
+Nenhum pedido em aberto: os quatro desta spec foram absorvidos pelo 000 na S1 da onda 3.
 
-Nenhum bloqueio: as três seguem o que o 000 já decidiu e não mudam contrato de outra spec.
+| # | Pedido | Decisão | Onde entrou |
+|---|---|---|---|
+| 1 | `SGC_RELATORIO.COMPARTILHADO` como `BOOLEAN` em vez de `TINYINT` | **aceito (R-071)** | *Modelo de dados*, T-001 |
+| 2 | `sgcIndPedidosPorFase` como SF a mais na linha 009 | **aceito (R-071)**, e a reescrita de JSON do dialeto junto | D-002, D-011, T-007, T-020 |
+| 3 | `backend/sql/situacao-solicitacao.sql` como entrega da 008 | **aceito (R-070)**, com o contrato de aliases fixado em **R-075** e o loader `fragmento(nome)` de `backend/lib/fragmentos.mjs` como entrega da base (**R-074**) | *Leituras — solicitações*, T-003, T-011, T-021 |
+| 4 | Os primitivos de KPI e gráfico em `page.tsx` | **entrega da base (R-080)**; a seção *Superfície de interação* deste plan é a especificação que ela segue | T-002 |
+
+O 000 acrescentou ainda a **R-076** (funil por `STATUS` × `SITUACAO`), que esta spec
+aplica em `sgcSolicitacoesFunil`, em `resumoSolicitacoes` e nos testes C-016/RN-009.
 
 ## Complexity Tracking
 
