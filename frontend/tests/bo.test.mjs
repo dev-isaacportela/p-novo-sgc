@@ -78,10 +78,9 @@ test('C-014 / RN-009 (tela): a matriz de verBo/operarBo — diretoria e comercia
   assert.equal(permissoesDe('comercial', 'MEMBER').operarBo, false);
 });
 
-test('C-013: o menu do comercial tem exatamente 1 item, o do painel de B.O. (coberto também em tests/permissoes.test.mjs)', () => {
+test('C-013: o painel de B.O. é item de menu do comercial — desde a onda 3 (R-056) ao lado de Solicitações, os DOIS únicos que ela tem (coberto também em tests/permissoes.test.mjs)', () => {
   const menu = menuParaPersona(permissoesDe('comercial', 'MEMBER'));
-  assert.equal(menu.length, 1);
-  assert.equal(menu[0].to, '/bo');
+  assert.deepEqual(menu.map((item) => item.to), ['/solicitacoes', '/bo']);
 });
 
 test('A-15 (revisão onda 2): linhasCsvBo — as colunas do painel de /bo, valor em vírgula decimal (R-037)', () => {
