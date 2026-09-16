@@ -595,33 +595,108 @@ export async function suite(ctx) {
     assert.equal(Number(solicitacao(idFila).ID_CARD), card, 'o caminho legítimo continua passando');
   });
 
-  await teste('C-019 (C-12 da revisão): a guarda de fase e dono vale nas duas escritas que recebem card — enviado não grava, RESTRICTED de fora não grava', async () => {
-    const id = SOLICITACOES_008.recusada;
+  await teste('C-019 (achado 2): as escritas INTERNAS que recebem card também conferem fase e dono — 7856 e 7853 não gravam fora da Análise nem para RESTRICTED em card alheio', async () => {
     const rita = Number(db.prepare("SELECT ID FROM INT_USER WHERE DESCR = 'restrito.sol@sgc.local'").get().ID);
-    const linhasDe = () => historicoDe(id).length;
+    const id = SOLICITACOES_008.pendenteAlta; // aprovada e devolvida à fila em C-009
+    assert.equal(Number(solicitacao(id).ID_CARD), 0, 'a solicitação está na fila antes do teste');
+
+    const itemDe = (cardId) => db.prepare('SELECT * FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = 5301').get(cardId);
+    const inserir = (cardId, quem) => chamar('sgcEscItemDeSolicitacaoInserir', {
+      idCard: cardId, codprod: 5301, descricao: 'BEBIDA LACTEA ZERO LACTOSE 200 ML',
+      embalagem: 'CAIXA COM 24', unidade: 'UN', quantidade: 24, idSolicitacao: id,
+      quando: AGORA, usuarioId: quem,
+    }, quem);
+    const vincular = (cardId, idItem, quem) => chamar('sgcEscSolicitacaoVincular', {
+      id, idCard: cardId, idItem, vinculadoEm: AGORA, usuarioId: quem,
+    }, quem);
 
     // 1) fase errada: o card `vinculado` está em `enviado`, não em `analise`.
-    const antesFase = linhasDe();
-    await chamar('sgcEscSolicitacaoHistoricoInserir', {
-      id, idCard: CARDS_008.vinculado, evento: 'desvinculada', detalhe: 'fora da montagem', em: AGORA,
-    }, U.gil);
-    assert.equal(linhasDe(), antesFase, 'card fora da Análise não recebe linha de histórico');
+    const itemEnviado = itemDe(CARDS_008.vinculado);
+    await inserir(CARDS_008.vinculado, U.gil);
+    assert.deepEqual(itemDe(CARDS_008.vinculado), itemEnviado, 'pedido fora da montagem não tem item alterado');
+    await vincular(CARDS_008.vinculado, Number(itemEnviado.ID), U.gil);
+    assert.equal(Number(solicitacao(id).ID_CARD), 0, 'nem o vínculo sai fora da Análise');
 
     // 2) dono: o card `montagem` foi criado por ana, e Rita é RESTRICTED.
-    await chamar('sgcEscSolicitacaoHistoricoInserir', {
-      id, idCard: CARDS_008.montagem, evento: 'desvinculada', detalhe: 'card alheio', em: AGORA,
-    }, rita);
-    assert.equal(linhasDe(), antesFase, 'RESTRICTED não escreve em card que não criou, mesmo na fase certa');
+    const itemZerado = itemDe(CARDS_008.montagem);
+    assert.equal(itemZerado.STATUS, 'removido', 'o item do 5301 saiu do pedido em C-009');
+    await inserir(CARDS_008.montagem, rita);
+    assert.deepEqual(itemDe(CARDS_008.montagem), itemZerado, 'RESTRICTED não revive item em card que não criou');
+    await vincular(CARDS_008.montagem, Number(itemZerado.ID), rita);
+    assert.equal(Number(solicitacao(id).ID_CARD), 0);
 
-    // 3) o caminho legítimo grava — a guarda não é um "nunca".
-    await chamar('sgcEscSolicitacaoHistoricoInserir', {
-      id, idCard: CARDS_008.montagem, evento: 'desvinculada', detalhe: 'caminho legitimo', em: AGORA,
-    }, U.gil);
-    assert.equal(linhasDe(), antesFase + 1);
+    // 3) o caminho legítimo continua gravando — a guarda não é um "nunca".
+    await inserir(CARDS_008.montagem, U.gil);
+    const revivido = itemDe(CARDS_008.montagem);
+    assert.equal(revivido.STATUS, 'montagem', 'o gestor na Análise revive o item');
+    assert.equal(Number(revivido.QT_PEDIDA), 24);
+    await vincular(CARDS_008.montagem, Number(revivido.ID), U.gil);
+    assert.equal(Number(solicitacao(id).ID_CARD), CARDS_008.montagem);
+  });
 
-    // 4) o desvínculo do card `vinculado` (fase enviado, item vivo) não solta nada.
-    const vinculada = SOLICITACOES_008.vinculada;
-    await chamar('sgcEscSolicitacaoDesvincular', { idCard: CARDS_008.vinculado, atualizadoEm: AGORA }, U.gil);
-    assert.equal(Number(solicitacao(vinculada).ID_CARD), CARDS_008.vinculado, 'o vínculo do pedido enviado continua de pé');
+  await teste('RF-013 (achado 3): o histórico por id leva a guarda da escrita que documenta — cancelar é do autor, avaliar é de compras', async () => {
+    const alheia = SOLICITACOES_008.recusada; // registrada por Gil
+    const propria = SOLICITACOES_008.pendenteAlta; // registrada por Leo
+    assert.equal(Number(solicitacao(propria).CRIADO_POR), U.leo);
+    assert.notEqual(Number(solicitacao(alheia).CRIADO_POR), U.leo);
+
+    const linha = (id, evento, quem) => chamar('sgcEscSolicitacaoHistoricoInserir', {
+      id, idCard: 0, evento, detalhe: 'linha do teste de autoria', em: AGORA,
+    }, quem);
+
+    const antesAlheia = historicoDe(alheia).length;
+    await linha(alheia, 'aprovada', U.leo);
+    assert.equal(historicoDe(alheia).length, antesAlheia, 'o comercial não documenta avaliação — quem avalia é compras');
+    await linha(alheia, 'cancelada', U.leo);
+    assert.equal(historicoDe(alheia).length, antesAlheia, 'nem cancelamento de solicitação alheia (RN-007)');
+
+    const antesPropria = historicoDe(propria).length;
+    await linha(propria, 'cancelada', U.leo);
+    assert.equal(historicoDe(propria).length, antesPropria + 1, 'cancelar a própria é do autor');
+
+    await linha(alheia, 'aprovada', U.ana);
+    assert.equal(historicoDe(alheia).length, antesAlheia + 1, 'o analista documenta a avaliação por id');
+  });
+
+  await teste('C-019 (achado 4): o ramo por card do histórico usa a MESMA guarda do desvínculo — quem não desvincula também não deixa a linha', async () => {
+    const card = CARDS_008.montagem;
+    const rita = Number(db.prepare("SELECT ID FROM INT_USER WHERE DESCR = 'restrito.sol@sgc.local'").get().ID);
+
+    // O par só age quando o item sumiu (D-005) — é o que o sgcAnaliseSair faz.
+    db.prepare("UPDATE SGC_PEDIDO_ITEM SET QT_PEDIDA = 0, STATUS = 'removido' WHERE ID_CARD = ?").run(card);
+    const ligadas = db.prepare('SELECT ID FROM SGC_SOLICITACAO WHERE ID_CARD = ?').all(card).map((l) => Number(l.ID));
+    assert.ok(ligadas.length > 0, 'o card tem solicitação vinculada para o par soltar');
+    const desvinculadas = () => ligadas.reduce(
+      (soma, id) => soma + historicoDe(id).filter((h) => h.EVENTO === 'desvinculada').length, 0,
+    );
+    const par = async (quem) => {
+      await chamar('sgcEscSolicitacaoHistoricoInserir', { id: 0, idCard: card, evento: 'desvinculada', detalhe: 'Item removido do pedido.', em: AGORA }, quem);
+      await chamar('sgcEscSolicitacaoDesvincular', { idCard: card, atualizadoEm: AGORA }, quem);
+    };
+
+    // 1) o comercial: o desvínculo é de compras (AVALIAR) e a linha do
+    //    histórico seguia a lista larga (HISTORICO, que inclui comercial) —
+    //    era assim que sobrava um "desvinculada" de uma escrita que não rodou.
+    const antes = desvinculadas();
+    await par(U.leo);
+    assert.equal(desvinculadas(), antes, 'quem não desvincula não deixa a linha do desvínculo');
+    for (const id of ligadas) assert.equal(Number(solicitacao(id).ID_CARD), card, 'e o vínculo continua de pé');
+
+    // 2) RESTRICTED em card de outro dono: NENHUMA das duas escritas roda.
+    await par(rita);
+    assert.equal(desvinculadas(), antes, 'histórico recusado junto com o desvínculo');
+    for (const id of ligadas) assert.equal(Number(solicitacao(id).ID_CARD), card);
+
+    // 3) fase errada: fora da Análise o par inteiro é recusado, para qualquer persona.
+    emFase(card, 'envio');
+    await par(U.gil);
+    assert.equal(desvinculadas(), antes, 'card fora da Análise não recebe linha de histórico');
+    for (const id of ligadas) assert.equal(Number(solicitacao(id).ID_CARD), card);
+    emFase(card, 'analise');
+
+    // 4) o caminho legítimo: as duas escritas rodam, uma linha por solicitação.
+    await par(U.gil);
+    assert.equal(desvinculadas(), antes + ligadas.length, 'uma linha `desvinculada` por solicitação solta');
+    for (const id of ligadas) assert.equal(Number(solicitacao(id).ID_CARD), 0, 'e todas voltam para a fila');
   });
 }
