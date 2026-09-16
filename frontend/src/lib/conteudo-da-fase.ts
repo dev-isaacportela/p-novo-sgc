@@ -9,7 +9,11 @@
 // leitura; em Concluído tudo é consulta.
 import type { ChaveFase } from '@/lib/transicoes';
 
-export type Bloco = 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo';
+// `solicitacoes` (008, R-054) já é valor do tipo — a base o declara para o
+// componente da 008 nascer tipado —, mas ainda NÃO entra em BLOCOS_POR_FASE:
+// o bloco entra em `analise`, antes de Itens, na integração (S4), com o
+// componente que a 008 entrega.
+export type Bloco = 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes';
 
 export const BLOCOS_POR_FASE: Record<ChaveFase, readonly Bloco[]> = {
   analise: ['itens', 'alertas'],

@@ -28,7 +28,13 @@
 //   TRUNC(A.COL - B.COL)               -> diferenca em dias entre duas colunas
 //                                         de data qualificadas (JULIANDAY)
 //   FROM DUAL                          -> removido (reescrita textual)
+//   REGEXP_SUBSTR(txt, '[^,]+'|'[^:]+', 1, n) -> n-esimo pedaco (R-064); outra
+//                                         forma LANCA, nunca devolve valor
+//   SELECT <x(LEVEL)> FROM DUAL CONNECT BY <x(LEVEL)> IS NOT NULL
+//                                      -> WITH RECURSIVE NIVEL(LVL) … (R-064)
+//   JSON_UNQUOTE(JSON_EXTRACT(c, '$.k')) -> json_extract(c, '$.k')  (R-071)
 //   ON DUPLICATE KEY UPDATE / VALUES(COL)    -> ON CONFLICT DO UPDATE SET / excluded.COL
+//                                         (ate o fim da INSTRUCAO, R-079)
 //   WHERE ROWNUM <= N / AND ROWNUM <= N -> remove a condicao, acrescenta LIMIT N no fim
 // ponytail: ROWNUM so cobre a forma solta "<= numero" (sem parenteses, sem
 // combinar com OFFSET/paginacao, sem ROWNUM > N); combinacao mais complexa
@@ -264,6 +270,25 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
     return date ? formatOracle(date, formato) : null;
   });
 
+  // REGEXP_SUBSTR(texto, padrao, inicio, ocorrencia) — o explodidor de lista do
+  // rastreio da 008 (R-064). So as duas formas que os plans usam ('[^,]+' e
+  // '[^:]+', sempre a partir da posicao 1): o n-esimo pedaco separado por
+  // virgula ou por dois-pontos, null quando a ocorrencia nao existe (e o que
+  // encerra o CONNECT BY). Qualquer outra forma LANCA — shim que devolve valor
+  // plausivel para um padrao que ele nao implementa e falso positivo, nao
+  // compatibilidade.
+  def('REGEXP_SUBSTR', 4, (texto, padrao, inicio, ocorrencia) => {
+    const separador = { '[^,]+': ',', '[^:]+': ':' }[String(padrao)];
+    if (!separador || Number(inicio) !== 1) {
+      throw new Error(`REGEXP_SUBSTR do simulador so implementa '[^,]+' e '[^:]+' a partir da posicao 1 (recebeu ${padrao}, inicio ${inicio}) — ver mysql-dialect.mjs`);
+    }
+    if (texto == null) return null;
+    // [^x]+ casa RUNS nao vazios, como o Oracle: 'a,,b' tem 2 pedacos, nao 3.
+    const pedacos = String(texto).match(new RegExp(`[^${separador}]+`, 'g')) ?? [];
+    const n = Number(ocorrencia);
+    return n >= 1 && n <= pedacos.length ? pedacos[n - 1] : null;
+  });
+
   // TRUNC(data) -> data sem hora; TRUNC(numero) continua numerico (Oracle e
   // polimorfico nos dois sentidos, e o WinThor usa os dois).
   def('TRUNC', 1, (valor) => {
@@ -334,13 +359,73 @@ function reescreverDateAddComExpressao(sql) {
 }
 
 /**
+ * Upsert: `ON DUPLICATE KEY UPDATE C = VALUES(C)` -> `ON CONFLICT DO UPDATE SET
+ * C = excluded.C`. O alvo do conflito e omitido de proposito: o SQLite o
+ * dispensa quando o INSERT vem de um SELECT com WHERE, que e a forma de toda
+ * escrita guardada daqui.
+ *
+ * R-079: roda sobre o SQL INTEIRO, e nao por chunk. A troca vale do marcador
+ * ate o fim da INSTRUCAO — dentro da clausula so os literais ficam intactos
+ * (por isso o `mapOutsideStrings` da cauda). Quando isto vivia dentro do
+ * `mapOutsideStrings` de `toSqlite()`, um `'texto'` no meio da clausula (um
+ * `CASE WHEN … THEN 'removido' ELSE VALUES(STATUS) END`, por exemplo) cortava o
+ * trecho e deixava crus todos os `VALUES()` seguintes — SQL invalido no SQLite.
+ */
+function reescreverUpsert(sql) {
+  const marcador = sql.match(/\bON\s+DUPLICATE\s+KEY\s+UPDATE\b/i);
+  if (!marcador) return sql;
+  const cabeca = sql.slice(0, marcador.index);
+  const clausula = sql.slice(marcador.index + marcador[0].length);
+  const trocado = mapOutsideStrings(clausula, (chunk) => (
+    chunk.replace(/\bVALUES\s*\(\s*([A-Za-z_][\w]*)\s*\)/gi, 'excluded.$1')
+  ));
+  return `${cabeca} ON CONFLICT DO UPDATE SET ${trocado}`;
+}
+
+/**
+ * O gerador de linhas do Oracle (R-064, rastreio da 008):
+ * `SELECT <expr(LEVEL)> … FROM DUAL CONNECT BY <expr(LEVEL)> IS NOT NULL`
+ * vira uma CTE recursiva de contagem. O teto de 200 cobre o lote de 120 pares
+ * com folga e e o que impede a recursao infinita.
+ *
+ * Roda sobre o SQL INTEIRO e ANTES dos chunks, porque `FROM DUAL` sozinho ja e
+ * apagado la embaixo — depois disso nao haveria mais o que reconhecer.
+ */
+function reescreverGeradorConnectBy(sql) {
+  const gerador = sql.match(/\bFROM\s+DUAL\s+CONNECT\s+BY\s+([\s\S]+?)\s+IS\s+NOT\s+NULL/i);
+  if (!gerador) return sql;
+  const trocado = `${sql.slice(0, gerador.index)}FROM NIVEL WHERE ${gerador[1]} IS NOT NULL${sql.slice(gerador.index + gerador[0].length)}`
+    .replace(/\bLEVEL\b/gi, 'LVL');
+  const cte = 'WITH RECURSIVE NIVEL(LVL) AS (SELECT 1 UNION ALL SELECT LVL + 1 FROM NIVEL WHERE LVL < 200)';
+  // O `WITH PARES AS (…)` que abre a consulta do rastreio e FUNDIDO com a CTE.
+  return /^\s*WITH\b/i.test(trocado)
+    ? trocado.replace(/^(\s*)WITH\s+(?:RECURSIVE\s+)?/i, `$1${cte}, `)
+    : `${cte} ${trocado}`;
+}
+
+/**
+ * `JSON_UNQUOTE(JSON_EXTRACT(col, '$.k'))` -> `json_extract(col, '$.k')`
+ * (R-071): o SQLite ja devolve o escalar sem aspas. Sobre o SQL inteiro porque
+ * o caminho `'$.k'` e um literal — por chunk, a chamada sairia partida ao meio.
+ */
+function reescreverJsonUnquote(sql) {
+  return sql.replace(/\bJSON_UNQUOTE\s*\(\s*JSON_EXTRACT\s*\(([^()]*)\)\s*\)/gi, 'json_extract($1)');
+}
+
+/**
  * Reescreve o que nao cabe em funcao escalar. Trabalha so fora de literais de
- * string, para nunca alterar um dado que por acaso pareca SQL.
+ * string, para nunca alterar um dado que por acaso pareca SQL — as tres
+ * reescritas acima sao a excecao: elas precisam do SQL inteiro e cuidam dos
+ * literais por conta propria.
  */
 export function toSqlite(sql) {
   let limiteRownum = null;
 
-  const resultado = mapOutsideStrings(reescreverDateAddComExpressao(String(sql)), (chunk) => {
+  const preparado = reescreverGeradorConnectBy(
+    reescreverUpsert(reescreverJsonUnquote(reescreverDateAddComExpressao(String(sql)))),
+  );
+
+  const resultado = mapOutsideStrings(preparado, (chunk) => {
     let out = chunk;
 
     // DATE_SUB(x, INTERVAL 30 DAY) -> MITRA_DATE_ADD(x, -30, 'DAY')
@@ -366,15 +451,8 @@ export function toSqlite(sql) {
     // SUBSTRING(x, 1, 10) -> substr; SQLite aceita substr, nao SUBSTRING.
     out = out.replace(/\bSUBSTRING\s*\(/gi, 'substr(');
 
-    // Upsert (spec 002, sgcEscPersonaSalvar): INSERT ... ON DUPLICATE KEY
-    // UPDATE C = VALUES(C) -> ON CONFLICT DO UPDATE SET C = excluded.C. O alvo
-    // do conflito e omitido de proposito: o SQLite o dispensa quando o INSERT
-    // vem de um SELECT com WHERE, que e a forma de toda escrita guardada daqui.
-    // O VALUES(x) so e trocado DEPOIS do marcador, para nao pegar o VALUES de
-    // um INSERT comum.
-    out = out.replace(/\bON\s+DUPLICATE\s+KEY\s+UPDATE\b([\s\S]*)$/i, (_, atribuicoes) => (
-      ` ON CONFLICT DO UPDATE SET ${atribuicoes.replace(/\bVALUES\s*\(\s*([A-Za-z_][\w]*)\s*\)/gi, 'excluded.$1')}`
-    ));
+    // (o upsert ON DUPLICATE KEY UPDATE virou reescrita de instrucao inteira,
+    // em reescreverUpsert() — R-079.)
 
     // Booleanos: as colunas viram INTEGER no schema traduzido.
     out = out.replace(/\bIS\s+TRUE\b/gi, '= 1').replace(/\bIS\s+FALSE\b/gi, '= 0');

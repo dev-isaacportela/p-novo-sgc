@@ -432,4 +432,19 @@ export async function suite(ctx) {
 
     db.prepare('UPDATE KB_CARD SET CRIADO_POR = ? WHERE ID = ?').run(U.ana, card);
   });
+
+  await teste('R-068 (base da onda 3): sgcPedidoCarregar devolve CRIADOR_NOME na capa e ID_SOLICITACAO/SOLICITACAO_VENDEDOR nos itens — item montado pela análise vem com 0 e string vazia', async () => {
+    const carregado = await chamar('sgcPedidoCarregar', { cardId: CARDS_003.alertas }, U.ana);
+    assert.equal(carregado.ok, true, carregado.erro);
+
+    const criador = db.prepare('SELECT CRIADO_POR FROM SGC_PEDIDO WHERE ID_CARD = ?').get(CARDS_003.alertas).CRIADO_POR;
+    const nome = db.prepare('SELECT NOME FROM INT_USER WHERE ID = ?').get(criador).NOME;
+    assert.equal(carregado.pedido.CRIADOR_NOME, nome, 'o nome do criador sai do INT_USER, como TEC_NOME/DIR_NOME já saíam');
+
+    assert.ok(carregado.itens.length > 0, 'o card de alertas tem itens do seed');
+    for (const item of carregado.itens) {
+      assert.equal(Number(item.ID_SOLICITACAO), 0, 'item montado pela análise não veio de solicitação');
+      assert.equal(item.SOLICITACAO_VENDEDOR, '', 'sem solicitação, a etiqueta de vendedor é vazia — nunca null');
+    }
+  });
 }

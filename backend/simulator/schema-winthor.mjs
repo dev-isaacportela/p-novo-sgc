@@ -13,7 +13,9 @@
 //
 // Colunas: as que os plans 001 (§Simulador), 003 (§"Tabelas PC*") e, na onda 2,
 // 005 (§"Tabelas PC*", R-027: PCNFENT, PCLANC novas; PCMOV e PCPRODUT ganham
-// colunas) citam. As linhas continuam por conta dos seeds de cada feature.
+// colunas) citam. Onda 3 (R-069): PCCLIENT ganha CGCENT e PCMOV ganha DTCANCEL,
+// as duas do rastreio da 008. As linhas continuam por conta dos seeds de cada
+// feature.
 
 export const DDL = [
   // Compartilhadas com a 001 (sgcWintFornecedores/sgcWintFiliais) e com a 003.
@@ -90,7 +92,8 @@ export const DDL = [
     NUMNOTA INT,
     SERIE VARCHAR(10),
     NUMLOTE VARCHAR(30),
-    DATAVALIDADE VARCHAR(10)
+    DATAVALIDADE VARCHAR(10),
+    DTCANCEL VARCHAR(10)
   )`,
 
   // Entrada de NF no WinThor (005, R-027): é dela que sgcWintNfEntradas/
@@ -125,11 +128,13 @@ export const DDL = [
   )`,
 
   // CODATV1 marca cliente publico (licitação — RN-011, D-002 do plan da 003).
+  // CGCENT é o CNPJ que sgcWintClienteBuscar procura e grava (008, R-069).
   `CREATE TABLE IF NOT EXISTS PCCLIENT (
     CODCLI INT PRIMARY KEY,
     CLIENTE VARCHAR(200),
     TIPOFJ VARCHAR(1),
-    CODATV1 INT
+    CODATV1 INT,
+    CGCENT VARCHAR(20)
   )`,
 
   // Alimentam o seletor da tela de coberturas (nível departamento/seção).

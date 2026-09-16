@@ -21,6 +21,9 @@ import NotasFiscaisPage from '@/pages/fiscal/NotasFiscaisPage';
 import FaturamentosPendentesPage from '@/pages/fiscal/FaturamentosPendentesPage';
 import NfsAtrasoPage from '@/pages/fiscal/NfsAtrasoPage';
 import BoPage from '@/pages/bo/BoPage';
+import SolicitacoesPage from '@/pages/solicitacoes/SolicitacoesPage';
+import AnalisesPage from '@/pages/analises/AnalisesPage';
+import RelatoriosPage from '@/pages/relatorios/RelatoriosPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -79,8 +82,10 @@ function Autenticado() {
   // Rotas por spec (docs/specs/000-visao-geral): onda 1 — quadro de compras
   // (002), fornecedores (001), itens e coberturas (003), agenda (004); onda 2 —
   // notas fiscais e faturamentos pendentes (005), NFs em atraso (006), produtos
-  // em B.O. (007). Quem barra persona sem acesso é cada página, no topo, com a
-  // mesma frase do servidor; o menu (AdminLayout) só esconde.
+  // em B.O. (007); onda 3 — solicitações do comercial (008), análises e
+  // relatórios (009), as três ainda em construção. Quem barra persona sem
+  // acesso é cada página, no topo, com a mesma frase do servidor; o menu
+  // (AdminLayout) só esconde.
   return (
     <Routes>
       <Route element={<AdminLayout usuario={usuario} />}>
@@ -98,6 +103,9 @@ function Autenticado() {
         <Route path="faturamentos-pendentes" element={<FaturamentosPendentesPage />} />
         <Route path="nfs-em-atraso" element={<NfsAtrasoPage />} />
         <Route path="bo" element={<BoPage />} />
+        <Route path="solicitacoes" element={<SolicitacoesPage />} />
+        <Route path="analises" element={<AnalisesPage />} />
+        <Route path="relatorios" element={<RelatoriosPage />} />
         <Route path="*" element={<Navigate to="/quadro" replace />} />
       </Route>
     </Routes>
