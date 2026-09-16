@@ -10,10 +10,12 @@
 // global. Todo número esperado é contado no próprio teste, sobre as mesmas
 // tabelas.
 //
-// Esta é a ÚLTIMA suíte do smoke.mjs de propósito: os cenários de SLA e de
-// agenda arranjam o estado que precisam por `UPDATE`/`INSERT` direto e o
+// Esta suíte roda DEPOIS das outras da onda 3, de propósito: os cenários de SLA
+// e de agenda arranjam o estado que precisam por `UPDATE`/`INSERT` direto e o
 // desfazem no `finally` do próprio `teste()` (C-10 do plan — o seed da 009 não
-// cria pedido nenhum, R-062), e nenhuma outra suíte depende do que ela toca.
+// cria pedido nenhum, R-062), e nenhuma suíte da onda 3 depende do que ela
+// toca. As suítes das ondas seguintes entram depois dela (011) ou antes (012,
+// logo após 003).
 
 import { assert, CENARIO } from './base.mjs';
 import { diasUteisEntre } from '../../lib/dias-uteis.mjs';
@@ -462,8 +464,9 @@ export async function suite(ctx) {
   /* ─────────── T-088 — C-017 e RN-010 (funil e ranking das solicitações) ─────────── */
 
   await teste('C-016 / RN-010: o funil vem em DUAS dimensões, a soma bate com a contagem do período e cada situação sai da fase do card', async () => {
-    // O seed da 009 não cria solicitação (R-062) e a suíte da 008 pode ainda
-    // não estar integrada: o cenário é arranjado aqui e removido no finally.
+    // O seed da 009 não cria solicitação (R-062): os seis estados que este
+    // cenário precisa são arranjados aqui e removidos no finally, por cima do
+    // que o seed da 008 já pôs na tabela.
     const inserir = db.prepare(`INSERT INTO SGC_SOLICITACAO
       (CODPROD, DESCRICAO, CODFORNEC, CODFILIAL, QUANTIDADE, STATUS, ID_CARD, CRIADO_POR, CRIADO_EM, AVALIADO_EM)
       VALUES (?, 'ARRANJO 009', 1015, '1', 10, ?, ?, ?, ?, ?)`);
@@ -498,10 +501,40 @@ export async function suite(ctx) {
         assert.ok(par, `o par ${status} x ${esperada} existe no funil`);
       }
       // R-076/B-3: pendente, recusada e aprovada-na-fila caem TODAS em
-      // sem_pedido — a situação sozinha não separa a decisão.
+      // sem_pedido — a situação sozinha não separa a decisão. `cancelada` cai
+      // lá também e entra na lista quando o seed da 008 está no banco (é o
+      // caso desde a integração da onda 3): a asserção é sobre quem PRECISA
+      // estar, não sobre uma lista fechada (R-045).
       const semPedido = funil.filter((l) => l.SITUACAO === 'sem_pedido').map((l) => l.STATUS).sort();
-      assert.deepEqual(semPedido, ['aprovada', 'pendente', 'recusada']);
+      for (const status of ['aprovada', 'pendente', 'recusada']) {
+        assert.ok(semPedido.includes(status), `${status} sem pedido cai em sem_pedido`);
+      }
+      assert.ok(
+        semPedido.every((s) => ['aprovada', 'pendente', 'recusada', 'cancelada'].includes(s)),
+        'sem_pedido só recebe solicitação sem card vivo',
+      );
       assert.ok(funil.every((l) => Number(l.QTD_AVALIADAS) <= Number(l.QTD)));
+
+      // RN-010 (integração da onda 3): o funil e a fila da 008 contam a MESMA
+      // população. Agora que SGC_SOLICITACAO tem o seed da 008, cada situação
+      // do funil é conferida contra `sgcSolicitacoesListar` com os mesmos
+      // filtros — a listagem não tem período, então o recorte é feito aqui,
+      // pelo CRIADO_EM que ela devolve.
+      const noPeriodo = (l) => {
+        const dia = String(l.CRIADO_EM || '').slice(0, 10);
+        return dia >= PERIODO.dataInicio && dia <= PERIODO.dataFim;
+      };
+      for (const situacao of [...new Set(funil.map((l) => l.SITUACAO))]) {
+        const doFunil = funil
+          .filter((l) => l.SITUACAO === situacao)
+          .reduce((acc, l) => acc + Number(l.QTD), 0);
+        const daFila = linhas(await chamar('sgcSolicitacoesListar', {
+          status: '', situacao, codfornec: 0, codfilial: '', vendedor: 0, minhas: 0,
+          busca: '', limite: 500, offset: 0,
+        }, U.admin)).filter(noPeriodo);
+        assert.equal(daFila.length, doFunil, `a situação ${situacao} tem a mesma contagem nos dois lados`);
+        assert.ok(daFila.every((l) => l.SITUACAO === situacao), `sgcSolicitacoesListar filtra por ${situacao}`);
+      }
     } finally {
       for (const id of ids) db.prepare('DELETE FROM SGC_SOLICITACAO WHERE ID = ?').run(id);
     }
@@ -532,10 +565,30 @@ export async function suite(ctx) {
         assert.ok(linha, `o vendedor ${esperado.CRIADO_POR} aparece no ranking`);
         assert.equal(Number(linha.TOTAL), Number(esperado.N));
       }
+      // As três colunas são contadas no PRÓPRIO teste (R-045): desde a
+      // integração da onda 3 o seed da 008 também tem solicitações do `leo`, e
+      // um literal aqui só valeria enquanto esta suíte rodasse sozinha.
       const doLeo = rows.find((l) => Number(l.USUARIO_ID) === U.leo);
-      assert.equal(Number(doLeo.PENDENTES), 1, 'PENDENTES sai do STATUS, não da situação');
-      assert.equal(Number(doLeo.RECUSADAS), 1, 'RECUSADAS sai do STATUS');
-      assert.equal(Number(doLeo.EM_FLUXO), 1, 'EM_FLUXO sai da SITUACAO');
+      const porStatus = (status) => conta(
+        `SELECT COUNT(*) AS N FROM SGC_SOLICITACAO
+         WHERE CRIADO_POR = ? AND STATUS = ?
+           AND SUBSTR(COALESCE(CRIADO_EM, ''), 1, 10) BETWEEN ? AND ?`,
+        U.leo, status, PERIODO.dataInicio, PERIODO.dataFim,
+      );
+      assert.equal(Number(doLeo.PENDENTES), porStatus('pendente'), 'PENDENTES sai do STATUS, não da situação');
+      assert.equal(Number(doLeo.RECUSADAS), porStatus('recusada'), 'RECUSADAS sai do STATUS');
+      // EM_FLUXO é da SITUACAO, não do STATUS: a régua é a mesma que a fila da
+      // 008 devolve, então quem conta é `sgcSolicitacoesListar` do vendedor.
+      const doLeoNaFila = linhas(await chamar('sgcSolicitacoesListar', {
+        status: '', situacao: '', codfornec: 0, codfilial: '', vendedor: U.leo, minhas: 0,
+        busca: '', limite: 500, offset: 0,
+      }, U.admin)).filter((l) => {
+        const dia = String(l.CRIADO_EM || '').slice(0, 10);
+        return dia >= PERIODO.dataInicio && dia <= PERIODO.dataFim;
+      });
+      const emFluxo = doLeoNaFila.filter((l) => !['atendida', 'nao_atendida', 'sem_pedido'].includes(l.SITUACAO));
+      assert.ok(emFluxo.length >= 1, 'a aprovada em análise do arranjo está em fluxo');
+      assert.equal(Number(doLeo.EM_FLUXO), emFluxo.length, 'EM_FLUXO sai da SITUACAO');
       assert.ok(Number(doLeo.ADERENCIA_PCT) >= 0 && Number(doLeo.ADERENCIA_PCT) <= 100);
       assert.ok(Object.keys(rows[0]).every((coluna) => !/^VL_|VALOR/.test(coluna)), 'nenhuma coluna de valor em reais');
     } finally {

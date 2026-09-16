@@ -1060,6 +1060,46 @@ export function Kpi({
 }
 
 /**
+ * A escala da `BarraConsumo`, em doze passos. É FECHADA de propósito: o
+ * Tailwind gera classe a partir do código-fonte, nunca de variável, e
+ * `style={{}}` não entra neste projeto (§1.4).
+ */
+const PASSO_CONSUMO = [
+  'w-0', 'w-1/12', 'w-2/12', 'w-3/12', 'w-4/12', 'w-5/12', 'w-6/12',
+  'w-7/12', 'w-8/12', 'w-9/12', 'w-10/12', 'w-11/12', 'w-full',
+] as const;
+
+/**
+ * Quanto de uma meta já foi consumido. Existe porque "3 / 1 dias úteis" numa
+ * célula não se lê de relance — a barra dá a leitura periférica e o `rotulo`
+ * segue ao lado, porque leitor de tela não lê barra e comprimento sozinho não
+ * distingue estado (§12). O tom vem do MESMO mapa do `Status`, então a barra
+ * nunca discorda do selo que está do lado.
+ *
+ * `pct` acima de 100 satura na barra cheia: quem informa o estouro é o estado,
+ * não o desenho.
+ */
+export function BarraConsumo({
+  pct,
+  tone,
+  rotulo,
+}: {
+  pct: number;
+  tone: keyof typeof STATUS_TONE;
+  rotulo: string;
+}) {
+  const passo = Math.max(0, Math.min(12, Math.round(((Number(pct) || 0) * 12) / 100)));
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-muted" aria-hidden>
+        <span className={cn('block h-full rounded-full', PASSO_CONSUMO[passo], STATUS_TONE[tone].dot)} />
+      </span>
+      <span className="text-[12px] text-ink-secondary">{rotulo}</span>
+    </span>
+  );
+}
+
+/**
  * A grade de gráficos do painel: duas colunas a partir de `lg`. Número ímpar
  * de gráficos deixa o último órfão, com meia faixa vazia ao lado — o último
  * então é `largura="total"`, e só se o dado justificar a largura (§9.7).

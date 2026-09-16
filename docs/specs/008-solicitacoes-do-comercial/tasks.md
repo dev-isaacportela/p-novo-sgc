@@ -138,7 +138,7 @@
   "Recusar" (`sgcEscSolicitacaoAvaliar` + `sgcEscSolicitacaoHistoricoInserir`), tudo
   desabilitado sem `podeEditar` do `usePedido()` →
   `frontend/src/pages/quadros/abas/Solicitacoes.tsx`
-- [ ] **T-037** — **Pedir ao integrador (S4)** — é integração, não entrega da 008 em S3
+- [x] **T-037** — **Pedir ao integrador (S4)** — é integração, não entrega da 008 em S3
   (C-3 da revisão cruzada): ligar o bloco ao card. O trecho vai pronto:
   `frontend/src/lib/conteudo-da-fase.ts` ganha `'solicitacoes'` no tipo `Bloco` e
   `analise: ['solicitacoes', 'itens', 'alertas']` (R-054: antes de Itens; `tecnica` e
@@ -149,14 +149,14 @@
   para `tecnica` e `diretoria` (hoje o laço cobre as três de uma vez) →
   `frontend/src/lib/conteudo-da-fase.ts`, `frontend/src/pages/quadros/abas/ConteudoDaFase.tsx`,
   `frontend/src/App.tsx`, `frontend/tests/conteudo-da-fase.test.mjs`
-- [ ] **T-038** — **Da base (S2), por R-068** — não é pedido à 002/003 (C-4 da revisão
+- [x] **T-038** — **Da base (S2), por R-068** — não é pedido à 002/003 (C-4 da revisão
   cruzada): `sgcPedidoCarregar` passa a devolver `CRIADOR_NOME` na capa (010) e
   `ID_SOLICITACAO` + `SOLICITACAO_VENDEDOR` nos itens, sem execução a mais. Desta spec
   ficam os consumidores: `itemDeLinha` de `lib/compras.ts` lê os dois campos e a aba Itens
   mostra a etiqueta "Solicitação de &lt;vendedor&gt;" (RF-022) →
   `backend/add-005-quadro-compras.mjs` (base), `frontend/src/lib/compras.ts`,
   `frontend/src/pages/quadros/abas/Itens.tsx`
-- [ ] **T-039** — **Pedir ao integrador (R-063)**: o par do desvínculo, **nesta ordem**
+- [x] **T-039** — **Pedir ao integrador (R-063)**: o par do desvínculo, **nesta ordem**
   (histórico primeiro, que precisa do `ID_CARD` ainda preenchido) — em `remover()` de
   `Itens.tsx`, depois de `sgcEscItemRemover`; e em `verificar-saida.ts`/`QuadroPage`,
   depois de `sgcAnaliseSair` devolver `ok`:

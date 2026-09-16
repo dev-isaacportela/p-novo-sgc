@@ -39,7 +39,7 @@ test('C-044 / RN-021: a persona comercial é a única sem acesso ao quadro; o me
   const menu = menuParaPersona(comercial);
   // Onda 3 (R-056): Solicitações entra e o comercial passa a ter DOIS itens.
   assert.deepEqual(menu.map((item) => item.to), ['/solicitacoes', '/bo']);
-  for (const rota of ['/quadro', '/agenda', '/fornecedores', '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso', '/analises', '/relatorios']) {
+  for (const rota of ['/quadro', '/agenda', '/fornecedores', '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso', '/analises']) {
     assert.equal(menu.some((item) => item.to === rota), false, `${rota} não é do comercial`);
   }
 });
@@ -83,7 +83,7 @@ test('menuParaPersona: o menu do analista tem quadro, novo pedido, agenda, notif
   assert.deepEqual(rotas, [
     '/quadro', '/pedidos/novo', '/solicitacoes', '/agenda', '/notificacoes', '/bo', '/fornecedores',
     '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso',
-    '/analises', '/relatorios',
+    '/analises',
   ]);
   assert.ok(menuParaPersona(permissoesDe('admin', 'ADMIN')).some((item) => item.to === '/seguranca'));
   assert.ok(menuParaPersona(permissoesDe('gestor', 'MEMBER')).some((item) => item.to === '/coberturas'));
@@ -123,7 +123,7 @@ test('C-027 / R-028/R-038 (onda 2): chaves novas por persona — comercial só v
   for (const chave of [...CHAVES_OPERAR, 'operarBo']) assert.equal(leitura[chave], false, `READ_ONLY zera ${chave}`);
 });
 
-test('C-021 / R-056 e R-061 (onda 3): chaves novas por persona — o comercial registra mas não avalia, a diretoria só lê, criarSolicitacao não é de analista nem gestor (RN-002 da 008) e READ_ONLY zera criar/avaliar/salvar sem tocar em ver*', () => {
+test('C-021 / R-056 e R-061 (onda 3): chaves novas por persona — o comercial registra mas não avalia, a diretoria só lê, criarSolicitacao não é de analista nem gestor (RN-002 da 008) e READ_ONLY zera criar/avaliar sem tocar em ver*', () => {
   const chave = (nome) => PERSONAS.filter((p) => permissoesDe(p, 'MEMBER')[nome]);
 
   // 008 (R-056): ver todas as personas; registrar só admin e comercial (o autor
@@ -132,17 +132,19 @@ test('C-021 / R-056 e R-061 (onda 3): chaves novas por persona — o comercial r
   assert.deepEqual(chave('criarSolicitacao'), ['admin', 'comercial']);
   assert.deepEqual(chave('avaliarSolicitacao'), ['admin', 'analista', 'gestor']);
 
-  // 009 (R-061): analises/relatorios menos o comercial; salvar sem a diretoria.
+  // 009 (R-061): análises menos o comercial. `verRelatorios`/`salvarRelatorio`
+  // saíram com a tela de relatórios salvos, adiada em 2026-09-16 (R-114).
   assert.deepEqual(chave('verAnalises'), ['admin', 'analista', 'gestor', 'diretoria']);
-  assert.deepEqual(chave('verRelatorios'), ['admin', 'analista', 'gestor', 'diretoria']);
-  assert.deepEqual(chave('salvarRelatorio'), ['admin', 'analista', 'gestor']);
+  for (const nome of ['verRelatorios', 'salvarRelatorio']) {
+    assert.equal(nome in permissoesDe('admin', 'ADMIN'), false, `${nome} saiu com /relatorios (R-114)`);
+  }
 
   // READ_ONLY: ver* atravessa (como verCoberturas/verBo), o resto zera.
   const leitura = permissoesDe('admin', 'READ_ONLY');
-  for (const nome of ['verSolicitacoes', 'verAnalises', 'verRelatorios']) {
+  for (const nome of ['verSolicitacoes', 'verAnalises']) {
     assert.equal(leitura[nome], true, `READ_ONLY continua vendo ${nome}`);
   }
-  for (const nome of ['criarSolicitacao', 'avaliarSolicitacao', 'salvarRelatorio']) {
+  for (const nome of ['criarSolicitacao', 'avaliarSolicitacao']) {
     assert.equal(leitura[nome], false, `READ_ONLY zera ${nome}`);
   }
   // E o comercial READ_ONLY vê a lista, mas não registra.
@@ -152,6 +154,6 @@ test('C-021 / R-056 e R-061 (onda 3): chaves novas por persona — o comercial r
 
   // O grupo Gestão é do resto; o comercial não chega às rotas (menu + porteiro).
   const gestao = menuParaPersona(permissoesDe('gestor', 'MEMBER')).filter((i) => i.grupo === 'Gestão');
-  assert.deepEqual(gestao.map((i) => i.to), ['/analises', '/relatorios']);
+  assert.deepEqual(gestao.map((i) => i.to), ['/analises'], 'Gestão fica só com Análises (R-114)');
   assert.equal(menuParaPersona(permissoesDe('comercial', 'MEMBER')).length, 2, 'o comercial tem exatamente 2 itens de menu');
 });

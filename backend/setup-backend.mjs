@@ -517,26 +517,13 @@ const DDL_008 = [
   )`,
 ];
 
-// spec 009 — relatorios salvos sobre os pedidos (onda 3, R-059/R-071).
-// CONFIG_JSON guarda filtros, colunas, agrupamento, grafico e visao; a
-// consulta e fixa (sgcRelatorioPedidos), nunca SQL montado na tela.
-const DDL_009 = [
-  `CREATE TABLE IF NOT EXISTS SGC_RELATORIO (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    TITULO VARCHAR(180) NOT NULL,
-    DESCRICAO VARCHAR(500),
-    CONFIG_JSON TEXT,
-    COMPARTILHADO BOOLEAN DEFAULT FALSE,
-    CRIADO_POR INT,
-    CRIADO_EM VARCHAR(19),
-    ATUALIZADO_POR INT,
-    ATUALIZADO_EM VARCHAR(19),
-    INDEX IX_SGC_RELATORIO_DONO (CRIADO_POR, ID)
-  )`,
-];
+// spec 009 (indicadores) nao tem tabela propria: os indicadores agregam o que
+// as ondas 1 e 2 ja gravam. A SGC_RELATORIO dos relatorios salvos saiu daqui
+// com a tela /relatorios, adiada por decisao do usuario em 2026-09-16 (R-114);
+// volta com ela, no CREATE, quando a feature entrar numa onda futura.
 
 export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007,
-  ...DDL_008, ...DDL_009];
+  ...DDL_008];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
