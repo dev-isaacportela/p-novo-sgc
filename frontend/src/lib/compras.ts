@@ -228,7 +228,7 @@ export function montarItens(
       tipoPreco: 'padrao',
       curvaAbc: curvas.get(codprod) ?? 'C',
       coberturaDias: coberturaFuturaDias(numero(linha.VENDA_PERIODO), numero(linha.ESTOQUE), numero(linha.TRANSITO), 0, meses) ?? 0,
-      coberturaLimite: limiteDeCobertura(coberturas, alvo).limiteDias,
+      coberturaLimite: limiteDeCobertura(coberturas, alvo, curvas.get(codprod) ?? 'C').limiteDias,
       coberturaJustificativa: '',
       observacao: '',
       status: 'montagem',
@@ -293,9 +293,10 @@ export function itemDeProdutoBuscado(
     tipoPreco: 'padrao',
     curvaAbc: 'C',
     coberturaDias: 0,
+    // O item nasce sem curva classificada: vale a coluna C, a mais tolerante (RN-003).
     coberturaLimite: limiteDeCobertura(coberturas, {
       codprod, codsec: numero(linha.CODSEC), codepto: numero(linha.CODEPTO), codfornec,
-    }).limiteDias,
+    }, 'C').limiteDias,
     coberturaJustificativa: '',
     observacao: '',
     status: 'montagem',

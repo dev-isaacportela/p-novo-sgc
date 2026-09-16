@@ -191,3 +191,16 @@ test('R-095 (onda 4): chaves novas de compras inteligentes — ver inclui a dire
   // A diretoria vê o item mesmo sem operar nem parametrizar.
   assert.ok(menuParaPersona(permissoesDe('diretoria', 'MEMBER')).some((i) => i.to === '/compras-inteligentes'));
 });
+
+test('C-011 (012): a tela de coberturas e de admin e gestor — analista, diretoria e comercial nao entram; o gestor somente-leitura ve a lista inteira e nao grava, porque `podeManter` e verCoberturas E NAO somenteLeitura', () => {
+  assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').verCoberturas), ['admin', 'gestor']);
+
+  const leitura = permissoesDe('gestor', 'READ_ONLY');
+  assert.equal(leitura.verCoberturas, true, 'READ_ONLY ve: o porteiro de rota deixa passar');
+  assert.equal(leitura.somenteLeitura, true, 'e a tela desabilita os controles de escrita com esta chave');
+
+  const analista = permissoesDe('analista', 'MEMBER');
+  assert.equal(analista.verCoberturas, false, 'pelo endereco direto tambem recebe a recusa (A-8)');
+  assert.equal(menuParaPersona(analista).some((i) => i.to === '/coberturas'), false);
+  assert.equal(menuParaPersona(permissoesDe('gestor', 'READ_ONLY')).some((i) => i.to === '/coberturas'), true);
+});
