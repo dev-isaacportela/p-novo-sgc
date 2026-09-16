@@ -9,18 +9,24 @@ cada `backend/add-00N-*.mjs` do `PUBLISH_ORDER` (`config.mjs`) — `add-001-kanb
 reexporta as server functions da lib `@benenutri/mitra-kanban` com os ids do
 `frontend/src/lib/server-functions.ts` deste projeto; `add-004..007` publicam
 as `sgc*` da onda 1, `add-008..010` as da onda 2 (005 notas fiscais, 006
-trânsito, 007 B.O.) e `add-011`/`add-012` as da onda 3 (008 solicitações do
+trânsito, 007 B.O.), `add-011`/`add-012` as da onda 3 (008 solicitações do
 comercial, 009 indicadores e relatórios — ainda stub, `definitions = []`, até
-cada feature chegar; a 010, o extrato, não tem script)
+cada feature chegar; a 010, o extrato, não tem script) e
+`add-013`/`add-014` as da onda 4 (011 compras inteligentes, 012 coberturas por
+curva — stub da base, R-113)
 — e executa o SQL e o JavaScript literais. O schema é lido de três fontes
 (`DDL_SOURCES`, sem execução: leitura de texto por `schema.mjs`): as tabelas
-`SGC_*` de `backend/setup-backend.mjs` (ondas 1, 2 e 3, R-026/R-051 — as ondas
+`SGC_*` de `backend/setup-backend.mjs` (ondas 1 a 4, R-026/R-051 — as ondas
 novas editam o `CREATE` das tabelas existentes em vez de `ALTER`, porque nada
-foi publicado ainda: é assim que `SGC_PEDIDO_ITEM.ID_SOLICITACAO` entrou), o
+foi publicado ainda: é assim que `SGC_PEDIDO_ITEM.ID_SOLICITACAO` entrou; a
+onda 4 acrescentou `SGC_PARAMETRO_COMPRA`, `SGC_VENDA_DESCONSIDERADA` e
+`SGC_COBERTURA_LOG`), o
 `schema.mjs` da lib instalada em `node_modules` e as tabelas `PC*`
 do WinThor em `backend/simulator/schema-winthor.mjs` (`PCNFENT`/`PCLANC`
 novas e colunas novas em `PCMOV`/`PCPRODUT`, R-027; onda 3, R-069:
-`PCCLIENT.CGCENT` e `PCMOV.DTCANCEL` — só simulador; a
+`PCCLIENT.CGCENT` e `PCMOV.DTCANCEL`; onda 4, R-096:
+`PCEST.QTBLOQUEADA`/`QTINDENIZ`/`QTRESERV`, que entram no estoque líquido de
+R-085 — só simulador; a
 plataforma usa o Oracle real, pelo `jdbcId` de `add-003-jdbc-winthor.mjs`).
 Dias úteis (R-025/R-038): `backend/lib/dias-uteis.mjs` exporta os fragmentos
 SQL (`somarDiasUteis`, `somarDiasCorridos`, `diasUteisEntre`), que rodam sem
@@ -58,23 +64,56 @@ pendência e vive no `add-005` (`colunasDePendencia`), porque a régua de situa�
 Os quatro estão provados, um a um, em `smoke/000-dialeto.mjs` (S0-010..S0-013),
 que também carrega a régua de situação (S0-014).
 
+## Shims novos do dialeto na onda 4 (`mysql-dialect.mjs`, R-096/R-100/R-113)
+
+Nenhuma reescrita da onda 3 saiu: a nova entra no **fim** da cadeia de
+`toSqlite()`, antes do `mapOutsideStrings`.
+
+- **`POWER(base, expoente)`** e **`SQRT(valor)`** como função registrada (a
+  mesma flag de compilação que já obrigou `FLOOR`/`CEIL`): o peso por recência
+  `0,85^dias` e a volatilidade `SQRT(AVG(x²) − AVG(x)²)` da 011.
+- **`ADD_MONTHS(data, n)`** do Oracle: mesmo dia, `n` meses depois (negativo
+  volta); dia que não existe no mês de destino cai no último dia do mês
+  (31/03 − 1 mês = 28/02). É a janela de 12 meses do lead time medido.
+- **O gerador de calendário do Oracle** `SELECT … FROM DUAL CONNECT BY LEVEL
+  <= n` vira `WITH RECURSIVE CALENDARIO(LEVEL) …` (`CALENDARIO`, e não
+  `NIVEL(LVL)` de R-064: as duas reescritas convivem). É o que dá uma linha por
+  dia do período — o denominador do consumo ponderado da 011 — inclusive nos
+  dias sem venda. O regex não atravessa outro `SELECT` (senão apagaria as CTEs
+  anteriores) e, sem parêntese envolvente, o fim da instrução conta como fim de
+  bloco (o gerador solto). `CONNECT BY` em qualquer outra forma segue **sem**
+  tradução, de propósito.
+- **`INSTR` e `STDDEV_POP` ficaram de fora** (R-100): nenhuma SQL da onda usa
+  `INSTR` e a volatilidade é `AVG`/`SQRT`, não o agregado.
+
+Os shims estão provados em `smoke/000-dialeto.mjs` (S0-015) e o gerador, nas
+duas formas (dentro de uma CTE precedida de outras duas, e solto), em S0-016.
+
 ## Seed e smoke, um arquivo por spec
 
 - `simulator/seed.mjs` cria o schema, os 5 usuários, o quadro e as 10 fases, e
   chama `simulator/seed/00N-*.mjs` nesta ordem: `001-fornecedores`,
   `002-quadro`, `003-itens`, `004-agenda`, `005-notas-fiscais`, `006-transito`,
-  `007-bo`, `008-solicitacoes`, `009-indicadores`. Cada um exporta
-  `seed00N(db, cenario)`; 001-007 já semeiam as ondas 1 e 2; 008-009 são stub
-  até cada feature da onda 3 preencher (o cabeçalho de cada um diz o que o plan
-  pede). A 010 não semeia nada.
+  `007-bo`, `008-solicitacoes`, `009-indicadores`, `011-compras-inteligentes`.
+  Cada um exporta
+  `seed00N(db, cenario)`; 001-007 já semeiam as ondas 1 e 2; 008-009 e 011 são
+  stub até cada feature preencher (o cabeçalho de cada um diz o que o plan
+  pede). A 010 não semeia nada, e a 012 também não tem arquivo próprio: nesta
+  onda ela é dona das linhas de `SGC_COBERTURA` do `seed/003-itens.mjs`
+  (R-096).
 - `simulator/smoke.mjs` é o orquestrador: abre **um** banco descartável
   (`smoke/base.mjs`, `abrirContexto()`) e roda, na ordem, `smoke/000-esqueleto.mjs`
   (o esqueleto do projeto — S0-001..S0-006), `smoke/000-dias-uteis.mjs`
   (S0-007..S0-009 — prova o fragmento SQL de `lib/dias-uteis.mjs` contra o
-  dialeto do simulador), `smoke/000-dialeto.mjs` (S0-010..S0-014 — os shims da
-  onda 3 e o carregador de `backend/sql/`) e `smoke/00N-*.mjs` de cada spec.
+  dialeto do simulador), `smoke/000-dialeto.mjs` (S0-010..S0-016 — os shims das
+  ondas 3 e 4 e o carregador de `backend/sql/`) e `smoke/00N-*.mjs` de cada
+  spec. A ordem das suítes de spec não é a numérica: a `012-coberturas` vem
+  logo depois de `003-itens` (ela revalida o smoke da 003 e é dona do
+  `SGC_COBERTURA` do seed dela) e a `011-compras-inteligentes` vem depois de
+  `009-indicadores` (R-107).
   Cada um exporta `suite(ctx)`, com `ctx.chamar`/`ctx.teste` prontos; 001-007 já
-  têm os cenários das ondas 1 e 2; 008-009 são stub (`suite(ctx) {}`) — o
+  têm os cenários das ondas 1 e 2; 008-009, 011 e 012 são stub (`suite(ctx) {}`)
+  — o
   `teste()` de cada cenário C-00N/RN-00N do plan entra lá. R-045 (revisão
   cruzada): como o banco é um só para todas as suítes, nenhuma pode assumir
   total absoluto de listagem — conta pelo banco, por diferença, ou recorta pelos

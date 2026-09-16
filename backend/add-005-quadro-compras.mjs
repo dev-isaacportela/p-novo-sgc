@@ -389,13 +389,14 @@ FROM (${notificacoesUniao()}) N`,
     {
       name: 'sgcEscPedidoCriar',
       type: 'SQL',
-      description: 'RF-001 - capa do pedido criado pela TELA (:VAR_USER), depois de kbCardCriar. Idempotente por ID_CARD. Params: cardId, codfornec, fornecedor, codfilial, filial, periodoInicio, periodoFim, agora.',
+      description: 'RF-001 - capa do pedido criado pela TELA (:VAR_USER), depois de kbCardCriar. Idempotente por ID_CARD. A origem vem de quem chama, com lista fechada (R-098/R-106): /pedidos/novo manda "manual", o carrinho da 011 manda "compras_inteligentes"; o cron da agenda tem a sua propria escrita (sgcEscPedidoCapaInserir). Params: cardId, codfornec, fornecedor, codfilial, filial, periodoInicio, periodoFim, origem, agora.',
       code: `INSERT INTO SGC_PEDIDO
   (ID_CARD, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, PERIODO_INICIO, PERIODO_FIM, ORIGEM, ID_AGENDA, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM)
 SELECT {{cardId}}, {{codfornec}}, '{{fornecedor}}', '{{codfilial}}', '{{filial}}',
-  '{{periodoInicio}}', '{{periodoFim}}', 'manual', 0, :VAR_USER, '{{agora}}', '{{agora}}'
+  '{{periodoInicio}}', '{{periodoFim}}', '{{origem}}', 0, :VAR_USER, '{{agora}}', '{{agora}}'
 FROM DUAL
 WHERE TRIM('{{fornecedor}}') <> '' AND TRIM('{{filial}}') <> ''
+  AND '{{origem}}' IN ('manual', 'compras_inteligentes')
   AND NOT EXISTS (SELECT 1 FROM SGC_PEDIDO EX WHERE EX.ID_CARD = {{cardId}})
   AND ${guardaPersona('admin', 'analista', 'gestor')}`,
     },

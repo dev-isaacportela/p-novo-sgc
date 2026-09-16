@@ -133,6 +133,10 @@ export default function NovoPedidoPage() {
         filial: nomeFilial,
         periodoInicio: periodo.inicio,
         periodoFim: periodo.fim,
+        // Lista fechada de `sgcEscPedidoCriar` (R-098/R-106): esta tela cria
+        // sempre pedido manual; o carrinho de /compras-inteligentes manda
+        // 'compras_inteligentes'.
+        origem: 'manual',
         agora: instanteIso(),
       });
       navigate(`/quadro?card=${criado.id}`);

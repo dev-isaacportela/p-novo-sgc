@@ -49,7 +49,9 @@ export const HEALTH_TABLE = 'KB_BOARD';
 // add-009-transito.mjs, 007 -> add-010-bo.mjs, nessa ordem lógica (006 e 007
 // leem SGC_NF da 005). Onda 3 (R-051): 008 -> add-011-solicitacoes.mjs, 009 ->
 // add-012-indicadores.mjs, nessa ordem (a aderência de solicitações da 009 lê a
-// tabela da 008); a 010 não tem script. add-002 continua fora, por último no sandbox.
+// tabela da 008); a 010 não tem script. Onda 4 (R-081): 011 ->
+// add-013-compras-inteligentes.mjs, 012 -> add-014-coberturas-abc.mjs, nessa
+// ordem. add-002 continua fora, por último no sandbox.
 export const PUBLISH_ORDER = [
   'add-001-kanban.mjs',
   'add-003-jdbc-winthor.mjs',
@@ -62,6 +64,8 @@ export const PUBLISH_ORDER = [
   'add-010-bo.mjs',
   'add-011-solicitacoes.mjs',
   'add-012-indicadores.mjs',
+  'add-013-compras-inteligentes.mjs',
+  'add-014-coberturas-abc.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -80,7 +84,10 @@ export const CHECK_INPUT = {
   codfornec: '0', codfilial: '', ativo: '0',
   // spec 002 (quadro de compras):
   usuarioId: '2', cardId: '5', idCard: '5', boardId: '1', faseId: '2',
-  origem: 'agenda', idAgenda: '1', usuarioAlvo: '2', persona: 'gestor',
+  // `origem` e da lista fechada de sgcEscPedidoCriar (R-098/R-106): 'manual'
+  // ou 'compras_inteligentes'. sgcEscPedidoCapaInserir (cron da agenda) manda
+  // 'agenda' e nao tem lista — as duas sao ESCRITA, que o sim:check pula.
+  origem: 'manual', idAgenda: '1', usuarioAlvo: '2', persona: 'gestor',
   agora: '2026-09-15T12:00:00', motivo: 'teste', produtos: '',
   codfornec: '1', fornecedor: 'X', codfilial: '1', filial: 'Y',
   periodoInicio: '2026-08-01', periodoFim: '2026-09-15',
@@ -118,4 +125,16 @@ export const CHECK_INPUT = {
   // `/relatorios` (R-114) — nenhuma SF viva as usa. `prioridade` FICA: quem a
   // usa é o sgcEscSolicitacaoInserir da 008.
   fase: '', soVencidos: '', prioridade: '',
+  // spec 011 (compras inteligentes): só as chaves NOVAS (R-100, D-17).
+  // codfornec/codfilial/dataInicio/dataFim/codprod/limite/offset já vêm das
+  // specs acima com valores que servem. `excluir` é FRAGMENTO (lista de
+  // NUMTRANSITEM sem aspas) e `0` é "nenhuma venda desconsiderada" (R-087);
+  // `diasPeriodo` entra sem aspas no gerador de calendário. leadTimeDias,
+  // coberturaDias e curva NÃO entram: com R-083 deixaram de ser parâmetro de
+  // SQL — a fórmula e a curva são régua pura da tela.
+  diasPeriodo: '153', excluir: '0', meses: '12', compradorId: '0', numtransitem: '960001',
+  // spec 012 (coberturas por curva): só a chave nova (R-100).
+  // nivel, limite e offset vêm da 003; situacao vem da 004, com o mesmo '' que
+  // sgcCoberturaListar quer no ramo "todas".
+  idCobertura: '0',
 };
