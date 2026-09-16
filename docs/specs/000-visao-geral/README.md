@@ -512,3 +512,76 @@ Consultas Oracle no smoke provam contagem > 0.
 
 Menu: grupo **Compras** ganha "Solicitações"; grupo novo **Gestão** com "Análises" e "Relatórios".
 O comercial vê Solicitações e Produtos em B.O.
+
+## Onda 4 — contrato (2026-09-16)
+
+Aberta **em paralelo** com a onda 3 (pedido do usuário). Vale o mesmo regime: nada publicado, então a
+onda 4 **edita o `CREATE TABLE`** (sem `ALTER`), inclusive de `SGC_COBERTURA` da onda 1; R-050 (conteúdo
+de card = bloco de fase) continua — e a onda 4 **não cria bloco de card**: a lista de ressuprimento
+existe antes do card, e a curva age dentro do bloco Itens que já existe. Base de leitura:
+`scratchpad/onda-4-levantamento.md` (legado `002-compras-inteligentes`, `006-parametrizacoes`,
+`update-estoque-centralizado.mjs`, `add-coberturas-abc.mjs`).
+
+### Specs
+
+| Spec | Assunto | Regras (`regras.md`) | Origem no p-45547 |
+|---|---|---|---|
+| `011-compras-inteligentes` | tela `/compras-inteligentes` por fornecedor + filial (abas A comprar · Todos · Em trânsito), consulta WinThor de ressuprimento (estoque líquido, trânsito, consumo com peso de recência, volatilidade, lead time medido, venda do período com a parte pública segregada), regra pura de sugestão (consumo, segurança, ponto de pedido, estoque máximo, sugerida, dias de gatilho, status), parâmetros por fornecedor e por SKU (cobertura, lead time, gatilho, silenciamento), vendas desconsideradas, detalhe do SKU (histórico 12 meses, últimas compras, estoque nas filiais), carrinho que cria o pedido no quadro, eficiência do comprador derivada dos pedidos, CSV | O4-01, O4-02, O4-04 | `.specs/002-compras-inteligentes`, `update-estoque-centralizado.mjs`, `add-compras-inteligentes.mjs`, `add-ci-vendas-desconsideradas.mjs`, `ComprasInteligentesPage.tsx` |
+| `012-coberturas-por-curva` | a curva ABC entra no limite de cobertura: `SGC_COBERTURA` ganha alvo e tolerância por curva, `limiteDeCobertura` recebe a curva do item, `/coberturas` ganha os três painéis com o "máximo sem justificativa", log de auditoria campo a campo, CSV; a trava de saída da Análise (003) passa a comparar contra o limite da curva | O4-03 | `.specs/006-parametrizacoes` (coberturas ABC), `add-coberturas-abc.mjs`, `update-compras-inteligentes-abc-fornecedores.mjs`, `ParametrizacaoCoberturasAbcPage.tsx` |
+
+Ordem lógica: 012 fecha o laço que a 011 abre (o alvo por curva é o "cobertura" do estoque máximo
+quando não há parâmetro mais específico). Na prática rodam em paralelo; o integrador liga rota, menu,
+permissões e a curva no `montarItens` (S4).
+
+### Decisões da onda 4 (R-081..R-096)
+
+Onde o legado diverge do texto de `regras.md`, a decisão abaixo diz qual venceu e por quê; o usuário
+pode reverter qualquer uma antes da S3.
+
+| Id | Decisão |
+|---|---|
+| R-081 | **Faixas e scripts**: 011 → 81xx (`add-013-compras-inteligentes.mjs`), 012 → 82xx (`add-014-coberturas-abc.mjs`); leituras/JS em x01–x30, escritas em x50–x79; `PUBLISH_ORDER` cresce nessa ordem depois de `add-012`; `add-002` continua por último e fora. Nenhuma SF nova das ondas 1–3 muda de id. |
+| R-082 | **Fórmula de sugestão = texto de O4-01 sobre medidas do WinThor**. O legado abandonou a fórmula descrita em O4-01 (geração 1) por uma segunda geração em `update-estoque-centralizado.mjs` que mede o lead time e pondera a tendência, mas fixou "9" no estoque de segurança e calcula um fator Z que nunca usa. O SGC 2 casa as duas: **consumo diário** = tendência ponderada por recência (peso `0,85^dias`, janela de 153 dias, `SUM(qt × peso) / SUM(peso)`); **lead time** = medido (média das entradas dos últimos 12 meses, `PCPEDIDO.DTEMISSAO` → `PCMOV.DTMOV`, mínimo 1 dia) com fallback ao parâmetro (padrão 9); **segurança** = lead × consumo; **ponto de pedido** = 2 × lead × consumo; **estoque máximo** = cobertura × consumo; **sugerida** = trânsito > 0 → 0, sem venda e sem consumo → 0, senão `max(0, ceil(máximo − atual − trânsito))`, arredondada por caixa (regra da 003); **cobertura atual** = atual ÷ consumo (`null` sem consumo, nunca 9999); **dias de gatilho** = `floor((atual + trânsito − segurança) ÷ consumo − lead)`; **status** = `ruptura` (atual ≤ 0) · `excesso` (atual + trânsito > máximo) · `elevada_exposicao` (atual ≤ ponto e cobertura atual < lead) · `baixa_exposicao` (atual ≤ ponto) · `adequado`. Fator Z e volatilidade **fora** da fórmula (a volatilidade é devolvida e exibida; dívida D-28: segurança estatística). |
+| R-083 | **Onde se calcula** (emenda a "cálculo no backend" de O4-01): o WinThor devolve **medidas** (uma linha por produto ativo do fornecedor na filial) e a fórmula com os parâmetros roda em **regra pura da tela** (`lib/ressuprimento.ts`, testada) — é o único jeito de o parâmetro por SKU valer (parâmetros vivem no Mitra, medidas no Oracle; o legado salvava o parâmetro de SKU e o ignorava). Uma execução por carga da tela para a consulta principal; nada por linha. |
+| R-084 | **Licitação**: a consulta devolve a venda total e a parte pública (`PCCLIENT.CODATV1 IN (11..15,20)`, mesmo recorte da 003) em colunas separadas; a demanda padrão da tela é **total** (coerente com AN-04 A) e um seletor "desconsiderar licitação" recalcula na tela subtraindo a parte pública. Nenhuma regra escondida no SQL. |
+| R-085 | **Produto ativo** = mesmo recorte da 003 (`OBS2` vazio, `CODEPTO NOT IN (4,7)`); fornecedor 999999 fora; `PCPRODUT.DTEXCLUSAO` não é portado. Estoque **líquido** = `max(0, QTEST − QTBLOQUEADA − QTINDENIZ − QTRESERV)`; trânsito = `QTPEDIDA + QTTRANSITO`. |
+| R-086 | **Parâmetros de compra** em `SGC_PARAMETRO_COMPRA` (modelo abaixo), um registro por fornecedor + filial (`CODPROD = 0`) ou por SKU + fornecedor + filial; `0` = "herda". Precedência (O4-02): **SKU > fornecedor > cobertura por curva (012) > padrão** para a cobertura; **SKU > fornecedor > medido > 9** para o lead time; **SKU > fornecedor > 15** para o gatilho. Silenciar = `SILENCIADO_ATE` (padrão hoje + 30 dias) + motivo; produto silenciado sai da aba "A comprar" e continua em "Todos" com etiqueta. |
+| R-087 | **Vendas desconsideradas** em `SGC_VENDA_DESCONSIDERADA` (chave `NUMTRANSITEM`); a consulta principal recebe `{{excluir}}` (lista de `NUMTRANSITEM`, `0` = nenhuma, no máximo 500 por chamada — teto do literal Oracle) e as tira da demanda **no WinThor**; a tela lista e reconsidera. |
+| R-088 | **Curva ABC = uma régua só**: a da 003 (`curvaAbc()` de `lib/compras.ts`: valor = venda × custo, acumulado ≤ 80 % A, ≤ 95 % B, resto C), aplicada na 011 sobre a janela da tela e por fornecedor + filial. A curva por rentabilidade e o "pior das duas" do legado **não entram** (dívida D-29). |
+| R-089 | **Limite de cobertura por curva** (O4-03; emenda: a onda 1 nunca teve "90 dias" — tem `SGC_COBERTURA` com padrão 35): `SGC_COBERTURA` troca `LIMITE_DIAS` por três pares `ALVO_A_DIAS/TOLERANCIA_A_PCT`, `ALVO_B_DIAS/TOLERANCIA_B_PCT`, `ALVO_C_DIAS/TOLERANCIA_C_PCT` (no `CREATE`); limite sem justificativa = `alvo × (1 + tolerância ÷ 100)` (35 × 20 % = 42); precedência **continua a do SGC 2** (sku > seção > departamento > fornecedor — a mais específica vale); item sem curva usa a coluna C; sem linha alcançável, padrão 35 dias e tolerância 0. `limiteDeCobertura(coberturas, alvo, curva)` é a única régua, usada pela cobertura futura, pela trava de saída da Análise (003, mesma mensagem) e pelo estoque máximo da 011 (o **alvo**, sem tolerância). Valores de referência do seed: A 35/20, B 45/10, C 60/5. |
+| R-090 | **Auditoria das coberturas** campo a campo em `SGC_COBERTURA_LOG` (precedente `SGC_FORNECEDOR_LOG` da 001), gravada pela tela junto de cada salvamento; ação derivada (criou / alterou / desativou / reativou). |
+| R-091 | **Carrinho cria o pedido pelo mesmo caminho de `/pedidos/novo`**: `kbCardCriar` (tela, `api.cardCriar`) + `sgcEscPedidoCapaSalvar` (002) com `ORIGEM = 'compras_inteligentes'`, um card por fornecedor + filial, prioridade `alta` quando há `ruptura` no grupo, período = janela da tela; itens gravados pelo upsert em lote da 003 com `QT_SUGERIDA` (sugestão da 011), `QT_PEDIDA` (quantidade do carrinho), `PRECO_CUSTO`, `CURVA_ABC`. Ao abrir o pedido, a análise da 003 roda normalmente e **preserva `QT_PEDIDA`** dos itens existentes (o plan da 011 confere isso no upsert do `add-006`). Nenhuma SF JavaScript nova para criar pedido. Carrinho bloqueado para fornecedor + filial com pedido aberto (fases antes de `enviado`) — mensagem cita o card. |
+| R-092 | **Eficiência do comprador** sem tabela: KPI na própria tela (`sgcEficienciaComprador`, SQL sobre `SGC_PEDIDO` com `ORIGEM = 'compras_inteligentes'` × `SGC_PEDIDO_ITEM`): % de itens em que `QT_PEDIDA` fica dentro de ±20 % de `QT_SUGERIDA`, por comprador e período. |
+| R-093 | **Custo** = `PCEST.CUSTOULTENT` (como a 003); custo padrão pela conexão `gestao-de-custos` fica como dívida D-30. Unidades por caixa: `sgcCustoUnidadesPorCaixa` (7306) + `unidadesPorCaixa()` da 003 — nada novo (AN-05 B já feito). |
+| R-094 | **Não se porta**: tabelas legadas sem consumidor (`SUGESTAO_COMPRA`, `MOVIMENTACOES_PRODUTO`, `PEDIDOS_TRANSITO`), previsão Holt-Winters/cinco modelos (dívida D-31, onda 5), oportunidades de custo especial, diálogo de bloqueios de lote, botão "Gerar exportação Winthor" (nunca teve handler), exportação `xlsx`. Exportação = CSV pelo `lib/csv.ts` nas duas telas. |
+| R-095 | **Personas**: `verComprasInteligentes` (admin, analista, gestor, diretoria), `operarComprasInteligentes` (admin, analista, gestor; zerado por READ_ONLY; RESTRICTED opera — o card que ele cria é dele), `parametrizarCompras` (admin, gestor: parâmetros por fornecedor/SKU e silenciar); `verCoberturas` continua (admin, gestor) e passa a cobrir as curvas. Comercial não vê. Menu: grupo **Compras** ganha "Compras inteligentes" (`/compras-inteligentes`) depois de "Novo pedido". |
+| R-096 | **Simulador**: `schema-winthor.mjs` ganha `PCEST.QTBLOQUEADA/QTINDENIZ/QTRESERV` (só DDL); shims novos no dialeto (base da onda 4, S2, depois da base da onda 3): `POWER`, `SQRT`, `STDDEV_POP`, `ADD_MONTHS`, `INSTR` e o gerador de calendário `FROM DUAL CONNECT BY LEVEL <= n` (reescrita exata no plan da 011; falha alto sem ele). Seeds: 011 usa produtos 5401–5420 (fornecedor 1015, curva inteira), clientes 9301–9305, `NUMTRANSITEM` ≥ 960001, `PCPEDIDO.NUMPED` ≥ 970001 (entradas casadas para o lead time medido); 012 **é dona, nesta onda**, das linhas de `SGC_COBERTURA` do `seed/003-itens.mjs`, de `lib/cobertura.ts`, de `pages/coberturas/**` e do bloco de coberturas do `add-006` (SFs `sgcCobertura*`), e revalida o smoke da 003. `CHECK_INPUT` ganha só chaves novas (`leadTimeDias`, `coberturaDias`, `diasPeriodo`, `curva`, `excluir`, `compradorId`…; D-17). |
+
+### Modelo de dados da onda 4
+
+| Tabela | Conteúdo | Spec |
+|---|---|---|
+| `SGC_PARAMETRO_COMPRA` | `ID`, `CODFORNEC`, `CODFILIAL`, `CODPROD INT DEFAULT 0` (0 = fornecedor), `COBERTURA_DIAS INT DEFAULT 0`, `LEAD_TIME_DIAS INT DEFAULT 0`, `GATILHO_DIAS INT DEFAULT 0` (0 = herda), `SILENCIADO_ATE VARCHAR(10)`, `MOTIVO_SILENCIO VARCHAR(500)`, `ATUALIZADO_POR`, `ATUALIZADO_EM`; `UNIQUE (CODFORNEC, CODFILIAL, CODPROD)` | 011 |
+| `SGC_VENDA_DESCONSIDERADA` | `ID`, `NUMTRANSITEM INT UNIQUE`, `CODPROD`, `CODFILIAL`, `DTMOV VARCHAR(10)`, `QUANTIDADE DECIMAL(15,3)`, `MOTIVO VARCHAR(500)`, `POR`, `EM` | 011 |
+| `SGC_COBERTURA` (onda 1, emendada) | `LIMITE_DIAS` sai; entram `ALVO_A_DIAS`, `TOLERANCIA_A_PCT`, `ALVO_B_DIAS`, `TOLERANCIA_B_PCT`, `ALVO_C_DIAS`, `TOLERANCIA_C_PCT` (`INT NOT NULL DEFAULT 0`; `DECIMAL(5,2)` para as tolerâncias) | 012 |
+| `SGC_COBERTURA_LOG` | `ID`, `ID_COBERTURA`, `CAMPO`, `ANTES VARCHAR(100)`, `DEPOIS VARCHAR(100)`, `ACAO` (`criou`/`alterou`/`desativou`/`reativou`), `POR`, `EM` | 012 |
+| `SGC_PEDIDO.ORIGEM` | ganha o valor `compras_inteligentes` (VARCHAR, só no comentário) | 011 |
+
+### Server functions da onda 4 (nomes fixos; detalhes nos plans)
+
+| Spec | Leitura / JS | Escrita (SQL) |
+|---|---|---|
+| 011 | `sgcWintRessuprimento` (Oracle: `{{codfornec}}`, `{{codfilial}}`, `{{dataInicio}}`, `{{dataFim}}`, `{{excluir}}` → uma linha por produto ativo com descrição, embalagem, unidade, depto, seção, custo, últimas entrada/saída, estoque líquido e parcelas, trânsito, lead medido, consumo ponderado, volatilidade, venda total e pública do período), `sgcWintProdutoHistorico` (12 meses), `sgcWintProdutoUltimasCompras`, `sgcWintProdutoEstoqueFiliais`, `sgcParametrosCompraListar` (fornecedor + filial → linha do fornecedor e linhas de SKU), `sgcVendasDesconsideradasListar`, `sgcEficienciaComprador` | `sgcEscParametroCompraSalvar` (upsert), `sgcEscParametroCompraSilenciar`, `sgcEscParametroCompraRestaurar`, `sgcEscVendaDesconsiderar`, `sgcEscVendaReconsiderar` |
+| 012 | `sgcCoberturaLogListar`; as SFs `sgcCobertura*` do `add-006` ganham as colunas novas (mesmo nome, mesmo id) | `sgcEscCoberturaLogInserir` |
+
+Quem chama o quê: tudo pela tela, `:VAR_USER`; nenhuma SF JavaScript, nenhum cron. Consultas Oracle no
+smoke provam contagem > 0.
+
+### Telas da onda 4
+
+| Rota | Tela | Persona | Spec |
+|---|---|---|---|
+| `/compras-inteligentes` | fornecedor + filial no topo; KPIs (sugestão total em R$, rupturas, silenciados, eficiência); abas A comprar · Todos (filtro de status) · Em trânsito; grid Produto · Status · Curva · Cobertura atual · Dias de gatilho · Sugestão (un./cx., editável) · Ações (carrinho, detalhe, silenciar, parâmetros do SKU); seletor "desconsiderar licitação"; parâmetros do fornecedor; carrinho (Produto · Por que comprar · Sugerido · Quantidade · Custo · Total · Cobertura futura) → "Criar pedido"; CSV | admin, analista, gestor (operam); diretoria lê | 011 |
+| `/coberturas` (existente) | grid com Alvo · Status · A · B · C (dias e %) e o "máximo sem justificativa"; formulário com três painéis de curva; aba de auditoria (antes → depois); CSV | admin, gestor | 012 |
+
+Menu: grupo **Compras** ganha "Compras inteligentes". Nenhum bloco de card novo (R-050).
