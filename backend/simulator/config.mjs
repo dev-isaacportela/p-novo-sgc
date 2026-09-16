@@ -80,7 +80,10 @@ export const CHECK_INPUT = {
   codfornec: '0', codfilial: '', ativo: '0',
   // spec 002 (quadro de compras):
   usuarioId: '2', cardId: '5', idCard: '5', boardId: '1', faseId: '2',
-  origem: 'agenda', idAgenda: '1', usuarioAlvo: '2', persona: 'gestor',
+  // `origem` e da lista fechada de sgcEscPedidoCriar (R-098/R-106): 'manual'
+  // ou 'compras_inteligentes'. sgcEscPedidoCapaInserir (cron da agenda) manda
+  // 'agenda' e nao tem lista — as duas sao ESCRITA, que o sim:check pula.
+  origem: 'manual', idAgenda: '1', usuarioAlvo: '2', persona: 'gestor',
   agora: '2026-09-15T12:00:00', motivo: 'teste', produtos: '',
   codfornec: '1', fornecedor: 'X', codfilial: '1', filial: 'Y',
   periodoInicio: '2026-08-01', periodoFim: '2026-09-15',
