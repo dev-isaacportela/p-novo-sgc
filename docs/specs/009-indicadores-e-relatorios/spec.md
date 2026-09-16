@@ -134,9 +134,10 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** vê cada passagem na ordem em que aconteceu, com a data de entrada e quantos dias ele ficou em cada etapa — a última contada até hoje
 
 **C-016 — Funil e aderência das solicitações do comercial**
-- **Dado que** no período existem 20 solicitações: 8 atendidas, 4 pendentes, 2 recusadas e 6 em andamento no fluxo
+- **Dado que** no período existem 20 solicitações: 8 atendidas, 4 esperando avaliação, 2 recusadas e 6 em andamento no fluxo
 - **Quando** a gestão abre a aba de solicitações
-- **Então** lê a aderência **geral de 40,0 %** (8 de 20) e a aderência **de fluxo de 57,1 %** (8 de 14, sem as pendentes e as recusadas), mais o tempo médio até a avaliação e o funil por situação
+- **Então** lê a aderência **geral de 40,0 %** (8 de 20) e a aderência **de fluxo de 57,1 %** (8 de 14, sem as que esperam avaliação e as recusadas), mais o tempo médio até a avaliação e o funil por situação de atendimento
+- **E** as que ainda não viraram pedido aparecem separadas por decisão (esperando avaliação, recusada, cancelada, aprovada na fila), porque todas elas têm a mesma situação de atendimento: "sem pedido"
 
 **C-017 — Ranking por vendedor**
 - **Dado que** três vendedores registraram solicitações no período
@@ -207,7 +208,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-006 | A comparação de compras e vendas DEVE exigir uma filial e, sem escolha, assumir a primeira **dizendo qual** | Subtítulo do bloco nomeia a filial assumida (C-005) | must |
 | RF-007 | O sistema DEVE medir cada pedido em três etapas — Análise (compras), Faturamento (fornecedor) e Entrega (fornecedor) — contra as metas cadastradas do fornecedor, em dias úteis (Entrega também em dias corridos, conforme o cadastro) | C-007, C-008, C-010 | must |
 | RF-008 | Cada etapa DEVE receber exatamente um destes sete estados: no prazo, concluída com atraso, em andamento, vence hoje, prazo vencido, não iniciada, sem meta | Nenhuma etapa aparece sem estado ou com um oitavo (RN-002) | must |
-| RF-009 | O pedido DEVE ser classificado como atrasado (compras), atrasado (fornecedor), atenção, no prazo ou concluído, nessa ordem de precedência | C-008, C-009 | must |
+| RF-009 | O pedido DEVE ser classificado como atrasado (compras), atrasado (fornecedor), concluído, atenção ou no prazo, nessa ordem de precedência | C-008, C-009 | must |
 | RF-010 | O sistema DEVE calcular uma nota de 0 a 100 por pedido, como média das etapas iniciadas que têm meta | 75 e 90 nos dois exemplos (C-011) | must |
 | RF-011 | Pedidos cancelados NÃO DEVEM entrar em nenhuma leitura de prazo | C-012 | must |
 | RF-012 | Os números do topo e a lista de prazos DEVEM sair da mesma conta | Total do topo = total da lista sem filtro, em qualquer período (C-013) | must |
@@ -255,12 +256,12 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-006 — A nota do pedido.** Por etapa iniciada e com meta, a nota é `menor entre 100 e (100 × meta ÷ dias gastos)`, arredondada; a nota do pedido é a média dessas notas, arredondada. Etapa não iniciada ou sem meta fica fora da média. Pedido sem nenhuma etapa medida tem nota 0.
 - **RN-007 — Cancelado fora.** Pedido na etapa de cancelados não entra em nenhuma leitura de prazo: nem nos números, nem nas médias, nem na lista.
 - **RN-008 — Aderência à agenda.** `na data planejada` (o envio saiu até a data planejada), `enviada com atraso` (saiu depois), `pendente e atrasada` (ainda não saiu e a data já passou), `dentro do planejado` (ainda não saiu e a data não chegou), `sem agenda` (o pedido não nasceu de um agendamento). Os dias de atraso são dias corridos entre a data planejada e o envio — ou hoje, se ainda não houve envio —, nunca negativos.
-- **RN-009 — Aderência das solicitações.** É contagem, nunca valor: aderência **geral** = atendidas ÷ todas as solicitações do período; aderência **de fluxo** = atendidas ÷ (todas − pendentes − recusadas). Sem solicitações no período, as duas ficam vazias, não zero.
+- **RN-009 — Aderência das solicitações.** É contagem, nunca valor: aderência **geral** = atendidas ÷ todas as solicitações do período; aderência **de fluxo** = atendidas ÷ (todas − as que esperam avaliação − as recusadas). Sem solicitações no período, as duas ficam vazias, não zero. O funil precisa de **duas leituras** da mesma solicitação para essa conta: a **decisão** (esperando avaliação, aprovada, recusada, cancelada) e a **situação de atendimento** — quem ainda não virou pedido tem todas a mesma situação ("sem pedido"), e só a decisão as separa.
 - **RN-010 — Situação da solicitação é derivada.** A situação de atendimento vem da etapa do pedido a que a solicitação está ligada e do estado do item, calculada na hora da consulta. Esta feature **lê** essa situação da mesma régua que a tela de solicitações usa; não tem régua própria.
 - **RN-011 — Períodos derivados de hoje.** A comparação de compras e vendas oferece os doze meses terminados no mês corrente e os trimestres já iniciados do ano, sempre calculados a partir de hoje; o padrão é o mês corrente. O painel de indicadores usa intervalo livre, com padrão dos últimos 90 dias até hoje.
 - **RN-012 — Filial na comparação de compras e vendas.** Essa comparação casa movimento de entrada com movimento de saída por filial e não existe consolidada: sem filial escolhida, vale a primeira da lista, e a tela diz qual.
 - **RN-013 — Dono do relatório.** Edita e exclui quem criou, e o administrador. Relatório compartilhado é visível a todos que enxergam a tela; relatório não compartilhado só ao autor. Título vazio é recusado.
-- **RN-014 — Filtro desligado e limite.** Filtro não preenchido não filtra. As duas listagens paginadas trazem o total ao lado; os blocos de gráfico trazem no máximo 50 linhas, com o corte declarado no bloco.
+- **RN-014 — Filtro desligado, período e limite.** Filtro não preenchido não filtra — e "não filtra" quer dizer que o resultado é o mesmo de não ter mandado o filtro, nunca uma lista vazia. O **período** é a exceção declarada: nos indicadores ele é obrigatório (todo bloco diz de que período está falando), e só o período de criação do relatório pode ficar em branco. As duas listagens paginadas trazem o total ao lado; os blocos de gráfico trazem no máximo 50 linhas, com o corte declarado no bloco.
 - **RN-015 — Recorte por acesso restrito.** Quem tem acesso restrito vê, em qualquer indicador, lista ou relatório desta feature, só os pedidos que criou — a mesma regra que já vale no quadro.
 - **RN-016 — A régua é uma só.** Os números do topo, a lista e o perfil por fornecedor saem da mesma conta de etapas; a tela não recalcula prazo por conta própria — quando ela precisa mostrar o estado de uma etapa, usa a mesma régua, conferida contra a do servidor por teste.
 
@@ -283,7 +284,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-013 | para o mesmo período e filial, o total do topo é igual ao total da listagem sem filtro, e o número de atrasados é igual à contagem da listagem filtrada por atrasados | regra de negócio |
 | C-014 | pedido ligado a um agendamento com data planejada e envio 4 dias depois → `enviada com atraso` e 4 dias; envio até a data → `na data planejada`; pedido sem agendamento → `sem agenda` | regra de negócio |
 | C-015 | a linha do tempo de um pedido com N passagens devolve N linhas, na ordem, com dias em cada etapa e a última contada até hoje | regra de negócio |
-| C-016 | funil com 8 atendidas, 4 pendentes, 2 recusadas e 6 em fluxo → geral 40,0 % e fluxo 57,1 %; funil vazio → as duas vazias, não zero | regra de tela |
+| C-016 | funil com 8 atendidas, 4 esperando avaliação, 2 recusadas e 6 em fluxo → geral 40,0 % e fluxo 57,1 %, com as 4 e as 2 lidas da **decisão** e as 8 e as 6 da **situação**; funil vazio → as duas vazias, não zero | regra de tela |
 | C-017 | o ranking devolve uma linha por vendedor do período, com total, pendentes, em fluxo, atendidas, não atendidas, recusadas e aderência, e nenhuma coluna de valor | regra de negócio |
 | C-018 | salvar devolve o relatório na listagem com título, autor e o recorte gravado; reler devolve o mesmo recorte, campo a campo | regra de negócio |
 | C-019 | editar e excluir como o autor funciona; como outra pessoa não altera nada (contagem e conteúdo iguais antes e depois); como administrador funciona; a listagem marca quem pode editar cada relatório | regra de negócio |
@@ -303,12 +304,12 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-006 | (2,1)+(5,5) → 75; (1,1)+(5,5)+(10,7) → 90; nenhuma etapa medida → 0; etapa com 0 dias não divide por zero | regra de tela |
 | RN-007 | o pedido cancelado do seed não aparece em nenhuma das quatro consultas de prazo | regra de negócio |
 | RN-008 | as cinco situações de agenda e os dias de atraso, inclusive o caso "envio antes da data planejada" com 0 dias | regra de tela + regra de negócio |
-| RN-009 | 8/20 → 40,0 e 8/14 → 57,1; total zero → vazio, não zero | regra de tela |
+| RN-009 | 8/20 → 40,0 e 8/14 → 57,1, separando as que esperam avaliação das recusadas pela decisão (as duas têm a mesma situação); total zero → vazio, não zero | regra de tela |
 | RN-010 | a soma do funil por situação é igual à contagem das solicitações do período lidas pela tela de solicitações, situação a situação | regra de negócio |
 | RN-011 | a lista de períodos derivada de 15/09/2026 e de 02/01/2027; o intervalo padrão dos indicadores tem 90 dias e termina hoje | regra de tela |
 | RN-012 | a consulta de compras e vendas com filial vazia devolve zero linhas, e a tela nunca a chama assim | regra de tela + regra de negócio |
 | RN-013 | título vazio é recusado; alterar relatório de outra pessoa não grava; excluir o próprio grava | regra de negócio |
-| RN-014 | filtros desligados não reduzem; o total acompanha o filtro; cada bloco de gráfico devolve no máximo 50 linhas | regra de negócio |
+| RN-014 | o período de criação em branco na consulta do relatório devolve o **mesmo** total que a contagem de todos os pedidos feita no teste (não reduz, não zera); os demais filtros desligados idem; o total acompanha o filtro; cada bloco de gráfico devolve no máximo 50 linhas | regra de negócio |
 | RN-015 | como usuário de acesso restrito, o resumo e a listagem só contam os pedidos criados por ele; como usuário normal, contam todos | regra de negócio |
 | RN-016 | para **cada** pedido devolvido pela listagem, a régua da tela reproduz, a partir dos mesmos marcos, os três estados e a nota que o servidor calculou | regra de tela + regra de negócio |
 
