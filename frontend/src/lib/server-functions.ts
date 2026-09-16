@@ -13,7 +13,10 @@
 // (7701–7709, 7750–7756); 78xx e 79xx por spec da onda 3: 008 solicitações do
 // comercial (7801–7807, 7850–7857), 009 indicadores e relatórios (7901–7917,
 // 7950–7952). A 010 (extrato do pedido) não tem SF própria: lê
-// sgcPedidoCarregar (002) e sgcNfListar (005).
+// sgcPedidoCarregar (002) e sgcNfListar (005). 81xx e 82xx por spec da onda 4
+// (R-081): 011 compras inteligentes (8101–8109, 8150–8154), 012 coberturas por
+// curva (8201, 8250) — sgcCoberturaListar (7307), sgcEscCoberturaGravar (7358)
+// e sgcEscCoberturaExcluir (7359) continuam no bloco 73xx, com os ids delas.
 
 
 export const SERVER_FUNCTION_NAMES = {
@@ -245,6 +248,24 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscRelatorioInserir: 'sgcEscRelatorioInserir',
   sgcEscRelatorioAtualizar: 'sgcEscRelatorioAtualizar',
   sgcEscRelatorioExcluir: 'sgcEscRelatorioExcluir',
+
+  sgcWintRessuprimento: 'sgcWintRessuprimento',
+  sgcWintProdutoHistorico: 'sgcWintProdutoHistorico',
+  sgcWintProdutoUltimasCompras: 'sgcWintProdutoUltimasCompras',
+  sgcWintProdutoEstoqueFiliais: 'sgcWintProdutoEstoqueFiliais',
+  sgcWintProdutoVendas: 'sgcWintProdutoVendas',
+  sgcParametrosCompraListar: 'sgcParametrosCompraListar',
+  sgcVendasDesconsideradasListar: 'sgcVendasDesconsideradasListar',
+  sgcPedidoAbertoDoFornecedor: 'sgcPedidoAbertoDoFornecedor',
+  sgcEficienciaComprador: 'sgcEficienciaComprador',
+  sgcEscParametroCompraSalvar: 'sgcEscParametroCompraSalvar',
+  sgcEscParametroCompraSilenciar: 'sgcEscParametroCompraSilenciar',
+  sgcEscParametroCompraRestaurar: 'sgcEscParametroCompraRestaurar',
+  sgcEscVendaDesconsiderar: 'sgcEscVendaDesconsiderar',
+  sgcEscVendaReconsiderar: 'sgcEscVendaReconsiderar',
+
+  sgcCoberturaLogListar: 'sgcCoberturaLogListar',
+  sgcEscCoberturaLogInserir: 'sgcEscCoberturaLogInserir',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -476,4 +497,22 @@ export const SERVER_FUNCTIONS = {
   sgcEscRelatorioInserir: '7950',
   sgcEscRelatorioAtualizar: '7951',
   sgcEscRelatorioExcluir: '7952',
+
+  sgcWintRessuprimento: '8101',
+  sgcWintProdutoHistorico: '8102',
+  sgcWintProdutoUltimasCompras: '8103',
+  sgcWintProdutoEstoqueFiliais: '8104',
+  sgcWintProdutoVendas: '8105',
+  sgcParametrosCompraListar: '8106',
+  sgcVendasDesconsideradasListar: '8107',
+  sgcPedidoAbertoDoFornecedor: '8108',
+  sgcEficienciaComprador: '8109',
+  sgcEscParametroCompraSalvar: '8150',
+  sgcEscParametroCompraSilenciar: '8151',
+  sgcEscParametroCompraRestaurar: '8152',
+  sgcEscVendaDesconsiderar: '8153',
+  sgcEscVendaReconsiderar: '8154',
+
+  sgcCoberturaLogListar: '8201',
+  sgcEscCoberturaLogInserir: '8250',
 };
