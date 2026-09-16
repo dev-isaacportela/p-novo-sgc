@@ -83,9 +83,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** a solicitação fica **cancelada** e sai da fila de avaliação; **cancelar a solicitação de outro vendedor é recusado**, e **cancelar uma já aprovada, recusada ou cancelada também é recusado** — depois de avaliada, quem desfaz é compras
 
 **C-007 — O pedido em montagem mostra as solicitações daquele fornecedor e filial**
-- **Dado que** há um pedido em Análise/Montagem do fornecedor Nestlé para a filial 1, e na fila existem 3 solicitações ativas desse mesmo fornecedor e filial — uma urgente (5303, aprovada e sem pedido), uma alta (5301, pendente) e uma normal (5302, pendente)
+- **Dado que** há um pedido em Análise/Montagem do fornecedor Nestlé para a filial 1, e na fila existem 4 solicitações ativas desse mesmo fornecedor e filial — uma urgente (5303, aprovada e sem pedido), uma alta (5301, pendente) e duas normais pendentes (5302 e, registrada depois, outra do 5301)
 - **Quando** a compradora abre o pedido
-- **Então** ela lê as 3, **nessa ordem de prioridade**, cada uma com produto, quantidade, cliente (código e nome), prioridade, vendedor e justificativa — e esse bloco aparece **só** enquanto o pedido está na montagem
+- **Então** ela lê as 4 na ordem urgente, alta, normal mais antiga, normal mais nova, cada uma com produto, quantidade, cliente (código e nome), prioridade, vendedor e justificativa — e esse bloco aparece **só** enquanto o pedido está na montagem
 
 **C-008 — "Incluir no pedido" cria o item e vincula**
 - **Dado que** a solicitação pendente do produto 5301 com quantidade 24 aparece no pedido em montagem
@@ -113,9 +113,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** nenhuma das duas aparece no bloco, e não há como incluí-las naquele pedido
 
 **C-013 — Uma solicitação vira um item só**
-- **Dado que** a solicitação do produto 5301 já foi incluída no pedido
-- **Quando** alguém tenta incluí-la de novo, no mesmo pedido ou em outro
-- **Então** a inclusão é recusada dizendo que a solicitação já está vinculada a um pedido; e quando o produto **já estava** no pedido com quantidade, o vínculo é gravado no item existente **sem sobrescrever a quantidade que a compradora já tinha decidido**
+- **Dado que** a solicitação do produto 5301 já foi incluída no pedido e existe uma **segunda** solicitação ativa do mesmo produto, do mesmo fornecedor e filial
+- **Quando** alguém tenta incluir a primeira de novo, e depois inclui a segunda
+- **Então** a primeira é recusada dizendo que já está vinculada a um pedido; a segunda é aceita e **vincula ao item que já existe** — o pedido continua com **um** item do 5301, **sem sobrescrever a quantidade que a compradora já tinha decidido**
 
 **C-014 — O cliente comprou?**
 - **Dado que** seis solicitações foram aprovadas para a filial 3 — uma cujo cliente comprou naquela filial (12 unidades 20 dias depois da aprovação), uma cujo cliente comprou **em outra filial**, uma cujo cliente não comprou nada, uma cujo produto vendeu na filial mas **para outro cliente**, uma **sem cliente informado** e uma aprovada há **10 dias**
@@ -148,9 +148,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Então** o comercial registra e cancela as **suas** e não avalia nenhuma; o analista avalia e inclui no pedido e **não registra**; a diretoria vê tudo com todos os botões desabilitados; o somente leitura idem; e um analista de acesso restrito só inclui solicitação nos pedidos que ele criou
 
 **C-020 — A lista, os filtros e a paginação**
-- **Dado que** existem 14 solicitações no sistema desta feature — 4 pendentes, 7 aprovadas sem pedido, 1 aprovada e vinculada, 1 recusada e 1 cancelada
+- **Dado que** existem 15 solicitações no sistema desta feature — 5 pendentes, 7 aprovadas sem pedido, 1 aprovada e vinculada, 1 recusada e 1 cancelada
 - **Quando** o gestor abre a lista
-- **Então** ela vem paginada com o total; o filtro de situação própria "pendente" devolve 4 e o de "recusada" devolve 1; o filtro de fornecedor Nestlé recorta a lista; a busca por "BEBIDA LACTEA" encontra as do produto 5301; e a soma das páginas é o total informado
+- **Então** ela vem paginada com o total; o filtro de situação própria "pendente" devolve 5 e o de "recusada" devolve 1; o filtro de fornecedor Nestlé recorta a lista; a busca por "BEBIDA LACTEA" encontra as do produto 5301; e a soma das páginas é o total informado
 
 **C-021 — O comercial só enxerga o que registrou**
 - **Dado que** o vendedor Leo registrou 4 solicitações e existem outras de outros autores
@@ -254,8 +254,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
   entrarem no mesmo pedido, **um** item — a segunda vincula ao item que já existe.
 - **RN-010 — Quantidade ao vincular.** O item nasce com a quantidade solicitada, e o
   comprador a ajusta como em qualquer item. Se o produto **já estava** no pedido com
-  quantidade maior que zero, a quantidade é preservada: quem decide quanto comprar é a
-  montagem, e uma inclusão nunca sobrescreve uma decisão já tomada.
+  quantidade maior que zero, a quantidade é preservada — inclusive quando o item tinha sido
+  removido e volta: quem decide quanto comprar é a montagem, e uma inclusão nunca
+  sobrescreve uma decisão já tomada. Só o item **zerado** recebe a quantidade solicitada.
 - **RN-011 — Desvínculo.** Item removido, ou zerado e removido ao sair da montagem, desfaz
   o vínculo: a solicitação volta a aprovada e sem pedido, e o histórico registra
   "desvinculada". Ela reaparece no bloco do próprio pedido, porque voltou a ser demanda em
@@ -300,39 +301,39 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 | Cenário / regra | Evidência automática exigida | Camada |
 |---|---|---|
-| C-001 | registrar 5301 com quantidade 24, cliente 9201 e justificativa de 90 caracteres grava 1 solicitação pendente com o vendedor, o fornecedor 1042 "Nestlé", o cliente 9201 com nome e CNPJ, e 1 linha "criada" no histórico | regra de negócio |
+| C-001 | registrar 5301 com quantidade 24, cliente 9201 e justificativa de 90 caracteres grava 1 solicitação pendente com o vendedor, o fornecedor 1042 "NESTLE BRASIL LTDA" (nome exato do seed da 001), o cliente 9201 com nome e CNPJ, e 1 linha "criada" no histórico | regra de negócio |
 | C-002 | registrar sem cliente grava cliente 0 e nome vazio; a leitura devolve situação de cliente "sem cliente informado" e nunca "não comprou" | regra de negócio + regra de tela |
 | C-003 | quantidade 0 é recusada; justificativa com 9 caracteres é recusada; a contagem de solicitações não muda em nenhum dos dois casos; a validação de tela aponta os dois campos de uma vez | regra de negócio + regra de tela |
 | C-004 | aprovar a pendente do 5303 deixa status "aprovada" com pedido 0, avaliador e data; a contagem de pedidos e de itens do sistema não muda; 1 linha "aprovada" no histórico | regra de negócio |
 | C-005 | recusar com 9 caracteres devolve "não pode" citando o motivo; com 10, grava status "recusada", motivo, autor e data, e 1 linha "recusada" | regra de negócio |
 | C-006 | Leo cancela a sua pendente e ela fica "cancelada"; Leo tentando cancelar a de outro autor não grava nada; cancelar uma já aprovada não grava nada | regra de negócio |
-| C-007 | o bloco do pedido em montagem (Nestlé, filial 1) devolve exatamente 3 linhas, na ordem 5303 (urgente), 5301 (alta), 5302 (normal), cada uma com cliente, vendedor e justificativa | regra de negócio |
-| C-008 | incluir a solicitação do 5301 devolve o item criado, o pedido passa a ter 1 item 5301 com quantidade pedida 24 e a origem da solicitação, a solicitação fica aprovada e vinculada àquele pedido e ao item, o bloco passa a devolver 2 linhas, e o histórico do pedido ganha 1 nota citando "Leo" | regra de negócio |
-| C-009 | remover o item 5301 devolve a solicitação à fila (pedido 0, item 0, status aprovada), o bloco volta a 3 linhas e o histórico dela ganha "desvinculada"; zerar o item e sair da montagem produz o mesmo resultado | regra de negócio |
-| C-010 | recusar pelo bloco deixa a solicitação "recusada" com o motivo e o bloco passa a devolver 2 linhas | regra de negócio |
+| C-007 | o bloco do pedido em montagem (Nestlé, filial 1) devolve exatamente 4 linhas, na ordem 5303 (urgente), 5301 (alta), 5302 (normal mais antiga) e 5301 de novo (normal mais nova), cada uma com cliente, vendedor e justificativa | regra de negócio |
+| C-008 | incluir a solicitação do 5301 devolve o item criado, o pedido passa a ter 1 item 5301 com quantidade pedida 24 e a origem da solicitação, a solicitação fica aprovada e vinculada àquele pedido e ao item, o bloco passa a devolver 3 linhas, e o histórico do pedido ganha 1 nota citando "Leo" | regra de negócio |
+| C-009 | remover o item 5301 devolve à fila as **duas** solicitações ligadas a ele (pedido 0, item 0, status aprovada), o bloco volta a 4 linhas e o histórico de cada uma ganha "desvinculada"; zerar o item e sair da montagem produz o mesmo resultado | regra de negócio |
+| C-010 | recusar pelo bloco deixa a solicitação "recusada" com o motivo e o bloco passa a devolver 3 linhas | regra de negócio |
 | C-011 | com a solicitação vinculada, mover o pedido pelas 10 etapas devolve, na ordem: em análise, em aprovação, em aprovação, em envio, enviada, em trânsito, em faturamento, em faturamento, atendida, não atendida; com o item daquele produto em B.O. na etapa de B.O., devolve não atendida | regra de negócio |
 | C-012 | o bloco do pedido Nestlé/filial 1 não traz a solicitação Nestlé/filial 2 nem a do fornecedor 1015/filial 1; incluir qualquer uma das duas nesse pedido é recusado citando fornecedor e filial | regra de negócio |
-| C-013 | incluir a mesma solicitação duas vezes devolve "não pode" na segunda e o pedido continua com 1 item; incluir uma solicitação de um produto que já está no pedido com quantidade 30 mantém a quantidade em 30 e grava a origem | regra de negócio |
+| C-013 | incluir a mesma solicitação duas vezes devolve "não pode" na segunda e o pedido continua com 1 item; incluir a segunda solicitação do 5301, com o item já em quantidade 24, mantém a quantidade em 24, continua com 1 item e grava a origem nova | regra de negócio |
 | C-014 | as 6 solicitações do rastreio devolvem, na ordem do seed: cliente comprou (12 unidades), comprou em outra filial (8), cliente não comprou, cliente não comprou (com 30 unidades vendidas a terceiros no contexto), sem cliente informado, aguardando giro | regra de tela + regra de negócio |
 | C-015 | as mesmas 6 devolvem: girando, sem estoque, parado na filial (80 dias sem saída), em excesso (300 dias de cobertura), sem estoque, girando | regra de tela + regra de negócio |
 | C-016 | a classificação de uma solicitação sem linha correspondente devolve "sem dado" nos dois eixos, e o resumo do painel conta quantas ficaram sem dado | regra de tela |
 | C-017 | a mesma linha classificada com cobertura de 90 dias dá "girando" e com 60 dá "em excesso"; a função de classificação é chamada de novo sobre os mesmos dados, sem entrada nova | regra de tela |
 | C-018 | a busca por 9201, por "nutrivida" e por "12345678000190" devolve, cada uma, pelo menos 1 linha com o mesmo código, nome e CNPJ; a busca devolve no máximo 20 linhas | regra de negócio |
 | C-019 | registrar como analista é recusado; avaliar como comercial e como diretoria é recusado; incluir no pedido como comercial, diretoria e somente leitura é recusado; incluir como analista restrito em pedido de outro é recusado citando acesso restrito; a matriz de permissões devolve as chaves certas por persona | regra de negócio + regra de tela |
-| C-020 | as 14 solicitações desta feature aparecem recortadas pelos seus próprios códigos (nunca por total absoluto); o filtro "pendente" devolve 4, "recusada" devolve 1, o de fornecedor 1042 recorta, a busca por "BEBIDA LACTEA" devolve as do 5301, e o total bate com a contagem feita no próprio teste | regra de negócio |
+| C-020 | as 15 solicitações desta feature aparecem recortadas pelos seus próprios códigos (nunca por total absoluto); o filtro "pendente" devolve 5, "recusada" devolve 1, o de fornecedor 1042 recorta, a busca por "BEBIDA LACTEA" devolve as do 5301, e o total bate com a contagem feita no próprio teste | regra de negócio |
 | C-021 | a mesma listagem, sem filtro, devolve só as 4 de Leo quando quem chama é Leo, e todas quando quem chama é o gestor; o filtro "minhas" do gestor devolve as dele | regra de negócio |
 | C-022 | a solicitação que passou por criada, aprovada, vinculada, desvinculada e vinculada devolve 5 linhas em ordem, com autor, data e o número do pedido no detalhe do vínculo | regra de negócio |
 | C-023 | as linhas exportadas são exatamente as 6 do painel, com as 9 colunas da regra, na mesma ordem da tela | regra de tela |
 | RN-001 | quantidade 0 → mensagem citando quantidade; justificativa de 9 caracteres → mensagem citando justificativa; produto ausente → mensagem; tudo preenchido → sem mensagem; prioridade vazia vira normal | regra de tela |
 | RN-002 | a solicitação criada por Leo devolve Leo como vendedor na listagem, no bloco e na etiqueta do item | regra de negócio |
 | RN-003 | cliente 0 → "sem cliente informado" nos dois eixos de rótulo, e nunca "cliente não comprou" | regra de tela |
-| RN-004 | registrar o 5301 grava fornecedor 1042 e "Nestlé" sem que o registro receba fornecedor nenhum como entrada | regra de negócio |
+| RN-004 | registrar o 5301 grava fornecedor 1042 e "NESTLE BRASIL LTDA" sem que o registro receba fornecedor nenhum como entrada | regra de negócio |
 | RN-005 | aprovar não cria pedido nem item: as contagens antes e depois são iguais | regra de negócio |
 | RN-006 | recusa com 9 caracteres não grava; com 10, grava motivo, autor e data | regra de negócio |
 | RN-007 | cancelar pendente do próprio autor grava; de outro autor, não; já aprovada, não | regra de negócio |
 | RN-008 | a tabela etapa → situação das 10 etapas, mais "sem pedido" quando não há vínculo e "não atendida" quando o item está em B.O. | regra de negócio |
 | RN-009 | duas solicitações do mesmo produto no mesmo pedido produzem 1 item; a segunda vincula ao item existente | regra de negócio |
-| RN-010 | incluir sobre item com quantidade 30 mantém 30; sobre item removido ou com quantidade 0, passa a valer a quantidade solicitada | regra de negócio |
+| RN-010 | incluir sobre item com quantidade 24 mantém 24 e o pedido continua com um item só; sobre item com quantidade 0 (removido ou não), passa a valer a quantidade solicitada | regra de negócio |
 | RN-011 | remover o item devolve a solicitação à fila; zerar e sair da montagem também; solicitação de item que continua vivo não é desvinculada | regra de negócio |
 | RN-012 | o bloco devolve só ativas do mesmo fornecedor e filial, ordenadas urgente → alta → normal e, dentro delas, da mais antiga para a mais nova; recusada, cancelada e vinculada ficam fora | regra de negócio |
 | RN-013 | (cliente 0) → sem cliente; (venda na filial > 0) → comprou; (venda na filial 0, venda geral > 0) → comprou em outra filial; (sem venda, 10 dias, carência 30) → aguardando; (sem venda, 45 dias) → não comprou | regra de tela |
