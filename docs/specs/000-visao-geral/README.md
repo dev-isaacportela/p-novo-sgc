@@ -479,6 +479,63 @@ Revisão cruzada da S1 (2026-09-16, Opus): 5 bloqueios (B-1..B-5), 13 correçõe
 | R-080 | Primitivos de gráfico e KPI ficam em `frontend/src/components/page.tsx` (arquivo compartilhado) e são entrega da **base (S2)**, conforme a seção do plan 009 que os descreve (`corDeSerie`, `GradeKpi`, `Kpi`, `GradeGraficos`, `PainelGrafico`, `AlternaVisao` e os primitivos do `recharts` reexportados); o `design.md` ganha a seção correspondente (§8.7). |
 | R-114 | **`/relatorios` adiado, salvo se já estivesse pronto** — decisão do usuário em 2026-09-16 ("não vamos criar /relatorios agora … a não ser que tenha finalizado o /relatorios"), tomada durante a S3 da 009: se o agente da 009 já tinha concluído e testado a parte de relatórios quando a decisão chegou, ela fica e é integrada; senão a spec 009 entrega só `/analises` nesta onda e, nesse caso, os cenários, regras e contratos de relatórios salvos (R-059, `SGC_RELATORIO`, `sgcRelatorio*`, `sgcEscRelatorio*`, `verRelatorios`/`salvarRelatorio`) ficam registrados na spec como **adiados**, não implementados. O integrador (S4) retira o que a base criou por antecipação: tabela `SGC_RELATORIO` do setup, chaves de permissão e item de menu "Relatórios", rota e página stub `/relatorios`, entradas do mapa (7915–7917, 7950–7952) e chaves de `CHECK_INPUT` só de relatório (`fase`, `campoAgrupar`, `responsavelId`, `prioridade`). O grupo de menu **Gestão** fica só com "Análises". Quando voltar, entra como item de uma onda futura sobre o mesmo contrato. |
 
+### Integração da onda 3 (2026-09-16)
+
+As três features chegaram a `develop` (010 → 008 → 009) e a S4 ligou o que cada
+uma deixou para o integrador. Quatro blocos:
+
+1. **Bloco "Solicitações" na Análise** (R-054/R-063): `BLOCOS_POR_FASE.analise`
+   passa a `['solicitacoes', 'itens', 'alertas']` e `ConteudoDaFase.tsx` desenha
+   o `BlocoSolicitacoes` da 008 com `fases` e `sessao`, como já fazia com o B.O.
+   As fases de aprovação continuam com itens e alertas.
+2. **Desvínculo** (R-066): `devolverSolicitacoes()` vive em
+   `abas/verificar-saida.ts` e serve aos dois caminhos — a remoção de um item
+   (`Itens.tsx`) e a saída da Análise, que apaga os zerados de uma vez. O par é
+   `sgcEscSolicitacaoHistoricoInserir` (antes, porque casa pelo `ID_CARD` que o
+   desvínculo zera) + `sgcEscSolicitacaoDesvincular`; nenhum id sai da tela. A
+   nota do card (`kbNotaRegistrar`, em `try/catch`) só no caminho da remoção,
+   onde a tela sabe qual item saiu: no caminho da saída da Análise ela custaria
+   uma execução a mais só para descobrir os zerados (RNF-001).
+   **Etiqueta** (R-054/R-068): `ItemPedido` ganha `idSolicitacao`/
+   `solicitacaoDe` (`itemDeLinha` lê `ID_SOLICITACAO`/`SOLICITACAO_VENDEDOR`) e
+   a célula do produto mostra "Solicitação de &lt;vendedor&gt;".
+3. **Órfãos de `/relatorios` retirados** (R-114): `CREATE TABLE SGC_RELATORIO`
+   do `setup-backend.mjs`; os nomes e ids 7914–7917 e 7950–7952 do mapa (o
+   `add-012` já subiu sem eles); `verRelatorios`/`salvarRelatorio` e o item de
+   menu de `permissoes.ts` (+ `tests/permissoes.test.mjs`) — o grupo **Gestão**
+   fica só com "Análises"; a rota `/relatorios`, a página stub e o ícone órfão
+   do `AdminLayout`; as chaves `campoAgrupar` e `responsavelId` do
+   `CHECK_INPUT`; e o `seed009` (já no-op) junto com o arquivo
+   `seed/009-indicadores.mjs`. **Ficam**: `prioridade` no `CHECK_INPUT` (quem a
+   usa é o `sgcEscSolicitacaoInserir` da 008), `fase`/`soVencidos` (filtro de
+   SLA do `add-012`) e o shim `JSON_UNQUOTE` do dialeto (testado e inofensivo).
+4. **009 ligada ao resto**: `BarraConsumo` entra na §8.7 de `page.tsx` (escala
+   fechada de doze passos — o Tailwind não gera classe a partir de variável e
+   `style={{}}` não entra aqui — com o tom do mesmo `STATUS_TONE` do `Status`) e
+   desenha o consumo da meta na aba Pedidos/SLA; o botão "Exportar CSV" da mesma
+   aba usa `COLUNAS_CSV_SLA`/`linhasCsvSla`, que estavam sem consumidor, sobre a
+   página atual e sem execução nova (emenda a D-013 do plan da 009, registrada
+   lá: com `/relatorios` adiado o construtor não existe nesta onda); e o smoke
+   009 passa a cruzar, situação a situação, o funil com `sgcSolicitacoesListar`
+   da 008 (RN-010), o que só era possível depois do merge.
+
+Duas asserções literais do `smoke/009-indicadores.mjs` caíram quando o seed da
+008 chegou ao mesmo banco (a lista fechada de `STATUS` em `sem_pedido`, que
+ganhou `cancelada`, e as três contagens do ranking do `leo`): as duas passam a
+ser contadas no próprio teste, como manda R-045. A-14: nenhum ramo "pendente de
+S4" sobrou nos smokes 008/009 — os dois arquivos não têm `else`.
+
+Notas da base (S2) e da integração, para quem ler o código depois:
+
+| O que | Onde |
+|---|---|
+| `fragmento(nome)` devolve o texto cru, **sem** vírgula de coluna: a vírgula é convenção dos blocos de pendência e mora em `colunasDePendencia()`, no `add-005`. A régua de situação é expressão escalar e uma vírgula a quebraria. | `backend/lib/fragmentos.mjs`, `add-005` |
+| `page.tsx` roda com `max-lines` e `react-refresh/only-export-components` desligados: é vocabulário do kit, e o bloco §8.7 exporta `corDeSerie`/`tomDeIntensidade` ao lado dos componentes (R-080). | `frontend/eslint.config.js` |
+| `recharts ^3.10.1` no frontend (R-058); nenhuma dependência nova no backend. | `frontend/package.json` |
+| `criarSolicitacao` é só de **admin e comercial** — o autor É o vendedor (RN-002 da 008); analista e gestor avaliam, não registram. | `lib/permissoes.ts` |
+| **D-33** (dívida): `tomDeIntensidade`, `Delta` e `Sparkline` do §8.7 não têm consumidor nenhum — só o kit os exporta. Ou uma tela passa a usá-los, ou saem (é o D-16 da onda 2 aplicado ao bloco de gráficos). | `frontend/src/components/page.tsx` |
+| `tests/bo.test.mjs` C-013 afirma **2** itens no menu do comercial (Solicitações e Produtos em B.O.), o mesmo que `tests/permissoes.test.mjs`. | `frontend/tests/bo.test.mjs` |
+
 ### Modelo de dados da onda 3
 
 | Tabela | Conteúdo | Spec |

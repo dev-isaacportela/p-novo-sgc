@@ -10,10 +10,12 @@
 // global. Todo número esperado é contado no próprio teste, sobre as mesmas
 // tabelas.
 //
-// Esta é a ÚLTIMA suíte do smoke.mjs de propósito: os cenários de SLA e de
-// agenda arranjam o estado que precisam por `UPDATE`/`INSERT` direto e o
+// Esta suíte roda DEPOIS das outras da onda 3, de propósito: os cenários de SLA
+// e de agenda arranjam o estado que precisam por `UPDATE`/`INSERT` direto e o
 // desfazem no `finally` do próprio `teste()` (C-10 do plan — o seed da 009 não
-// cria pedido nenhum, R-062), e nenhuma outra suíte depende do que ela toca.
+// cria pedido nenhum, R-062), e nenhuma suíte da onda 3 depende do que ela
+// toca. As suítes das ondas seguintes entram depois dela (011) ou antes (012,
+// logo após 003).
 
 import { assert, CENARIO } from './base.mjs';
 import { diasUteisEntre } from '../../lib/dias-uteis.mjs';
@@ -462,8 +464,9 @@ export async function suite(ctx) {
   /* ─────────── T-088 — C-017 e RN-010 (funil e ranking das solicitações) ─────────── */
 
   await teste('C-016 / RN-010: o funil vem em DUAS dimensões, a soma bate com a contagem do período e cada situação sai da fase do card', async () => {
-    // O seed da 009 não cria solicitação (R-062) e a suíte da 008 pode ainda
-    // não estar integrada: o cenário é arranjado aqui e removido no finally.
+    // O seed da 009 não cria solicitação (R-062): os seis estados que este
+    // cenário precisa são arranjados aqui e removidos no finally, por cima do
+    // que o seed da 008 já pôs na tabela.
     const inserir = db.prepare(`INSERT INTO SGC_SOLICITACAO
       (CODPROD, DESCRICAO, CODFORNEC, CODFILIAL, QUANTIDADE, STATUS, ID_CARD, CRIADO_POR, CRIADO_EM, AVALIADO_EM)
       VALUES (?, 'ARRANJO 009', 1015, '1', 10, ?, ?, ?, ?, ?)`);
