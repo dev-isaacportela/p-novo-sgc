@@ -46,6 +46,10 @@ Commits `tipo: descrição`, em português, **sem trailer de agente**.
 ## Como subir para o Mitra (quando o p-NNNNN existir)
 
 1. `npm test` verde em `backend/` e `frontend/`; `npm run build` e `npm run lint` limpos.
+   Antes da primeira publicação (R-115): com a `@benenutri/mitra-kanban` 1.5.0 já no npm, rodar
+   `npm unlink @benenutri/mitra-kanban && npm i @benenutri/mitra-kanban@1.5.0` em `backend/` e em `frontend/`
+   (atualiza `package.json` e o lock juntos — os dois ainda pinam `^1.3.0` porque o lock não pode
+   apontar para versão inexistente enquanto a lib é linkada) e commitar.
 2. `git fetch origin && git merge origin/main --no-edit`; leia o diff.
 3. Merge da release em `main` e `git push origin main` (sem `--force`, sem `--rebase`).
 4. No chat do projeto no Mitra: *"sincronize com a main e rode

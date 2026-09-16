@@ -571,6 +571,53 @@ Consultas Oracle no smoke provam contagem > 0.
 Menu: grupo **Compras** ganha "Solicitações"; grupo novo **Gestão** com "Análises" e "Relatórios".
 O comercial vê Solicitações e Produtos em B.O.
 
+## Revisão adversarial da onda 3 (2026-09-16) e dívidas abertas
+
+Revisão feita sobre `develop` (2ced922) depois da S4, só leitura, com `npm test` verde nos dois lados (245 verificações no backend, 205 testes no frontend, `tsc`/`eslint` limpos). Dois achados bloqueavam a release (injeção no `LIKE` e escritas internas sem fase/dono), nove pediam correção antes dela e catorze viraram dívida. O ensaio no navegador (S4) tinha achado um (P-1 = 3A-8). Tudo o que é "corrigido" abaixo entrou pela branch `fix/onda-3-p1` (agente de correção + integrador) e foi mergeado antes da `release/onda-3`.
+
+**Corrigido antes da release**
+
+| Id | O que era | Como ficou |
+|---|---|---|
+| 3A-1 | `LIKE '%{{busca}}%'` em `sgcWintClienteBuscar` (Oracle) e `sgcFornecedorListar` (MySQL): o runtime só escapa marcador com aspa adjacente — `SANT'ANNA` quebrava a consulta e `a%' OR 1=1 --` a reescrevia. | Concatenação (`'%' \|\| '{{busca}}' \|\| '%'` no Oracle, `CONCAT('%', '{{busca}}', '%')` no MySQL); `grep "%{{"` nos `add-*` volta vazio. Testes com apóstrofo nos smokes 008 (cliente) e 001 (fornecedor), que falham com o SQL antigo. |
+| 3A-2 | `sgcEscSolicitacaoVincular` (7853) e `sgcEscItemDeSolicitacaoInserir` (7856), chamadas por id, só conferiam persona: o `pedidoEmAnalise` do JS era caminho paralelo, não trava (A-6/D-19 da onda 2 de novo). | `faseEDono('{{idCard}}', '{{usuarioId}}')` dentro da `guardaInterna` das duas. Smoke: card fora da Análise e RESTRICTED em card alheio → 0 linhas, nada gravado. |
+| 3A-3 | `sgcEscSolicitacaoHistoricoInserir` por `{{id}}` não conferia autoria: comercial gravava `aprovada`/`vinculada` com detalhe livre em qualquer solicitação. | Ramo por id: `cancelada` só pelo autor (`S.CRIADO_POR = :VAR_USER`); os demais eventos só com a guarda de `AVALIAR`. Smoke com os quatro casos. |
+| 3A-4 | Histórico gravado incondicionalmente depois da escrita principal nos três caminhos (avaliar, cancelar, desvincular): escrita guardada recusada devolve 0 linhas sem erro (D-03) e a linha do histórico dizia que aconteceu. | Servidor: o ramo por card do histórico usa a MESMA guarda do desvínculo (`AVALIAR` + fase e dono) — os dois recusam ou os dois gravam. Tela: avaliar e cancelar releem a solicitação e só registram o histórico quando o carimbo confirma que a escrita rodou; recusa vira aviso no diálogo, que não fecha em silêncio (cobre 3A-25). |
+| 3A-5 | `AVALIADO_EM` também é gravado na recusa; o painel de rastreio filtrava só pela data e listava recusadas como "aprovada em". | `alvoDeRastreio()` em `lib/solicitacoes.ts` (`STATUS = 'aprovada'` e data válida), usado pelo painel; teste RN-015b. |
+| 3A-6 | `TO_DATE` do simulador devolvia NULL para texto que não é data e rolava data impossível (`2026-13-45` → `2027-02-14`) — o Oracle lança (ORA-01861/01839); o rastreio classificava par malformado como "cliente não comprou" (R-064 proíbe shim que inventa valor). | Lança em texto não nulo que não parseia ou não faz round-trip; NULL/'' → NULL. Caso S0-017 no `000-dialeto`. |
+| 3A-7 / 3A-17 | `remover()` em `Itens.tsx`: o par histórico + desvínculo rodava sem `catch` (falha deixava o item removido na tela com erro) e custava 3 execuções mesmo para item sem origem em solicitação. | Par só quando `idSolicitacao > 0`, com `.catch(() => null)`; `recarregar` sempre roda. Caso comum volta a 1 execução (D-39 resolvida ao nascer). Residual: se o par falhar, a varredura na saída da Análise (`verificar-saida.ts`) devolve a solicitação. |
+| 3A-8 | = P-1 do ensaio: o bloco Solicitações só relia no próprio caminho; remover o item na aba irmã devolvia a solicitação no servidor e o bloco não mostrava até reabrir o card. | O efeito do bloco depende dos itens do pedido (`usePedido`) já carregados para o card: relê quando eles mudam e continua UMA execução ao abrir (RNF-001); `incluir` não relê duas vezes. |
+| 3A-10 | "Funil em números" (aba Solicitações de `/analises`) imprimia `STATUS`/`SITUACAO` crus e em ordem diferente do gráfico que diz espelhar. | `rotuloDecisaoSolicitacao`/`rotuloSituacaoSolicitacao` e a ordem do gráfico. |
+| 3A-11 | Aba Pedidos (SLA) classificava com `hoje = padrao.dataFim` e mandava `hoje: ''` ao servidor (`CURDATE()`): RN-016 só valia enquanto os dois "hojes" coincidissem. | `hoje: padrao.dataFim` em todas as chamadas da aba. |
+| 3A-12 (D-34) | `guarda()` do `add-012` sem consumidor depois de R-114. | Apagada. |
+| 3A-13 (D-35) | `CHECK_INPUT.prioridade` justificada no §Integração por uma escrita — mas o `sim:check` pula escritas; chave sem consumidor. | Removida. |
+| 3A-19 | S0-014 percorria as linhas da régua de situação sem exigir `length > 0`. | `assert.ok(linhas.length > 0)` antes do laço. |
+| 3A-23 (D-44) | `PontoSerie`/`PontoComparativo` redeclarados em `blocos.tsx`. | `import type` de `lib/analises.ts`. |
+| D-48 | `backend/package.json` só tinha `publish:001..007`. | `publish:008..012` no mesmo padrão. |
+
+**Aberto — fazer na primeira publicação**
+
+| Id | O que é | Onde |
+|---|---|---|
+| R-115 (3A-9) | Os dois `package.json` pinam `@benenutri/mitra-kanban ^1.3.0` com a lib linkada em 1.5.0 (R-021 pedia `^1.4.0` na onda 2 e não foi aplicado). Decisão: o bump acontece **junto da publicação da lib**, com `npm i @benenutri/mitra-kanban@1.5.0` nos dois lados (atualiza `package.json` e `package-lock.json` de uma vez), porque o lock não pode apontar para versão que não existe no registry e o `npm ci` dos worktrees precisa continuar funcionando até lá. Passo explícito no README ("Como subir") e no prompt do sandbox. | `frontend/package.json`, `backend/package.json`, `README.md` |
+
+**Aberto — dívida de código (sem risco funcional hoje)**
+
+| Id | O que é | Onde |
+|---|---|---|
+| D-36 | `CODFILIAL` entra cru no `{{pares}}` do rastreio, contra o que o comentário de `montarPares` afirma; `:` ou `,` no valor monta par malformado e, no Oracle, o lote inteiro (até 120) vira `sem_dado`. | `frontend/src/lib/solicitacoes.ts` |
+| D-37 | `sgcSolicitacoesFunil`/`sgcSolicitacoesPorVendedor` não têm recorte de persona: ranking nominal por vendedor executável por id por qualquer usuário business; o porteiro é só de rota. Risco aceito por ora; a solução de fundo é o R-007. | `backend/add-012-indicadores.mjs` |
+| D-38 | `sgcIndProdutosBo` (`JOIN SGC_PEDIDO`) × `sgcIndResumo.ITENS_BO` (`LEFT JOIN`): item de B.O. em card sem linha de pedido conta no KPI e some do gráfico. | `backend/add-012-indicadores.mjs` |
+| D-40 | Extrato: `Promise.all` faz a falha de `sgcNfListar` derrubar o PDF inteiro, sendo a seção de faturamento opcional (RN-008). | `frontend/src/pages/quadros/AcoesDoPedido.tsx` |
+| D-41 | `extrato-html.ts` (marca d'água, assinaturas, `esc()`) sem teste nenhum: o `import …?inline` da logo não roda em `node --test`. Injetar a logo por parâmetro e testar escape e marca. | `frontend/src/pages/quadros/extrato-html.ts` |
+| D-42 | `max-lines` desligado por arquivo em `page.tsx`, hoje com 1195 linhas (teto 800) e crescendo a cada onda. Mover o §8.7 (gráficos) para `components/graficos.tsx` e devolver o limite. | `frontend/eslint.config.js`, `frontend/src/components/page.tsx` |
+| D-43 | Classe Tailwind solta em tela (D-14 cresceu): "Carregando…" repetido em 6 blocos de card e o `rodape` dos painéis de `/analises` em 4 abas. Um `<Carregando>` e `RowMeta` no rodapé. | `abas/*.tsx`, `pages/analises/*.tsx` |
+| D-45 | `{{vendedor}}` é parâmetro publicado de `sgcSolicitacoesListar`/`Total` e a tela manda sempre `'0'` (D-18 aplicado a parâmetro). Ligar o filtro na toolbar ou tirar o parâmetro. | `backend/add-011-solicitacoes.mjs`, `SolicitacoesPage.tsx` |
+| D-46 | Três "hojes" na onda: `intervaloPadrao` (UTC), `hojeIso` (local), `CURDATE()` (fuso do servidor); `AVALIADO_EM`/`CRIADO_EM` gravados em UTC e exibidos crus (D-23/D-24 crescem com `/solicitacoes` e `/analises`). 3A-11 alinhou a aba SLA; o resto continua. | `lib/analises.ts`, `lib/formato.ts`, `solicitacoes-dialogos.tsx`, `SolicitacoesPage.tsx` |
+| D-47 | O gerador `CONNECT BY` do simulador trunca em `LVL < 200` sem erro: lote maior que 200 pares perderia pares em silêncio (hoje protegido por `PARES_POR_LOTE = 120` + 4000 caracteres). | `backend/simulator/mysql-dialect.mjs` |
+
+**Cobertura declaradamente em aberto**: `soVencidos` pelo caminho da tela (nada amarra `OPCOES_VENCIDOS` ao contrato `'{{soVencidos}}' = ''`); `resumoSolicitacoes` contra o funil real (teste usa funil sintético); C-018..C-023 e RN-013 da 009 adiados com `/relatorios` (R-114); C-017 da 010 delegado a `tests/permissoes.test.mjs`.
+
 ## Onda 4 — contrato (2026-09-16)
 
 Aberta **em paralelo** com a onda 3 (pedido do usuário). Vale o mesmo regime: nada publicado, então a
