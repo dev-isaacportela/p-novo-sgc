@@ -114,8 +114,9 @@ export const CHECK_INPUT = {
   codcli: '0', pares: '5301:3:2026-08-01:9201', minhas: '0', vendedor: '0',
   // spec 009 (indicadores): só chaves NOVAS. `fase` em vez de `faseId` (002)
   // para não colidir; dataInicio/dataFim/hoje/idCard/codfilial/codfornec já vêm
-  // com valores que servem aqui. `campoAgrupar` e `responsavelId` saíram com
-  // `/relatorios` (R-114) — nenhuma SF viva as usa. `prioridade` FICA: quem a
-  // usa é o sgcEscSolicitacaoInserir da 008.
-  fase: '', soVencidos: '', prioridade: '',
+  // com valores que servem aqui. `campoAgrupar`, `responsavelId` e `prioridade`
+  // saíram: as duas primeiras com `/relatorios` (R-114) e `prioridade` porque o
+  // único `{{prioridade}}` vivo está no sgcEscSolicitacaoInserir, uma ESCRITA —
+  // e o sim:check só executa leitura (a escrita é assunto do smoke).
+  fase: '', soVencidos: '',
 };
