@@ -43,26 +43,6 @@ export const WINTHOR = ['sgcWintComprasVsVendas'];
 const HOJE = `COALESCE(NULLIF('{{hoje}}', ''), DATE_FORMAT(CURDATE(), '%Y-%m-%d'))`;
 
 /**
- * Guarda de persona — UM texto só, o da 002 (R-013), copiado literalmente
- * (mesmo padrão de add-010-bo.mjs); só a lista de personas muda. `:VAR_USER`
- * vale porque as três escritas desta spec nascem de um clique e têm sessão
- * (D-001): nenhuma é chamada por id.
- */
-function guarda(personas, quem = ':VAR_USER') {
-  const lista = personas.map((p) => `'${p}'`).join(', ');
-  return `EXISTS (
-    SELECT 1 FROM INT_USER IU
-    LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
-    WHERE IU.ID = ${quem}
-      AND COALESCE(IU.ACCESS_LEVEL, 'MEMBER') <> 'READ_ONLY'
-      AND COALESCE(UP.PERSONA, CASE COALESCE(IU.ACCESS_LEVEL, 'MEMBER')
-                                 WHEN 'ADMIN' THEN 'admin'
-                                 WHEN 'RESTRICTED' THEN 'comercial'
-                                 ELSE 'analista' END) IN (${lista})
-  )`;
-}
-
-/**
  * RN-015/D-012 — recorte por acesso restrito, aplicado no SERVIDOR em toda
  * consulta desta spec que fala de pedido. É `KB_CARD.CRIADO_POR`, não
  * `SGC_PEDIDO.CRIADO_POR`: "os próprios cards" é o card em todo o projeto

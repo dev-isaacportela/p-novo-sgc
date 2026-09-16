@@ -15,7 +15,8 @@ import {
   Toolbar, Tr,
 } from '@/components/page';
 import {
-  intervaloPadrao, resultadosDosBlocos, resumoSolicitacoes, serieDasPendentes, serieDoFunil,
+  intervaloPadrao, resultadosDosBlocos, resumoSolicitacoes, rotuloDecisaoSolicitacao,
+  rotuloSituacaoSolicitacao, serieDasPendentes, serieDoFunil,
   type Bloco, type FunilRow,
 } from '@/lib/analises';
 import { fmtData } from '@/lib/formato';
@@ -50,6 +51,12 @@ export default function SolicitacoesTab({ codfilial }: { codfilial: string }) {
   const bloco = (nome: string): Bloco<Generica> => blocos[nome] ?? { estado: 'vazio', linhas: [], erro: '' };
   const funil = bloco('funil').linhas as unknown as FunilRow[];
   const resumo = resumoSolicitacoes(funil);
+  // §12.3: a tabela é a versão acessível do gráfico — mesma ordem que ele, que
+  // põe o maior valor na frente (serieDoFunil). Aqui a linha é um PAR
+  // decisão × situação, então o desempate é pelos dois rótulos.
+  const funilOrdenado = [...funil].sort((a, b) => inteiro(b.QTD) - inteiro(a.QTD)
+    || String(a.SITUACAO).localeCompare(String(b.SITUACAO))
+    || String(a.STATUS).localeCompare(String(b.STATUS)));
   const vendedores = bloco('vendedores').linhas;
   const periodoTexto = `${fmtData(dataInicio)} a ${fmtData(dataFim)}`;
 
@@ -159,10 +166,10 @@ export default function SolicitacoesTab({ codfilial }: { codfilial: string }) {
           <tbody>
             {funil.length === 0 ? (
               <Tr><Td colSpan={4}>Sem dados no período.</Td></Tr>
-            ) : funil.map((l) => (
+            ) : funilOrdenado.map((l) => (
               <Tr key={`${l.STATUS}-${l.SITUACAO}`}>
-                <Td>{l.STATUS}</Td>
-                <Td>{l.SITUACAO}</Td>
+                <Td>{rotuloDecisaoSolicitacao(l.STATUS)}</Td>
+                <Td>{rotuloSituacaoSolicitacao(l.SITUACAO)}</Td>
                 <Td numeric>{inteiro(l.QTD)}</Td>
                 <Td numeric>{inteiro(l.QTD_AVALIADAS) || <Dash />}</Td>
               </Tr>

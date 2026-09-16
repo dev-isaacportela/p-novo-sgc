@@ -96,17 +96,17 @@ function Etapas({ pedido, hoje }: { pedido: LinhaSla; hoje: string }) {
 }
 
 /** C-015 — a linha do tempo: uma execução por pedido expandido. */
-function LinhaDoTempo({ idCard }: { idCard: number }) {
+function LinhaDoTempo({ idCard, hoje }: { idCard: number; hoje: string }) {
   const [passagens, setPassagens] = React.useState<Generica[] | null>(null);
   const [erro, setErro] = React.useState('');
 
   React.useEffect(() => {
     let vivo = true;
-    linhas('sgcSlaPedidoFases', { idCard, hoje: '' })
+    linhas('sgcSlaPedidoFases', { idCard, hoje })
       .then((rows) => vivo && setPassagens(rows as Generica[]))
       .catch((e) => vivo && setErro(String(e?.message || e)));
     return () => { vivo = false; };
-  }, [idCard]);
+  }, [idCard, hoje]);
 
   if (erro) return <Alert tone="error">Não foi possível carregar a linha do tempo. {erro}</Alert>;
   if (!passagens) return <RowMeta>Carregando a linha do tempo…</RowMeta>;
@@ -143,6 +143,9 @@ export default function PedidosSlaTab({ codfilial }: { codfilial: string }) {
   const [lista, setLista] = React.useState<LinhaSla[]>([]);
   const [total, setTotal] = React.useState(0);
   const [carregando, setCarregando] = React.useState(true);
+  // RN-016: UMA régua de 'hoje' na aba inteira. O servidor cai para o dia dele
+  // quando recebe '' — e aí a etapa aberta que a tela mede até o fim do período
+  // seria classificada contra outra data. Vai explícito em toda consulta.
   const hoje = padrao.dataFim;
 
   // Ajuste de estado durante a RENDERIZAÇÃO, não em efeito: trocar a filial no
@@ -162,7 +165,7 @@ export default function PedidosSlaTab({ codfilial }: { codfilial: string }) {
     let vivo = true;
     const filtros = {
       codfilial, codfornec: 0, dataInicio: padrao.dataInicio, dataFim: padrao.dataFim,
-      busca, hoje: '', fase, soVencidos,
+      busca, hoje, fase, soVencidos,
     };
     Promise.allSettled([
       linhas('sgcSlaPedidosKpis', filtros),
@@ -178,7 +181,7 @@ export default function PedidosSlaTab({ codfilial }: { codfilial: string }) {
       if (vivo) setTotal(inteiro(totalRow?.TOTAL));
     });
     return () => { vivo = false; };
-  }, [codfilial, busca, fase, soVencidos, pagina, padrao.dataInicio, padrao.dataFim]);
+  }, [codfilial, busca, fase, soVencidos, pagina, padrao.dataInicio, padrao.dataFim, hoje]);
 
   const bloco = (nome: string): Bloco<Generica> => blocos[nome] ?? { estado: 'vazio', linhas: [], erro: '' };
   const kpis = bloco('kpis').linhas[0] ?? {};
@@ -292,7 +295,7 @@ export default function PedidosSlaTab({ codfilial }: { codfilial: string }) {
                       <Td colSpan={8}>
                         <div className="flex flex-col gap-4">
                           <Etapas pedido={pedido} hoje={hoje} />
-                          <LinhaDoTempo idCard={pedido.CARD_ID} />
+                          <LinhaDoTempo idCard={pedido.CARD_ID} hoje={hoje} />
                         </div>
                       </Td>
                     </Tr>
