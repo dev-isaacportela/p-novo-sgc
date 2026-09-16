@@ -691,6 +691,25 @@ Revisão cruzada da S1 da onda 4 (2026-09-16, Opus): 10 bloqueios (B-1..B-10), 1
 | R-112 | R-091 emendada: o item nascido do carrinho é gravado com o `ItemPedido` **inteiro** da 003 (descrição, embalagem, unidade, depto, seção, un/cx, medidas, `coberturaDias` com a quantidade do carrinho e `coberturaLimite`), porque a remontagem da Análise preserva o item existente inteiro — campo que nascer zerado fica zerado e some da trava de cobertura. C-018 assere `DESCRICAO <> ''` e `COBERTURA_LIMITE > 0`. |
 | R-113 | R-105 reafirmada: a base (S2) cria **só** `SGC_COBERTURA_LOG`, `SGC_PARAMETRO_COMPRA`, `SGC_VENDA_DESCONSIDERADA`, as colunas de `PCEST`, os shims (`POWER`, `SQRT`, `ADD_MONTHS`, calendário — encadeados em `toSqlite` **sem remover** as reescritas da onda 3; regex do gerador sem atravessar outro `SELECT`; fim de instrução conta como fim de bloco), stubs, registros de seed/suíte, mapa, permissões, rota, menu, `CHECK_INPUT`, `PUBLISH_ORDER`, `{{origem}}` (R-106) e `curvaAbc` (R-110). O bloco `SGC_COBERTURA` e o tipo de `COBERTURA_LIMITE` são da 012 na S3, num commit só com o código que os lê. |
 
+### Integração da onda 4 (2026-09-16)
+
+Branch `feature/integracao-onda-4`, criada de `develop` já com a onda 3 integrada e revisada. Merges `--no-ff` na ordem `feature/base-onda-4` → `feature/012-coberturas` → `feature/011-compras-inteligentes`. A base nasceu antes da retirada de `/relatorios` (R-114), então os oito arquivos compartilhados conflitaram (`setup-backend`, `config.mjs`, `seed.mjs`, `App.tsx`, `AdminLayout.tsx`, `permissoes.ts`, `server-functions.ts`, `permissoes.test.mjs`): resolvidos mantendo o estado sem `/relatorios` mais as adições da onda 4 (`DDL_011`/`DDL_012`, chaves 011/012 do `CHECK_INPUT`, `seed011`, rota e ícone de `/compras-inteligentes`, as três permissões de R-095, os blocos 81xx/82xx). As duas features entraram limpas.
+
+| O que o integrador mudou | Onde |
+|---|---|
+| **R-111** aplicada: o adaptador provisório da 011 (`limiteDeCobertura(coberturas, alvo).limiteDias`) virou `limiteDeCobertura(coberturas, alvo, curva).alvoDias`; o teto que viaja com o item do carrinho passa a curva da linha (`l.curva`). | `pages/compras-inteligentes/ComprasInteligentesPage.tsx` |
+| O item do carrinho nasce com `idSolicitacao: 0` e `solicitacaoDe: ''` (campos que a 008 pôs em `ItemPedido`; a 011 foi escrita antes do merge da onda 3 e o `tsc -b` acusou). | `lib/ressuprimento.ts` (`itemDoCarrinho`) |
+| **D-32 (R-104)** corrigida: a aba Itens guarda a parametrização de cobertura lida na remontagem (`parametrizacao`) e o produto adicionado por busca a herda — antes caía sempre no padrão 35. Teste `D-32` em `tests/compras.test.mjs` (departamento com linha → 63; sem linha ou sem parametrização → 35). | `abas/Itens.tsx`, `lib/compras.ts` (sem mudança), `tests/compras.test.mjs` |
+| `README.md` "Como subir" com `add-013` e `add-014` antes do segundo `add-001`; índice das specs com 011/012 implementadas. | `README.md`, `docs/specs/README.md` |
+
+Desvios registrados pelas features (aceitos): **011** — C-019 sem literal na filial 2 (o seed da 008 já deixa um card do 1042 em Análise; o teste assere a regra, R-045); urgente/silenciado com `Status` em vez de `Badge` na grade (design.md §8.4); `sgcCustoUnidadesPorCaixa` não é chamada (seria a 10ª execução da carga, RNF-001 fecha em 9 — `unidadesPorCaixa` cai no `QTUNITCX` e na embalagem). **012** — seção 21 não semeada; C-020 da 003 emendado (seis campos + `situacao: 'ativa'`); `test('C-011…')` aditivo em `permissoes.test.mjs`.
+
+| Id | Dívida nova | Onde |
+|---|---|---|
+| D-49 | No `sim:check`, seis SFs da 011 rodam com 0 linha porque o `CHECK_INPUT` compartilhado tem `codprod: '0'` e `codfornec: '1015'` (D-17 proíbe mudar valor existente). O smoke da 011 prova contagem > 0 nas mesmas consultas; o check cobre só a sintaxe (é o D-27 da onda 2 de novo). | `backend/simulator/config.mjs`, `smoke/011-compras-inteligentes.mjs` |
+
+Testes depois dos merges e das correções: backend 74 SQL no `sim:check` (0 falhas) e **269 verificações** no smoke; frontend **251 testes**, `build` e `lint` limpos. Ensaio no navegador (T-097/T-098 da 011, T-112/T-113 da 012) fica para depois do merge em `develop`, no simulador do repositório principal.
+
 ### Modelo de dados da onda 4
 
 | Tabela | Conteúdo | Spec |
