@@ -166,7 +166,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 | ID | Requisito | Como se mede |
 |---|---|---|
-| RNF-001 | Gerar o extrato não custa nenhuma consulta além das que a tela do pedido já usa para o abrir | revisão do código: nenhuma consulta nova é criada por esta feature |
+| RNF-001 | Gerar o extrato DEVE reaproveitar só as leituras que o sistema já faz para abrir o pedido — nenhuma leitura nova entra no sistema por causa desta feature, mesmo que cada clique busque o dado mais recente em vez de reusar o que a tela já tinha carregado | revisão do código: zero leitura nova criada por esta feature; o clique sempre busca de novo, dentro do teto de execuções do sistema |
 | RNF-002 | O documento impresso cabe em folha A4 retrato, com cabeçalho, prazo e itens legíveis, mesmo com 20 ou mais itens | inspeção visual no simulador com um pedido de 20+ itens |
 
 ## Entidades do domínio

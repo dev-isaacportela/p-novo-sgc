@@ -8,13 +8,13 @@
 
 | Princípio | Toca? | Como atende |
 |---|---|---|
-| Spec antes de código | sim | `spec.md` sem `[NEEDS CLARIFICATION]`; cenários vindos de O3-05 e das decisões R-060, R-061 do 000 |
+| Spec antes de código | sim | `spec.md` sem `[NEEDS CLARIFICATION]`; cenários vindos de O3-05 e das decisões R-060, R-061, R-068, R-077, R-078 do 000 |
 | Backend escrito local, executado no sandbox | não | R-051: a 010 **não tem script nem SF**. Lê `sgcPedidoCarregar` (002/003, id 7205) e `sgcNfListar` (005, id 7507), já publicadas; nada roda do `mitra-sdk` daqui |
 | Migrations append-only | não | nenhuma tabela, nenhuma coluna nova; `backend/migrations/` intocado |
 | Leitura e escrita por Server Function | sim | as duas leituras usam `acao()` de `src/lib/mitra-api.ts`, como o resto da tela; nenhuma escrita |
 | Simulador cobre a feature | não | R-062: a 010 não semeia nada; os testes de frontend montam pedido/itens/notas à mão (regra pura), sem depender do simulador |
 | Testes automatizados obrigatórios | sim | cada linha da seção **Testes** da spec vira um `test()` em `frontend/tests/extrato.test.mjs`; `npm test` verde em `frontend/` |
-| Design tokens, sem cor literal | ver **Complexity Tracking** | a tela (botões, aviso de pop-up) usa `Button`/`Alert` de `page.tsx`, tokens normais; o **documento impresso** é a exceção documentada abaixo |
+| Design tokens, sem cor literal | ver **Complexity Tracking** | a tela (botões, aviso de pop-up) usa `Button`/`Alert` de `page.tsx`, tokens normais; o **documento impresso** é a exceção documentada abaixo, declarada em R-078 |
 | Simplicidade | sim | nenhuma dependência nova; reaproveita `itemDeLinha`/`totalDoPedido` (003), `compararPrazo` (003), `moeda`/`fmtData` (base), `textoCsv`/`baixarCsv` (R-037) — ver **Contexto técnico** |
 
 ## Contexto técnico
@@ -40,7 +40,7 @@ inventar coluna — conferido linha a linha no código das SFs (`backend/add-005
 
 | Fonte (SF já publicada) | Tabela por trás | Colunas que o extrato usa |
 |---|---|---|
-| `sgcPedidoCarregar` (002/003) → `pedido` | `SGC_PEDIDO` (`P.*`, mais `TEC_NOME`/`DIR_NOME`/`CANC_NOME`/`ENVIO_NOME` de `INT_USER`) | `ID_CARD`, `CODFORNEC`, `FORNECEDOR`, `CODFILIAL`, `FILIAL`, `PERIODO_INICIO`, `PERIODO_FIM`, `VL_TOTAL`, `PRAZO_PADRAO`, `PRAZO_ACORDADO`, `PRAZO_JUSTIFICATIVA`, `TEC_POR`, `TEC_EM`, `TEC_MOTIVO`, `TEC_NOME`, `DIR_POR`, `DIR_EM`, `DIR_MOTIVO`, `DIR_NOME`, `DT_ENVIO`, `NUMPED_WINTHOR`, `CANC_POR`, `CANC_EM`, `CANC_MOTIVO`, `CANC_NOME`, `CRIADO_POR` |
+| `sgcPedidoCarregar` (002/003) → `pedido` | `SGC_PEDIDO` (`P.*`, mais `TEC_NOME`/`DIR_NOME`/`CANC_NOME`/`ENVIO_NOME`/`CRIADOR_NOME` de `INT_USER`) | `ID_CARD`, `CODFORNEC`, `FORNECEDOR`, `CODFILIAL`, `FILIAL`, `PERIODO_INICIO`, `PERIODO_FIM`, `VL_TOTAL`, `PRAZO_PADRAO`, `PRAZO_ACORDADO`, `PRAZO_JUSTIFICATIVA`, `TEC_POR`, `TEC_EM`, `TEC_MOTIVO`, `TEC_NOME`, `DIR_POR`, `DIR_EM`, `DIR_MOTIVO`, `DIR_NOME`, `DT_ENVIO`, `NUMPED_WINTHOR`, `CANC_POR`, `CANC_EM`, `CANC_MOTIVO`, `CANC_NOME`, `CRIADO_POR`, `CRIADOR_NOME` |
 | `sgcPedidoCarregar` (002/003) → `itens` | `SGC_PEDIDO_ITEM` (subconjunto fechado com a 003) | `CODPROD`, `DESCRICAO`, `EMBALAGEM`, `QT_PEDIDA`, `PRECO_CUSTO` |
 | `sgcNfListar` (005) → `nfs` | `SGC_NF` (`SELECT *`) | `NUMNOTA`, `SERIE`, `DT_EMISSAO`, `VL_TOTAL` |
 
@@ -51,15 +51,15 @@ sugestões/contatos são fora de escopo (spec, seção "Fora de escopo").
 
 ### Pedidos ao 000
 
-- **`CRIADOR_NOME` ausente em `sgcPedidoCarregar`.** RF-010 pede "quem criou o pedido" no
-  cabeçalho. `sgcPedidoCarregar` junta nome para `TEC_POR`, `DIR_POR`, `CANC_POR` e
-  `ENVIO_POR` (`LEFT JOIN INT_USER`), mas não para `CRIADO_POR` — só o id vem. Pedido:
-  acrescentar `LEFT JOIN INT_USER UN ON UN.ID = P.CRIADO_POR` e `COALESCE(UN.NOME, '') AS
-  CRIADOR_NOME` ao `SELECT` de `sgcPedidoCarregar` (`backend/add-005-quadro-compras.mjs`,
-  mesmo padrão dos outros quatro joins) — uma linha, tarefa do integrador (S4), fora desta
-  spec porque o arquivo é da 002. Enquanto isso não entra, `montarExtrato` trata o campo
-  como opcional e o documento mostra "—" no lugar do criador (RF-010: "a ausência de um
-  dado não impede o resto do documento").
+Nenhum em aberto. O único que esta spec levantou — `CRIADOR_NOME` ausente em
+`sgcPedidoCarregar` (RF-010 pede "quem criou o pedido" no cabeçalho; a SF já junta nome para
+`TEC_POR`, `DIR_POR`, `CANC_POR` e `ENVIO_POR`, mas não para `CRIADO_POR`) — foi resolvido na
+revisão cruzada da S1: **R-068** manda a base (S2) acrescentar `LEFT JOIN INT_USER` e
+`CRIADOR_NOME` ao `SELECT` de `sgcPedidoCarregar` (mesmo padrão dos outros quatro joins),
+sem execução a mais. O campo continua **opcional** em `PedidoParaExtrato` — chega vazio até
+a base publicar essa mudança — e o documento mostra "—" no lugar do criador enquanto isso
+(RF-010: "a ausência de um dado não impede o resto do documento"); depois de R-068 publicada,
+o teste do cabeçalho (C-012, ver **Testes**) passa a esperar o nome preenchido.
 
 ## Contratos de backend
 
@@ -120,7 +120,7 @@ e `frontend/tests/nf.test.mjs`, que também não dependem do simulador).
 | C-009 / RN-007 | `frontend/tests/extrato.test.mjs` | `VL_TOTAL` do pedido diferente da soma dos itens do teste: `.totalPedido` é igual a `VL_TOTAL`, não à soma |
 | C-010 / RN-008 | `frontend/tests/extrato.test.mjs` | `nfs` com 1 linha: `.faturamento.temNota === true`, `.faturamento.notas.length === 1` |
 | C-011 / RN-008 | `frontend/tests/extrato.test.mjs` | `nfs` vazio: `.faturamento.temNota === false` |
-| C-012 / RN-009 | `frontend/tests/extrato.test.mjs` | `DT_ENVIO`/`NUMPED_WINTHOR` preenchidos: `.numeroWinthor` é o número; sem `DT_ENVIO`: `.numeroWinthor === ''` |
+| C-012 / RN-009 | `frontend/tests/extrato.test.mjs` | `DT_ENVIO`/`NUMPED_WINTHOR` preenchidos: `.numeroWinthor` é o número; sem `DT_ENVIO`: `.numeroWinthor === ''`; `CRIADOR_NOME` preenchido (R-068): `.criador` é o nome; `CRIADOR_NOME` ausente (antes de R-068 publicada): `.criador === ''`, sem quebrar o resto do modelo |
 | C-013 / RN-013 | `frontend/tests/extrato.test.mjs` | `popupFoiBloqueado(null) === true`; `popupFoiBloqueado({} as Window) === false` |
 | C-014 / RN-012 | `frontend/tests/extrato.test.mjs` | `linhasCsvExtrato(modelo).linhas` tem o mesmo tamanho e os mesmos valores de `.itens`, na mesma ordem |
 | C-015 / RN-010 | `frontend/tests/extrato.test.mjs` | `ID_CARD: 4321` → `.nomeArquivo === 'extrato-pedido-4321'` |
@@ -138,10 +138,10 @@ e `frontend/tests/nf.test.mjs`, que também não dependem do simulador).
 
 | # | Decisão | Alternativa descartada | Por quê |
 |---|---|---|---|
-| D-001 | `CRIADOR_NOME` vira "Pedido ao 000" (uma linha em `sgcPedidoCarregar`, tarefa do integrador), não uma SF nova desta spec | Criar uma SF só para buscar o nome do criador | R-051 é explícito: a 010 só ganha SF própria se o plan **provar** necessidade; um `LEFT JOIN` a mais numa SF que já existe é mudança menor, e é de quem já é dono do arquivo (002) |
+| D-001 | `CRIADOR_NOME` resolvido por **R-068** (000, revisão cruzada da S1): a base (S2) acrescenta o join em `sgcPedidoCarregar`, não uma SF nova desta spec. Continua opcional em `PedidoParaExtrato` até a base publicar | Criar uma SF só para buscar o nome do criador | R-051 já orientava nesse sentido (a 010 só ganha SF própria se provar necessidade); um `LEFT JOIN` a mais numa SF que já existe é mudança menor e é de quem já é dono do arquivo (002) — a revisão cruzada fechou isso como R-068 |
 | D-002 | `lib/extrato.ts` define o próprio tipo de entrada (`PedidoParaExtrato = PedidoCapa & {...}`, por interseção) em vez de estender `PedidoCapa` em `lib/pedido.ts` | Adicionar os campos de faturamento (`VL_FATURADO`, `PERC_FATURADO_VALOR`…) direto em `PedidoCapa` | `lib/pedido.ts` é arquivo da 002; a 010 não precisa editar arquivo de outra spec para ler um campo que a SF já devolve (`P.*`) — alteração mínima |
 | D-003 | O total do extrato é `pedido.VL_TOTAL` (o mesmo que a capa do quadro mostra), não uma soma recalculada dos itens | Somar `qtPedida × precoCusto` dos itens do extrato (`totalDoPedido`, já existe em `lib/compras.ts`) | `VL_TOTAL` é recalculado ao sair da Análise (AN-12) e é o número que a pessoa já vê no cartão; somar nos itens do extrato podia divergir por um instante (item editado e não salvo) e a pessoa não teria como saber qual dos dois confiar |
-| D-004 | Cada clique busca os dados de novo (`sgcPedidoCarregar` + `sgcNfListar`), sem reaproveitar a prop `pedido` que `QuadroPage` já carregou | Usar a `pedido: PedidoCapa \| null` que `AcoesDoPedido` já recebe | Essa prop pode estar `null` (ainda carregando) ou de outro card por uma fração de segundo (troca de card); RF-001 exige o extrato "em qualquer fase", inclusive no instante em que a capa ainda não chegou — buscar de novo é a única forma de garantir isso sem acoplar o botão ao timing de outro componente |
+| D-004 | Cada clique busca os dados de novo (`sgcPedidoCarregar` + `sgcNfListar`), sem reaproveitar a prop `pedido` que `QuadroPage` já carregou | Usar a `pedido: PedidoCapa \| null` que `AcoesDoPedido` já recebe | Essa prop pode estar `null` (ainda carregando) ou de outro card por uma fração de segundo (troca de card); RF-001 exige o extrato "em qualquer fase", inclusive no instante em que a capa ainda não chegou — buscar de novo é a única forma de garantir isso sem acoplar o botão ao timing de outro componente. **R-077** (000, revisão cruzada da S1) formaliza o custo: 2 execuções por clique, relidas sempre — "sem SF nova" não é "sem execução", e cabe no teto de 300/min |
 | D-005 | A janela de impressão abre **antes** do `await` das duas SFs (com um texto de carregando), e o conteúdo é substituído quando os dados chegam | Buscar os dados primeiro e só then abrir a janela | Vários navegadores só tratam `window.open` como ação direta da pessoa quando ele roda **dentro** do clique, sem `await` no meio; abrir depois do fetch arrisca bloqueio silencioso mesmo com o clique real — o que RF-011/C-013 pede para não acontecer |
 | D-006 | O clique do extrato usa um wrapper de execução próprio (trava o botão, mostra erro), sem chamar `recarregarPedido()` no final | Reusar o `executar()` que as outras ações de `AcoesDoPedido` já têm | Gerar o extrato não muda nenhum dado do pedido; `executar()` sempre recarrega a capa ao final, e isso seria uma SF a mais sem motivo |
 | D-007 | A logo entra em `extrato-html.ts` por `import logoBenenutri from '@/assets/logo-benenutri.png?inline'` — o sufixo `?inline` do Vite força o módulo a resolver para uma `data:` URI (base64), **independente do tamanho do arquivo** | Reusar o import comum que `components/Logo.tsx` já faz (`import logoBenenutri from '@/assets/logo-benenutri.png'`, sem sufixo) | Sem `?inline`, o Vite só embute como `data:` URI quando o arquivo fica abaixo do `assetsInlineLimit` padrão (4096 bytes) — hoje o arquivo tem 2.438 bytes e embutiria de qualquer jeito, mas um logo maior no futuro viraria silenciosamente uma URL de arquivo, que não existe dentro da janela `about:blank` do extrato (ela não tem base URL — a mesma razão que o sistema anterior documentava em `lib/brand.ts`). O sufixo blinda contra isso sem duplicar o arquivo de imagem nem acoplar `extrato-html.ts` a `components/Logo.tsx` |
@@ -152,11 +152,11 @@ e `frontend/tests/nf.test.mjs`, que também não dependem do simulador).
 | Risco | Impacto | Mitigação |
 |---|---|---|
 | Bloqueio de pop-up pelo navegador | a pessoa não recebe o PDF e pode achar que o botão não funciona | `Alert` dedicado (RF-011) + janela aberta antes do fetch assíncrono (D-005) reduz a chance real de bloqueio |
-| `CRIADOR_NOME` só existe depois que o integrador aplicar o "Pedido ao 000" | até lá, o cabeçalho mostra "—" no lugar do criador | campo tratado como opcional no modelo (RF-010 já prevê "ausência não impede o resto do documento"); nada quebra, só falta um dado |
+| `CRIADOR_NOME` só existe depois que a base (S2) publicar **R-068** | até lá, o cabeçalho mostra "—" no lugar do criador | campo tratado como opcional no modelo (RF-010 já prevê "ausência não impede o resto do documento"); nada quebra, só falta um dado até a base publicar |
 | Documento impresso foge do sistema de tokens (cor fixa, sempre claro) | pode parecer inconsistência numa revisão de design que não souber do motivo | documentado no Complexity Tracking abaixo; é regra de negócio (R-060), não escolha de estilo |
 
 ## Complexity Tracking
 
 | Princípio violado | Por que é necessário | Por que a alternativa simples não serve |
 |---|---|---|
-| VI — Design tokens, nunca cor literal | O documento impresso (`extrato-html.ts`) usa cores fixas (`#fff`, `#111`, cinzas) em vez dos tokens de `index.css`, e é **sempre claro**, independente do tema ativo na tela (R-060: "o documento impresso é sempre claro e monocromático, independente do tema da tela") | O documento é escrito com `document.write` numa janela `about:blank`, que não carrega o CSS do app — não há `:root`/`.dark` para herdar. Ele também precisa imprimir igual em impressora preto e branco e ser arquivado como um documento estável (nunca "no tema escuro de quem imprimiu"). Importar as folhas de estilo do app para depois anular o dark mode dentro delas seria mais código para o mesmo resultado, e ainda arriscaria puxar tema por engano numa atualização futura do `index.css` |
+| VI — Design tokens, nunca cor literal | O documento impresso (`extrato-html.ts`) usa cores fixas (`#fff`, `#111`, cinzas) em vez dos tokens de `index.css`, e é **sempre claro**, independente do tema ativo na tela (R-060: "o documento impresso é sempre claro e monocromático, independente do tema da tela"; **R-078**, revisão cruzada da S1, declara esta exceção formalmente — "não vale para a tela: botões e `Alert` seguem os tokens", o que este plan já respeita em `AcoesDoPedido.tsx`) | O documento é escrito com `document.write` numa janela `about:blank`, que não carrega o CSS do app — não há `:root`/`.dark` para herdar. Ele também precisa imprimir igual em impressora preto e branco e ser arquivado como um documento estável (nunca "no tema escuro de quem imprimiu"). Importar as folhas de estilo do app para depois anular o dark mode dentro delas seria mais código para o mesmo resultado, e ainda arriscaria puxar tema por engano numa atualização futura do `index.css` |
