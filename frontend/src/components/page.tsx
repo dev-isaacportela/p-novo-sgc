@@ -1341,6 +1341,38 @@ export function Disclosure({
 }
 
 /**
+ * Mini-cartão de número com nome (R-123, a janela "Análise do Produto"): o
+ * `Kpi` em tamanho de grade — rótulo pequeno em cima, valor de 13 px em
+ * negrito, nota opcional embaixo. `tone="attention"` pinta o valor em âmbar
+ * (uma previsão que a entrada não cumpriu). Sem dado é `Dash`, nunca 0.
+ */
+export function MiniCartao({
+  rotulo,
+  valor,
+  hint,
+  tone = 'neutral',
+}: {
+  rotulo: string;
+  valor: React.ReactNode;
+  hint?: React.ReactNode;
+  tone?: 'neutral' | 'attention';
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2">
+      <span className="truncate text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
+      <span className={cn('truncate text-[13px] font-bold', tone === 'attention' ? 'text-attention' : 'text-ink')}>{valor}</span>
+      {hint ? <span className="truncate text-[11px] text-ink-secondary">{hint}</span> : null}
+    </div>
+  );
+}
+
+/** A grade dos mini-cartões: 2 por linha no mobile, 3 em `sm`, `colunas` a partir de `lg`. */
+export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 3 | 4 | 6 }) {
+  const emLg = { 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 6: 'lg:grid-cols-6' }[colunas];
+  return <div className={cn('grid grid-cols-2 gap-2 sm:grid-cols-3', emLg)}>{children}</div>;
+}
+
+/**
  * Alternador de poucas opções exclusivas (Unidades/Caixas, 6m/13m): o mesmo
  * desenho do `AlternaVisao`, generalizado. `aria-pressed` na opção ativa.
  */

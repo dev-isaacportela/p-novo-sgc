@@ -227,6 +227,9 @@ ORDER BY MES`;
 
 // `ROWNUM` literal dentro da subconsulta ordenada, como em sgcWintBuscarProduto
 // da 003 — é a forma que o dialeto traduz em LIMIT.
+// R-123: o pedido ao ERP de cada entrada (número, emissão = solicitação e
+// previsão de entrega) para a Análise do Produto; entrada sem pedido casado
+// devolve 0 e datas vazias.
 const SQL_PRODUTO_ULTIMAS_COMPRAS = `SELECT * FROM (
   SELECT
     TO_CHAR(M.DTMOV, 'YYYY-MM-DD') AS DT_ENTRADA,
@@ -235,8 +238,12 @@ const SQL_PRODUTO_ULTIMAS_COMPRAS = `SELECT * FROM (
     NVL(M.CODFILIAL, '')  AS CODFILIAL,
     NVL(M.QT, 0)          AS QUANTIDADE,
     NVL(M.PUNIT, 0)       AS PRECO_UNITARIO,
-    NVL(M.QT, 0) * NVL(M.PUNIT, 0) AS VALOR_TOTAL
+    NVL(M.QT, 0) * NVL(M.PUNIT, 0) AS VALOR_TOTAL,
+    NVL(M.NUMPED, 0)      AS NUMPED,
+    NVL(TO_CHAR(O.DTEMISSAO, 'YYYY-MM-DD'), '') AS DT_SOLICITACAO,
+    NVL(TO_CHAR(O.DTPREVENT, 'YYYY-MM-DD'), '') AS DT_PREVISAO
   FROM PCMOV M
+  LEFT JOIN PCPEDIDO O ON O.NUMPED = M.NUMPED
   WHERE M.CODPROD = {{codprod}} AND M.CODOPER = 'E' AND M.QT > 0
   ORDER BY M.DTMOV DESC
 ) WHERE ROWNUM <= 10`;
@@ -270,9 +277,12 @@ const SQL_PRODUTO_VENDAS = `SELECT * FROM (
     NVL(M.QT, 0) * NVL(M.PUNIT, 0) AS VALOR_TOTAL,
     NVL(M.CODCLI, 0) AS CODCLI,
     NVL(C.CLIENTE, '') AS CLIENTE,
+    NVL(M.CODUSUR, 0) AS CODUSUR,
+    NVL(U.NOME, '') AS VENDEDOR,
     CASE WHEN ${PUBLICO} THEN 1 ELSE 0 END AS PUBLICO
   FROM PCMOV M
   LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+  LEFT JOIN PCUSUARI U ON U.CODUSUR = M.CODUSUR
   WHERE M.CODPROD = {{codprod}}
     AND M.CODFILIAL = '{{codfilial}}'
     AND M.CODOPER = 'S'

@@ -92,6 +92,7 @@ export const DDL = [
     QT DECIMAL(15,3),
     PUNIT DECIMAL(15,4),
     CUSTOFIN DECIMAL(15,4),
+    CODUSUR INT,
     NUMPED INT,
     NUMTRANSENT INT,
     NUMNOTA INT,
@@ -99,6 +100,13 @@ export const DDL = [
     NUMLOTE VARCHAR(30),
     DATAVALIDADE VARCHAR(10),
     DTCANCEL VARCHAR(10)
+  )`,
+
+  // Vendedor (RCA) da venda: PCMOV.CODUSUR -> PCUSUARI.NOME, para a aba Vendas
+  // da Análise do Produto (011, R-123).
+  `CREATE TABLE IF NOT EXISTS PCUSUARI (
+    CODUSUR INT PRIMARY KEY,
+    NOME VARCHAR(80)
   )`,
 
   // Entrada de NF no WinThor (005, R-027): é dela que sgcWintNfEntradas/
@@ -190,6 +198,7 @@ export const DDL = [
     CODFORNEC INT,
     CODFILIAL VARCHAR(10),
     DTEMISSAO VARCHAR(10),
+    DTPREVENT VARCHAR(10),
     VLTOTAL DECIMAL(15,2),
     PRAZO1 INT,
     PRAZO2 INT,

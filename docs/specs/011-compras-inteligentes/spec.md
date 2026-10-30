@@ -248,6 +248,17 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Quando** o carrinho é desenhado com 24 do primeiro e 10 do segundo
 - **Então** o primeiro mostra variação de −8,3 % (caiu) e o segundo +5 % (subiu), e a "economia no custo" do carrinho é R$ 24 — só o que caiu conta
 
+**C-041 — Vendedor e pedido ao ERP nas consultas do produto** *(R-123)*
+- **Dado que** a compradora abre a Análise do Produto
+- **Quando** a lista de vendas e as últimas compras voltam do ERP
+- **Então** cada venda traz o código e o nome do vendedor ao lado do cliente, e cada entrada traz o número do pedido ao ERP, a data de emissão (solicitação) e a previsão de entrega — entrada sem pedido casado vem sem essas datas
+
+**C-042 — Análise do Produto, a janela do sistema antigo** *(R-123)*
+- **Dado que** a compradora selecionou um produto na lista (o painel já carregou histórico, compras e filiais)
+- **Quando** ela clica no olho do painel
+- **Então** abre a janela "Análise do Produto": cabeçalho com código, descrição, embalagem, fornecedor e situação; Estoque | Em trânsito | Cobertura | Cobertura futura e Necessidade | Sugestão | Custo; a aba **Análise** com simulação de compra (quantidade, caixas, valor previsto, estoque final, cobertura, Parâmetros e Adicionar ao carrinho), Compras × vendas (6m/13m, Caixas/Unidades quando há caixa, Gráfico/Tabela, legenda que esconde a série, a série Desconsideradas, o aviso "Ainda não há dados suficientes para análise histórica consistente." com menos de 3 meses com movimento), análise de venda futura, o aviso de excesso em até 6 outras filiais, compras do produto (a última em mini-cartões, com a previsão em atenção quando a entrada atrasou; histórico de 5 entradas e "Ver todas as N entradas") e os parâmetros do cálculo; a aba **Vendas (N)** com vendas listadas, quantidade e valor desconsiderados, os meses em pílula ("Outubro de 2026 · N vendas · R$ X"), a tabela com cliente e vendedor e Desconsiderar/Reconsiderar, a linha desconsiderada em fundo de atenção, "Carregando…" e "Nenhuma venda encontrada para o período atual."
+- **E** abrir a janela não custa consulta nova — só a aba Vendas custa 1, ao abrir
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -271,7 +282,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RF-017 | O carrinho DEVE criar um pedido por fornecedor e filial, na primeira fase do quadro, com período igual à janela da tela, prioridade alta quando houver ruptura no grupo, valor total na capa e os itens já gravados com quantidade pedida, quantidade sugerida, custo e curva, marcado como originado das compras inteligentes | C-018 | must |
 | RF-018 | O carrinho DEVE ser recusado quando já houver pedido aberto (ainda não enviado à indústria) para aquele fornecedor e filial, citando o pedido e a fase | C-019 | must |
 | RF-019 | A montagem da análise dentro do pedido não DEVE sobrescrever a quantidade que veio do carrinho | C-020 | must |
-| RF-020 | O detalhe do produto DEVE mostrar posição de estoque aberta, histórico de 12 meses, últimas compras e estoque nas outras filiais | C-021 | must |
+| RF-020 | O detalhe do produto DEVE ser a janela "Análise do Produto" do sistema antigo — a versão expandida do painel (cabeçalho, métricas, aba Análise com simulação, Compras × vendas, venda futura, excesso em outras filiais, compras do produto e parâmetros; aba Vendas com os meses em pílula, cliente, vendedor e desconsiderar) sobre os dados que o painel já carregou | C-021, C-041, C-042 | must |
 | RF-021 | O sistema DEVE apurar a aderência do comprador: o percentual de itens de pedidos originados das compras inteligentes em que a quantidade pedida ficou dentro de 20 % para mais ou para menos da sugerida, por comprador e período | C-022 | should |
 | RF-022 | A tela DEVE ser aberta por analista, gestor, admin e diretoria (esta só lê); a parametrização e o silenciamento, só por admin e gestor; o comercial não DEVE alcançá-la | C-023 | must |
 | RF-023 | A lista visível DEVE poder ser exportada | C-024 | should |
@@ -398,6 +409,8 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-037 | (48, 12, unidades) → "48 un. · 4 cx"; (48, 12, caixas) → "4 cx · 48 un."; (48, 1) → "48 un." | regra de tela |
 | C-038 | ordem por código, nome e curva (A, B, C); cada filtro de movimentação devolve só as linhas certas | regra de tela |
 | C-040 | consulta do ressuprimento: o 5410 (50 un. a 20 com custo financeiro 12) devolve faturamento 1000 e rentabilidade 400; devolução e venda desconsiderada ficam fora dos dois; produto sem venda tem 0 e 0 | regra de negócio |
+| C-041 | `sgcWintProdutoVendas` do 5408 → 4 vendas, todas com `CODUSUR` > 0 e `VENDEDOR`; `sgcWintProdutoUltimasCompras` do 5403 → a entrada do pedido 970001 com `DT_SOLICITACAO`, `DT_PREVISAO` e a entrada depois da previsão | regra de negócio |
+| C-042 | meses de vendas: 2 em outubro (R$ 1.400) e 1 em setembro, do mais recente ao mais antigo, filtro por mês e resumo do que está fora (60 un., R$ 1.200); série Desconsideradas por mês só quando pedida, em caixas dividida por 12 com 1 decimal; 2 meses com movimento → histórico insuficiente, 3 → suficiente; entrada em 04/09 com previsão 02/09 atrasou, sem previsão não; necessidade 70 − 30 − 0 = 40, inteira e nunca negativa | regra de tela |
 | C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
 | RN-028 | produto com 6 no Gestão de Custos e "CX 12" na embalagem fica com caixa 6 e origem gestão (sugestão em múltiplos de 6); sem o mapa, 12 pela embalagem; com 24 no ERP, origem ERP; a integração no simulador devolve 12 e 24 para 5001 e 5002 e nada para 5010 | regra de tela + regra de negócio |
 
@@ -412,6 +425,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 
 - [ ] **Previsão de demanda** (modelos estatísticos, corte de outlier, escolha por menor erro) — dívida registrada para a onda 5; aqui a projeção é a tendência ponderada de RN-001.
 - [ ] **Estoque de segurança estatístico** (fator de serviço sobre a volatilidade) — a volatilidade é medida e mostrada, mas não entra na fórmula; dívida registrada.
+- [ ] **Na Análise do Produto (R-123)**: a oportunidade com preço especial (depende do módulo de custos), o seletor de modelos de previsão (Best Fit, Holt…) e o fator Z do estoque de segurança — o sistema antigo os tinha na janela; aqui ficam para a onda 5, com a venda futura mostrando só o que a RN-006 calcula.
 - [ ] **Oportunidades de custo especial** e políticas de preço por cliente — dependem do módulo de custos.
 - [ ] **Diálogo de bloqueios de lote** — **adiado** (R-117): o layout do sistema antigo o tinha; entra numa rodada futura, com consulta própria aos lotes.
 - [x] ~~**Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.~~ Existia (R-117): entrou como RF-031 / C-030.

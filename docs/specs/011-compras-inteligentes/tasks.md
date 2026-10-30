@@ -140,6 +140,7 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 - [x] **T-101** — Verificação manual no simulador (VPS, WinThor real, Coloplast × filial 1): cards de visão, seleção e painel compacto, gráfico com rótulos, carrinho com mínimo, variação e arquivo, retomada do carrinho salvo — nos dois temas
 - [x] **T-102** — *(R-120)* `sgcCustoUnidadesPorCaixa` uma vez por carga (lotes de 1000) → `Map` de `montarRessuprimento`; `origemCaixa` na linha (`origemUnidadesPorCaixa` em `lib/compras.ts`) e no painel; simulador roda a INTEGRATION (`gestao-custos.mjs`: SQLite por padrão, plataforma com `SIMULATOR_GESTAO_CUSTOS=mitra`); testes em `tests/compras.test.mjs`, `tests/ressuprimento.test.mjs` e `smoke/000-gestao-custos.mjs`; checagem ao vivo `npm run sim:gestao-custos` → `frontend/src/pages/compras-inteligentes/ComprasInteligentesPage.tsx`, `lib/compras.ts`, `lib/ressuprimento.ts`, `backend/simulator/gestao-custos.mjs`
 - [x] **T-103** — *(R-122)* curvas de faturamento e de rentabilidade e a pior das duas: `FATURAMENTO_PERIODO` e `RENTABILIDADE_PERIODO` em `sgcWintRessuprimento` (PCMOV `PUNIT`/`CUSTOFIN`; `CUSTOFIN` no esquema e no seed do simulador); `curvaPorValor`/`piorCurva` em `lib/compras.ts`, `curvasDoRessuprimento` em `lib/ressuprimento.ts` (`curva` = a pior; `curvaFaturamento`, `curvaRentabilidade`; CSV com 12 colunas); duas colunas na grade com a que vale em destaque e as letras no painel; `test('C-015 …')` reescrito, `test('RN-010 …')`, `test('R-122 …')` e `teste('C-040 …')` → `backend/add-013-compras-inteligentes.mjs`, `frontend/src/lib/compras.ts`, `lib/ressuprimento.ts`, `pages/compras-inteligentes/grid.tsx`
+- [x] **T-104** — *(R-123)* a janela "Análise do Produto" (`pages/compras-inteligentes/analise-produto.tsx`) no lugar do detalhe do SKU: a versão expandida do painel sobre o mesmo cache (`dados`), aba Análise e aba Vendas (`VendasDoProduto` em `dialogos.tsx`, reaproveitado pela janela de vendas); `GraficoComprasVendas` com `expandido` (Caixas/Unidades, série Desconsideradas, legenda que esconde, aviso de histórico curto); `MiniCartao`/`GradeMini` em `page.tsx`; `sgcWintProdutoUltimasCompras` com `NUMPED`/`DT_SOLICITACAO`/`DT_PREVISAO` e `sgcWintProdutoVendas` com `CODUSUR`/`VENDEDOR` (PCPEDIDO.DTPREVENT, PCMOV.CODUSUR e PCUSUARI no esquema e no seed); regra pura em `lib/ressuprimento-detalhe.ts`; `teste('C-041 …')`, C-021 estendido e `test('C-042 …')` ×3 → `frontend/src/pages/compras-inteligentes/analise-produto.tsx`, `dialogos.tsx`, `grafico.tsx`, `lib/ressuprimento-detalhe.ts`, `backend/add-013-compras-inteligentes.mjs`
 
 ## Dependências
 
@@ -178,7 +179,7 @@ tudo → T-095 · T-096 → T-097 · T-098
 | RF-017 / C-018, RN-015 | T-013, T-030, T-036 | T-086, T-093 |
 | RF-018 / C-019, RN-016 | T-007, T-036 | T-087 |
 | RF-019 / C-020, RN-017 | T-023, T-036 | T-086 |
-| RF-020 / C-021 | T-004, T-035 | T-085 |
+| RF-020 / C-021, C-041, C-042 | T-004, T-035, T-104 | T-085, T-104 |
 | RF-021 / C-022, RN-018 | T-008, T-030 | T-088, T-092 |
 | RF-022 / C-023, RN-019 | T-009, T-010, T-032, T-033, T-037 | T-084, T-094 |
 | RF-023 / C-024 | T-030, T-034 | T-093 |
