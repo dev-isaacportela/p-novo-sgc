@@ -136,9 +136,14 @@ const VENDAS = [
   [960025, 5420, 9301, 5, 7],
 ];
 
-// NUMPED, dias atrás da emissão — todos do 1042 na filial 1, PRAZO1 = 0 para
-// não entrarem no sgcWintPrazoPagamento da 003.
-const PEDIDOS_ERP = [[970001, 30], [970002, 20], [970003, 10]];
+// NUMPED, dias atrás da emissão, dias atrás da PREVISÃO de entrega — todos do
+// 1042 na filial 1, PRAZO1 = 0 para não entrarem no sgcWintPrazoPagamento da
+// 003. R-123: o 970001 previa a entrada 2 dias antes de ela acontecer (entrada
+// atrasada, em atenção na Análise do Produto); o 970002 previa depois.
+const PEDIDOS_ERP = [[970001, 30, 28], [970002, 20, 12], [970003, 10, 9]];
+
+// CODUSUR, NOME — os vendedores das vendas (R-123: coluna da aba Vendas).
+const VENDEDORES = [[1, 'Carla Vendas'], [2, 'Diego Vendas']];
 
 // NUMTRANSITEM, CODPROD, NUMPED, dias atrás da entrada, QT, PUNIT.
 // 5403: entrada 4 dias depois de uma emissão e 6 depois de outra -> lead 5
@@ -207,19 +212,23 @@ export function seed011(db, cenario) {
   const inserirCliente = db.prepare('INSERT INTO PCCLIENT (CODCLI, CLIENTE, TIPOFJ, CODATV1) VALUES (?, ?, ?, ?)');
   for (const c of CLIENTES) inserirCliente.run(c[0], c[1], 'J', c[2]);
 
+  // Vendedor: NUMTRANSITEM ímpar -> 1 (Carla), par -> 2 (Diego).
   const inserirVenda = db.prepare(`INSERT INTO PCMOV
-    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED)
-    VALUES (?, ?, ?, ?, 'S', ?, ?, 20.0, NULL)`);
+    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, CODUSUR, NUMPED)
+    VALUES (?, ?, ?, ?, 'S', ?, ?, 20.0, ?, NULL)`);
   for (const [transitem, codprod, codcli, qt, dias] of VENDAS) {
-    inserirVenda.run(transitem, codprod, FILIAL_011, codcli, haDias(dias), qt);
+    inserirVenda.run(transitem, codprod, FILIAL_011, codcli, haDias(dias), qt, transitem % 2 === 1 ? 1 : 2);
   }
 
   const inserirPedidoErp = db.prepare(`INSERT INTO PCPEDIDO
-    (NUMPED, CODFORNEC, CODFILIAL, DTEMISSAO, VLTOTAL, PRAZO1, PRAZO2, PRAZO3)
-    VALUES (?, ?, ?, ?, 5000.0, 0, 0, 0)`);
-  for (const [numped, dias] of PEDIDOS_ERP) {
-    inserirPedidoErp.run(numped, FORNECEDOR_011, FILIAL_011, haDias(dias));
+    (NUMPED, CODFORNEC, CODFILIAL, DTEMISSAO, DTPREVENT, VLTOTAL, PRAZO1, PRAZO2, PRAZO3)
+    VALUES (?, ?, ?, ?, ?, 5000.0, 0, 0, 0)`);
+  for (const [numped, dias, diasPrevisao] of PEDIDOS_ERP) {
+    inserirPedidoErp.run(numped, FORNECEDOR_011, FILIAL_011, haDias(dias), haDias(diasPrevisao));
   }
+
+  const inserirVendedor = db.prepare('INSERT OR IGNORE INTO PCUSUARI (CODUSUR, NOME) VALUES (?, ?)');
+  for (const [codusur, nome] of VENDEDORES) inserirVendedor.run(codusur, nome);
 
   const inserirEntrada = db.prepare(`INSERT INTO PCMOV
     (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED, NUMTRANSENT, NUMNOTA)

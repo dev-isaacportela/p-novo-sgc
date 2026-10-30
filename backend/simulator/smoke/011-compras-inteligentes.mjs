@@ -217,6 +217,12 @@ export async function suite(ctx) {
     assert.ok(compras.length > 0, 'consulta ao WinThor sem linha nao e verde');
     assert.ok(compras.length <= 10, 'teto de 10 por ROWNUM');
     assert.ok(Number(compras[0].VALOR_TOTAL) > 0);
+    // R-123: a entrada traz o pedido ao ERP casado — emissão (solicitação) e previsão.
+    const comPedido = compras.find((c) => Number(c.NUMPED) === 970001);
+    assert.ok(comPedido, 'a entrada do 970001 esta nas ultimas compras');
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(String(comPedido.DT_SOLICITACAO)), `solicitacao ${comPedido.DT_SOLICITACAO}`);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(String(comPedido.DT_PREVISAO)), `previsao ${comPedido.DT_PREVISAO}`);
+    assert.ok(String(comPedido.DT_PREVISAO) < String(comPedido.DT_ENTRADA), 'o 970001 entrou DEPOIS da previsao (atrasado)');
 
     const filiais = await linhas('sgcWintProdutoEstoqueFiliais', { codprod: 5403 }, U.ana);
     assert.ok(filiais.length >= 2, `o detalhe mostra o estoque nas outras filiais, veio ${filiais.length}`);
@@ -272,6 +278,16 @@ export async function suite(ctx) {
     assert.equal(Number(produto(rows, 5403).CUSTO_ATUAL), 10.5);
     assert.equal(Number(produto(rows, 5402).CUSTO_ATUAL), 12);
     assert.equal(String(produto(rows, 5401).CODFAB), 'FAB-5401');
+  });
+
+  await teste('C-041 / R-123: sgcWintProdutoVendas devolve, por venda, o vendedor (CODUSUR e VENDEDOR da PCUSUARI) ao lado do cliente — toda venda do 5408 na janela tem vendedor nomeado', async () => {
+    const vendas = await linhas('sgcWintProdutoVendas', { codprod: 5408, codfilial: FILIAL_011, ...JANELA }, U.ana);
+    assert.ok(vendas.length >= 4, `o 5408 tem 4 vendas na janela, veio ${vendas.length}`);
+    for (const v of vendas) {
+      assert.ok(Number(v.CODUSUR) > 0, `CODUSUR da ${v.NUMTRANSITEM}`);
+      assert.ok(String(v.VENDEDOR).length > 0, `VENDEDOR da ${v.NUMTRANSITEM}`);
+      assert.ok(Number(v.CODCLI) > 0 && String(v.CLIENTE).length > 0);
+    }
   });
 
   await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho do Novo pedido do quadro — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {

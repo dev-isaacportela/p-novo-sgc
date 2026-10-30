@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import { montarRessuprimento } from '../src/lib/ressuprimento.ts';
 import {
   diasDoMes, filiaisComExcesso, mesesAte, rotuloMes, serieComprasVendas, simularCompra, somarMeses, totaisDoRodape,
+  desconsideradasPorMes, entradaAtrasou, historicoSuficiente, mesesComMovimento, mesesDeVendas, necessidade,
+  resumoDeVendas, rotuloMesLongo, serieEmCaixas, vendasDoMes, ENTRADAS_VISIVEIS, MESES_MINIMOS_HISTORICO,
 } from '../src/lib/ressuprimento-detalhe.ts';
 
 const medida = (extra = {}) => ({
@@ -40,9 +42,9 @@ test('C-032: a série de 6 meses tem 6 pontos medidos (zero onde não houve movi
   const serie = serieComprasVendas(historico, '2026-09-16', 6, 2);
   assert.equal(serie.length, 7);
   assert.deepEqual(serie.map((p) => p.mes), ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
-  assert.deepEqual(serie[4], { mes: '2026-08', rotulo: 'ago/26', compras: 24, vendas: 10, projecao: null });
-  assert.deepEqual(serie[0], { mes: '2026-04', rotulo: 'abr/26', compras: 0, vendas: 0, projecao: null });
-  assert.deepEqual(serie[6], { mes: '2026-10', rotulo: 'out/26', compras: null, vendas: null, projecao: 62 });
+  assert.deepEqual(serie[4], { mes: '2026-08', rotulo: 'ago/26', compras: 24, vendas: 10, projecao: null, desconsideradas: null });
+  assert.deepEqual(serie[0], { mes: '2026-04', rotulo: 'abr/26', compras: 0, vendas: 0, projecao: null, desconsideradas: null });
+  assert.deepEqual(serie[6], { mes: '2026-10', rotulo: 'out/26', compras: null, vendas: null, projecao: 62, desconsideradas: null });
   assert.equal(serieComprasVendas(historico, '2026-09-16', 13, 2).length, 14);
 });
 
@@ -82,4 +84,56 @@ test('C-034: simular 50 unidades com caixa de 12 compra 60 (5 caixas) por R$ 600
   assert.equal(s.coberturaFuturaDias, 55);
   assert.equal(Math.round(s.nivelFuturoPct), 157);
   assert.equal(simularCompra(linha({ CONSUMO_DIARIO: 0, VENDA_PERIODO: 0 }), 12).coberturaFuturaDias, null, 'sem giro não há cobertura');
+});
+
+/* ── R-123 — a janela "Análise do Produto" (C-042) ─────────────────────── */
+
+const VENDAS = [
+  { NUMTRANSITEM: 1, DTMOV: '2026-10-05', QUANTIDADE: 10, PRECO_VENDA: 20, VALOR_TOTAL: 200, CODCLI: 9301, CLIENTE: 'A', CODUSUR: 1, VENDEDOR: 'Carla', PUBLICO: 0 },
+  { NUMTRANSITEM: 2, DTMOV: '2026-10-20', QUANTIDADE: 60, PRECO_VENDA: 20, VALOR_TOTAL: 1200, CODCLI: 9303, CLIENTE: 'B', CODUSUR: 2, VENDEDOR: 'Diego', PUBLICO: 0 },
+  { NUMTRANSITEM: 3, DTMOV: '2026-09-02', QUANTIDADE: 5, PRECO_VENDA: 20, VALOR_TOTAL: 100.5, CODCLI: 9301, CLIENTE: 'A', CODUSUR: 1, VENDEDOR: 'Carla', PUBLICO: 1 },
+];
+
+test('C-042: a aba Vendas agrupa por mês do mais recente ao mais antigo ("Outubro de 2026 · 2 vendas · R$ 1.400"), filtra por mês e resume o que está fora da demanda', () => {
+  assert.equal(rotuloMesLongo('2026-10'), 'Outubro de 2026');
+  assert.equal(rotuloMesLongo('x'), 'x');
+  assert.deepEqual(mesesDeVendas(VENDAS), [
+    { mes: '2026-10', rotulo: 'Outubro de 2026', vendas: 2, valor: 1400 },
+    { mes: '2026-09', rotulo: 'Setembro de 2026', vendas: 1, valor: 100.5 },
+  ]);
+  assert.deepEqual(vendasDoMes(VENDAS, '2026-09').map((v) => v.NUMTRANSITEM), [3]);
+  assert.equal(vendasDoMes(VENDAS, '').length, 3);
+  assert.deepEqual(resumoDeVendas(VENDAS, [2, 999]), { listadas: 3, quantidadeDesconsiderada: 60, valorDesconsiderado: 1200 });
+  assert.deepEqual(resumoDeVendas([], []), { listadas: 0, quantidadeDesconsiderada: 0, valorDesconsiderado: 0 });
+});
+
+test('C-042: a série "Desconsideradas" soma as vendas fora da demanda por mês e entra no gráfico só quando pedida; em caixas, cada valor é dividido pela caixa com 1 decimal', () => {
+  const fora = desconsideradasPorMes([{ dtmov: '2026-09-10', quantidade: 6 }, { dtmov: '2026-09-11', quantidade: 4 }, { dtmov: '2026-08-01', quantidade: 1 }]);
+  assert.deepEqual([...fora.entries()], [['2026-09', 10], ['2026-08', 1]]);
+  const historico = [{ MES: '2026-09', SAIDAS: 20, ENTRADAS: 24, SAIDAS_PUBLICAS: 0 }];
+  const serie = serieComprasVendas(historico, '2026-09-16', 6, 2, fora);
+  assert.equal(serie[5].desconsideradas, 10);
+  assert.equal(serie[4].desconsideradas, 1);
+  assert.equal(serie[0].desconsideradas, 0, 'mês sem desconsiderada é zero quando a série foi pedida');
+  assert.equal(serie[6].desconsideradas, null, 'a projeção não tem desconsiderada');
+  assert.equal(serieComprasVendas(historico, '2026-09-16', 6, 2)[5].desconsideradas, null);
+  const caixas = serieEmCaixas(serie, 12);
+  assert.deepEqual([caixas[5].compras, caixas[5].vendas, caixas[5].desconsideradas, caixas[6].projecao, caixas[6].compras], [2, 1.7, 0.8, 5.2, null]);
+  assert.deepEqual(serieEmCaixas(serie, 1), serie, 'avulso não divide');
+});
+
+test('C-042: com menos de 3 meses com movimento o histórico não sustenta leitura; a entrada que chegou depois da previsão fica em atenção; a necessidade é o que falta ao máximo, inteira e nunca negativa', () => {
+  assert.equal(MESES_MINIMOS_HISTORICO, 3);
+  const dois = [{ MES: '2026-08', SAIDAS: 1, ENTRADAS: 0, SAIDAS_PUBLICAS: 0 }, { MES: '2026-09', SAIDAS: 0, ENTRADAS: 5, SAIDAS_PUBLICAS: 0 }, { MES: '2026-07', SAIDAS: 0, ENTRADAS: 0, SAIDAS_PUBLICAS: 0 }];
+  assert.equal(mesesComMovimento(dois), 2);
+  assert.equal(historicoSuficiente(dois), false);
+  assert.equal(historicoSuficiente([...dois, { MES: '2026-06', SAIDAS: 3, ENTRADAS: 0, SAIDAS_PUBLICAS: 0 }]), true);
+  assert.equal(entradaAtrasou({ DT_ENTRADA: '2026-09-04', DT_PREVISAO: '2026-09-02' }), true);
+  assert.equal(entradaAtrasou({ DT_ENTRADA: '2026-09-04', DT_PREVISAO: '2026-09-10' }), false);
+  assert.equal(entradaAtrasou({ DT_ENTRADA: '2026-09-04', DT_PREVISAO: '' }), false, 'sem previsão não há atraso');
+  assert.equal(ENTRADAS_VISIVEIS, 5);
+  assert.equal(necessidade({ estoqueMaximo: 70, estoqueAtual: 30, emTransito: 0 }), 40);
+  assert.equal(necessidade({ estoqueMaximo: 52.5, estoqueAtual: 30, emTransito: 10 }), 13);
+  assert.equal(necessidade({ estoqueMaximo: 20, estoqueAtual: 30, emTransito: 0 }), 0);
+  assert.equal(necessidade(linha()), 20, 'a linha do caso base: máximo 70, 50 disponível');
 });

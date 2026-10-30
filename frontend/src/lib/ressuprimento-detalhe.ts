@@ -8,7 +8,7 @@
 
 import { arredondarPorCaixa } from './compras.ts';
 import { coberturaFuturaComCompra, nivelDeCobertura } from './ressuprimento.ts';
-import type { LinhaRessuprimento } from './ressuprimento.ts';
+import type { LinhaRessuprimento, Ressuprimento } from './ressuprimento.ts';
 
 const numero = (valor: unknown): number => {
   const n = Number(valor);
@@ -27,6 +27,8 @@ export interface PontoSerie {
   compras: number | null;
   vendas: number | null;
   projecao: number | null;
+  /** R-123: vendas desconsideradas no mês; `null` quando a série não foi pedida. */
+  desconsideradas: number | null;
 }
 
 export type JanelaGrafico = 6 | 13;
@@ -74,6 +76,7 @@ export function serieComprasVendas(
   hoje: string,
   janela: JanelaGrafico,
   consumoDiario: number,
+  desconsideradas?: Map<string, number>,
 ): PontoSerie[] {
   const porMes = new Map((historico ?? []).map((h) => [String(h.MES).slice(0, 7), h]));
   const medidos: PontoSerie[] = mesesAte(hoje, janela).map((mes) => {
@@ -83,6 +86,7 @@ export function serieComprasVendas(
       compras: numero(h?.ENTRADAS),
       vendas: numero(h?.SAIDAS),
       projecao: null,
+      desconsideradas: desconsideradas ? numero(desconsideradas.get(mes)) : null,
     };
   });
   const atual = String(hoje).slice(0, 7);
@@ -93,6 +97,7 @@ export function serieComprasVendas(
       mes, rotulo: rotuloMes(mes),
       compras: null, vendas: null,
       projecao: Math.round(consumo * diasDoMes(mes)),
+      desconsideradas: null,
     };
   });
   return [...medidos, ...projetados];
@@ -176,4 +181,126 @@ export function simularCompra(l: LinhaRessuprimento, quantidadeDigitada: number)
     coberturaFuturaDias: coberturaFuturaComCompra(l, quantidade),
     nivelFuturoPct: nivelDeCobertura({ estoqueAtual: l.estoqueAtual + l.emTransito + quantidade, estoqueMaximo: l.estoqueMaximo }),
   };
+}
+
+/* ─────────────── R-123: a janela "Análise do Produto" ─────────────── */
+
+/** Linha de `sgcWintProdutoVendas` (colunas UPPERCASE). */
+export interface VendaDoProduto {
+  NUMTRANSITEM: number; DTMOV: string; QUANTIDADE: number; PRECO_VENDA: number; VALOR_TOTAL: number;
+  CODCLI: number; CLIENTE: string; CODUSUR?: number; VENDEDOR?: string; PUBLICO: number;
+}
+
+/** Linha de `sgcWintProdutoUltimasCompras` (colunas UPPERCASE); o pedido casado é opcional. */
+export interface CompraDoProduto {
+  DT_ENTRADA: string; NUMTRANSENT: number; NUMNOTA: number; CODFILIAL: string;
+  QUANTIDADE: number; PRECO_UNITARIO: number; VALOR_TOTAL: number;
+  NUMPED?: number; DT_SOLICITACAO?: string; DT_PREVISAO?: string;
+}
+
+/** Uma venda desconsiderada como a página a guarda (do que VOLTOU do banco, D-03). */
+export interface VendaDesconsiderada {
+  numtransitem: number; codprod: number; dtmov: string; quantidade: number;
+}
+
+const NOME_MES_LONGO = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+/** `2026-10` → `Outubro de 2026` (a pílula de mês da aba Vendas). */
+export function rotuloMesLongo(mes: string): string {
+  const [ano, m] = String(mes ?? '').split('-');
+  const indice = Number(m) - 1;
+  if (!ano || !(indice >= 0 && indice < 12)) return String(mes ?? '');
+  return `${NOME_MES_LONGO[indice]} de ${ano}`;
+}
+
+export interface MesDeVendas { mes: string; rotulo: string; vendas: number; valor: number }
+
+/** Os meses com venda na lista, do mais recente ao mais antigo, com contagem e valor. */
+export function mesesDeVendas(vendas: VendaDoProduto[]): MesDeVendas[] {
+  const porMes = new Map<string, MesDeVendas>();
+  for (const v of vendas ?? []) {
+    const mes = String(v.DTMOV ?? '').slice(0, 7);
+    if (!mes) continue;
+    const atual = porMes.get(mes) ?? { mes, rotulo: rotuloMesLongo(mes), vendas: 0, valor: 0 };
+    atual.vendas += 1;
+    atual.valor = Math.round((atual.valor + numero(v.VALOR_TOTAL)) * 100) / 100;
+    porMes.set(mes, atual);
+  }
+  return [...porMes.values()].sort((a, b) => b.mes.localeCompare(a.mes));
+}
+
+/** As vendas de um mês (`''` = todas), na ordem em que vieram. */
+export function vendasDoMes(vendas: VendaDoProduto[], mes: string): VendaDoProduto[] {
+  if (!mes) return vendas ?? [];
+  return (vendas ?? []).filter((v) => String(v.DTMOV ?? '').slice(0, 7) === mes);
+}
+
+export interface ResumoVendas { listadas: number; quantidadeDesconsiderada: number; valorDesconsiderado: number }
+
+/** As três métricas da aba Vendas: quantas listadas, e quanto (un. e R$) está fora da demanda. */
+export function resumoDeVendas(vendas: VendaDoProduto[], desconsideradas: number[]): ResumoVendas {
+  const fora = new Set((desconsideradas ?? []).map(Number));
+  let quantidade = 0;
+  let valor = 0;
+  for (const v of vendas ?? []) {
+    if (!fora.has(Number(v.NUMTRANSITEM))) continue;
+    quantidade += numero(v.QUANTIDADE);
+    valor += numero(v.VALOR_TOTAL);
+  }
+  return { listadas: (vendas ?? []).length, quantidadeDesconsiderada: quantidade, valorDesconsiderado: Math.round(valor * 100) / 100 };
+}
+
+/** As desconsideradas por mês (`AAAA-MM` → unidades), a série "Desconsideradas" do gráfico. */
+export function desconsideradasPorMes(lista: Pick<VendaDesconsiderada, 'dtmov' | 'quantidade'>[]): Map<string, number> {
+  const porMes = new Map<string, number>();
+  for (const v of lista ?? []) {
+    const mes = String(v.dtmov ?? '').slice(0, 7);
+    if (!mes) continue;
+    porMes.set(mes, (porMes.get(mes) ?? 0) + numero(v.quantidade));
+  }
+  return porMes;
+}
+
+/** A série em caixas: cada valor medido dividido pelas unidades por caixa (1 decimal). `null` segue `null`. */
+export function serieEmCaixas(serie: PontoSerie[], unidadesPorCaixa: number): PontoSerie[] {
+  const divisor = numero(unidadesPorCaixa);
+  if (!(divisor > 1)) return serie ?? [];
+  const cx = (valor: number | null) => (valor === null ? null : Math.round((valor / divisor) * 10) / 10);
+  return (serie ?? []).map((p) => ({
+    ...p, compras: cx(p.compras), vendas: cx(p.vendas), projecao: cx(p.projecao), desconsideradas: cx(p.desconsideradas),
+  }));
+}
+
+/** Abaixo disto o histórico não sustenta leitura: a janela avisa em vez de desenhar. */
+export const MESES_MINIMOS_HISTORICO = 3;
+
+/** Quantos meses do histórico tiveram saída ou entrada. */
+export function mesesComMovimento(historico: PontoHistorico[]): number {
+  return (historico ?? []).filter((h) => numero(h.SAIDAS) > 0 || numero(h.ENTRADAS) > 0).length;
+}
+
+export function historicoSuficiente(historico: PontoHistorico[]): boolean {
+  return mesesComMovimento(historico) >= MESES_MINIMOS_HISTORICO;
+}
+
+/** A entrada chegou depois da previsão do pedido (previsão em atenção). Sem previsão, não. */
+export function entradaAtrasou(compra: Pick<CompraDoProduto, 'DT_ENTRADA' | 'DT_PREVISAO'>): boolean {
+  const previsao = String(compra?.DT_PREVISAO ?? '').slice(0, 10);
+  const entrada = String(compra?.DT_ENTRADA ?? '').slice(0, 10);
+  return previsao.length === 10 && entrada.length === 10 && entrada > previsao;
+}
+
+/** Quantas entradas o histórico mostra antes de "Ver todas". */
+export const ENTRADAS_VISIVEIS = 5;
+
+/**
+ * A necessidade bruta: o que falta para o estoque máximo depois do disponível
+ * e do trânsito, inteiro para cima, nunca negativa — a sugestão (RN-007) é ela
+ * arredondada à caixa e zerada quando há trânsito.
+ */
+export function necessidade(l: Pick<Ressuprimento, 'estoqueMaximo' | 'estoqueAtual' | 'emTransito'>): number {
+  return Math.max(0, Math.ceil(numero(l.estoqueMaximo) - numero(l.estoqueAtual) - numero(l.emTransito)));
 }

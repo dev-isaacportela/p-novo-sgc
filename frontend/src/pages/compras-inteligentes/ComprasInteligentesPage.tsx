@@ -43,13 +43,14 @@ import type {
 import { CHAVE_CARRINHO, carrinhoDeTexto, resumoDoCarrinho, textoDoCarrinho } from '@/lib/carrinho';
 import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
 import { DADOS_VAZIOS } from '@/lib/ressuprimento-detalhe';
-import type { DadosDoSku, PontoHistorico, PosicaoFilial } from '@/lib/ressuprimento-detalhe';
+import type { DadosDoSku, PontoHistorico, PosicaoFilial, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
 import { ListaProdutos } from './grid';
 import type { PedidoAbertoDoItem } from './grid';
 import { CarrinhoDialogo } from './Carrinho';
 import type { PedidoAberto } from './Carrinho';
 import { PainelDetalhe } from './painel-detalhe';
-import { DetalheSku, ParametrosDialogo, SilenciarDialogo, VendasDialogo } from './dialogos';
+import { ParametrosDialogo, SilenciarDialogo, VendasDialogo } from './dialogos';
+import { AnaliseProdutoDialogo } from './analise-produto';
 import type { AlvoParametro } from './dialogos';
 
 interface Opcao { value: string; label: string; hint?: string }
@@ -110,7 +111,7 @@ export default function ComprasInteligentesPage() {
   const [porCaixa, setPorCaixa] = React.useState<Map<number, number>>(() => new Map());
   const [parametros, setParametros] = React.useState<ParametroCompra[]>([]);
   const [coberturas, setCoberturas] = React.useState<Cobertura[]>([]);
-  const [desconsideradas, setDesconsideradas] = React.useState<{ numtransitem: number; codprod: number }[]>([]);
+  const [desconsideradas, setDesconsideradas] = React.useState<VendaDesconsiderada[]>([]);
   const [pedidoAberto, setPedidoAberto] = React.useState<PedidoAberto | null>(null);
   const [emPedidoAberto, setEmPedidoAberto] = React.useState<Map<number, PedidoAbertoDoItem>>(() => new Map());
 
@@ -215,7 +216,7 @@ export default function ComprasInteligentesPage() {
         // D-03: o `{{excluir}}` é montado do que VOLTOU do banco, nunca do que
         // a tela achou que gravou — escrita guardada recusada devolve 0 linhas.
         const vendas = linhasVenda
-          .map((l) => ({ numtransitem: Number(l.NUMTRANSITEM), codprod: Number(l.CODPROD) }))
+          .map((l) => ({ numtransitem: Number(l.NUMTRANSITEM), codprod: Number(l.CODPROD), dtmov: String(l.DTMOV ?? ''), quantidade: Number(l.QUANTIDADE ?? 0) }))
           .filter((v) => v.numtransitem > 0)
           .slice(0, 500);
         if (!vivo) return;
@@ -665,7 +666,26 @@ export default function ComprasInteligentesPage() {
         onCriado={(cardId) => { setCarrinhoAberto(false); navigate(`/quadro?card=${cardId}`); }}
       />
 
-      <DetalheSku linha={detalheCompleto} codfilial={codfilial} onFechar={() => setDetalheCompleto(null)} />
+      {/* R-123: a Análise do Produto é a versão expandida do painel, sobre o mesmo cache do SKU. */}
+      <AnaliseProdutoDialogo
+        linha={detalheCompleto ? todas.find((l) => Number(l.medida.CODPROD) === Number(detalheCompleto.medida.CODPROD)) ?? detalheCompleto : null}
+        codfilial={codfilial}
+        fornecedor={nomeFornecedor}
+        hoje={hoje}
+        dados={detalheCompleto ? cacheSku.get(Number(detalheCompleto.medida.CODPROD)) ?? DADOS_VAZIOS : DADOS_VAZIOS}
+        referencia={referencia}
+        desconsideradas={desconsideradas}
+        periodo={periodo}
+        pedidoMinimo={pedidoMinimo}
+        podeOperar={podeOperar}
+        podeParametrizar={podeParametrizar}
+        motivoBloqueio={motivoBloqueio}
+        onFechar={() => setDetalheCompleto(null)}
+        onAdicionar={adicionar}
+        onParametros={abrirParametros}
+        onDesconsiderar={desconsiderarVenda}
+        onReconsiderar={reconsiderarVenda}
+      />
       <ParametrosDialogo alvo={parametroAlvo} onFechar={() => setParametroAlvo(null)} onSalvar={salvarParametro} />
       <SilenciarDialogo linha={silenciando} onFechar={() => setSilenciando(null)} onSilenciar={silenciar} />
       <VendasDialogo
