@@ -205,7 +205,7 @@ export function PainelDetalhe({
           aberta={abertas.has('previsao')}
           onToggle={() => alterna('previsao')}
         >
-          <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} />
+          <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} compacto />
         </Disclosure>
 
         <Disclosure

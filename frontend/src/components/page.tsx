@@ -1367,7 +1367,8 @@ export function MiniCartao({
 }
 
 /** A grade dos mini-cartões: 2 por linha no mobile, 3 em `sm`, `colunas` a partir de `lg`. */
-export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 3 | 4 | 6 }) {
+export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 2 | 3 | 4 | 6 }) {
+  if (colunas === 2) return <div className="grid grid-cols-2 gap-2">{children}</div>;
   const emLg = { 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 6: 'lg:grid-cols-6' }[colunas];
   return <div className={cn('grid grid-cols-2 gap-2 sm:grid-cols-3', emLg)}>{children}</div>;
 }

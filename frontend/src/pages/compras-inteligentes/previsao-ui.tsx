@@ -19,6 +19,7 @@ export function AnaliseVendaFutura({
   onModelo,
   projetada,
   referencia,
+  compacto = false,
 }: {
   linha: LinhaRessuprimento;
   /** `null` enquanto o histórico do SKU não voltou. */
@@ -27,6 +28,8 @@ export function AnaliseVendaFutura({
   onModelo: (modelo: ModeloPrevisao) => void;
   projetada: SugestaoProjetada | null;
   referencia: ReferenciaSugestao;
+  /** No painel lateral: texto em cima, seletor na largura toda e KPIs em duas colunas. */
+  compacto?: boolean;
 }) {
   const escolhido = previsao ? modeloEscolhido(previsao, modelo) : null;
   const vencedor = previsao?.suficiente ? previsao.modelos.find((m) => m.modelo === previsao.bestFit) ?? null : null;
@@ -42,7 +45,7 @@ export function AnaliseVendaFutura({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className={compacto ? 'flex flex-col gap-2' : 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'}>
         <RowMeta>Escolha o modelo matemático. O Best Fit compara o MAD histórico e usa automaticamente o menor erro.</RowMeta>
         <SelectMenu
           label="Modelo de previsão"
@@ -50,7 +53,7 @@ export function AnaliseVendaFutura({
           onChange={(v) => onModelo(v as ModeloPrevisao)}
           options={opcoes}
           disabled={!previsao?.suficiente}
-          className="sm:w-72"
+          className={compacto ? undefined : 'sm:w-72'}
         />
       </div>
 
@@ -62,7 +65,7 @@ export function AnaliseVendaFutura({
         </Alert>
       ) : (
         <>
-          <GradeMini colunas={4}>
+          <GradeMini colunas={compacto ? 2 : 4}>
             <MiniCartao
               rotulo="Projeção mensal"
               valor={`${numero(escolhido.previsao)} un.`}
