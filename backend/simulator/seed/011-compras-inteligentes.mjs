@@ -207,9 +207,12 @@ export function seed011(db, cenario) {
   const inserirCliente = db.prepare('INSERT INTO PCCLIENT (CODCLI, CLIENTE, TIPOFJ, CODATV1) VALUES (?, ?, ?, ?)');
   for (const c of CLIENTES) inserirCliente.run(c[0], c[1], 'J', c[2]);
 
+  // Preço 20 e custo financeiro 12 em toda venda: faturamento = 20 × qt e
+  // rentabilidade = 8 × qt (C-040); a ordem das duas curvas é a mesma aqui, e
+  // o "pior das duas" é provado puro em tests/ressuprimento.test.mjs.
   const inserirVenda = db.prepare(`INSERT INTO PCMOV
-    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED)
-    VALUES (?, ?, ?, ?, 'S', ?, ?, 20.0, NULL)`);
+    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, CUSTOFIN, NUMPED)
+    VALUES (?, ?, ?, ?, 'S', ?, ?, 20.0, 12.0, NULL)`);
   for (const [transitem, codprod, codcli, qt, dias] of VENDAS) {
     inserirVenda.run(transitem, codprod, FILIAL_011, codcli, haDias(dias), qt);
   }

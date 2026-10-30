@@ -47,6 +47,17 @@ export interface AcoesDaLista {
   onAbrirCarrinho: () => void;
 }
 
+/**
+ * R-122: a letra de uma das duas curvas; a que vale para a cobertura (a pior
+ * das duas, ou ambas quando iguais) sai em destaque, com o alvo no título.
+ */
+function LetraCurva({ letra, linha }: { letra: LinhaRessuprimento['curva']; linha: LinhaRessuprimento }) {
+  const alvo = `Alvo de cobertura: ${linha.coberturaDias} dias (${linha.parametros.origemCobertura})`;
+  return letra === linha.curva
+    ? <strong title={`Vale para a cobertura (a pior das duas). ${alvo}`}>{letra}</strong>
+    : <span title={`Não é a pior das duas; a cobertura segue a curva ${linha.curva}. ${alvo}`}>{letra}</span>;
+}
+
 export function ListaProdutos({
   visao,
   linhas,
@@ -156,7 +167,8 @@ export function ListaProdutos({
           <tr>
             <Th>Produto</Th>
             <Th>Situação</Th>
-            <Th>Curva</Th>
+            <Th className="w-20">Curva fat.</Th>
+            <Th className="w-20">Curva rent.</Th>
             <Th numeric className="w-32">Cobertura</Th>
             <Th numeric className="w-40">Qtd. (un.)</Th>
             <Th className="w-24 text-right">Ações</Th>
@@ -199,9 +211,8 @@ export function ListaProdutos({
                   ) : null}
                 </Td>
                 <Td><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></Td>
-                <Td>
-                  <span title={`Alvo de cobertura: ${linha.coberturaDias} dias (${linha.parametros.origemCobertura})`}>{linha.curva}</span>
-                </Td>
+                <Td><LetraCurva letra={linha.curvaFaturamento} linha={linha} /></Td>
+                <Td><LetraCurva letra={linha.curvaRentabilidade} linha={linha} /></Td>
                 <Td numeric>
                   {linha.coberturaAtualDias === null
                     ? <span title="Sem giro: não há consumo para dividir"><Dash /></span>

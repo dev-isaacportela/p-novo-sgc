@@ -141,23 +141,39 @@ export function arredondarPorCaixa(sugestao: number, unidades: number): number {
 export function curvaAbc(
   linhas: Pick<LinhaAnalise, 'CODPROD' | 'VENDA_PERIODO' | 'CUSTO_ULT_ENTRADA'>[],
 ): Map<number, CurvaAbc> {
-  const itens = (linhas ?? []).map((linha) => ({
+  return curvaPorValor((linhas ?? []).map((linha) => ({
     codprod: Number(linha?.CODPROD ?? 0),
     valor: Math.max(0, numero(linha?.VENDA_PERIODO)) * Math.max(0, numero(linha?.CUSTO_ULT_ENTRADA)),
-  }));
+  })));
+}
+
+/**
+ * R-122: a MESMA régua (80 % / 95 %) sobre qualquer valor por produto — é o que
+ * a 011 usa duas vezes, com o faturamento e com a rentabilidade da janela.
+ * Valor negativo (margem abaixo de zero) conta como zero.
+ */
+export function curvaPorValor(itens: { codprod: number; valor: number }[]): Map<number, CurvaAbc> {
   const mapa = new Map<number, CurvaAbc>();
-  const total = itens.reduce((soma, item) => soma + item.valor, 0);
+  const itensValidos = (itens ?? []).map((item) => ({ codprod: Number(item.codprod), valor: Math.max(0, numero(item.valor)) }));
+  const total = itensValidos.reduce((soma, item) => soma + item.valor, 0);
   if (total <= 0) {
-    for (const item of itens) mapa.set(item.codprod, 'C');
+    for (const item of itensValidos) mapa.set(item.codprod, 'C');
     return mapa;
   }
   let acumulado = 0;
-  for (const item of [...itens].sort((a, b) => b.valor - a.valor)) {
+  for (const item of [...itensValidos].sort((a, b) => b.valor - a.valor)) {
     acumulado += item.valor;
     const parte = acumulado / total;
     mapa.set(item.codprod, parte <= 0.8 ? 'A' : parte <= 0.95 ? 'B' : 'C');
   }
   return mapa;
+}
+
+const ORDEM_CURVA: Record<CurvaAbc, number> = { A: 0, B: 1, C: 2 };
+
+/** R-122: "a pior das duas" — a letra mais ao fim do alfabeto (A < B < C). */
+export function piorCurva(a: CurvaAbc, b: CurvaAbc): CurvaAbc {
+  return ORDEM_CURVA[a] >= ORDEM_CURVA[b] ? a : b;
 }
 
 /** RN-004. Sem venda diária não há cobertura a calcular — é `null`, não zero. */

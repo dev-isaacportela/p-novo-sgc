@@ -151,7 +151,9 @@ const SQL_RESSUPRIMENTO = `WITH
       M.CODPROD,
       TRUNC(M.DTMOV) AS DIA,
       SUM(M.QT) AS QT_DIA,
-      SUM(CASE WHEN ${PUBLICO} THEN M.QT ELSE 0 END) AS QT_DIA_PUBLICA
+      SUM(CASE WHEN ${PUBLICO} THEN M.QT ELSE 0 END) AS QT_DIA_PUBLICA,
+      SUM(M.QT * NVL(M.PUNIT, 0)) AS VL_DIA,
+      SUM(M.QT * (NVL(M.PUNIT, 0) - NVL(M.CUSTOFIN, 0))) AS MARGEM_DIA
     FROM PCMOV M
     JOIN PRODUTOS_BASE PB ON PB.CODPROD = M.CODPROD
     LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
@@ -167,6 +169,8 @@ const SQL_RESSUPRIMENTO = `WITH
       PB.CODPROD,
       NVL(V.QT_DIA, 0)         AS QT_DIA,
       NVL(V.QT_DIA_PUBLICA, 0) AS QT_DIA_PUBLICA,
+      NVL(V.VL_DIA, 0)         AS VL_DIA,
+      NVL(V.MARGEM_DIA, 0)     AS MARGEM_DIA,
       POWER(0.85, D.DIAS_ATE_FIM) AS PESO
     FROM PRODUTOS_BASE PB
     CROSS JOIN DIAS D
@@ -177,6 +181,8 @@ const SQL_RESSUPRIMENTO = `WITH
       D.CODPROD,
       SUM(D.QT_DIA)         AS VENDA_PERIODO,
       SUM(D.QT_DIA_PUBLICA) AS VENDA_PUBLICA,
+      SUM(D.VL_DIA)         AS FATURAMENTO_PERIODO,
+      SUM(D.MARGEM_DIA)     AS RENTABILIDADE_PERIODO,
       ROUND(SUM(D.QT_DIA * D.PESO)         / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO,
       ROUND(SUM(D.QT_DIA_PUBLICA * D.PESO) / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO_PUBLICO,
       ROUND(SQRT(GREATEST(AVG(D.QT_DIA * D.QT_DIA) - AVG(D.QT_DIA) * AVG(D.QT_DIA), 0)), 4) AS VOLATILIDADE_DIARIA
@@ -191,6 +197,8 @@ SELECT
   NVL(R.LEAD_TIME_MEDIDO, 0)       AS LEAD_TIME_MEDIDO,
   NVL(M.VENDA_PERIODO, 0)          AS VENDA_PERIODO,
   NVL(M.VENDA_PUBLICA, 0)          AS VENDA_PUBLICA,
+  NVL(M.FATURAMENTO_PERIODO, 0)    AS FATURAMENTO_PERIODO,
+  NVL(M.RENTABILIDADE_PERIODO, 0)  AS RENTABILIDADE_PERIODO,
   NVL(M.CONSUMO_DIARIO, 0)         AS CONSUMO_DIARIO,
   NVL(M.CONSUMO_DIARIO_PUBLICO, 0) AS CONSUMO_DIARIO_PUBLICO,
   NVL(M.VOLATILIDADE_DIARIA, 0)    AS VOLATILIDADE_DIARIA
@@ -441,7 +449,7 @@ const LEITURAS = [
   {
     name: 'sgcWintRessuprimento',
     code: SQL_RESSUPRIMENTO,
-    resumo: 'RF-001..RF-005/RF-013 (R-082..R-087) - uma linha por produto ativo do fornecedor na filial, com MEDIDAS: estoque liquido e parcelas, transito, lead time medido, venda do periodo (publica a parte), consumo ponderado por recencia e volatilidade. Sem formula e sem paginacao (a curva ABC e acumulada sobre o fornecedor inteiro). Params: codfornec int, codfilial string, dataInicio string, dataFim string, diasPeriodo int, excluir lista de NUMTRANSITEM (fragmento, 0 = nenhuma, teto 500)',
+    resumo: 'RF-001..RF-005/RF-013 (R-082..R-087) - uma linha por produto ativo do fornecedor na filial, com MEDIDAS: estoque liquido e parcelas, transito, lead time medido, venda do periodo (publica a parte), faturamento e rentabilidade do periodo (R-122: QT x PUNIT e QT x (PUNIT - CUSTOFIN) da PCMOV, para as curvas de faturamento e de rentabilidade), consumo ponderado por recencia e volatilidade. Sem formula e sem paginacao (a curva ABC e acumulada sobre o fornecedor inteiro). Params: codfornec int, codfilial string, dataInicio string, dataFim string, diasPeriodo int, excluir lista de NUMTRANSITEM (fragmento, 0 = nenhuma, teto 500)',
   },
   {
     name: 'sgcWintProdutoHistorico',
