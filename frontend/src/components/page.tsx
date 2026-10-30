@@ -1254,9 +1254,11 @@ export function GradeVisoes({ children }: { children: React.ReactNode }) {
  * 3"). Só leitura, ou clicável quando é filtro — aí vira botão com
  * `aria-pressed`, e o ativo ganha o fundo primário.
  */
+// Todos com borda (transparente onde não há contorno): é o que faz a ficha ter
+// a mesma altura do gatilho do SelectMenu (h-9) numa Toolbar com `items-end`.
 const CHIP_TONE = {
-  neutral: 'bg-muted text-ink-secondary',
-  alert: 'bg-destructive-bg text-destructive',
+  neutral: 'border border-transparent bg-muted text-ink-secondary',
+  alert: 'border border-transparent bg-destructive-bg text-destructive',
   attention: 'border border-input bg-card text-attention',
 } as const;
 
@@ -1274,8 +1276,8 @@ export function ChipContagem({
   tone?: keyof typeof CHIP_TONE;
 }) {
   const classes = cn(
-    'inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[12px] whitespace-nowrap',
-    ativo ? 'bg-primary text-primary-foreground' : CHIP_TONE[tone],
+    'inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[13px] whitespace-nowrap',
+    ativo ? 'border border-primary bg-primary text-primary-foreground' : CHIP_TONE[tone],
   );
   if (!onClick) return <span className={classes} title={title}>{children}</span>;
   return (
