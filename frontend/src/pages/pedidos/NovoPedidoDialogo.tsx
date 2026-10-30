@@ -24,10 +24,10 @@ import { usePersona } from '@/lib/persona';
 import { instanteIso, periodoPadrao, PRIORIDADES, tituloDoPedido, validarNovoPedido } from '@/lib/pedido';
 import { QUADRO_COMPRAS } from '@/lib/quadro';
 import { DatePicker } from '@/components/DatePicker';
-import { diasEntre } from '@/lib/data';
+import { diasEntre, resolverRelativo } from '@/lib/data';
 import {
   Alert, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader,
-  DialogTitle, Field, SelectMenu,
+  DialogTitle, Field, Input, SelectMenu,
 } from '@/components/page';
 
 const ROTULO_PRIORIDADE: Record<string, string> = { normal: 'Normal', alta: 'Alta', urgente: 'Urgente' };
@@ -138,7 +138,35 @@ export function NovoPedidoDialogo({
   }
 
   const lista = fornecedores ?? [];
+
+  // "Dias" é derivado das datas: mudar início ou fim recalcula o campo. O
+  // texto local só existe enquanto a pessoa digita — ajuste de estado durante
+  // a renderização quando o período muda por fora.
   const diasDoPeriodo = diasEntre(periodo.inicio, periodo.fim);
+  const [diasTexto, setDiasTexto] = React.useState(diasDoPeriodo === null ? '' : String(diasDoPeriodo));
+  const [erroDias, setErroDias] = React.useState<string | undefined>(undefined);
+  const [periodoVisto, setPeriodoVisto] = React.useState(periodo);
+  if (periodoVisto.inicio !== periodo.inicio || periodoVisto.fim !== periodo.fim) {
+    setPeriodoVisto(periodo);
+    setDiasTexto(diasDoPeriodo === null ? '' : String(diasDoPeriodo));
+    setErroDias(undefined);
+  }
+
+  /** Dias N válido (1–999) → início = fim − N; senão não mexe nas datas e avisa. */
+  function aplicarDias() {
+    const n = Number(diasTexto);
+    if (!/^\s*\d{1,3}\s*$/.test(diasTexto) || !(n >= 1 && n <= 999)) {
+      setErroDias('Informe de 1 a 999 dias');
+      return;
+    }
+    const inicio = resolverRelativo(String(n), periodo.fim, -1);
+    if (inicio === null) {
+      setErroDias('Informe de 1 a 999 dias');
+      return;
+    }
+    setErroDias(undefined);
+    if (inicio !== periodo.inicio) setPeriodo((atual) => ({ ...atual, inicio }));
+  }
   const nomeFornecedor = lista.find((item) => item.value === codfornec)?.label ?? '';
   const nomeFilial = filiais.find((item) => item.value === codfilial)?.label ?? '';
   const titulo = tituloDoPedido(nomeFilial, nomeFornecedor);
@@ -224,24 +252,41 @@ export function NovoPedidoDialogo({
                   disabled={!codfornec || !filiais.length}
                 />
               </Field>
-              {/* R-119 / C-045: data ou quantidade de dias — o início conta para
-                  trás a partir do fim, o fim para a frente a partir do início. */}
-              <Field label="Início do período de vendas" obrigatorio hint={erros.periodo ?? 'Digite a data ou a quantidade de dias'}>
-                <DatePicker
-                  value={periodo.inicio}
-                  onChange={(valor) => setPeriodo((atual) => ({ ...atual, inicio: valor }))}
-                  relativo={{ base: periodo.fim, sentido: -1 }}
-                  aria-label="Início do período de vendas"
-                />
-              </Field>
-              <Field label="Fim do período de vendas" obrigatorio hint={diasDoPeriodo === null ? undefined : `Período de ${diasDoPeriodo} ${diasDoPeriodo === 1 ? 'dia' : 'dias'}`}>
-                <DatePicker
-                  value={periodo.fim}
-                  onChange={(valor) => setPeriodo((atual) => ({ ...atual, fim: valor }))}
-                  relativo={{ base: periodo.inicio, sentido: 1 }}
-                  aria-label="Fim do período de vendas"
-                />
-              </Field>
+              {/* R-119 / C-045: início, fim e um campo "Dias" explícito. Dias é
+                  derivado das datas; digitar N e sair do campo faz início = fim − N. */}
+              <div className="grid grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_8rem]">
+                <Field label="Início do período de vendas" obrigatorio hint={erros.periodo}>
+                  <DatePicker
+                    value={periodo.inicio}
+                    onChange={(valor) => setPeriodo((atual) => ({ ...atual, inicio: valor }))}
+                    relativo={{ base: periodo.fim, sentido: -1 }}
+                    aria-label="Início do período de vendas"
+                  />
+                </Field>
+                <Field label="Fim do período de vendas" obrigatorio>
+                  <DatePicker
+                    value={periodo.fim}
+                    onChange={(valor) => setPeriodo((atual) => ({ ...atual, fim: valor }))}
+                    relativo={{ base: periodo.inicio, sentido: 1 }}
+                    aria-label="Fim do período de vendas"
+                  />
+                </Field>
+                <Field label="Dias" hint={erroDias}>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={999}
+                    step={1}
+                    inputMode="numeric"
+                    className="text-right"
+                    aria-label="Dias do período de vendas"
+                    value={diasTexto}
+                    onChange={(e) => setDiasTexto(e.target.value)}
+                    onBlur={aplicarDias}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarDias(); } }}
+                  />
+                </Field>
+              </div>
               <Field label="Prioridade">
                 <SelectMenu
                   label="Prioridade do pedido"

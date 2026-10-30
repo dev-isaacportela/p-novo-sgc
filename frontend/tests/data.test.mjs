@@ -104,6 +104,9 @@ test('C-045: resolverRelativo — "45" no início com fim 30/10/2026 dá 15/09/2
   assert.equal(resolverRelativo('30', '2026-10-01', 1), '2026-10-31');
   assert.equal(resolverRelativo('0', '2026-10-30', -1), '2026-10-30');
   assert.equal(resolverRelativo('45', '2027-01-10', -1), '2026-11-26');
+  // O campo "Dias" da janela: Dias 30 com fim 30/10/2026 → início 30/09/2026; início em 01/10 → Dias 29.
+  assert.equal(resolverRelativo('30', '2026-10-30', -1), '2026-09-30');
+  assert.equal(diasEntre('2026-10-01', '2026-10-30'), 29);
   assert.equal(resolverRelativo('15/09/2026', '2026-10-30', -1), null);
   assert.equal(resolverRelativo('abc', '2026-10-30', -1), null);
   assert.equal(resolverRelativo('45', '', -1), null);

@@ -65,8 +65,8 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 **C-045 — O período aceita a quantidade de dias** *(2026-10-30, R-119)*
 - **Dado que** a pessoa está criando o pedido e o fim do período de vendas é 30/10/2026
-- **Quando** ela escreve "45" (ou "45 dias") no início do período e sai do campo
-- **Então** o início vira 15/09/2026 — a mesma conta do período padrão —, e o campo passa a mostrar a data; escrevendo "60 dias" no fim, o fim vira o início + 60 dias; a tela mostra "Período de N dias"; uma data escrita por extenso continua valendo como sempre, e o que não é data nem dias segue a validação de hoje
+- **Quando** ela escreve "30" no campo **Dias** ao lado das datas e sai do campo
+- **Então** o início vira 30/09/2026 (fim − 30) e o campo Dias continua mostrando 30; mudando o início para 01/10/2026, Dias passa a 29 — é derivado das datas; Dias vazio ou fora de 1 a 999 não mexe nas datas e avisa "Informe de 1 a 999 dias"; o padrão mostra 45 (a mesma conta do período padrão); escrever "45" direto no campo de data também resolve, mas o campo Dias é o caminho visível
 
 **C-005 — A Análise nunca vai direto para a Diretoria**
 - **Dado que** o pedido 10 está em "Análise/Montagem de Pedido"
