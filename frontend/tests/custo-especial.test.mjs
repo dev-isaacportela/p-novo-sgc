@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   capRecenteSku, chaveEspecial, lotesDeCodigos, oportunidadesDoItem, piorRisco, planoEspecial, seloEspecial, sugestaoPorCliente,
-  abaDoGrafico, temAbaEspecial,
+  abaDoGrafico, temAbaEspecial, secaoEspecialAberta,
 } from '../src/lib/custo-especial.ts';
 
 const custo = (CODCLI, CUSTO_ESPECIAL, POLITICA_ID, POLITICA_NOME, DATA_FIM = '2026-12-31') => ({ CODPROD: 5401, CODCLI, CUSTO_ESPECIAL, VARIACAO_PERCENTUAL: 0, POLITICA_ID, POLITICA_NOME, DATA_FIM });
@@ -105,4 +105,10 @@ test('C-048 (abas do gráfico): a aba "Preço especial" só existe com oportunid
   assert.equal(abaDoGrafico('vendas', comEspecial), 'vendas');
   assert.equal(abaDoGrafico('especial', comEspecial), 'especial');
   assert.equal(abaDoGrafico('especial', []), 'vendas', 'produto sem oportunidade nunca mostra a aba especial');
+});
+
+test('C-048: a aba "Preço especial" abre a seção "Oportunidade com preço especial" já expandida; em "Compras × vendas" ela segue recolhida', () => {
+  assert.equal(secaoEspecialAberta('especial'), true);
+  assert.equal(secaoEspecialAberta('vendas'), false);
+  assert.equal(abaDoGrafico('especial', []), 'vendas', 'sem oportunidade não há aba especial, e nada abre');
 });

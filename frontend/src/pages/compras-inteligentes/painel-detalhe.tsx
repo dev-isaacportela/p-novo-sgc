@@ -288,6 +288,7 @@ export function PainelDetalhe({
           referencia={referencia}
           podeOperar={podeOperar}
           motivoBloqueio={motivoBloqueio}
+          abaGrafico="especial"
           onAdicionarEspecial={onAdicionarEspecial}
         />
       ) : (

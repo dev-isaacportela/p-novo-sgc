@@ -16,8 +16,8 @@ import {
 } from '@/components/page';
 import type { ChartConfig } from '@/components/page';
 import { arredondarPorCaixa } from '@/lib/compras';
-import { ROTULO_LIMITADO, ROTULO_RISCO, planoEspecial } from '@/lib/custo-especial';
-import type { Risco, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import { ROTULO_LIMITADO, ROTULO_RISCO, planoEspecial, secaoEspecialAberta } from '@/lib/custo-especial';
+import type { AbaGrafico, Risco, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
 import { fmtData, moeda } from '@/lib/formato';
 import { quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada } from '@/lib/ressuprimento';
 import type { LinhaRessuprimento, ReferenciaSugestao } from '@/lib/ressuprimento';
@@ -152,9 +152,11 @@ function CardTabela({
 }
 
 export function OportunidadeEspecial({
-  linha, sugestoes, quantidade: quantidadeSimulada, referencia, podeOperar, motivoBloqueio, onAdicionarEspecial,
+  linha, sugestoes, quantidade: quantidadeSimulada, referencia, podeOperar, motivoBloqueio, onAdicionarEspecial, abaGrafico = 'vendas',
 }: {
   linha: LinhaRessuprimento;
+  /** A aba do gráfico em que a seção aparece: na "Preço especial" ela já nasce expandida (C-048). */
+  abaGrafico?: AbaGrafico;
   /** As sugestões por cliente do produto aberto (RN-033), já calculadas pela página. */
   sugestoes: SugestaoCliente[];
   /** A quantidade simulada do painel, já à caixa. */
@@ -166,13 +168,14 @@ export function OportunidadeEspecial({
 }) {
   const plano = React.useMemo(() => planoEspecial(sugestoes, quantidadeSimulada), [sugestoes, quantidadeSimulada]);
   const [aba, setAba] = React.useState(0);
-  // R-126: nasce recolhida; trocar de produto recolhe de novo.
-  const [aberta, setAberta] = React.useState(false);
+  // R-126: as seções nascem recolhidas — esta, escolhida pela aba "Preço especial", nasce
+  // expandida (C-048); trocar de produto volta ao padrão.
+  const [aberta, setAberta] = React.useState(() => secaoEspecialAberta(abaGrafico));
   const codprod = Number(linha.medida.CODPROD);
   const [ultimoCodprod, setUltimoCodprod] = React.useState(codprod);
   if (codprod !== ultimoCodprod) {
     setUltimoCodprod(codprod);
-    setAberta(false);
+    setAberta(secaoEspecialAberta(abaGrafico));
     setAba(0);
   }
   const indice = Math.min(aba, Math.max(0, plano.tabelas.length - 1));
