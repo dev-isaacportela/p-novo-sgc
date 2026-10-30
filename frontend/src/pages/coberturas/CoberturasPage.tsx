@@ -17,7 +17,7 @@ import * as React from 'react';
 import { Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   Alert, Button, Code, Dash, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader,
-  DialogTitle, EmptyState, IconButton, Input, LabelledField, PageHeader,
+  DialogTitle, EmptyState, Field, IconButton, Input, LabelledField, PageHeader,
   Pagination, Panel, PanelHeader, RowMeta, RowTitle, SelectMenu, Status, Table, Tabs,
   TabsContent, TabsList, TabsTrigger, Td, Th, Toolbar, Tr,
 } from '@/components/page';
@@ -314,19 +314,34 @@ export default function CoberturasPage() {
               </Button>
             </PanelHeader>
 
+            {/* §9.2: filtros lado a lado, com rótulo e largura própria — não dois
+                seletores de largura inteira empilhados. */}
             <Toolbar>
-              <SelectMenu
-                label="Nível"
-                value={nivel}
-                options={FILTRO_NIVEL}
-                onChange={(valor) => { setNivel(valor); setPagina(1); }}
-              />
-              <SelectMenu
-                label="Situação"
-                value={situacao}
-                options={FILTRO_SITUACAO}
-                onChange={(valor) => { setSituacao(valor); setPagina(1); }}
-              />
+              <Field label="Nível" className="w-56">
+                <SelectMenu
+                  label="Nível"
+                  value={nivel}
+                  options={FILTRO_NIVEL}
+                  onChange={(valor) => { setNivel(valor); setPagina(1); }}
+                />
+              </Field>
+              <Field label="Situação" className="w-44">
+                <SelectMenu
+                  label="Situação"
+                  value={situacao}
+                  options={FILTRO_SITUACAO}
+                  onChange={(valor) => { setSituacao(valor); setPagina(1); }}
+                />
+              </Field>
+              {nivel || situacao !== 'ativa' ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setNivel(''); setSituacao('ativa'); setPagina(1); }}
+                >
+                  Limpar filtros
+                </Button>
+              ) : null}
             </Toolbar>
 
             {carregando ? (
