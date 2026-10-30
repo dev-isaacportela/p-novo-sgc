@@ -11,10 +11,12 @@
 import { assert } from './base.mjs';
 import { CARDS_005, DATAS_005 } from '../seed/005-notas-fiscais.mjs';
 import { toSqlite } from '../mysql-dialect.mjs';
+import { createRunner } from '../runtime.mjs';
+import { ehWinthor } from '../winthor-oracle.mjs';
 import { diasUteisEntre } from '../../lib/dias-uteis.mjs';
 
 export async function suite(ctx) {
-  const { db, chamar, teste, U, emails } = ctx;
+  const { db, byName, byId, chamar, teste, U, emails } = ctx;
 
   /* ── atalhos ── */
 
@@ -634,6 +636,51 @@ export async function suite(ctx) {
 
     assert.deepEqual(ocorrenciasDe(card).filter((o) => o.DECISAO === 'pendente').map((o) => Number(o.ID)),
       pendentesAntes, 'nenhuma linha foi decidida');
+  });
+
+  await teste('D-016: nenhuma SQL com tabela PC* vai ao banco do projeto — com as sgcWint* desviadas para um executor externo (como no WinThor real), sgcNfDetectar e sgcNfVincular (7005 no faturamentoParcial) terminam ok, os codigos de fabrica/EAN dos itens do pedido chegam por sgcWintProdutosCodigos (UMA leitura por rodada, UMA por vinculo, fora da conta de RNF-002) e tudo o que passou por runQueryMitra e livre de PC*', async () => {
+    const aoOracle = [];
+    const aoProjeto = [];
+    const codigosWinthor = new Set([...byName.values()].filter(ehWinthor).map((d) => d.code));
+    const execute = createRunner(db, {
+      resolveById: (id) => byId.get(id) ?? null,
+      // O mesmo SQLite, mas por FORA de runQueryMitra: e o que o Oracle receberia.
+      externo: {
+        aceita: ehWinthor,
+        query: async (sql) => { aoOracle.push(sql); return db.prepare(toSqlite(sql)).all().map((linha) => ({ ...linha })); },
+      },
+      // onQuery recebe toda consulta: no desvio externo o segundo argumento e o
+      // code da definition sgcWint*; em tudo o mais e o SQL que foi ao banco do projeto.
+      onQuery: (sql, origem) => { if (!codigosWinthor.has(origem)) aoProjeto.push(sql); },
+    });
+    const TABELA_PC = /\b(FROM|JOIN|INTO|UPDATE)\s+PC[A-Z_]+\b/i;
+    const LEITURA_DE_CODIGOS = /FROM PCPRODUT P\s+WHERE P\.CODPROD IN \(/;
+
+    db.exec('BEGIN');
+    try {
+      const rodada = await execute(byName.get('sgcNfDetectar'), {}, 0);
+      assert.equal(rodada.ok, true);
+      assert.deepEqual(rodada.erros, [], 'a leitura de codigos no Oracle nao pode ter falhado');
+      assert.equal(rodada.consultasErp, rodada.grupos, 'RNF-002 continua: uma busca de notas por grupo');
+
+      const card = CARDS_005.faturamentoParcial;
+      const vinculo = await execute(byName.get('sgcNfVincular'), {
+        cardId: card, idSugestao: 0, numnota: 7005, serie: '', codfornec: 1015, codfilial: '1', origem: 'hibrida', itensJson: '',
+      }, U.ana);
+      assert.equal(vinculo.ok, true, vinculo.erro);
+      assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_NF WHERE ID_CARD = ? AND NUMNOTA = 7005', card), 1);
+
+      assert.ok(aoProjeto.length > 0, 'as duas JAVASCRIPT consultam o banco do projeto');
+      const vazou = aoProjeto.filter((sql) => TABELA_PC.test(sql));
+      assert.deepEqual(vazou, [], 'SQL com PC* foi por runQueryMitra ao banco do projeto, onde a tabela nao existe em producao');
+
+      const leiturasDeCodigos = aoOracle.filter((sql) => LEITURA_DE_CODIGOS.test(sql));
+      assert.equal(leiturasDeCodigos.length, 2, 'uma leitura de codigos na rodada e uma no vinculo');
+      assert.match(leiturasDeCodigos[1], /IN \(5006, 5007\)/, 'os itens do pedido faturamentoParcial, nao os da nota');
+    } finally {
+      db.exec('ROLLBACK');
+    }
+    assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_NF WHERE NUMNOTA = 7005'), 0, 'o banco volta ao que era para as suites seguintes');
   });
 
   await teste('RN-001 / RF-018: o fragmento SQL de dias uteis conta 15 dias uteis entre 24/08/2026 e 14/09/2026 — a mesma conferencia do R-025, agora dentro da SQL desta spec', async () => {

@@ -8,7 +8,7 @@
 // 74xx por spec da onda 1, 75xx a 77xx por spec da onda 2): 001 fornecedores
 // (7101–7106, 7150–7162), 002 quadro de compras (7201–7211, 7250–7260), 003
 // itens do pedido (7301–7311, 7350–7361), 004 agenda de análises (7401–7405,
-// 7450–7458), 005 notas fiscais e faturamento (7501–7515, 7550–7559), 006
+// 7450–7458), 005 notas fiscais e faturamento (7501–7516, 7550–7559), 006
 // trânsito e recebimento (7601–7606, 7650–7651), 007 produtos em B.O.
 // (7701–7709, 7750–7756); 78xx e 79xx por spec da onda 3: 008 solicitações do
 // comercial (7801–7807, 7850–7857), 009 indicadores (7901–7913). Os ids
@@ -177,6 +177,7 @@ export const SERVER_FUNCTION_NAMES = {
   sgcOcorrenciaDecidir: 'sgcOcorrenciaDecidir',
   sgcFaturamentoMonitorar: 'sgcFaturamentoMonitorar',
   sgcCobrancaEnviar: 'sgcCobrancaEnviar',
+  sgcWintProdutosCodigos: 'sgcWintProdutosCodigos',
   sgcEscNfInserir: 'sgcEscNfInserir',
   sgcEscNfItemInserir: 'sgcEscNfItemInserir',
   sgcEscOcorrenciaInserir: 'sgcEscOcorrenciaInserir',
@@ -418,6 +419,7 @@ export const SERVER_FUNCTIONS = {
   sgcOcorrenciaDecidir: '7513',
   sgcFaturamentoMonitorar: '7514',
   sgcCobrancaEnviar: '7515',
+  sgcWintProdutosCodigos: '7516',
   sgcEscNfInserir: '7550',
   sgcEscNfItemInserir: '7551',
   sgcEscOcorrenciaInserir: '7552',

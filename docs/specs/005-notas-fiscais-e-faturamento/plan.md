@@ -142,7 +142,7 @@ faturamentos pendentes mostra no lugar do aviso (R-041).
 
 ## Contratos de backend
 
-Tudo em `backend/add-008-notas-fiscais.mjs`, que exporta `definitions`. Ids locais **7501–7515**
+Tudo em `backend/add-008-notas-fiscais.mjs`, que exporta `definitions`. Ids locais **7501–7516**
 (leitura e JS) e **7550–7559** (escrita), faixa 75xx do R-024. Filtro desligado é `''` no texto e
 `0` no número; `dataEnvio` desligada é `'1900-01-01'` (nunca `''`: quebraria o `TO_DATE`).
 
@@ -154,6 +154,7 @@ Tudo em `backend/add-008-notas-fiscais.mjs`, que exporta `definitions`. Ids loca
 | `sgcWintNfItens` | SQL (Oracle) | `numnota` (0), `serie` (''), `codfornec` (0) | `CODPROD, DESCRICAO, CODFAB, EAN, QT, PUNIT, NUMLOTE, DT_VALIDADE, DT_EMISSAO_NF, DT_ENTRADA, NUMTRANSENT, SERIE, CHAVENFE, VL_TOTAL, PRAZO` | RF-006, RF-007 |
 | `sgcWintNfParcelas` | SQL (Oracle) | `numnota` (0), `codfornec` (0) | `DUPLIC, DT_EMISSAO, DT_VENC, VALOR, DIAS` | RF-009 (prazo) |
 | `sgcWintNfBuscar` | SQL (Oracle) | `numnota` (0), `codfornec` (0) | cabeçalho: `NUMTRANSENT, NUMNOTA, SERIE, CHAVENFE, CODFORNEC, CODFILIAL, VL_TOTAL, PRAZO, DT_EMISSAO, DT_ENTRADA` (máx. 5) | RF-005 (O2-07) |
+| `sgcWintProdutosCodigos` | SQL (Oracle) | `codprods` ('0', fragmento: lista de inteiros, lotes de 500) | `CODPROD, CODFAB, EAN` dos produtos da lista — o lado do **pedido** no casamento da RN-003 (D-016) | RF-002, RF-007 |
 
 **`sgcWintNfEntradas`** — as duas origens numa consulta só: a nota emitida contra um dos pedidos
 da lista entra mesmo se for anterior ao envio; as demais entram pela janela de emissão. Uma
@@ -406,7 +407,9 @@ persona dele que a guarda confere.
   `DT_ENVIO`, `NUMPED_WINTHOR`, `VL_TOTAL`, `VL_FATURADO` e o responsável (na ordem de
   `KB_CARD_RESPONSAVEL.ORDEM`, a mesma da lib); (2) agrupa por
   `CODFORNEC|CODFILIAL` e, **por grupo**, faz UMA chamada a `sgcWintNfEntradas` com a menor
-  `DT_ENVIO` do grupo e a lista de `NUMPED` dele (RNF-002); (3) descarta, com uma consulta só,
+  `DT_ENVIO` do grupo e a lista de `NUMPED` dele (RNF-002) — o código de fábrica e o EAN dos
+  itens dos 30 cards vêm **uma vez por rodada** de `sgcWintProdutosCodigos` (D-016), fora dessa
+  conta e sem derrubar a rodada se falhar (vai a `erros[]`); (3) descarta, com uma consulta só,
   as notas já vinculadas em qualquer card (RN-010) **e as que já têm sugestão para aquele card**
   — reprocessar a sugestão existente não grava nada, mas repetiria a nota do histórico a cada
   rodada; (4) agrupa as linhas por nota e,
@@ -420,7 +423,9 @@ persona dele que a guarda confere.
 - **`sgcNfVincular`** — persona `admin`/`analista`/`gestor`, `ACCESS_LEVEL <> 'READ_ONLY'`, e
   `RESTRICTED` só no card que criou; fase em `enviado`, `transito`, `faturamento` ou `bo`.
   Lê os itens da nota (`sgcWintNfItens`; no modo `manual`, de `itensJson`), as parcelas
-  (`sgcWintNfParcelas`), os itens do pedido e a validade mínima do fornecedor. Grava a nota
+  (`sgcWintNfParcelas`), os itens do pedido — com `CODFAB`/`EAN` lidos do ERP por
+  `sgcWintProdutosCodigos` (D-016), porque `PCPRODUT` não existe no banco do projeto — e a
+  validade mínima do fornecedor. Grava a nota
   (`sgcEscNfInserir` — recusa a nota já vinculada em qualquer card e devolve o erro), os itens em
   um lote (`sgcEscNfItemInserir`), roda as **sete** regras e grava as ocorrências em um lote
   (`sgcEscOcorrenciaInserir`), recalcula o faturamento (`sgcEscPedidoFaturamento`) e registra a
@@ -665,6 +670,7 @@ no `TEXTO`. O integrador acrescenta a linha em `ROTULO`.
 | 7513 | `sgcOcorrenciaDecidir` | | |
 | 7514 | `sgcFaturamentoMonitorar` | | |
 | 7515 | `sgcCobrancaEnviar` | | |
+| 7516 | `sgcWintProdutosCodigos` | | |
 
 ## Superfície de interação
 
@@ -956,6 +962,7 @@ JSON é usada: o campo do quadro é escrito pela lib (R-042).
 | RN-013 | `tests/faturamento.test.mjs` | sem nota e 2 dias → `''`; com nota → `R$ 72.000,00 (60 %) · saldo R$ 48.000,00`; sem nota e 4 dias → `Faturamento pendente · 4 dias úteis` |
 | RN-014 | `smoke/…` | a rodada do cron não registra e-mail no coletor; a cobrança manual registra 1 com a cópia fixa |
 | RN-015 | `smoke/…` | a 7003 não aparece em `sgcWintNfEntradas` nem em `sgcWintNfBuscar` |
+| D-016 | `smoke/…` + `smoke/000-esqueleto.mjs` | com as `sgcWint*` desviadas para um executor externo (`createRunner({ externo })`), `sgcNfDetectar` e `sgcNfVincular` da 7005 terminam `ok`, `sgcWintProdutosCodigos` é lida **2** vezes (rodada e vínculo, `IN (5006, 5007)` no vínculo), `consultasErp = grupos` continua, e nenhuma SQL vista por `onQuery` fora do desvio cita `FROM/JOIN PC*`; tudo em `BEGIN … ROLLBACK`. S0-018 varre o `code` de toda `JAVASCRIPT` publicada pelo mesmo padrão |
 
 - **Backend:** `backend/simulator/smoke/005-notas-fiscais.mjs`, um `teste()` por linha, título
   começando pelo id. Toda consulta ao WinThor assere **contagem > 0** (vazio não é verde).
@@ -1043,6 +1050,7 @@ só fornece o ícone (G-7) — as duas rotas desta spec entram lá, pelo integra
 | D-012 | Ao vincular uma nota que **já entrou** no ERP (`PCNFENT.DTENT` preenchido), `sgcNfVincular` grava `DT_RECEBIMENTO = DT_ENTRADA`: a nota nasce recebida e o cron da 006 não a procura. Sem `DTENT` (registro híbrido), `DT_ENTRADA` e `DT_RECEBIMENTO` nascem vazias e o recebimento é da 006 | Deixar `DT_RECEBIMENTO` para a 006 preencher sempre | O 000 é explícito, e sem isso uma nota que já entrou no ERP ficaria "não recebida" até a próxima rodada de 2 h da 006 — e o card não sairia de Trânsito sozinho. Contrato alinhado com o plan da 006 |
 | D-013 | Divergência não impede o vínculo, mas **decisão pendente** impede concluir | Bloquear o vínculo na divergência | RN-5 e RN-7 do legado, confirmadas em O2-02: a nota existe no mundo real de qualquer jeito; o que o sistema cobra é a decisão de uma pessoa sobre ela |
 | D-014 | Pedido em `bo` **é listado** em `/faturamentos-pendentes` (com `DT_PREVISAO_BO` e `QT_BO_ABERTO`) e **não é avisado** pelo cron | Tirar o pedido em B.O. da lista, ou avisar como qualquer outro | R-041: quem está em B.O. já recebe o aviso diário `bo_previsao` da 007; um segundo aviso por dia sobre o mesmo pedido foi defeito corrigido no legado. Mas o saldo a faturar continua existindo e continua sendo cobrado por gente, então sumir da lista seria pior — a lista mostra, no lugar do aviso, a previsão de liberação e quantos itens seguem em aberto |
+| D-016 | O código de fábrica e o EAN dos itens do **pedido** vêm do Oracle por `sgcWintProdutosCodigos` (7516, `jdbcId`, lotes de 500): uma leitura por vínculo e uma por rodada da detecção | O subselect em `PCPRODUT` dentro do `SELECT` sobre `SGC_PEDIDO_ITEM` que as duas `JAVASCRIPT` mandavam por `runQueryMitra` | `runQueryMitra` roda no MySQL do projeto, onde as `PC*` não existem — em produção o vínculo e a detecção quebravam; o simulador imita as `PC*` no mesmo SQLite e por isso o `npm test` passava. Toda leitura do ERP é por `sgcWint*` chamada por id; o smoke (S0-018 e o teste D-016) passa a barrar a recaída |
 | D-015 | A marca do alerta (`ALERTA_FATURAMENTO_NIVEL`/`_EM`) é escrita própria **por id** (`sgcEscPedidoAlertaFaturamento`, `{{usuarioId}}` = responsável do card), separada de qualquer escrita de tela | Reaproveitar `sgcEscPedidoFaturamento` para gravar também o nível | Quem grava o nível é só o cron, que não tem sessão; misturar com a escrita do faturamento (chamada também no vínculo, a partir de um clique) faria um caminho de tela mexer no escalonamento sem querer. Mesmo desenho que a 007 usa em `sgcEscPedidoAlertaBo` |
 
 ## Riscos

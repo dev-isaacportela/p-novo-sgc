@@ -1,4 +1,4 @@
-// S0-001..S0-006 — o esqueleto do projeto: a lib INSTALADA NESTE PROJETO, pelo
+// S0-001..S0-006, S0-018 — o esqueleto do projeto: a lib INSTALADA NESTE PROJETO, pelo
 // add-001-kanban.mjs e pelo mapa de ids deste frontend, funciona — e os shims
 // Oracle que a spec 003 (WinThor) vai precisar ja traduzem o basico
 // corretamente? O motor em si e testado na lib
@@ -117,5 +117,13 @@ export async function suite(ctx) {
     const fonte = readFileSync(FRONTEND_MAP, 'utf8');
     assert.ok(fonte.includes("kbNotaRegistrar: 'kbNotaRegistrar'"), 'kbNotaRegistrar deveria estar reservado em SERVER_FUNCTION_NAMES');
     assert.match(fonte, /kbNotaRegistrar: '\d+'/, 'kbNotaRegistrar deveria ter um id local em SERVER_FUNCTIONS');
+  });
+
+  await teste('S0-018: nenhuma definition JAVASCRIPT publicada tem SQL proprio sobre tabela PC* (FROM/JOIN/INTO/UPDATE PC…) — runQueryMitra vai ao banco do projeto, onde as PC* nao existem; leitura do ERP e sempre por uma sgcWint* chamada por id (D-016 da 005)', async () => {
+    const TABELA_PC = /\b(FROM|JOIN|INTO|UPDATE)\s+PC[A-Z_]+\b/i;
+    const javascripts = [...byName.values()].filter((d) => d.type === 'JAVASCRIPT');
+    assert.ok(javascripts.length > 0, 'nenhuma JAVASCRIPT carregada');
+    const culpadas = javascripts.filter((d) => TABELA_PC.test(d.code)).map((d) => d.name);
+    assert.deepEqual(culpadas, [], 'JAVASCRIPT com SQL sobre PC*: so o simulador (PC* no mesmo SQLite) aceita, a plataforma nao');
   });
 }

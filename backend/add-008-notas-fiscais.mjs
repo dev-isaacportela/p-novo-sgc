@@ -2,7 +2,7 @@
 // detecção automática de NF de entrada, conferência NF × pedido, faturamento
 // e cobrança. Ver docs/specs/005-notas-fiscais-e-faturamento/.
 //
-// Faixa de id local: 75xx (R-024) — leituras e JAVASCRIPT 7501–7515, escritas
+// Faixa de id local: 75xx (R-024) — leituras e JAVASCRIPT 7501–7516, escritas
 // 7550–7559. O id local vem de SERVER_FUNCTIONS em
 // frontend/src/lib/server-functions.ts até o sync-server-function-map.mjs
 // trazer os reais do sandbox — mesmo padrão de add-006-itens.mjs.
@@ -27,7 +27,8 @@ const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', im
 const MARCADOR_IDS = '__SGC_IDS__';
 
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
-export const WINTHOR = ['sgcWintNfEntradas', 'sgcWintNfItens', 'sgcWintNfParcelas', 'sgcWintNfBuscar'];
+export const WINTHOR = ['sgcWintNfEntradas', 'sgcWintNfItens', 'sgcWintNfParcelas', 'sgcWintNfBuscar',
+  'sgcWintProdutosCodigos'];
 
 // R-048: o campo do quadro `faturamento` (texto, capa: "R$ 72.000,00 (60 %) ·
 // saldo R$ 48.000,00"), no MESMO formato de `CAMPOS` de add-005-quadro-compras.mjs.
@@ -136,6 +137,16 @@ const SQL_NF_BUSCAR = `SELECT * FROM (
   WHERE N.NUMNOTA = {{numnota}} AND N.CODFORNEC = {{codfornec}} AND N.DTCANCEL IS NULL
   ORDER BY N.DTEMISSAO DESC
 ) WHERE ROWNUM <= 5`;
+
+// D-016: PCPRODUT só existe no Oracle. O código de fábrica e o EAN dos itens do
+// PEDIDO (o lado SGC_PEDIDO_ITEM do casamento da RN-003) vinham de um subselect
+// em PCPRODUT dentro de runQueryMitra — o banco do projeto, onde a tabela não
+// existe (o simulador, que imita as PC* no mesmo SQLite, não denunciava).
+// `codprods` é FRAGMENTO (lista de inteiros sem aspas), como na 003.
+const SQL_PRODUTOS_CODIGOS = `SELECT P.CODPROD,
+  NVL(TRIM(P.CODFAB), '') AS CODFAB, NVL(TRIM(P.CODAUXILIAR), '') AS EAN
+FROM PCPRODUT P
+WHERE P.CODPROD IN ({{codprods}})`;
 
 /* ─────────────── leituras — banco do projeto ─────────────── */
 
@@ -425,6 +436,25 @@ async function chamar(nome, entrada) {
   }
   return desembrulhar(resposta);
 }
+// D-016: devolve as mesmas linhas com CODFAB e EAN lidos do WinThor por
+// sgcWintProdutosCodigos (jdbcId), em lotes de 500 (ORA-01795, como a 003).
+// runQueryMitra nao alcanca PCPRODUT: o banco do projeto nao tem as PC*.
+async function codigosDoErp(itens) {
+  const codprods = [];
+  for (const item of itens) {
+    const codprod = inteiro(item.CODPROD);
+    if (codprod > 0 && codprods.indexOf(codprod) === -1) codprods.push(codprod);
+  }
+  const porProduto = {};
+  for (let inicio = 0; inicio < codprods.length; inicio += 500) {
+    const linhas = linhasDe(await chamar('sgcWintProdutosCodigos', { codprods: codprods.slice(inicio, inicio + 500).join(', ') }));
+    for (const linha of linhas) porProduto[inteiro(linha.CODPROD)] = linha;
+  }
+  return itens.map(function (item) {
+    const codigos = porProduto[inteiro(item.CODPROD)] || {};
+    return Object.assign({}, item, { CODFAB: String(codigos.CODFAB || '').trim(), EAN: String(codigos.EAN || '').trim() });
+  });
+}
 function inteiro(valor) { const n = Number(valor); return Number.isFinite(n) ? Math.trunc(n) : 0; }
 function numero(valor) { const n = Number(valor); return Number.isFinite(n) ? n : 0; }
 // A-11: caractere de controle fora e teto de tamanho — e SO isso. O valor que
@@ -651,12 +681,11 @@ const gravada = (await consultar(
 if (!gravada) return { ok: false, erro: 'A nota nao foi gravada: confira o seu perfil de acesso.' };
 const idNf = inteiro(gravada.ID);
 
-// 2. os itens da nota, num lote so (D-002).
-const itensPedido = await consultar(
-  'SELECT I.CODPROD, I.DESCRICAO, I.QT_PEDIDA, I.PRECO_CUSTO,'
-  + " COALESCE((SELECT TRIM(PP.CODFAB) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS CODFAB,"
-  + " COALESCE((SELECT TRIM(PP.CODAUXILIAR) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS EAN"
-  + ' FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD = ' + cardId + " AND COALESCE(I.STATUS, '') <> 'removido'");
+// 2. os itens da nota, num lote so (D-002). Os codigos alternativos dos itens
+// do pedido vem do ERP (D-016), nunca de PCPRODUT pelo banco do projeto.
+const itensPedido = await codigosDoErp(await consultar(
+  'SELECT I.CODPROD, I.DESCRICAO, I.QT_PEDIDA, I.PRECO_CUSTO'
+  + ' FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD = ' + cardId + " AND COALESCE(I.STATUS, '') <> 'removido'"));
 
 const COLUNAS_ITEM = ${JSON.stringify(emLista(COLUNAS_NF_ITEM))};
 const COLUNAS_OCO = ${JSON.stringify(emLista(COLUNAS_OCORRENCIA))};
@@ -867,6 +896,21 @@ const erros = [];
 let sugestoes = 0;
 let consultasErp = 0;
 
+// D-016: PCPRODUT nao existe no banco do projeto. Os itens dos 30 cards saem
+// numa consulta e os codigos de fabrica/EAN deles vem do Oracle numa leitura
+// por RODADA (sgcWintProdutosCodigos, lotes de 500) — fora da conta de RNF-002,
+// que e a busca de notas por fornecedor+filial. Sem o ERP aqui, a rodada segue
+// casando so por CODPROD e NUMPED e registra o motivo em erros[].
+let itensDosCards = cards.length === 0 ? [] : await consultar(
+  'SELECT I.ID_CARD, I.CODPROD FROM SGC_PEDIDO_ITEM I'
+  + ' WHERE I.ID_CARD IN (' + cards.map(function (c) { return inteiro(c.ID_CARD); }).join(', ') + ')'
+  + " AND COALESCE(I.STATUS, '') <> 'removido'");
+try {
+  itensDosCards = await codigosDoErp(itensDosCards);
+} catch (erro) {
+  erros.push({ grupo: '', erro: 'Codigos de fabrica e EAN dos itens nao lidos do WinThor: ' + ((erro && erro.message) || String(erro)) });
+}
+
 for (const chave of Object.keys(grupos)) {
   const grupo = grupos[chave];
   try {
@@ -912,14 +956,9 @@ for (const chave of Object.keys(grupos)) {
       else jaSugeridas.push(inteiro(existente.ID_CARD) + '|' + chaveNota);
     }
 
-    // Itens de todos os cards do grupo, numa consulta.
-    const idsDoGrupo = grupo.cards.map(function (c) { return inteiro(c.ID_CARD); }).join(', ');
-    const itens = await consultar(
-      'SELECT I.ID_CARD, I.CODPROD,'
-      + " COALESCE((SELECT TRIM(PP.CODFAB) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS CODFAB,"
-      + " COALESCE((SELECT TRIM(PP.CODAUXILIAR) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS EAN"
-      + ' FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD IN (' + idsDoGrupo + ")"
-      + " AND COALESCE(I.STATUS, '') <> 'removido'");
+    // Itens de todos os cards do grupo, recortados da leitura unica da rodada.
+    const idsDoGrupo = grupo.cards.map(function (c) { return inteiro(c.ID_CARD); });
+    const itens = itensDosCards.filter(function (i) { return idsDoGrupo.indexOf(inteiro(i.ID_CARD)) !== -1; });
 
     for (const id of Object.keys(notas)) {
       if (jaVinculadas.indexOf(id) !== -1) continue;
@@ -1194,6 +1233,7 @@ const LEITURAS = [
   { name: 'sgcWintNfItens', code: SQL_NF_ITENS, resumo: 'RF-006/RF-007 - itens de UMA nota com lote, validade, codigo de fabrica e EAN. Params: numnota int, serie string, codfornec int' },
   { name: 'sgcWintNfParcelas', code: SQL_NF_PARCELAS, resumo: 'RF-009/RN-007 - duplicatas da nota com os dias entre emissao e vencimento. Params: numnota int, codfornec int' },
   { name: 'sgcWintNfBuscar', code: SQL_NF_BUSCAR, resumo: 'RF-005 (O2-07) - registro hibrido: acha a nota pelo numero SEM exigir entrada no armazem. Params: numnota int, codfornec int' },
+  { name: 'sgcWintProdutosCodigos', code: SQL_PRODUTOS_CODIGOS, resumo: 'RF-002/RF-007 (D-016) - codigo de fabrica e EAN dos produtos da lista, para o casamento NF x pedido; PCPRODUT nao existe no banco do projeto. Params: codprods lista' },
   { name: 'sgcNfSugestoesListar', code: SQL_SUGESTOES_LISTAR, resumo: 'RF-024 - fila de sugestoes com pedido, fase, score, motivo e situacao; a nota ja vinculada sai da fila (RN-010). Params: status, codfornec, busca, hoje, limite, offset' },
   { name: 'sgcNfSugestoesListarTotal', code: SQL_SUGESTOES_TOTAL, resumo: 'RF-024/RNF-005 - total da fila de sugestoes, para a paginacao. Params: status, codfornec, busca' },
   { name: 'sgcFaturamentoPendenteListar', code: SQL_PENDENTE_LISTAR, resumo: 'RF-025/C-028 - pedidos enviados sem 100 % faturado, com os dias uteis desde o envio, contatos e as duas colunas de B.O. (R-041). Params: faixa, busca, hoje, limite, offset' },
@@ -1277,7 +1317,7 @@ VALUES (${boardId}, NULL, '${campo.chave}', '${escapar(campo.label)}', '${campo.
     console.log(`  campo criado     ${campo.chave}`);
   }
 
-  /* 2. as 25 server functions — ids reais por NOME (R-016), nunca hardcoded */
+  /* 2. as 26 server functions — ids reais por NOME (R-016), nunca hardcoded */
   const existentes = async () => {
     const lista = (await sdk.listServerFunctionsMitra({ projectId })).result ?? [];
     return new Map(lista.map((f) => [f.name, f.id]));

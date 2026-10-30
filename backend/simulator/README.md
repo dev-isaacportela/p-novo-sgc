@@ -193,7 +193,11 @@ versão do servidor e o modo (`thick`/`thin`), ou `sqlite (PC* do seed)`.
 
 Atenção: os dados `SGC_*` continuam os do seed; só a leitura do ERP é real. E
 uma `JAVASCRIPT` que mande SQL com PC* por `runQueryMitra` (banco do projeto)
-não chega ao Oracle — nem aqui nem em produção.
+não chega ao Oracle — nem aqui nem em produção. O smoke barra isso em dois
+pontos: `S0-018` (`000-esqueleto.mjs`) varre o código de toda `JAVASCRIPT`
+publicada, e `D-016` (`005-notas-fiscais.mjs`) roda `sgcNfDetectar` e
+`sgcNfVincular` com as `sgcWint*` desviadas para um executor externo e confere,
+por `onQuery`, que nada do que foi por `runQueryMitra` cita tabela PC*.
 
 Testes: `smoke/000-winthor-real.mjs` (W-001..W-004) prova o roteamento com um
 executor falso, sem rede.
