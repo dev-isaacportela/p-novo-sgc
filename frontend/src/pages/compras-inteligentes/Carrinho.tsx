@@ -177,17 +177,31 @@ export function CarrinhoDialogo({
     <Dialog open={aberto} onOpenChange={(estaAberto) => !estaAberto && onFechar()}>
       <DialogContent className="sm:max-w-[min(96vw,1400px)]">
         <DialogHeader>
-          <DialogTitle>Carrinho</DialogTitle>
-          <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[12px] text-ink-secondary">
-            <div><dt className="inline font-semibold text-ink-muted uppercase">Total </dt><dd className="inline font-title text-[14px] font-bold text-ink">{moeda(resumo.total)}</dd></div>
-            <div><dt className="inline font-semibold text-ink-muted uppercase">Economia no custo </dt><dd className="inline font-title text-[14px] font-bold text-ink">{economia > 0 ? moeda(economia) : '—'}</dd></div>
-            <div><dt className="inline font-semibold text-ink-muted uppercase">Itens · pedidos </dt><dd className="inline font-title text-[14px] font-bold text-ink">{`${resumo.itens} · ${resumo.pedidos}`}</dd></div>
-            {abertoEm ? (
-              <div className="basis-full">
-                {`aberto em ${fmtDataHora(abertoEm)}${abertoPor ? ` por ${abertoPor}` : ''}${salvoEm ? ` · salvo às ${horaCurta(salvoEm)}` : ''}`}
+          <div className="flex flex-wrap items-start justify-between gap-4 pr-6">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">Compras inteligentes</p>
+              <DialogTitle>Carrinho de compras</DialogTitle>
+              {abertoEm ? (
+                <p className="mt-1 text-[12px] text-ink-secondary">
+                  {`Aberto em ${fmtDataHora(abertoEm)}${abertoPor ? ` por ${abertoPor}` : ''}${salvoEm ? ` · salvo às ${horaCurta(salvoEm)}` : ''}`}
+                </p>
+              ) : null}
+            </div>
+            <dl className="flex flex-wrap gap-x-6 gap-y-2">
+              <div>
+                <dt className="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">Total</dt>
+                <dd className="font-title text-[22px] font-extrabold text-ink">{moeda(resumo.total)}</dd>
               </div>
-            ) : null}
-          </dl>
+              <div>
+                <dt className="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">Economia no custo</dt>
+                <dd className="font-title text-[22px] font-extrabold text-primary">{economia > 0 ? moeda(economia) : '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">Itens</dt>
+                <dd className="font-title text-[22px] font-extrabold text-ink">{`${resumo.itens} · ${resumo.pedidos} ${resumo.pedidos === 1 ? 'pedido' : 'pedidos'}`}</dd>
+              </div>
+            </dl>
+          </div>
         </DialogHeader>
         <DialogBody>
           <div className="flex flex-col gap-4">
@@ -208,11 +222,15 @@ export function CarrinhoDialogo({
               />
             ) : (
               <>
-                <SearchInput
-                  placeholder="Buscar no carrinho por produto, código ou código de fábrica"
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <SearchInput
+                    placeholder="Buscar produto no carrinho"
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    className="max-w-sm flex-1"
+                  />
+                  <RowMeta>Um pedido nasce no quadro para cada fornecedor e filial.</RowMeta>
+                </div>
                 {grupos.map((grupo) => {
                   const minimo = pedidoMinimoDoGrupo(itens, grupo);
                   const situacao = faltaParaMinimo(grupo.total, minimo);
@@ -229,15 +247,17 @@ export function CarrinhoDialogo({
                             {` · ${grupo.itens.length} ${grupo.itens.length === 1 ? 'item' : 'itens'} · ${moeda(grupo.total)}`}
                           </RowMeta>
                         </div>
-                        <BarraConsumo
-                          pct={situacao.pct}
-                          tone={situacao.atingido ? 'live' : 'attention'}
-                          rotulo={minimo <= 0
-                            ? 'Sem pedido mínimo parametrizado'
-                            : situacao.atingido
-                              ? `Pedido mínimo atingido (${moeda(minimo)})`
-                              : `Faltam ${moeda(situacao.falta)} para o mínimo de ${moeda(minimo)}`}
-                        />
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Status tone={minimo <= 0 ? 'off' : situacao.atingido ? 'live' : 'attention'}>
+                            {minimo <= 0
+                              ? 'Sem pedido mínimo parametrizado'
+                              : situacao.atingido
+                                ? `Pedido mínimo de ${moeda(minimo)} atingido`
+                                : `Faltam ${moeda(situacao.falta)} para o pedido mínimo de ${moeda(minimo)}`}
+                          </Status>
+                          <BarraConsumo pct={situacao.pct} tone={situacao.atingido ? 'live' : 'attention'} rotulo="" />
+                          <RowTitle>{moeda(grupo.total)}</RowTitle>
+                        </div>
                       </div>
                       {doGrupo.length === 0 ? (
                         <RowMeta>Nenhum item deste pedido casa com a busca.</RowMeta>
@@ -280,13 +300,17 @@ export function CarrinhoDialogo({
                                   <Td>
                                     <Input
                                       value={entrada?.motivo ?? ''}
+                                      placeholder="Ex.: ruptura, oportunidade de custo"
                                       aria-label={`Por que comprar ${linha.medida.DESCRICAO}`}
                                       maxLength={500}
                                       disabled={criando}
                                       onChange={(e) => onMotivo(codprod, grupo.codfilial, e.target.value)}
                                     />
                                   </Td>
-                                  <Td numeric>{linha.sugerida > 0 ? quantidade(linha.sugerida) : <Dash />}</Td>
+                                  <Td numeric>
+                                    {linha.sugerida > 0 ? quantidade(linha.sugerida) : <Dash />}
+                                    {linha.unidadesPorCaixa > 1 && linha.sugerida > 0 ? <RowMeta>{`${quantidade(linha.sugerida / linha.unidadesPorCaixa)} cx`}</RowMeta> : null}
+                                  </Td>
                                   <Td numeric>
                                     <Input
                                       type="number"
@@ -299,6 +323,7 @@ export function CarrinhoDialogo({
                                       onChange={(e) => onQuantidade(codprod, grupo.codfilial, Number(e.target.value) || 0)}
                                       onBlur={(e) => onQuantidade(codprod, grupo.codfilial, arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa))}
                                     />
+                                    {linha.unidadesPorCaixa > 1 ? <RowMeta>{`${quantidade(escolhida / linha.unidadesPorCaixa)} cx`}</RowMeta> : null}
                                   </Td>
                                   <Td numeric>{moeda(ultimo)}</Td>
                                   <Td numeric>{atual > 0 ? moeda(atual) : <Dash />}</Td>
@@ -339,7 +364,7 @@ export function CarrinhoDialogo({
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button onClick={() => setConfirmandoDescarte(true)} disabled={criando || itens.length === 0 || confirmandoDescarte}>
+          <Button variant="ghost" className="text-destructive" onClick={() => setConfirmandoDescarte(true)} disabled={criando || itens.length === 0 || confirmandoDescarte}>
             Descartar carrinho
           </Button>
           <Button onClick={baixarArquivos} disabled={criando || itens.length === 0} title="Um arquivo CODPROD;PRECO;QTD por fornecedor e filial">

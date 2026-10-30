@@ -30,7 +30,8 @@ export interface PontoSerie {
 }
 
 export type JanelaGrafico = 6 | 13;
-export const MESES_PROJECAO = 3;
+/** O mockup (R-117) projeta só o mês seguinte, como a última barra do gráfico. */
+export const MESES_PROJECAO = 1;
 
 const NOME_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -65,8 +66,8 @@ export function mesesAte(hoje: string, n: number): string[] {
 
 /**
  * C-032: a série do gráfico. Mês sem movimento entra com zero (barra de altura
- * zero afirma "zero", e aqui zero é verdade); a projeção são os próximos
- * `MESES_PROJECAO` meses a consumo diário × dias do mês, só na série própria.
+ * zero afirma "zero", e aqui zero é verdade); a projeção é o mês seguinte a
+ * consumo diário × dias do mês, só na série própria — a última barra.
  */
 export function serieComprasVendas(
   historico: PontoHistorico[],

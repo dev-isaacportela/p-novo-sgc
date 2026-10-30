@@ -1,5 +1,6 @@
 // "Compras × vendas" do painel de detalhe (layout legado da 011, R-117 / C-032):
-// barras de compras e vendas por mês mais a projeção em linha, SEMPRE aberto,
+// barras de compras e vendas por mês mais a projeção do mês seguinte como a
+// última barra, SEMPRE aberto,
 // com 6m | 13m, Gráfico | Tabela e o rodapé 3m / 6m / 12m / Projeção.
 //
 // R-116: cada barra e cada ponto da linha mostram o seu valor escrito em cima
@@ -12,7 +13,7 @@ import * as React from 'react';
 
 import {
   AlternaOpcoes, AlternaVisao, Bar, CartesianGrid, ChartContainer, ChartLegend, ChartLegendContent,
-  ChartTooltip, ChartTooltipContent, ComposedChart, Dash, EmptyState, LabelList, Line, PainelGrafico,
+  ChartTooltip, ChartTooltipContent, ComposedChart, Dash, EmptyState, LabelList, PainelGrafico,
   Table, Td, Th, Tr, XAxis, YAxis, corDeSerie,
 } from '@/components/page';
 import type { ChartConfig } from '@/components/page';
@@ -77,7 +78,7 @@ export function GraficoComprasVendas({
   return (
     <PainelGrafico
       titulo="Compras × vendas"
-      hint="Unidades por mês; a projeção é o consumo diário ponderado × dias do mês."
+      hint="Entradas, vendas e projeção · em unidades"
       acoes={
         <>
           <AlternaOpcoes rotulo="Janela do gráfico" opcoes={JANELAS} valor={janela} onValor={setJanela} />
@@ -117,7 +118,7 @@ export function GraficoComprasVendas({
         <ChartContainer config={config} className="h-full w-full">
           <ComposedChart data={serie} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} />
-            <XAxis dataKey="rotulo" tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <XAxis dataKey="rotulo" tickLine={false} axisLine={false} interval={0} className="text-[10px]" />
             <YAxis tickLine={false} axisLine={false} width={40} allowDecimals={false} />
             <ChartTooltip content={<ChartTooltipContent />} />
             <ChartLegend content={<ChartLegendContent />} />
@@ -127,9 +128,9 @@ export function GraficoComprasVendas({
             <Bar dataKey="vendas" fill="var(--color-vendas)" radius={4}>
               <LabelList dataKey="vendas" position="top" formatter={rotulo} className="fill-ink text-[10px]" />
             </Bar>
-            <Line dataKey="projecao" stroke="var(--color-projecao)" strokeWidth={2} strokeDasharray="4 4" connectNulls={false}>
-              <LabelList dataKey="projecao" position="top" formatter={rotulo} className="fill-ink text-[10px]" />
-            </Line>
+            <Bar dataKey="projecao" fill="var(--color-projecao)" radius={4}>
+              <LabelList dataKey="projecao" position="top" formatter={rotulo} className="fill-primary text-[10px] font-semibold" />
+            </Bar>
           </ComposedChart>
         </ChartContainer>
       )}

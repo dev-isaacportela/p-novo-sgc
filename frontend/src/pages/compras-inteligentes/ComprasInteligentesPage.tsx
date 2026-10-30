@@ -17,12 +17,11 @@
 // recalculada na tela por `montarRessuprimento`, que é regra pura (R-083).
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useKanban } from '@benenutri/mitra-kanban';
 
 import {
-  Alert, AlternaOpcoes, Button, CardVisao, CheckRow, EmptyState, Field, GradeVisoes, PageHeader, Panel,
-  SearchInput, SelectMenu, Toolbar,
+  Alert, AlternaOpcoes, Button, CardVisao, EmptyState, GradeVisoes, PageHeader, Panel, SelectMenu,
 } from '@/components/page';
 import { acao, linha as umaLinha, linhas } from '@/lib/mitra-api';
 import { usePersona } from '@/lib/persona';
@@ -149,7 +148,7 @@ export default function ComprasInteligentesPage() {
     ]).then(([registros, , quadro]) => {
       if (!vivo) return;
       setFornecedores(registros.map((r) => ({
-        value: String(r.CODFORNEC), label: String(r.FORNECEDOR ?? ''), hint: String(r.CNPJ_FORMATADO ?? ''),
+        value: String(r.CODFORNEC), label: `${r.CODFORNEC} — ${String(r.FORNECEDOR ?? '')}`, hint: String(r.CNPJ_FORMATADO ?? ''),
       })));
       setBoardId(Number(quadro?.board?.id ?? 0));
     }, () => vivo && setErro('Não foi possível carregar os fornecedores.'));
@@ -182,7 +181,7 @@ export default function ComprasInteligentesPage() {
         const registros: Record<string, unknown>[] = Array.isArray(dados.filiais) ? dados.filiais : [];
         setFiliais(registros
           .filter((r) => r.CODFILIAL !== undefined && r.CODFILIAL !== null)
-          .map((r) => ({ value: String(r.CODFILIAL), label: String(r.FILIAL ?? r.CODFILIAL) })));
+          .map((r) => ({ value: String(r.CODFILIAL), label: `${r.CODFILIAL} — ${String(r.FILIAL ?? r.CODFILIAL)}` })));
         const capa = (dados.fornecedor ?? {}) as Record<string, unknown>;
         setPedidoMinimo(Number(capa.PEDIDO_MINIMO ?? 0) || 0);
       },
@@ -383,8 +382,9 @@ export default function ComprasInteligentesPage() {
 
   /* ── carrinho ── */
 
-  const nomeFornecedor = fornecedores.find((f) => f.value === codfornec)?.label ?? '';
-  const nomeFilial = filiais.find((f) => f.value === codfilial)?.label ?? '';
+  const semCodigo = (rotulo: string) => rotulo.replace(/^\S+ — /, '');
+  const nomeFornecedor = semCodigo(fornecedores.find((f) => f.value === codfornec)?.label ?? '');
+  const nomeFilial = semCodigo(filiais.find((f) => f.value === codfilial)?.label ?? '');
 
   function adicionar(l: LinhaRessuprimento, quantidade: number) {
     const codprod = Number(l.medida.CODPROD);
@@ -463,82 +463,62 @@ export default function ComprasInteligentesPage() {
   const opcoesFornecedor: Opcao[] = fornecedores.map((f) => {
     const resumo = resumos.get(Number(f.value));
     return resumo
-      ? { ...f, hint: `${resumo.itens} ${resumo.itens === 1 ? 'item' : 'itens'} · sugestão ${moeda(resumo.valorSugerido)}` }
+      ? { ...f, hint: `${resumo.itens} ${resumo.itens === 1 ? 'item' : 'itens'} · ${moeda(resumo.valorSugerido)}` }
       : f;
   });
 
   return (
     <>
-      <PageHeader
-        module="Compras"
-        title="Compras inteligentes"
-        description={`O que comprar hoje, por fornecedor e filial. A janela são os últimos ${JANELA_DIAS} dias (${periodo.inicio} a ${periodo.fim}).`}
-        meta={salvoEm ? <span>Salvo às {salvoEm}</span> : undefined}
-        actions={
-          <>
-            <AlternaOpcoes rotulo="Referência da sugestão" opcoes={REFERENCIAS} valor={referencia} onValor={setReferencia} />
-            <Button
-              onClick={() => abrirParametros(null)}
-              disabled={!podeParametrizar || !codfilial}
-              title={podeParametrizar ? undefined : motivoBloqueio}
-            >
-              Parâmetros do fornecedor
-            </Button>
-            <Button onClick={() => navigate('/coberturas')}>Coberturas ABC</Button>
-            <Button variant="primary" onClick={atualizar} disabled={!codfilial || carregando}>
-              <RefreshCw aria-hidden />
-              Atualizar
-            </Button>
-          </>
-        }
-      />
-
-      {erro ? <Alert tone="error" className="mb-4">{erro}</Alert> : null}
-      {avisoCarrinho ? <Alert tone="warn" className="mb-4">{avisoCarrinho}</Alert> : null}
-
-      <Panel>
-        <Toolbar>
-          <Field label="Fornecedor" className="w-80">
-            <SelectMenu
-              label="Fornecedor"
-              value={codfornec}
-              onChange={(valor) => {
-                setCodfornec(valor);
-                setCodfilial('');
-                setFiliais([]);
-                setMedidas([]);
-                setSelecionado(0);
-                setCarregando(false);
-              }}
-              options={opcoesFornecedor}
-              placeholder={fornecedores.length ? 'Escolha o fornecedor' : 'Nenhum fornecedor ativo'}
-              disabled={!fornecedores.length}
-            />
-          </Field>
-          <Field label="Filial" className="w-56">
-            <SelectMenu
-              label="Filial"
-              value={codfilial}
-              onChange={(valor) => { setCarregando(true); setErro(''); setSelecionado(0); setCodfilial(valor); }}
-              options={filiais}
-              placeholder={codfornec ? 'Escolha a filial' : 'Escolha o fornecedor primeiro'}
-              disabled={!codfornec || !filiais.length}
-            />
-          </Field>
-          <SearchInput
-            placeholder="Buscar por produto, código ou código de fábrica"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="min-w-56 flex-1"
-          />
-          <CheckRow
-            marcado={desconsiderarLicitacao}
-            onToggle={() => setDesconsiderarLicitacao((atual) => !atual)}
+      {/* Cabeçalho compacto (pedido do usuário em 2026-10-30): uma linha só —
+          fornecedor e filial à esquerda, as ações à direita; sem título nem
+          descrição. A busca e o seletor de órgãos públicos ficam na lista. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <SelectMenu
+          label="Fornecedor"
+          value={codfornec}
+          onChange={(valor) => {
+            setCodfornec(valor);
+            setCodfilial('');
+            setFiliais([]);
+            setMedidas([]);
+            setSelecionado(0);
+            setCarregando(false);
+          }}
+          options={opcoesFornecedor}
+          placeholder={fornecedores.length ? 'Escolha o fornecedor' : 'Nenhum fornecedor ativo'}
+          disabled={!fornecedores.length}
+          className="w-80"
+        />
+        <SelectMenu
+          label="Filial"
+          value={codfilial}
+          onChange={(valor) => { setCarregando(true); setErro(''); setSelecionado(0); setCodfilial(valor); }}
+          options={filiais}
+          placeholder={codfornec ? 'Escolha a filial' : 'Escolha o fornecedor primeiro'}
+          disabled={!codfornec || !filiais.length}
+          className="w-72"
+        />
+        {salvoEm ? <span className="text-[12px] text-ink-secondary">Salvo às {salvoEm}</span> : null}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <AlternaOpcoes rotulo="Referência da sugestão" opcoes={REFERENCIAS} valor={referencia} onValor={setReferencia} />
+          <Button
+            onClick={() => abrirParametros(null)}
+            disabled={!podeParametrizar || !codfilial}
+            title={podeParametrizar ? `Cobertura, lead time e gatilho do fornecedor na filial` : motivoBloqueio}
           >
-            Desconsiderar venda a órgãos públicos
-          </CheckRow>
-        </Toolbar>
-      </Panel>
+            <SlidersHorizontal aria-hidden />
+            Configurar fornecedor
+          </Button>
+          <Button onClick={() => navigate('/coberturas')}>Coberturas ABC</Button>
+          <Button variant="primary" onClick={atualizar} disabled={!codfilial || carregando} title={`Janela de ${periodo.inicio} a ${periodo.fim}`}>
+            <RefreshCw aria-hidden />
+            Atualizar
+          </Button>
+        </div>
+      </div>
+
+      {erro ? <Alert tone="error" className="mt-4">{erro}</Alert> : null}
+      {avisoCarrinho ? <Alert tone="warn" className="mt-4">{avisoCarrinho}</Alert> : null}
 
       {/* C-028: o aviso só aparece quando há carrinho guardado e o da tela está vazio. */}
       {carrinhoSalvo && resumoSalvo && carrinho.length === 0 ? (
@@ -557,7 +537,7 @@ export default function ComprasInteligentesPage() {
             ) : (
               <>
                 <Button size="sm" variant="primary" onClick={continuarCarrinho}>Continuar compra</Button>
-                <Button size="sm" onClick={() => setConfirmandoDescarte(true)}>Descartar carrinho</Button>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmandoDescarte(true)}>Descartar carrinho</Button>
               </>
             )}
           </span>
@@ -602,6 +582,10 @@ export default function ComprasInteligentesPage() {
             referencia={referencia}
             filtros={filtros}
             onFiltros={(parcial) => setFiltros((atual) => ({ ...atual, ...parcial }))}
+            busca={busca}
+            onBusca={setBusca}
+            desconsiderarLicitacao={desconsiderarLicitacao}
+            onLicitacao={() => setDesconsiderarLicitacao((atual) => !atual)}
             emPedidoAberto={emPedidoAberto}
             sugestaoTotal={sugestaoTotal}
             carrinho={{ itens: resumoCarrinho.itens, pedidos: resumoCarrinho.pedidos }}
@@ -612,7 +596,6 @@ export default function ComprasInteligentesPage() {
               onAdicionar: adicionar,
               onSilenciar: setSilenciando,
               onRestaurar: (l) => void restaurar(l),
-              onParametros: abrirParametros,
               onExportar: exportar,
               onAbrirCarrinho: () => setCarrinhoAberto(true),
             }}
@@ -626,10 +609,12 @@ export default function ComprasInteligentesPage() {
             referencia={referencia}
             desconsideradasDoSku={desconsideradas.filter((v) => v.codprod === codprodSelecionado).length}
             podeOperar={podeOperar}
+            podeParametrizar={podeParametrizar}
             motivoBloqueio={motivoBloqueio}
             onVerDetalheCompleto={setDetalheCompleto}
             onVerVendas={setVendasDe}
             onAdicionar={adicionar}
+            onParametros={abrirParametros}
           />
         </div>
       )}

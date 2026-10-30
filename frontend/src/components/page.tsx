@@ -1049,9 +1049,9 @@ export function Kpi({
 }
 
 /**
- * O `Kpi` em versão compacta, para painel lateral onde o gráfico precisa de
- * espaço (layout legado da 011, R-117): rótulo pequeno em cima, valor logo
- * abaixo, sem linha de apoio — a explicação vai no `title`.
+ * O `Kpi` em versão mínima, para painel lateral onde o gráfico precisa de
+ * espaço (layout legado da 011, R-117): rótulo pequeno e valor na MESMA
+ * linha, sem caixa — a explicação vai no `title`. Quatro cabem numa faixa.
  */
 export function KpiCompacto({
   rotulo,
@@ -1063,9 +1063,9 @@ export function KpiCompacto({
   hint?: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-muted/60 px-3 py-2" title={hint}>
-      <span className="text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
-      <span className="truncate font-title text-[15px] font-bold text-ink">{valor}</span>
+    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap" title={hint}>
+      <span className="shrink-0 text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
+      <span className="truncate text-[13px] font-bold text-ink">{valor}</span>
     </div>
   );
 }
@@ -1254,20 +1254,28 @@ export function GradeVisoes({ children }: { children: React.ReactNode }) {
  * 3"). Só leitura, ou clicável quando é filtro — aí vira botão com
  * `aria-pressed`, e o ativo ganha o fundo primário.
  */
+const CHIP_TONE = {
+  neutral: 'bg-muted text-ink-secondary',
+  alert: 'bg-destructive-bg text-destructive',
+  attention: 'border border-input bg-card text-attention',
+} as const;
+
 export function ChipContagem({
   children,
   ativo,
   onClick,
   title,
+  tone = 'neutral',
 }: {
   children: React.ReactNode;
   ativo?: boolean;
   onClick?: () => void;
   title?: string;
+  tone?: keyof typeof CHIP_TONE;
 }) {
   const classes = cn(
-    'inline-flex items-center gap-1.5 rounded-xl px-2 py-1 text-[12px] whitespace-nowrap',
-    ativo ? 'bg-primary text-primary-foreground' : 'bg-muted text-ink-secondary',
+    'inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[12px] whitespace-nowrap',
+    ativo ? 'bg-primary text-primary-foreground' : CHIP_TONE[tone],
   );
   if (!onClick) return <span className={classes} title={title}>{children}</span>;
   return (
@@ -1313,10 +1321,10 @@ export function Disclosure({
         aria-expanded={aberta}
         className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
       >
-        <span className="font-title text-[13px] font-bold text-ink">{titulo}</span>
-        <span className="flex items-center gap-2 text-[12px] text-ink-secondary">
-          {resumo}
-          <ChevronDown className={cn('size-4 transition-transform', aberta && 'rotate-180')} aria-hidden />
+        <span className="shrink-0 font-title text-[13px] font-bold text-ink">{titulo}</span>
+        <span className="flex min-w-0 items-center gap-2 text-[12px] text-ink-secondary">
+          <span className="truncate">{resumo}</span>
+          <ChevronDown className={cn('size-4 shrink-0 transition-transform', aberta && 'rotate-180')} aria-hidden />
         </span>
       </button>
       {aberta ? <div className="px-4 pb-4">{children}</div> : null}

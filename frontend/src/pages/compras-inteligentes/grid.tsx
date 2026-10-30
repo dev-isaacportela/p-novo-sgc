@@ -7,11 +7,11 @@
 // nenhuma execução (RNF-005). A linha já chega calculada por
 // `montarRessuprimento`; esta camada só desenha, seleciona e coleta a quantidade.
 import * as React from 'react';
-import { Download, RotateCcw, ShoppingCart, SlidersHorizontal, VolumeX } from 'lucide-react';
+import { Download, RotateCcw, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
-  Button, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
-  SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
+  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
+  SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
 } from '@/components/page';
 import { arredondarPorCaixa } from '@/lib/compras';
 import { fmtData, moeda } from '@/lib/formato';
@@ -43,7 +43,6 @@ export interface AcoesDaLista {
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onSilenciar: (linha: LinhaRessuprimento) => void;
   onRestaurar: (linha: LinhaRessuprimento) => void;
-  onParametros: (linha: LinhaRessuprimento) => void;
   onExportar: () => void;
   onAbrirCarrinho: () => void;
 }
@@ -59,6 +58,10 @@ export function ListaProdutos({
   referencia,
   filtros,
   onFiltros,
+  busca,
+  onBusca,
+  desconsiderarLicitacao,
+  onLicitacao,
   emPedidoAberto,
   sugestaoTotal,
   carrinho,
@@ -79,6 +82,10 @@ export function ListaProdutos({
   referencia: ReferenciaSugestao;
   filtros: FiltrosLista;
   onFiltros: (parcial: Partial<FiltrosLista>) => void;
+  busca: string;
+  onBusca: (texto: string) => void;
+  desconsiderarLicitacao: boolean;
+  onLicitacao: () => void;
   /** Produtos que já estão num pedido aberto do fornecedor nesta filial (C-035). */
   emPedidoAberto: Map<number, PedidoAbertoDoItem>;
   /** Soma da sugestão do recorte ao custo da última entrada (R$). */
@@ -128,8 +135,9 @@ export function ListaProdutos({
         <ChipContagem title="Soma da sugestão das linhas do recorte, em unidades">
           {`Sugestão ${quantidade(sugestaoUnidades)} un.`}
         </ChipContagem>
-        <ChipContagem title="Produtos sem estoque disponível nesta filial">{`Rupturas ${rupturas}`}</ChipContagem>
+        <ChipContagem tone="alert" title="Produtos sem estoque disponível nesta filial">{`Rupturas ${rupturas}`}</ChipContagem>
         <ChipContagem
+          tone="attention"
           ativo={filtros.soSilenciados}
           onClick={() => onFiltros({ soSilenciados: !filtros.soSilenciados })}
           title={filtros.soSilenciados ? 'Mostrando só os silenciados — clique para ver todos' : 'Clique para ver só os silenciados'}
@@ -139,6 +147,8 @@ export function ListaProdutos({
         <SelectMenu label="Ordenar" value={filtros.ordem} onChange={(v) => onFiltros({ ordem: v as OrdemLista })} options={OPCOES_ORDEM} className="w-40" />
         <SelectMenu label="Movimentação" value={filtros.movimentacao} onChange={(v) => onFiltros({ movimentacao: v as FiltroMovimentacao })} options={OPCOES_MOVIMENTACAO} className="w-52" />
         <SelectMenu label="Situação" value={filtros.situacao} onChange={(v) => onFiltros({ situacao: v as '' | StatusRessuprimento })} options={OPCOES_SITUACAO} className="w-44" />
+        <SearchInput placeholder="Produto ou código" value={busca} onChange={(e) => onBusca(e.target.value)} className="w-56" />
+        <div><CheckRow marcado={desconsiderarLicitacao} onToggle={onLicitacao}>Desconsiderar venda a órgãos públicos</CheckRow></div>
       </Toolbar>
 
       <Table>
@@ -149,7 +159,7 @@ export function ListaProdutos({
             <Th>Curva</Th>
             <Th numeric className="w-32">Cobertura</Th>
             <Th numeric className="w-40">Qtd. (un.)</Th>
-            <Th className="w-28 text-right">Ações</Th>
+            <Th className="w-24 text-right">Ações</Th>
           </tr>
         </thead>
         <tbody>
@@ -173,7 +183,7 @@ export function ListaProdutos({
                   </RowMeta>
                   {linha.silenciado ? (
                     <RowMeta>
-                      <Status tone="off">
+                      <Status tone="attention">
                         <span title={linha.motivoSilencio || 'Silenciado'}>
                           {`Silenciado até ${fmtData(linha.silenciadoAte)}${linha.motivoSilencio ? ` · ${linha.motivoSilencio}` : ''}`}
                         </span>
@@ -182,7 +192,7 @@ export function ListaProdutos({
                   ) : null}
                   {aberto && linha.emTransito <= 0 ? (
                     <RowMeta>
-                      <Status tone="attention">
+                      <Status tone="alert">
                         <span title={aberto.titulo}>{`Pedido #${aberto.idCard} aberto, ainda sem trânsito`}</span>
                       </Status>
                     </RowMeta>
@@ -242,13 +252,6 @@ export function ListaProdutos({
                         <VolumeX aria-hidden />
                       </IconButton>
                     )}
-                    <IconButton
-                      label={podeParametrizar ? 'Parâmetros deste produto' : motivoBloqueio}
-                      disabled={!podeParametrizar}
-                      onClick={() => acoes.onParametros(linha)}
-                    >
-                      <SlidersHorizontal aria-hidden />
-                    </IconButton>
                   </span>
                 </Td>
               </Tr>

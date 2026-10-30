@@ -28,7 +28,8 @@ const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = 
 };
 
 const quantidade = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
-const dias = (valor: number | null) => (valor === null ? 'sem giro' : `${Math.round(valor)} d`);
+// Consumo quase nulo dá cobertura de milhares de dias: acima de 999 o número não informa nada.
+const dias = (valor: number | null) => (valor === null ? 'sem giro' : valor >= 1000 ? '999+ d' : `${Math.round(valor)} d`);
 const pct = (valor: number | null) => (valor === null ? '—' : `${Math.round(valor)} %`);
 
 const ORIGEM_COBERTURA = { sku: 'do produto', fornecedor: 'do fornecedor', curva: 'alvo da curva' } as const;
@@ -45,10 +46,12 @@ export function PainelDetalhe({
   referencia,
   desconsideradasDoSku,
   podeOperar,
+  podeParametrizar,
   motivoBloqueio,
   onVerDetalheCompleto,
   onVerVendas,
   onAdicionar,
+  onParametros,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -59,10 +62,12 @@ export function PainelDetalhe({
   /** Quantas vendas deste SKU estão desconsideradas nesta filial (da lista que voltou do banco). */
   desconsideradasDoSku: number;
   podeOperar: boolean;
+  podeParametrizar: boolean;
   motivoBloqueio: string;
   onVerDetalheCompleto: (linha: LinhaRessuprimento) => void;
   onVerVendas: (linha: LinhaRessuprimento) => void;
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
+  onParametros: (linha: LinhaRessuprimento) => void;
 }) {
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
@@ -108,16 +113,16 @@ export function PainelDetalhe({
             <Eye aria-hidden />
           </IconButton>
         </PanelHeader>
-        <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-rule-row px-4 py-2">
           <KpiCompacto
-            rotulo="Estoque / trânsito"
-            valor={`${quantidade(linha.estoqueAtual)} · ${linha.emTransito > 0 ? quantidade(linha.emTransito) : '0'}`}
+            rotulo="Estoque"
+            valor={`${quantidade(linha.estoqueAtual)} · tr. ${quantidade(linha.emTransito)}`}
             hint="Disponível na filial · a caminho (pedido ao ERP + trânsito)"
           />
           <KpiCompacto
-            rotulo="Cobertura / nível"
+            rotulo="Cobertura"
             valor={`${dias(linha.coberturaAtualDias)} · ${pct(nivel)}`}
-            hint={`Dias de estoque · % do máximo de ${Math.round(linha.estoqueMaximo).toLocaleString('pt-BR')} un.`}
+            hint={`Dias de estoque · nível: % do máximo de ${Math.round(linha.estoqueMaximo).toLocaleString('pt-BR')} un.`}
           />
           <KpiCompacto
             rotulo="Situação"
@@ -125,10 +130,8 @@ export function PainelDetalhe({
             hint={linha.silenciado ? `Silenciado até ${fmtData(linha.silenciadoAte)}` : `Curva ${linha.curva}`}
           />
           <KpiCompacto
-            rotulo="Prioridade / gatilho"
-            valor={linha.urgente
-              ? <Status tone="alert">{`Urgente · ${dias(linha.diasDeGatilho)}`}</Status>
-              : `Normal · ${dias(linha.diasDeGatilho)}`}
+            rotulo="Gatilho"
+            valor={linha.urgente ? <Status tone="alert">{`${dias(linha.diasDeGatilho)} · urgente`}</Status> : dias(linha.diasDeGatilho)}
             hint={`Urgente quando o gatilho fica em ${linha.gatilhoDias} dias ou menos`}
           />
         </div>
@@ -141,7 +144,7 @@ export function PainelDetalhe({
 
         <Disclosure
           titulo="Simulação de compra"
-          resumo={`${textoDaSugestao(simulacao.quantidade, linha.unidadesPorCaixa, referencia)} · ${moeda(simulacao.total)}`}
+          resumo={`${textoDaSugestao(simulacao.quantidade, linha.unidadesPorCaixa, referencia)} · ${moeda(simulacao.total)} · cobertura futura ${dias(simulacao.coberturaFuturaDias)}`}
           aberta={abertas.has('simulacao')}
           onToggle={() => alterna('simulacao')}
         >
@@ -182,7 +185,7 @@ export function PainelDetalhe({
 
         <Disclosure
           titulo="Atributos e estoque"
-          resumo={`${quantidade(m.ESTOQUE_TOTAL)} total · ${quantidade(linha.estoqueAtual)} disp.`}
+          resumo={`nível ${nivel === null ? 'sem giro' : nivel < 50 ? 'baixo' : nivel <= 100 ? 'adequado' : 'alto'} · ${pct(nivel)} · ressuprimento ${linha.leadTimeDias} dias`}
           aberta={abertas.has('atributos')}
           onToggle={() => alterna('atributos')}
         >
@@ -205,7 +208,8 @@ export function PainelDetalhe({
 
         <Disclosure
           titulo="Compras do produto"
-          resumo={dados.pronto ? `${dados.compras.length} entradas` : '…'}
+          resumo={!dados.pronto ? '…' : dados.compras.length === 0 ? 'nenhuma entrada'
+            : `última em ${fmtData(String(dados.compras[0].DT_ENTRADA))} · ${quantidade(dados.compras[0].QUANTIDADE)} un. · ${moeda(Number(dados.compras[0].VALOR_TOTAL))} · ${dados.compras.length} ${dados.compras.length === 1 ? 'entrada' : 'entradas'}`}
           aberta={abertas.has('compras')}
           onToggle={() => alterna('compras')}
         >
@@ -239,7 +243,7 @@ export function PainelDetalhe({
 
         <Disclosure
           titulo="Vendas do período"
-          resumo={`${quantidade(m.VENDA_PERIODO)} un. em ${JANELA_DIAS} dias`}
+          resumo={`${quantidade(m.VENDA_PERIODO)} un. em ${JANELA_DIAS} dias · ${desconsideradasDoSku} ${desconsideradasDoSku === 1 ? 'venda desconsiderada' : 'vendas desconsideradas'}`}
           aberta={abertas.has('vendas')}
           onToggle={() => alterna('vendas')}
         >
@@ -255,7 +259,7 @@ export function PainelDetalhe({
 
         <Disclosure
           titulo="Filiais com excesso"
-          resumo={dados.pronto ? `${excessos.length} ${excessos.length === 1 ? 'filial' : 'filiais'}` : '…'}
+          resumo={dados.pronto ? `${excessos.length} ${excessos.length === 1 ? 'filial' : 'filiais'} acima da cobertura alvo` : '…'}
           aberta={abertas.has('filiais')}
           onToggle={() => alterna('filiais')}
         >
@@ -285,7 +289,7 @@ export function PainelDetalhe({
 
         <Disclosure
           titulo="Parâmetros do cálculo"
-          resumo={`lead ${linha.leadTimeDias} d · cob. ${linha.coberturaDias} d`}
+          resumo={`janela ${JANELA_DIAS} dias · lead time ${linha.leadTimeDias} dias · cobertura ${linha.coberturaDias} dias (${ORIGEM_COBERTURA[linha.parametros.origemCobertura]})`}
           aberta={abertas.has('parametros')}
           onToggle={() => alterna('parametros')}
         >
@@ -302,6 +306,16 @@ export function PainelDetalhe({
               <Tr><Td>Janela de venda</Td><Td numeric>{`${JANELA_DIAS} dias`}</Td></Tr>
             </tbody>
           </Table>
+          <div className="mt-3">
+            <Button
+              size="sm"
+              disabled={!podeParametrizar}
+              title={podeParametrizar ? undefined : motivoBloqueio}
+              onClick={() => onParametros(linha)}
+            >
+              Parâmetros deste produto
+            </Button>
+          </div>
         </Disclosure>
       </Panel>
     </div>

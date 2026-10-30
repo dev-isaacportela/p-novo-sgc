@@ -32,20 +32,18 @@ test('calendário: set/26, um mês antes de jan/2026 é dez/2025, fevereiro de 2
   assert.deepEqual(mesesAte('2026-09-16', 3), ['2026-07', '2026-08', '2026-09']);
 });
 
-test('C-032: a série de 6 meses tem 6 pontos medidos (zero onde não houve movimento) mais 3 de projeção a consumo diário × dias do mês, cada série só na sua coluna', () => {
+test('C-032: a série de 6 meses tem 6 pontos medidos (zero onde não houve movimento) mais o mês seguinte projetado a consumo diário × dias do mês, cada série só na sua coluna', () => {
   const historico = [
     { MES: '2026-08', SAIDAS: 10, ENTRADAS: 24, SAIDAS_PUBLICAS: 0 },
     { MES: '2026-09', SAIDAS: 20, ENTRADAS: 0, SAIDAS_PUBLICAS: 4 },
   ];
   const serie = serieComprasVendas(historico, '2026-09-16', 6, 2);
-  assert.equal(serie.length, 9);
-  assert.deepEqual(serie.map((p) => p.mes), ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12']);
+  assert.equal(serie.length, 7);
+  assert.deepEqual(serie.map((p) => p.mes), ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
   assert.deepEqual(serie[4], { mes: '2026-08', rotulo: 'ago/26', compras: 24, vendas: 10, projecao: null });
   assert.deepEqual(serie[0], { mes: '2026-04', rotulo: 'abr/26', compras: 0, vendas: 0, projecao: null });
   assert.deepEqual(serie[6], { mes: '2026-10', rotulo: 'out/26', compras: null, vendas: null, projecao: 62 });
-  assert.equal(serie[7].projecao, 60);
-  assert.equal(serie[8].projecao, 62);
-  assert.equal(serieComprasVendas(historico, '2026-09-16', 13, 2).length, 16);
+  assert.equal(serieComprasVendas(historico, '2026-09-16', 13, 2).length, 14);
 });
 
 test('C-032: o rodapé soma 3, 6 e 12 meses de vendas e compras e projeta o próximo mês', () => {
