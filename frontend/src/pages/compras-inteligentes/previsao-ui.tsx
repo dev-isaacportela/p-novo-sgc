@@ -39,7 +39,8 @@ export function AnaliseVendaFutura({
     return {
       value: m.value,
       label: m.value === 'bestfit' && vencedor ? `Best Fit → ${vencedor.rotulo}` : m.label,
-      hint: `${m.descricao}${mad === undefined ? '' : ` · MAD ${numero(mad)}`}`,
+      // O MAD vem primeiro: a descrição longa é o que a lista corta.
+      hint: `${mad === undefined ? '' : `MAD ${numero(mad)} · `}${m.descricao}`,
     };
   });
 
