@@ -19,6 +19,7 @@ import {
   coberturaFuturaComCompra, dataDeSilencio, estaSilenciado, itemDoCarrinho, linhaCsv,
   montarRessuprimento, motivoDaSugestao, resolverParametros,
   RECORTE_INICIAL, alternarSilenciados, escolherVisao,
+  campoEmCaixas, quantidadeNaReferencia, rotuloDaQuantidade, unidadesDaDigitada,
 } from '../src/lib/ressuprimento.ts';
 
 /** Uma medida de `sgcWintRessuprimento`, com o caso base do plan. */
@@ -525,6 +526,24 @@ test('C-038: ordenar por código, nome e curva, e os filtros de movimentação, 
 test('C-031: o nível de cobertura é disponível ÷ máximo — 50 de 70 dá 71,4 %; sem máximo (sem giro) não existe', () => {
   assert.equal(Math.round(nivelDeCobertura({ estoqueAtual: 50, estoqueMaximo: 70 }) * 10) / 10, 71.4);
   assert.equal(nivelDeCobertura({ estoqueAtual: 40, estoqueMaximo: 0 }), null);
+});
+
+test('C-037 (campo): em "caixas" o campo mostra e recebe caixas — 315 un. com caixa de 15 mostra 21 cx, digitar 22 grava 330 un., 1,5 grava 22,5 (o blur sobe à caixa); avulso e "unidades" ficam em unidades', () => {
+  assert.equal(campoEmCaixas(15, 'caixas'), true);
+  assert.equal(campoEmCaixas(1, 'caixas'), false);
+  assert.equal(campoEmCaixas(15, 'unidades'), false);
+  assert.equal(quantidadeNaReferencia(315, 15, 'caixas'), 21);
+  assert.equal(quantidadeNaReferencia(316, 15, 'caixas'), 21.07);
+  assert.equal(quantidadeNaReferencia(315, 15, 'unidades'), 315);
+  assert.equal(quantidadeNaReferencia(7, 1, 'caixas'), 7);
+  assert.equal(unidadesDaDigitada(22, 15, 'caixas'), 330);
+  assert.equal(unidadesDaDigitada(1.5, 15, 'caixas'), 22.5);
+  assert.equal(arredondarPorCaixa(unidadesDaDigitada(1.5, 15, 'caixas'), 15), 30, 'o blur sobe para a caixa cheia');
+  assert.equal(unidadesDaDigitada(-3, 15, 'caixas'), 0);
+  assert.equal(unidadesDaDigitada(48, 12, 'unidades'), 48);
+  assert.equal(rotuloDaQuantidade(15, 'caixas'), 'cx');
+  assert.equal(rotuloDaQuantidade(1, 'caixas'), 'un.');
+  assert.equal(rotuloDaQuantidade(15, 'unidades'), 'un.');
 });
 
 test('C-037: a referência Unidades/Caixas só muda o texto da sugestão — 48 com caixa de 12 é "48 un. · 4 cx" ou "4 cx · 48 un."; avulso é só unidades', () => {

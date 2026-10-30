@@ -237,7 +237,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 **C-037 — Unidades ou caixas como referência**
 - **Dado que** a sugestão de um produto é 48 com caixa de 12
 - **Quando** a compradora alterna a referência para caixas
-- **Então** a sugestão passa a ler "4 cx · 48 un."; a quantidade digitada continua sendo em unidades e sobe para a caixa cheia
+- **Então** a sugestão passa a ler "4 cx · 48 un." e o campo de quantidade passa a mostrar e receber **caixas** (4; digitar 5 grava 60 unidades; fração sobe para a caixa cheia) — o cabeçalho diz "Qtd. (cx)"; produto avulso continua em unidades; o que fica guardado é sempre em unidades
 
 **C-038 — Ordem, movimentação e silenciados**
 - **Dado que** a lista tem produtos com e sem venda, com e sem estoque e com trânsito
@@ -426,7 +426,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-034 | simular 50 → 60 un., 5 cx, R$ 600, 55 d, 157 %; sem giro → cobertura nula | regra de tela |
 | C-035 | a consulta de itens em pedido aberto devolve os 5 produtos do pedido em análise do 1042 na filial 1, com card e fase pela chave, e nada para a filial 2 (enviado) | regra de negócio |
 | C-036, RN-026 | o resumo do 1042 devolve os itens ativos do catálogo menos o inativo e o do departamento 4, e valor estimado > 0 | regra de negócio |
-| C-037 | (48, 12, unidades) → "48 un. · 4 cx"; (48, 12, caixas) → "4 cx · 48 un."; (48, 1) → "48 un." | regra de tela |
+| C-037 | (48, 12, unidades) → "48 un. · 4 cx"; (48, 12, caixas) → "4 cx · 48 un."; (48, 1) → "48 un."; campo: 315 un. com caixa 15 em "caixas" mostra 21, digitar 22 grava 330, 1,5 grava 22,5 e o blur sobe a 30; avulso e "unidades" em unidades | regra de tela |
 | C-038 | ordem por código, nome e curva (A, B, C); cada filtro de movimentação devolve só as linhas certas | regra de tela |
 | C-040 | consulta do ressuprimento: o 5410 (50 un. a 20 com custo financeiro 12) devolve faturamento 1000 e rentabilidade 400; devolução e venda desconsiderada ficam fora dos dois; produto sem venda tem 0 e 0 | regra de negócio |
 | C-041 | `sgcWintProdutoVendas` do 5408 → 4 vendas, todas com `CODUSUR` > 0 e `VENDEDOR`; `sgcWintProdutoUltimasCompras` do 5403 → a entrada do pedido 970001 com `DT_SOLICITACAO`, `DT_PREVISAO` e a entrada depois da previsão | regra de negócio |

@@ -16,7 +16,8 @@ import {
 import { arredondarPorCaixa } from '@/lib/compras';
 import { fmtData, moeda } from '@/lib/formato';
 import {
-  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, quantidadeParaCompletar, textoDaSugestao,
+  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, quantidadeNaReferencia, quantidadeParaCompletar, rotuloDaQuantidade, textoDaSugestao,
+  unidadesDaDigitada,
 } from '@/lib/ressuprimento';
 import type {
   FiltroMovimentacao, FiltrosLista, LinhaRessuprimento, OrdemLista, ReferenciaSugestao, StatusRessuprimento,
@@ -180,7 +181,7 @@ export function ListaProdutos({
             <Th className="w-20">Curva fat.</Th>
             <Th className="w-20">Curva rent.</Th>
             <Th numeric className="w-32">Cobertura</Th>
-            <Th numeric className="w-40">Qtd. (un.)</Th>
+            <Th numeric className="w-40">{referencia === 'caixas' ? 'Qtd. (cx)' : 'Qtd. (un.)'}</Th>
             <Th className="w-24 text-right">Ações</Th>
           </tr>
         </thead>
@@ -238,12 +239,12 @@ export function ListaProdutos({
                     type="number"
                     min={0}
                     className="text-right"
-                    aria-label={`Quantidade de ${linha.medida.DESCRICAO}`}
-                    value={String(escolhida)}
+                    aria-label={`Quantidade de ${linha.medida.DESCRICAO} (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia)})`}
+                    value={String(quantidadeNaReferencia(escolhida, linha.unidadesPorCaixa, referencia))}
                     disabled={!podeOperar}
-                    title={podeOperar ? `Sobe para a caixa cheia de ${linha.unidadesPorCaixa} un.` : motivoBloqueio}
-                    onChange={(evento) => onQuantidade(codprod, Number(evento.target.value) || 0)}
-                    onBlur={(evento) => onQuantidade(codprod, arredondarPorCaixa(Number(evento.target.value) || 0, linha.unidadesPorCaixa))}
+                    title={podeOperar ? `Em ${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia)} · sobe para a caixa cheia de ${linha.unidadesPorCaixa} un.` : motivoBloqueio}
+                    onChange={(evento) => onQuantidade(codprod, unidadesDaDigitada(Number(evento.target.value) || 0, linha.unidadesPorCaixa, referencia))}
+                    onBlur={(evento) => onQuantidade(codprod, arredondarPorCaixa(unidadesDaDigitada(Number(evento.target.value) || 0, linha.unidadesPorCaixa, referencia), linha.unidadesPorCaixa))}
                   />
                   <RowMeta>
                     {`sug. ${textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)}`}

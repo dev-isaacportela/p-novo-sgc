@@ -17,7 +17,9 @@ import {
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa } from '@/lib/compras';
-import { JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, textoDaSugestao } from '@/lib/ressuprimento';
+import {
+  JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
+} from '@/lib/ressuprimento';
 import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from '@/lib/ressuprimento';
 import { filiaisComExcesso, simularCompra } from '@/lib/ressuprimento-detalhe';
 import type { DadosDoSku } from '@/lib/ressuprimento-detalhe';
@@ -124,6 +126,12 @@ export function PainelDetalhe({
 }) {
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
+  // C-037: o campo segue a referência (caixas ou unidades); `simulada` é o texto digitado nela.
+  const [referenciaAnterior, setReferenciaAnterior] = React.useState(referencia);
+  if (referencia !== referenciaAnterior) {
+    setReferenciaAnterior(referencia);
+    setSimulada('');
+  }
 
   // Trocou de produto: a simulação volta à sugestão dele — ajuste de estado
   // durante a renderização, não em efeito.
@@ -152,7 +160,7 @@ export function PainelDetalhe({
   const nivel = nivelDeCobertura(linha);
   // R-124: a quantidade de partida é a sugestão projetada pelo modelo, quando há.
   const sugestaoDePartida = projetada ? projetada.sugestao : linha.sugerida;
-  const quantidadeSimulada = simulada === '' ? sugestaoDePartida : Number(simulada) || 0;
+  const quantidadeSimulada = simulada === '' ? sugestaoDePartida : unidadesDaDigitada(Number(simulada) || 0, linha.unidadesPorCaixa, referencia);
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
   const custoAtual = Number(m.CUSTO_ATUAL ?? 0);
@@ -217,13 +225,13 @@ export function PainelDetalhe({
           <div className="flex flex-col gap-3">
             <div className="flex items-end gap-3">
               <label className="flex flex-1 flex-col gap-1 text-[12px] text-ink-secondary">
-                Quantidade (unidades)
+                {`Quantidade (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 'caixas' : 'unidades'})`}
                 <Input
                   type="number"
                   min={0}
-                  value={simulada === '' ? String(sugestaoDePartida) : simulada}
+                  value={simulada === '' ? String(quantidadeNaReferencia(sugestaoDePartida, linha.unidadesPorCaixa, referencia)) : simulada}
                   onChange={(e) => setSimulada(e.target.value)}
-                  onBlur={(e) => setSimulada(String(arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa)))}
+                  onBlur={(e) => setSimulada(String(quantidadeNaReferencia(arredondarPorCaixa(unidadesDaDigitada(Number(e.target.value) || 0, linha.unidadesPorCaixa, referencia), linha.unidadesPorCaixa), linha.unidadesPorCaixa, referencia)))}
                   title={`Sobe para a caixa cheia de ${linha.unidadesPorCaixa} un.`}
                 />
               </label>

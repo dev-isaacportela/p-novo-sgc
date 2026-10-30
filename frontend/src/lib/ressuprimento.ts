@@ -531,8 +531,35 @@ export function nivelDeCobertura(l: Pick<Ressuprimento, 'estoqueAtual' | 'estoqu
   return (l.estoqueAtual / l.estoqueMaximo) * 100;
 }
 
-/** C-037: a referência da sugestão — unidades ou caixas — é só leitura; a quantidade digitada é sempre em unidades. */
+/**
+ * C-037: a referência da sugestão — unidades ou caixas. O texto da sugestão
+ * mostra as duas; o CAMPO de quantidade segue a referência (emenda a pedido
+ * do usuário): em "caixas" ele mostra e recebe caixas, e o que fica guardado
+ * continua sendo unidades. Avulso (caixa 1) é sempre em unidades.
+ */
 export type ReferenciaSugestao = 'unidades' | 'caixas';
+
+/** O campo de quantidade está em caixas? Só na referência "caixas" e com caixa > 1. */
+export function campoEmCaixas(unidadesPorCaixa: number, referencia: ReferenciaSugestao): boolean {
+  return referencia === 'caixas' && numero(unidadesPorCaixa) > 1;
+}
+
+/** O que o campo mostra: a quantidade (em unidades) convertida para a referência, com até 2 casas em caixas. */
+export function quantidadeNaReferencia(unidades: number, unidadesPorCaixa: number, referencia: ReferenciaSugestao): number {
+  if (!campoEmCaixas(unidadesPorCaixa, referencia)) return numero(unidades);
+  return Math.round((numero(unidades) / numero(unidadesPorCaixa)) * 100) / 100;
+}
+
+/** O que foi digitado, de volta a unidades (caixas × caixa), nunca negativo. */
+export function unidadesDaDigitada(digitada: number, unidadesPorCaixa: number, referencia: ReferenciaSugestao): number {
+  const valor = Math.max(0, numero(digitada));
+  if (!campoEmCaixas(unidadesPorCaixa, referencia)) return valor;
+  return Math.round(valor * numero(unidadesPorCaixa) * 1000) / 1000;
+}
+
+export function rotuloDaQuantidade(unidadesPorCaixa: number, referencia: ReferenciaSugestao): 'un.' | 'cx' {
+  return campoEmCaixas(unidadesPorCaixa, referencia) ? 'cx' : 'un.';
+}
 
 export function textoDaSugestao(sugerida: number, unidadesPorCaixa: number, referencia: ReferenciaSugestao): string {
   const un = `${Math.round(numero(sugerida)).toLocaleString('pt-BR')} un.`;

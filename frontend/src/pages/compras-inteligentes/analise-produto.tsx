@@ -18,7 +18,9 @@ import {
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa } from '@/lib/compras';
-import { JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, textoDaSugestao } from '@/lib/ressuprimento';
+import {
+  JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
+} from '@/lib/ressuprimento';
 import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from '@/lib/ressuprimento';
 import {
   ENTRADAS_VISIVEIS, desconsideradasPorMes, entradaAtrasou, filiaisComExcesso, necessidade, simularCompra, totaisDoRodape,
@@ -97,6 +99,12 @@ export function AnaliseProdutoDialogo({
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
   const [simulada, setSimulada] = React.useState('');
+  // C-037: o campo segue a referência (caixas ou unidades); `simulada` é o texto digitado nela.
+  const [referenciaAnterior, setReferenciaAnterior] = React.useState(referencia);
+  if (referencia !== referenciaAnterior) {
+    setReferenciaAnterior(referencia);
+    setSimulada('');
+  }
   const [todasEntradas, setTodasEntradas] = React.useState(false);
   const [totalVendas, setTotalVendas] = React.useState<number | null>(null);
   const [ocupado, setOcupado] = React.useState(false);
@@ -117,7 +125,7 @@ export function AnaliseProdutoDialogo({
 
   const nivel = nivelDeCobertura(linha);
   const sugestaoDePartida = projetada ? projetada.sugestao : linha.sugerida;
-  const quantidadeSimulada = simulada === '' ? sugestaoDePartida : Number(simulada) || 0;
+  const quantidadeSimulada = simulada === '' ? sugestaoDePartida : unidadesDaDigitada(Number(simulada) || 0, linha.unidadesPorCaixa, referencia);
   const resultadoModelo = previsao ? modeloEscolhido(previsao, modelo) : null;
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const comSugestao = simularCompra(linha, linha.sugerida);
@@ -197,13 +205,13 @@ export function AnaliseProdutoDialogo({
                   <div className="flex flex-col gap-3 p-4">
                     <div className="flex flex-wrap items-end gap-3">
                       <label className="flex w-48 flex-col gap-1 text-[12px] text-ink-secondary">
-                        Quantidade (unidades)
+                        {`Quantidade (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 'caixas' : 'unidades'})`}
                         <Input
                           type="number"
                           min={0}
-                          value={simulada === '' ? String(sugestaoDePartida) : simulada}
+                          value={simulada === '' ? String(quantidadeNaReferencia(sugestaoDePartida, linha.unidadesPorCaixa, referencia)) : simulada}
                           onChange={(e) => setSimulada(e.target.value)}
-                          onBlur={(e) => setSimulada(String(arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa)))}
+                          onBlur={(e) => setSimulada(String(quantidadeNaReferencia(arredondarPorCaixa(unidadesDaDigitada(Number(e.target.value) || 0, linha.unidadesPorCaixa, referencia), linha.unidadesPorCaixa), linha.unidadesPorCaixa, referencia)))}
                         />
                       </label>
                       <RowMeta>{linha.unidadesPorCaixa > 1 ? `${quantidade(simulacao.caixas)} cx de ${linha.unidadesPorCaixa}` : 'avulso'}</RowMeta>
