@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   mesesDoPeriodo, sugestaoDeCompra, unidadesPorCaixa, arredondarPorCaixa, origemUnidadesPorCaixa,
   curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens, itemDeLinha, itemDeProdutoBuscado,
-  curvaPorValor, piorCurva,
+  curvaPorValor, piorCurva, custoPadraoDe, mapaDeCustoPadrao, rotuloSemCusto,
 } from '../src/lib/compras.ts';
 
 const linha = (codprod, vendaPeriodo, custo, extra = {}) => ({
@@ -176,4 +176,36 @@ test('R-122: curvaPorValor é a régua de curvaAbc sobre qualquer valor (500/250
   assert.equal(piorCurva('A', 'C'), 'C');
   assert.equal(piorCurva('B', 'A'), 'B');
   assert.equal(piorCurva('B', 'B'), 'B');
+});
+
+test('R-128: o custo de compra é o custo padrão do Gestão de Custos — a data mais recente vence; sem linha é "Sem custo" (0); a consulta que falhou deixa TODOS em "Erro custo" (0); antes de vir, "…"; nunca o ERP', () => {
+  const mapa = mapaDeCustoPadrao([
+    { CODPROD: 54, CUSTO: 51.1, DATA_REF: '2025-01-01' },
+    { CODPROD: 54, CUSTO: 57.23, DATA_REF: '2026-01-01' },
+    { CODPROD: 7, CUSTO: 0, DATA_REF: '2026-01-01' },
+  ]);
+  assert.deepEqual(custoPadraoDe(mapa, 54), { valor: 57.23, dataRef: '2026-01-01', origem: 'gestao' });
+  assert.deepEqual(custoPadraoDe(mapa, 99), { valor: 0, dataRef: '', origem: 'sem' });
+  assert.equal(custoPadraoDe(mapa, 7).origem, 'sem', 'custo zero conta como sem custo');
+  assert.deepEqual(custoPadraoDe(null, 54), { valor: 0, dataRef: '', origem: 'erro' });
+  assert.equal(custoPadraoDe(undefined, 54).origem, 'carregando');
+  assert.equal(rotuloSemCusto(custoPadraoDe(mapa, 54)), null);
+  assert.equal(rotuloSemCusto(custoPadraoDe(mapa, 99)), 'Sem custo');
+  assert.equal(rotuloSemCusto(custoPadraoDe(null, 54)), 'Erro custo');
+});
+
+test('R-128: na montagem do pedido (003) o item nasce com o custo padrão do Gestão de Custos e a curva pesa venda × esse custo; sem linha lá, custo 0', () => {
+  const linhas = [linha(1, 50, 10), linha(2, 25, 10)];
+  const custos = new Map([[1, { custo: 12, dataRef: '2026-01-01' }]]);
+  const itens = montarItens(linhas, [], new Map(), { inicio: '2026-08-01', fim: '2026-09-14' }, 1042, custos);
+  assert.equal(itens[0].precoCusto, 12);
+  assert.equal(itens[1].precoCusto, 0, 'sem custo padrão: 0, nunca o da última entrada');
+  // Só o 1 tem custo: ele leva 100 % do valor (C pelo corte de 95 %), e o 2, sem custo, também fica em C — a curva já não usa a última entrada.
+  assert.equal(itens[1].curvaAbc, 'C');
+  // Cinco produtos com a mesma última entrada (10): pela última entrada seriam A, A, B, C, C; pelo custo
+  // padrão (1, 1, 1, 1, 100) os valores são 50, 25, 15, 7 e 300 → B, B, C, C, A.
+  const cinco = [linha(1, 50, 10), linha(2, 25, 10), linha(3, 15, 10), linha(4, 7, 10), linha(5, 3, 10)];
+  const padrao = new Map([1, 2, 3, 4, 5].map((c) => [c, { custo: c === 5 ? 100 : 1, dataRef: '2026-01-01' }]));
+  assert.deepEqual(montarItens(cinco, [], new Map(), { inicio: '2026-08-01', fim: '2026-09-14' }, 1042, padrao).map((i) => i.curvaAbc), ['B', 'B', 'C', 'C', 'A']);
+  assert.equal(montarItens(linhas, [], new Map(), { inicio: '2026-08-01', fim: '2026-09-14' }, 1042, null)[0].precoCusto, 0, 'consulta que falhou: 0 em todos');
 });

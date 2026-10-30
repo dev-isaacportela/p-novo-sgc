@@ -34,7 +34,7 @@ import { coberturaDeLinha, limiteDeCobertura } from '@/lib/cobertura';
 import type { Cobertura } from '@/lib/cobertura';
 import {
   COLUNAS_CSV, FILTROS_INICIAIS, JANELA_DIAS, ROTULO_VISAO, alternarSilenciados, contarVisoes, escolherVisao, filtrarMovimentacao, linhaCsv, linhasDaVisao,
-  montarRessuprimento, motivoDaSugestao, ordenarLinhas, parametroDeLinha,
+  montarRessuprimento, motivoDaSugestao, ordenarLinhas, parametroDeLinha, chaveDaEntrada,
 } from '@/lib/ressuprimento';
 import type {
   AlvoDaCurva, FiltrosLista, LinhaRessuprimento, MedidaRessuprimento, ParametroCompra, ReferenciaSugestao,
@@ -44,6 +44,12 @@ import { CHAVE_CARRINHO, carrinhoDeTexto, resumoDoCarrinho, textoDoCarrinho } fr
 import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
 import { DADOS_VAZIOS, desconsideradasPorMes } from '@/lib/ressuprimento-detalhe';
 import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
+import { lotesDeCodigos, oportunidadesDoItem, seloEspecial, sugestaoPorCliente } from '@/lib/custo-especial';
+import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
+import { CHAVE_LARGURA, curvasJuntas, larguraDe, proximaLargura } from '@/lib/largura-painel';
+import type { LarguraPainel } from '@/lib/largura-painel';
+import type { MapaCustoPadrao } from '@/lib/compras';
+import type { CustoEspecial, Oportunidade, SugestaoCliente, TabelaEspecial, VendaCliente } from '@/lib/custo-especial';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import type { DadosDoSku, PontoHistorico, PosicaoFilial, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
 import { ListaProdutos } from './grid';
@@ -65,6 +71,14 @@ const REFERENCIAS: { value: ReferenciaSugestao; label: string }[] = [
 const DIAS_RESUMO = 90;
 /** Lote de códigos por chamada ao Gestão de Custos (R-120). */
 const LOTE_CAIXAS = 1000;
+
+/** R-129: as quatro larguras do painel de detalhe — classes fixas, a lista fica com o resto. */
+const COLUNAS_POR_LARGURA: Record<LarguraPainel, string> = {
+  estreito: 'lg:grid-cols-[minmax(0,1fr)_380px]',
+  medio: 'lg:grid-cols-[minmax(0,1fr)_480px]',
+  largo: 'lg:grid-cols-[minmax(0,1fr)_620px]',
+  metade: 'lg:grid-cols-2',
+};
 
 /** A janela da tela: 153 dias terminados hoje, fixa e mostrada (D-016). */
 function janelaDeHoje() {
@@ -111,6 +125,11 @@ export default function ComprasInteligentesPage() {
 
   const [medidas, setMedidas] = React.useState<MedidaRessuprimento[]>([]);
   const [porCaixa, setPorCaixa] = React.useState<Map<number, number>>(() => new Map());
+  // R-128: o custo de compra é o custo padrão do Gestão de Custos; `null` = a consulta falhou.
+  const [custosPadrao, setCustosPadrao] = React.useState<MapaCustoPadrao | null | undefined>(undefined);
+  // R-125: as políticas de preço especial e a venda por cliente, uma carga por filial.
+  const [custosEspeciais, setCustosEspeciais] = React.useState<CustoEspecial[]>([]);
+  const [vendasClientes, setVendasClientes] = React.useState<VendaCliente[]>([]);
   const [parametros, setParametros] = React.useState<ParametroCompra[]>([]);
   const [coberturas, setCoberturas] = React.useState<Cobertura[]>([]);
   const [desconsideradas, setDesconsideradas] = React.useState<VendaDesconsiderada[]>([]);
@@ -262,8 +281,30 @@ export default function ComprasInteligentesPage() {
             }
           }
         } catch { /* a embalagem resolve */ }
+        const padrao = await carregarCustoPadrao(codprods);
         if (!vivo) return;
         setPorCaixa(mapa);
+        setCustosPadrao(padrao);
+
+        // R-125: as políticas de preço especial (gestao-de-custos) e, só se
+        // houver alguma, a venda por cliente destes produtos (WinThor) — ambas
+        // em lotes de 500, uma vez por carga. Sem a integração, sem oportunidade.
+        const custos: CustoEspecial[] = [];
+        const porCliente: VendaCliente[] = [];
+        try {
+          for (const lote of lotesDeCodigos(codprods)) {
+            custos.push(...(await linhas('sgcCustoEspeciaisProdutos', { codprods: lote })) as unknown as CustoEspecial[]);
+          }
+          const comPolitica = [...new Set(custos.map((c) => Number(c.CODPROD)))];
+          for (const lote of lotesDeCodigos(comPolitica)) {
+            porCliente.push(...(await linhas('sgcWintVendasClientesProdutos', {
+              codprods: lote, codfilial, dataInicio: periodo.inicio, dataFim: periodo.fim, incluirPublico: 0,
+            })) as unknown as VendaCliente[]);
+          }
+        } catch { /* sem o módulo de custos não há oportunidade; a lista segue */ }
+        if (!vivo) return;
+        setCustosEspeciais(custos);
+        setVendasClientes(porCliente);
       })
       .catch(() => {
         if (!vivo) return;
@@ -276,6 +317,30 @@ export default function ComprasInteligentesPage() {
 
   /* ── o carrinho salvo no navegador (RN-021): lido uma vez por usuário ── */
   const usuarioId = sessao?.usuarioId ?? 0;
+  // R-129: a largura do painel, por usuário no navegador (conveniência: sem ele, Médio).
+  const [largura, setLargura] = React.useState<LarguraPainel>('medio');
+  const [larguraLida, setLarguraLida] = React.useState(0);
+  if (usuarioId && larguraLida !== usuarioId) {
+    setLarguraLida(usuarioId);
+    let guardada: string | null = null;
+    try { guardada = window.localStorage.getItem(CHAVE_LARGURA(usuarioId)); } catch { /* sem armazenamento */ }
+    setLargura(larguraDe(guardada));
+  }
+  const mudarLargura = React.useCallback((passo: 1 | -1) => setLargura((atual) => {
+    const proxima = proximaLargura(atual, passo);
+    try { window.localStorage.setItem(CHAVE_LARGURA(usuarioId), proxima); } catch { /* conveniência */ }
+    return proxima;
+  }), [usuarioId]);
+  // Alt+← alarga e Alt+→ estreita o painel (que está à direita).
+  React.useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+      e.preventDefault();
+      mudarLargura(e.key === 'ArrowLeft' ? 1 : -1);
+    };
+    window.addEventListener('keydown', tecla);
+    return () => window.removeEventListener('keydown', tecla);
+  }, [mudarLargura]);
   // Ajuste de estado durante a renderização, não em efeito: a leitura é
   // síncrona e idempotente, e acontece uma vez por usuário.
   if (usuarioId && armazenamentoLido !== usuarioId) {
@@ -321,8 +386,8 @@ export default function ComprasInteligentesPage() {
   // cadeia de RN-002 da 003, e a origem fica na linha para o painel mostrar.
   const todas = React.useMemo(() => montarRessuprimento(
     medidas, parametros, alvoDaCurvaDias, porCaixa,
-    { codfornec: Number(codfornec), hoje, desconsiderarLicitacao },
-  ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao]);
+    { codfornec: Number(codfornec), hoje, desconsiderarLicitacao }, custosPadrao,
+  ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao, custosPadrao]);
 
   const contagens = React.useMemo(() => contarVisoes(todas), [todas]);
 
@@ -340,7 +405,7 @@ export default function ComprasInteligentesPage() {
   }, [todas, visao, filtros, termo]);
 
   const sugestaoTotal = React.useMemo(
-    () => lista.reduce((soma, l) => soma + l.sugerida * Number(l.medida.CUSTO_ULT_ENTRADA), 0),
+    () => lista.reduce((soma, l) => soma + l.sugerida * Number(l.custo?.valor ?? 0), 0),
     [lista],
   );
 
@@ -371,6 +436,42 @@ export default function ComprasInteligentesPage() {
   );
   const previsaoDetalhe = React.useMemo(() => previsaoDe(codprodDetalhe), [previsaoDe, codprodDetalhe]);
   const projetadaDetalhe = React.useMemo(() => projetar(previsaoDetalhe, linhaDetalhe), [projetar, previsaoDetalhe, linhaDetalhe]);
+
+  /* ── R-125: as oportunidades com custo especial (selo em toda linha; sugestões no produto aberto) ── */
+  const oportunidadesPorProduto = React.useMemo(() => {
+    const mapa = new Map<number, Oportunidade[]>();
+    if (custosEspeciais.length === 0) return mapa;
+    for (const l of todas) {
+      const lista = oportunidadesDoItem({
+        // R-128: a economia é contra o custo padrão do Gestão de Custos, sem fallback para o ERP.
+        codprod: Number(l.medida.CODPROD), custoAtual: Number(l.custo?.valor ?? 0), custoUltimaEntrada: 0,
+        sugerida: l.sugerida, coberturaDias: l.coberturaDias,
+      }, custosEspeciais, vendasClientes, JANELA_DIAS);
+      if (lista.length > 0) mapa.set(Number(l.medida.CODPROD), lista);
+    }
+    return mapa;
+  }, [todas, custosEspeciais, vendasClientes]);
+  const selosEspeciais = React.useMemo(() => {
+    const mapa = new Map<number, { texto: string; tone: 'accent' | 'attention' }>();
+    for (const [codprod, lista] of oportunidadesPorProduto) {
+      const selo = seloEspecial(lista);
+      if (selo) mapa.set(codprod, selo);
+    }
+    return mapa;
+  }, [oportunidadesPorProduto]);
+  const sugestoesDe = React.useCallback((linha: LinhaRessuprimento | null, previsao: Previsao | null): SugestaoCliente[] => {
+    if (!linha) return [];
+    const lista = oportunidadesPorProduto.get(Number(linha.medida.CODPROD)) ?? [];
+    if (lista.length === 0) return [];
+    const r = previsao ? modeloEscolhido(previsao, modeloPrevisao) : null;
+    const sku = {
+      quantidade: linha.sugerida, projecaoMensal: r?.previsao ?? 0, coberturaDias: linha.coberturaDias, consumoDiario: linha.consumoDiario,
+      unidadesPorCaixa: linha.unidadesPorCaixa, serie: previsao?.serie.pontos ?? [],
+    };
+    return lista.map((o) => sugestaoPorCliente(o, sku));
+  }, [oportunidadesPorProduto, modeloPrevisao]);
+  const sugestoesSelecionada = React.useMemo(() => sugestoesDe(linhaSelecionada, previsaoSelecionada), [sugestoesDe, linhaSelecionada, previsaoSelecionada]);
+  const sugestoesDetalhe = React.useMemo(() => sugestoesDe(linhaDetalhe, previsaoDetalhe), [sugestoesDe, linhaDetalhe, previsaoDetalhe]);
 
   /* ── o detalhe do SKU: 3 execuções, uma vez por produto (cache) ── */
   // As cargas em andamento ficam num ref, não no estado: o efeito só dispara a
@@ -450,7 +551,7 @@ export default function ComprasInteligentesPage() {
     setAvisoCarrinho('');
     if (!carrinhoMeta.abertoEm) setCarrinhoMeta({ abertoEm: instante(), abertoPor: sessao?.nome ?? '', salvoEm: '' });
     mudarCarrinho((atual) => [
-      ...atual.filter((e) => Number(e.linha.medida.CODPROD) !== codprod || e.codfilial !== codfilial),
+      ...atual.filter((e) => e.especial || Number(e.linha.medida.CODPROD) !== codprod || e.codfilial !== codfilial),
       {
         linha: l, quantidade, codfornec: Number(codfornec), codfilial,
         fornecedor: nomeFornecedor, filial: nomeFilial,
@@ -460,8 +561,30 @@ export default function ComprasInteligentesPage() {
     ]);
   }
 
-  const alterarItem = (codprod: number, filial: string, mudanca: Partial<ItemCarrinho>) => mudarCarrinho((atual) => atual.map(
-    (e) => (Number(e.linha.medida.CODPROD) === codprod && e.codfilial === filial ? { ...e, ...mudanca } : e),
+  /** R-125: a linha especial do carrinho — uma por produto, política e custo; o custo da política substitui o do item. */
+  function adicionarEspecial(l: LinhaRessuprimento, tabela: TabelaEspecial, quantidade: number) {
+    if (pedidoAberto) {
+      setAvisoCarrinho(`Já existe um pedido aberto para este fornecedor e filial (${pedidoAberto.titulo}). Envie ou cancele esse pedido antes de abrir outro.`);
+      return;
+    }
+    if (quantidade <= 0) return;
+    setAvisoCarrinho('');
+    if (!carrinhoMeta.abertoEm) setCarrinhoMeta({ abertoEm: instante(), abertoPor: sessao?.nome ?? '', salvoEm: '' });
+    const especial = { politicaId: tabela.politicaId, politicaNome: tabela.politicaNome, custo: tabela.custoEspecial };
+    const chave = chaveDaEntrada({ linha: l, codfilial, especial });
+    mudarCarrinho((atual) => [
+      ...atual.filter((e) => chaveDaEntrada(e) !== chave),
+      {
+        linha: l, quantidade, codfornec: Number(codfornec), codfilial,
+        fornecedor: nomeFornecedor, filial: nomeFilial, especial,
+        motivo: `Preço especial · ${tabela.politicaNome || `política ${tabela.politicaId}`}`,
+        pedidoMinimo,
+      },
+    ]);
+  }
+
+  const alterarItem = (chave: string, mudanca: Partial<ItemCarrinho>) => mudarCarrinho((atual) => atual.map(
+    (e) => (chaveDaEntrada(e) === chave ? { ...e, ...mudanca } : e),
   ));
 
   function descartarCarrinho() {
@@ -513,7 +636,16 @@ export default function ComprasInteligentesPage() {
   }
 
   const resumoSalvo = carrinhoSalvo ? resumoDoCarrinho(carrinhoSalvo.itens) : null;
-  const resumoCarrinho = resumoDoCarrinho(carrinho);
+  // R-128: as entradas da filial aberta usam a linha de AGORA (o custo padrão de agora, inclusive no
+  // carrinho salvo antes dele); as de outras filiais ficam como foram guardadas.
+  // Depois do retorno antecipado da página: cálculo simples, sem hook.
+  const carrinhoAtualizado = (() => {
+    if (todas.length === 0) return carrinho;
+    const agora = new Map(todas.map((l) => [Number(l.medida.CODPROD), l]));
+    return carrinho.map((e) => (e.codfilial === codfilial && Number(e.codfornec) === Number(codfornec) && agora.has(Number(e.linha.medida.CODPROD))
+      ? { ...e, linha: agora.get(Number(e.linha.medida.CODPROD)) ?? e.linha } : e));
+  })();
+  const resumoCarrinho = resumoDoCarrinho(carrinhoAtualizado);
   const opcoesFornecedor: Opcao[] = fornecedores.map((f) => {
     const resumo = resumos.get(Number(f.value));
     return resumo
@@ -522,7 +654,7 @@ export default function ComprasInteligentesPage() {
   });
 
   return (
-    <>
+    <div className="flex flex-col lg:h-full lg:min-h-0">
       {/* Cabeçalho compacto (pedido do usuário em 2026-10-30): uma linha só —
           fornecedor e filial à esquerda, as ações à direita; sem título nem
           descrição. A busca e o seletor de órgãos públicos ficam na lista. */}
@@ -541,16 +673,16 @@ export default function ComprasInteligentesPage() {
           options={opcoesFornecedor}
           placeholder={fornecedores.length ? 'Escolha o fornecedor' : 'Nenhum fornecedor ativo'}
           disabled={!fornecedores.length}
-          className="w-80"
+          className="w-72 xl:w-80"
         />
         <SelectMenu
           label="Filial"
           value={codfilial}
-          onChange={(valor) => { setCarregando(true); setErro(''); setSelecionado(0); setCodfilial(valor); }}
+          onChange={(valor) => { setCarregando(true); setErro(''); setAvisoCarrinho(''); setSelecionado(0); setCodfilial(valor); }}
           options={filiais}
           placeholder={codfornec ? 'Escolha a filial' : 'Escolha o fornecedor primeiro'}
           disabled={!codfornec || !filiais.length}
-          className="w-72"
+          className="w-60 xl:w-72"
         />
         {salvoEm ? <span className="text-[12px] text-ink-secondary">Salvo às {salvoEm}</span> : null}
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -572,6 +704,7 @@ export default function ComprasInteligentesPage() {
       </div>
 
       {erro ? <Alert tone="error" className="mt-4">{erro}</Alert> : null}
+      {medidas.length > 0 && custosPadrao === null ? <Alert tone="error" className="mt-4">{AVISO_ERRO_CUSTO}</Alert> : null}
       {avisoCarrinho ? <Alert tone="warn" className="mt-4">{avisoCarrinho}</Alert> : null}
 
       {/* C-028: o aviso só aparece quando há carrinho guardado e o da tela está vazio. */}
@@ -624,7 +757,8 @@ export default function ComprasInteligentesPage() {
       ) : medidas.length === 0 ? (
         <Panel className="mt-4"><EmptyState title="Nenhum produto ativo deste fornecedor nesta filial" /></Panel>
       ) : (
-        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
+        // R-129: lista e painel ocupam a altura que sobra, cada um com a sua rolagem; a largura do painel é do usuário.
+        <div className={`mt-4 grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] ${COLUNAS_POR_LARGURA[largura]}`}>
           <ListaProdutos
             visao={visao}
             linhas={lista}
@@ -641,6 +775,8 @@ export default function ComprasInteligentesPage() {
             desconsiderarLicitacao={desconsiderarLicitacao}
             onLicitacao={() => setDesconsiderarLicitacao((atual) => !atual)}
             emPedidoAberto={emPedidoAberto}
+            curvasNumaColuna={curvasJuntas(largura)}
+            especiais={selosEspeciais}
             sugestaoProjetada={projetadaSelecionada ? { codprod: codprodSelecionado, sugestao: projetadaSelecionada.sugestao } : null}
             sugestaoTotal={sugestaoTotal}
             carrinho={{ itens: resumoCarrinho.itens, pedidos: resumoCarrinho.pedidos }}
@@ -676,6 +812,10 @@ export default function ComprasInteligentesPage() {
             modelo={modeloPrevisao}
             onModelo={setModeloPrevisao}
             projetada={projetadaSelecionada}
+            sugestoesEspeciais={sugestoesSelecionada}
+            onAdicionarEspecial={(tabela, quantidade) => { if (linhaSelecionada) adicionarEspecial(linhaSelecionada, tabela, quantidade); }}
+            largura={largura}
+            onLargura={mudarLargura}
           />
         </div>
       )}
@@ -683,7 +823,7 @@ export default function ComprasInteligentesPage() {
       <CarrinhoDialogo
         aberto={carrinhoAberto}
         onFechar={() => setCarrinhoAberto(false)}
-        itens={carrinho}
+        itens={carrinhoAtualizado}
         abertoEm={carrinhoMeta.abertoEm}
         abertoPor={carrinhoMeta.abertoPor}
         salvoEm={carrinhoMeta.salvoEm}
@@ -696,11 +836,9 @@ export default function ComprasInteligentesPage() {
         podeOperar={podeOperar}
         motivoBloqueio={motivoBloqueio}
         coberturaLimiteDe={coberturaLimiteDe}
-        onQuantidade={(codprod, filial, quantidade) => alterarItem(codprod, filial, { quantidade })}
-        onMotivo={(codprod, filial, motivo) => alterarItem(codprod, filial, { motivo })}
-        onRemover={(codprod, filial) => mudarCarrinho((atual) => atual.filter(
-          (e) => Number(e.linha.medida.CODPROD) !== codprod || e.codfilial !== filial,
-        ))}
+        onQuantidade={(chave, quantidade) => alterarItem(chave, { quantidade })}
+        onMotivo={(chave, motivo) => alterarItem(chave, { motivo })}
+        onRemover={(chave) => mudarCarrinho((atual) => atual.filter((e) => chaveDaEntrada(e) !== chave))}
         onDescartar={descartarCarrinho}
         onCriado={(cardId) => { setCarrinhoAberto(false); navigate(`/quadro?card=${cardId}`); }}
       />
@@ -729,6 +867,8 @@ export default function ComprasInteligentesPage() {
         modelo={modeloPrevisao}
         onModelo={setModeloPrevisao}
         projetada={projetadaDetalhe}
+        sugestoesEspeciais={sugestoesDetalhe}
+        onAdicionarEspecial={(tabela, quantidade) => { if (linhaDetalhe) adicionarEspecial(linhaDetalhe, tabela, quantidade); }}
       />
       <ParametrosDialogo alvo={parametroAlvo} onFechar={() => setParametroAlvo(null)} onSalvar={salvarParametro} />
       <SilenciarDialogo linha={silenciando} onFechar={() => setSilenciando(null)} onSilenciar={silenciar} />
@@ -741,6 +881,6 @@ export default function ComprasInteligentesPage() {
         onDesconsiderar={desconsiderarVenda}
         onReconsiderar={reconsiderarVenda}
       />
-    </>
+    </div>
   );
 }

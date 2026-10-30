@@ -14,15 +14,15 @@ import { Download, Trash2 } from 'lucide-react';
 import { useKanban } from '@benenutri/mitra-kanban';
 
 import {
-  Alert, BarraConsumo, Button, Code, Dash, Delta, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
+  Alert, Badge, BarraConsumo, Button, Code, Dash, Delta, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
   DialogTitle, EmptyState, IconButton, Input, RowMeta, RowTitle, SearchInput, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { acao, linhas } from '@/lib/mitra-api';
 import { baixarTexto } from '@/lib/csv';
-import { arredondarPorCaixa } from '@/lib/compras';
+import { arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import { fmtData, fmtDataHora, moeda } from '@/lib/formato';
 import { instanteIso, tituloDoPedido } from '@/lib/pedido';
-import { agruparCarrinho, coberturaFuturaComCompra, itemDoCarrinho } from '@/lib/ressuprimento';
+import { agruparCarrinho, chaveDaEntrada, coberturaFuturaComCompra, custoDaEntrada, itemDoCarrinho } from '@/lib/ressuprimento';
 import type { LinhaRessuprimento } from '@/lib/ressuprimento';
 import {
   economiaNoCusto, faltaParaMinimo, filtrarCarrinho, nomeArquivoWinthor, pedidoMinimoDoGrupo, resumoDoCarrinho,
@@ -86,9 +86,10 @@ export function CarrinhoDialogo({
   motivoBloqueio: string;
   /** O limite de cobertura resolvido para a linha — injetado pela página (R-111). */
   coberturaLimiteDe: (linha: LinhaRessuprimento) => number;
-  onQuantidade: (codprod: number, codfilial: string, quantidade: number) => void;
-  onMotivo: (codprod: number, codfilial: string, motivo: string) => void;
-  onRemover: (codprod: number, codfilial: string) => void;
+  /** As ações recebem a CHAVE da entrada (`chaveDaEntrada`): a linha especial tem a sua própria (R-125). */
+  onQuantidade: (chave: string, quantidade: number) => void;
+  onMotivo: (chave: string, motivo: string) => void;
+  onRemover: (chave: string) => void;
   onDescartar: () => void;
   onCriado: (cardId: number) => void;
 }) {
@@ -101,7 +102,8 @@ export function CarrinhoDialogo({
   const grupos = React.useMemo(() => agruparCarrinho(itens), [itens]);
   const resumo = React.useMemo(() => resumoDoCarrinho(itens), [itens]);
   const economia = React.useMemo(() => economiaNoCusto(itens.map((i) => ({
-    quantidade: i.quantidade, ultimo: Number(i.linha.medida.CUSTO_ULT_ENTRADA), atual: Number(i.linha.medida.CUSTO_ATUAL ?? 0),
+    // RN-027 / R-128: a última entrada (histórico ERP) contra o custo de compra (padrão do Gestão, ou o especial).
+    quantidade: i.quantidade, ultimo: Number(i.linha.medida.CUSTO_ULT_ENTRADA), atual: custoDaEntrada(i),
   }))), [itens]);
   const visiveis = React.useMemo(() => new Set(filtrarCarrinho(itens, busca).map((i) => `${i.codfilial}|${i.linha.medida.CODPROD}`)), [itens, busca]);
 
@@ -111,9 +113,9 @@ export function CarrinhoDialogo({
 
   function baixarArquivos() {
     for (const grupo of grupos) {
-      const texto = textoImportacaoWinthor(grupo.itens.map(({ linha, quantidade: escolhida }) => ({
+      const texto = textoImportacaoWinthor(grupo.itens.map(({ linha, quantidade: escolhida, especial }) => ({
         codprod: Number(linha.medida.CODPROD),
-        preco: Number(linha.medida.CUSTO_ATUAL ?? 0) > 0 ? Number(linha.medida.CUSTO_ATUAL) : Number(linha.medida.CUSTO_ULT_ENTRADA),
+        preco: custoDaEntrada({ linha, especial }),
         quantidade: escolhida,
       })));
       baixarTexto(nomeArquivoWinthor(grupo.codfornec, grupo.codfilial, hoje), texto);
@@ -156,9 +158,10 @@ export function CarrinhoDialogo({
 
         // 3 — os itens, INTEIROS (R-112), num upsert em lote; o "por que comprar"
         // vai na observação do item.
-        const itensJson = grupo.itens.map(({ linha, quantidade: escolhida }) => {
-          const entrada = itens.find((i) => i.codfilial === grupo.codfilial && Number(i.linha.medida.CODPROD) === Number(linha.medida.CODPROD));
-          return { ...itemDoCarrinho(linha, escolhida, coberturaLimiteDe(linha)), observacao: String(entrada?.motivo ?? '').slice(0, 500) };
+        const itensJson = grupo.itens.map(({ linha, quantidade: escolhida, especial }) => {
+          const chave = chaveDaEntrada({ linha, codfilial: grupo.codfilial, especial });
+          const entrada = itens.find((i) => chaveDaEntrada(i) === chave);
+          return { ...itemDoCarrinho(linha, escolhida, coberturaLimiteDe(linha), especial), observacao: String(entrada?.motivo ?? '').slice(0, 500) };
         });
         const gravado = await acao('sgcItensGravar', { cardId: criado.id, itensJson: JSON.stringify(itensJson) });
         if (gravado && gravado.ok === false) throw new Error(String(gravado.erro ?? 'Os itens não foram gravados.'));
@@ -270,7 +273,7 @@ export function CarrinhoDialogo({
                               <Th numeric>Sugerido</Th>
                               <Th numeric className="w-28">Quantidade</Th>
                               <Th numeric>Últ. preço</Th>
-                              <Th numeric>Preço atual</Th>
+                              <Th numeric>Custo padrão</Th>
                               <Th numeric>Variação</Th>
                               <Th numeric>Cob. futura</Th>
                               <Th numeric>Total</Th>
@@ -280,15 +283,18 @@ export function CarrinhoDialogo({
                             </tr>
                           </thead>
                           <tbody>
-                            {doGrupo.map(({ linha, quantidade: escolhida }) => {
+                            {doGrupo.map(({ linha, quantidade: escolhida, especial }) => {
                               const codprod = Number(linha.medida.CODPROD);
-                              const entrada = itens.find((i) => i.codfilial === grupo.codfilial && Number(i.linha.medida.CODPROD) === codprod);
+                              const chave = chaveDaEntrada({ linha, codfilial: grupo.codfilial, especial });
+                              const entrada = itens.find((i) => chaveDaEntrada(i) === chave);
                               const ultimo = Number(linha.medida.CUSTO_ULT_ENTRADA);
-                              const atual = Number(linha.medida.CUSTO_ATUAL ?? 0);
+                              // R-125 / R-128: o preço que vale é o da política, ou o custo padrão do Gestão de Custos.
+                              const atual = custoDaEntrada({ linha, especial });
                               const variacao = variacaoDePreco(ultimo, atual);
                               const futura = coberturaFuturaComCompra(linha, escolhida);
+                              const custo = custoDaEntrada({ linha, especial });
                               return (
-                                <Tr key={codprod}>
+                                <Tr key={chave}>
                                   <Td>
                                     <RowTitle>{String(linha.medida.DESCRICAO)}</RowTitle>
                                     <RowMeta>
@@ -296,6 +302,7 @@ export function CarrinhoDialogo({
                                       {linha.medida.CODFAB ? ` · fab. ${String(linha.medida.CODFAB)}` : ''}
                                       {linha.medida.DT_ULT_ENTRADA ? ` · últ. compra ${fmtData(String(linha.medida.DT_ULT_ENTRADA))}` : ''}
                                     </RowMeta>
+                                    {especial ? <RowMeta><Badge tone="accent" title={`Custo especial ${moeda(especial.custo)}`}>{`Especial · ${especial.politicaNome || `política ${especial.politicaId}`}`}</Badge></RowMeta> : null}
                                   </Td>
                                   <Td>
                                     <Input
@@ -304,7 +311,7 @@ export function CarrinhoDialogo({
                                       aria-label={`Por que comprar ${linha.medida.DESCRICAO}`}
                                       maxLength={500}
                                       disabled={criando}
-                                      onChange={(e) => onMotivo(codprod, grupo.codfilial, e.target.value)}
+                                      onChange={(e) => onMotivo(chave, e.target.value)}
                                     />
                                   </Td>
                                   <Td numeric>
@@ -320,22 +327,22 @@ export function CarrinhoDialogo({
                                       value={String(escolhida)}
                                       disabled={criando || !podeOperar}
                                       title={podeOperar ? `Sobe para a caixa cheia de ${linha.unidadesPorCaixa} un.` : motivoBloqueio}
-                                      onChange={(e) => onQuantidade(codprod, grupo.codfilial, Number(e.target.value) || 0)}
-                                      onBlur={(e) => onQuantidade(codprod, grupo.codfilial, arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa))}
+                                      onChange={(e) => onQuantidade(chave, Number(e.target.value) || 0)}
+                                      onBlur={(e) => onQuantidade(chave, arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa))}
                                     />
                                     {linha.unidadesPorCaixa > 1 ? <RowMeta>{`${quantidade(escolhida / linha.unidadesPorCaixa)} cx`}</RowMeta> : null}
                                   </Td>
                                   <Td numeric>{moeda(ultimo)}</Td>
-                                  <Td numeric>{atual > 0 ? moeda(atual) : <Dash />}</Td>
+                                  <Td numeric>{atual > 0 ? moeda(atual) : <Status tone="alert">{especial ? 'Sem custo' : rotuloSemCusto(linha.custo) ?? 'Sem custo'}</Status>}</Td>
                                   <Td numeric><Delta valor={variacao} inverso /></Td>
                                   <Td numeric>{futura === null ? <Dash /> : `${Math.round(futura)} d`}</Td>
-                                  <Td numeric>{moeda(escolhida * ultimo)}</Td>
+                                  <Td numeric>{moeda(escolhida * custo)}</Td>
                                   <Td className="text-right">
                                     <IconButton
                                       label="Tirar do carrinho"
                                       tone="danger"
                                       disabled={criando}
-                                      onClick={() => onRemover(codprod, grupo.codfilial)}
+                                      onClick={() => onRemover(chave)}
                                     >
                                       <Trash2 aria-hidden />
                                     </IconButton>

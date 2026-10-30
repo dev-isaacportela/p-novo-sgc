@@ -126,6 +126,84 @@ export function unidadesDeRegistros(registros) {
   return linhas;
 }
 
+const STATUS_ENCERRADOS = new Set(['INATIVA', 'INACTIVE', 'CANCELADA', 'CANCELADO', 'REJEITADA', 'REPROVADA']);
+const dataIso = (valor) => String(valor ?? '').slice(0, 10);
+
+/** A SQL de uma definition é a do custo padrão atual (R-128)? */
+export function ehCustoPadrao(definition) {
+  return /\bCUSTOPRODUTO\b/.test(String(definicaoDeIntegracao(definition)?.body?.sql ?? ''));
+}
+
+/**
+ * O que a sgcCustoPadraoAtual devolveria (REST `records`): por produto pedido,
+ * a linha de DATA_REF mais recente (empate: maior ID) com CODPROD, CUSTO e
+ * DATA_REF; produto sem linha não volta.
+ */
+export function custoPadraoDeRegistros(registros, codprods) {
+  const pedidos = new Set((codprods ?? []).map(Number));
+  const melhor = new Map();
+  for (const r of registros ?? []) {
+    const codprod = Number(r?.CODPROD);
+    if (!pedidos.has(codprod)) continue;
+    const atual = melhor.get(codprod);
+    const data = String(r.DATA_REF ?? '').slice(0, 10);
+    if (!atual || data > atual.DATA_REF || (data === atual.DATA_REF && Number(r.ID ?? 0) > atual.ID)) {
+      melhor.set(codprod, { CODPROD: codprod, CUSTO: Number(r.CUSTO ?? 0), DATA_REF: data, ID: Number(r.ID ?? 0) });
+    }
+  }
+  return [...melhor.values()].map(({ ID: _id, ...linha }) => linha);
+}
+
+/** A SQL de uma definition é a das políticas de preço especial (R-125)? */
+export function ehCustosEspeciais(definition) {
+  return /\bCOST_POLICIES\b/.test(String(definicaoDeIntegracao(definition)?.body?.sql ?? ''));
+}
+
+/**
+ * O que a sgcCustoEspeciaisProdutos devolveria para estas tabelas (REST
+ * `records`): as três origens de cliente unidas (lista da política, CLIENTE_ID
+ * da política, aberta = 0), filtradas por produto pedido, custo > 0, status
+ * não encerrado e vigência em `hoje`; sem repetição.
+ */
+export function custosEspeciaisDeRegistros({ politicas, itens, clientes }, codprods, hoje) {
+  const pedidos = new Set((codprods ?? []).map(Number));
+  const dia = dataIso(hoje);
+  const porPolitica = new Map();
+  for (const c of clientes ?? []) {
+    const lista = porPolitica.get(Number(c.POLICY_ID)) ?? [];
+    lista.push(Number(c.CLIENTE_ID));
+    porPolitica.set(Number(c.POLICY_ID), lista);
+  }
+  const vistos = new Set();
+  const saida = [];
+  for (const p of politicas ?? []) {
+    const status = String(p.STATUS ?? 'ATIVA').toUpperCase();
+    if (STATUS_ENCERRADOS.has(status)) continue;
+    const inicio = dataIso(p.DT_START);
+    const fim = dataIso(p.DT_END);
+    if ((inicio && inicio > dia) || (fim && fim < dia)) continue;
+    const daLista = porPolitica.get(Number(p.ID)) ?? [];
+    const proprio = Number(p.CLIENTE_ID ?? 0);
+    const codclis = [...daLista, ...(proprio > 0 ? [proprio] : [])];
+    const alvos = codclis.length > 0 ? codclis : [0];
+    for (const i of (itens ?? []).filter((item) => Number(item.POLICY_ID) === Number(p.ID))) {
+      const codprod = Number(i.PRODUCT_ID);
+      const custo = Number(i.SPECIAL_COST);
+      if (!pedidos.has(codprod) || !(custo > 0)) continue;
+      for (const codcli of alvos) {
+        const chave = `${codprod}|${codcli}|${p.ID}|${custo}`;
+        if (vistos.has(chave)) continue;
+        vistos.add(chave);
+        saida.push({
+          CODPROD: codprod, CODCLI: codcli, CUSTO_ESPECIAL: custo, VARIACAO_PERCENTUAL: Number(i.VARIATION_PERCENT ?? 0),
+          POLITICA_ID: Number(p.ID), POLITICA_NOME: String(p.NAME ?? ''), DATA_FIM: fim || null,
+        });
+      }
+    }
+  }
+  return saida;
+}
+
 /**
  * Abre o executor conforme o .env: sem `SIMULATOR_GESTAO_CUSTOS=mitra`, o de
  * SQLite (se houver `db`) ou `null`; com ele, o da plataforma, em leitura.
@@ -186,14 +264,26 @@ export async function abrirGestaoCustos({
     return linhas;
   }
 
-  // Cache: por CODPROD no runQuery (só o que falta vai à plataforma); a tabela
-  // inteira no records (8 páginas, uma vez a cada 5 min).
-  const cache = new Map();
-  let tabela = null;
-  async function produtosPeloRest() {
+  // Cache: por CODPROD e por definition no runQuery (só o que falta vai à
+  // plataforma); a tabela inteira no records (uma vez a cada 5 min).
+  const caches = new Map();
+  const cacheDe = (nome) => {
+    if (!caches.has(nome)) caches.set(nome, new Map());
+    return caches.get(nome);
+  };
+  const tabelas = new Map();
+  async function tabelaPeloRest(nome) {
     const agora = Date.now();
-    if (!tabela || tabela.ate <= agora) tabela = { linhas: await registros('PRODUTOS'), ate: agora + TTL_CACHE_MS };
-    return tabela.linhas;
+    const guardada = tabelas.get(nome);
+    if (guardada && guardada.ate > agora) return guardada.linhas;
+    const linhas = await registros(nome);
+    tabelas.set(nome, { linhas, ate: agora + TTL_CACHE_MS });
+    return linhas;
+  }
+  const produtosPeloRest = () => tabelaPeloRest('PRODUTOS');
+  async function custosEspeciaisPeloRest(codprods) {
+    const [politicas, itens, clientes] = await Promise.all([tabelaPeloRest('COST_POLICIES'), tabelaPeloRest('POLICY_ITEMS'), tabelaPeloRest('COST_POLICY_CLIENTS')]);
+    return custosEspeciaisDeRegistros({ politicas, itens, clientes }, codprods, new Date().toISOString());
   }
 
   log.log(`[gestao-custos] INTEGRATION ${CONEXAO_GESTAO_CUSTOS} na plataforma: projeto ${projectId}, caminho inicial ${caminho}`);
@@ -216,6 +306,7 @@ export async function abrirGestaoCustos({
     async executar(definition, input) {
       const lista = codprodsDe(input);
       if (lista.length === 0) return [];
+      const cache = cacheDe(String(definition?.name ?? 'sgcCustoUnidadesPorCaixa'));
       const agora = Date.now();
       const prontos = [];
       const faltam = [];
@@ -228,7 +319,11 @@ export async function abrirGestaoCustos({
       let linhas = caminho === 'runQuery' ? await consultar(montarSql(definition, { ...input, codprods: faltam.join(',') })) : null;
       if (!linhas) {
         const pedidos = new Set(faltam);
-        linhas = unidadesDeRegistros(await produtosPeloRest()).filter((linha) => pedidos.has(linha.CODPROD));
+        linhas = ehCustoPadrao(definition)
+          ? custoPadraoDeRegistros(await tabelaPeloRest('CUSTOPRODUTO'), faltam)
+          : ehCustosEspeciais(definition)
+          ? await custosEspeciaisPeloRest(faltam)
+          : unidadesDeRegistros(await produtosPeloRest()).filter((linha) => pedidos.has(linha.CODPROD));
       }
       const porCodprod = new Map(faltam.map((codprod) => [codprod, []]));
       for (const linha of linhas) {

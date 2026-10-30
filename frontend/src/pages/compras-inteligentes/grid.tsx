@@ -10,14 +10,14 @@ import * as React from 'react';
 import { Download, RotateCcw, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
-  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
+  Badge,  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
   SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
 } from '@/components/page';
-import { arredondarPorCaixa } from '@/lib/compras';
+import { arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import { fmtData, moeda } from '@/lib/formato';
 import {
-  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, quantidadeNaReferencia, quantidadeParaCompletar, rotuloDaQuantidade, textoDaSugestao,
-  unidadesDaDigitada,
+  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, coberturaComTransito, precoDeCompra, quantidadeNaReferencia, quantidadeParaCompletar,
+  rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
 import type {
   FiltroMovimentacao, FiltrosLista, LinhaRessuprimento, OrdemLista, ReferenciaSugestao, StatusRessuprimento,
@@ -25,6 +25,13 @@ import type {
 } from '@/lib/ressuprimento';
 
 const POR_PAGINA = 25;
+
+// R-129: a lista estreita rola para o lado, mas a quantidade e as ações ficam
+// presas à direita — nunca somem atrás da rolagem. O fundo é sólido para
+// cobrir o que passa por baixo e segue a linha (selecionada ou sob o mouse).
+const FIXA_ACOES = 'lg:sticky lg:right-0 lg:z-[1] w-24 min-w-24';
+const FIXA_QTD = 'lg:sticky lg:right-24 lg:z-[1] lg:border-l lg:border-l-rule-row';
+const fundoFixo = (ativa: boolean) => (ativa ? 'bg-accent' : 'bg-card group-hover:bg-accent');
 
 /** §8.4: estado dentro de tabela é ponto + texto, nunca só a cor. */
 const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = {
@@ -77,6 +84,8 @@ export function ListaProdutos({
   desconsiderarLicitacao,
   onLicitacao,
   emPedidoAberto,
+  curvasNumaColuna = false,
+  especiais,
   sugestaoProjetada,
   sugestaoTotal,
   carrinho,
@@ -103,6 +112,10 @@ export function ListaProdutos({
   onLicitacao: () => void;
   /** Produtos que já estão num pedido aberto do fornecedor nesta filial (C-035). */
   emPedidoAberto: Map<number, PedidoAbertoDoItem>;
+  /** R-129: com o painel largo, as duas curvas numa coluna só ("F/R"). */
+  curvasNumaColuna?: boolean;
+  /** R-125: o selo "Especial N un." / "Especial N tabelas" por produto com oportunidade. */
+  especiais: Map<number, { texto: string; tone: 'accent' | 'attention' }>;
   /** R-124: a sugestão projetada pelo modelo escolhido, só para o produto aberto no painel. */
   sugestaoProjetada: { codprod: number; sugestao: number } | null;
   /** Soma da sugestão do recorte ao custo da última entrada (R$). */
@@ -115,6 +128,7 @@ export function ListaProdutos({
   acoes: AcoesDaLista;
 }) {
   const [pagina, setPagina] = React.useState(1);
+  const rolagem = React.useRef<HTMLDivElement>(null);
   const ultima = Math.max(1, Math.ceil(linhas.length / POR_PAGINA));
   const paginaAtual = Math.min(pagina, ultima);
   const visiveis = linhas.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
@@ -139,7 +153,8 @@ export function ListaProdutos({
   };
 
   return (
-    <Panel>
+    // R-129: no desktop o card tem a altura que sobra na tela; só as linhas rolam, com o cabeçalho grudado.
+    <Panel className="lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
       <PanelHeader
         title="Produtos"
         hint={`${linhas.length.toLocaleString('pt-BR')} ${linhas.length === 1 ? 'produto' : 'produtos'} no recorte · sugestão ${sugestaoTotal > 0 ? moeda(sugestaoTotal) : '—'}`}
@@ -153,7 +168,8 @@ export function ListaProdutos({
         </Button>
       </PanelHeader>
 
-      <Toolbar>
+      {/* R-129: em tela baixa a barra aperta (menos linhas) para sobrar altura às linhas da lista. */}
+      <Toolbar className="[@media(max-height:760px)]:gap-2 [@media(max-height:760px)]:py-2">
         <ChipContagem title="Soma da sugestão das linhas do recorte, em unidades">
           {`Sugestão ${quantidade(sugestaoUnidades)} un.`}
         </ChipContagem>
@@ -166,24 +182,42 @@ export function ListaProdutos({
         >
           {`Silenciados ${silenciados}`}
         </ChipContagem>
-        <SelectMenu label="Ordenar" value={filtros.ordem} onChange={(v) => onFiltros({ ordem: v as OrdemLista })} options={OPCOES_ORDEM} className="w-40" />
-        <SelectMenu label="Movimentação" value={filtros.movimentacao} onChange={(v) => onFiltros({ movimentacao: v as FiltroMovimentacao })} options={OPCOES_MOVIMENTACAO} className="w-52" />
-        <SelectMenu label="Situação" value={filtros.situacao} onChange={(v) => onFiltros({ situacao: v as '' | StatusRessuprimento })} options={OPCOES_SITUACAO} className="w-44" />
-        <SearchInput placeholder="Produto ou código" value={busca} onChange={(e) => onBusca(e.target.value)} className="w-56" />
+        <SelectMenu label="Ordenar" value={filtros.ordem} onChange={(v) => onFiltros({ ordem: v as OrdemLista })} options={OPCOES_ORDEM} className="w-40 lg:w-36" />
+        <SelectMenu label="Movimentação" value={filtros.movimentacao} onChange={(v) => onFiltros({ movimentacao: v as FiltroMovimentacao })} options={OPCOES_MOVIMENTACAO} className="w-52 lg:w-44" />
+        <SelectMenu label="Situação" value={filtros.situacao} onChange={(v) => onFiltros({ situacao: v as '' | StatusRessuprimento })} options={OPCOES_SITUACAO} className="w-44 lg:w-40" />
+        <SearchInput placeholder="Produto ou código" value={busca} onChange={(e) => onBusca(e.target.value)} className="w-56 lg:w-48" />
         <div><CheckRow marcado={desconsiderarLicitacao} onToggle={onLicitacao}>Desconsiderar venda a órgãos públicos</CheckRow></div>
       </Toolbar>
 
-      <Table>
+      <div ref={rolagem} className="overflow-x-auto lg:min-h-0 lg:flex-1 lg:overflow-auto">
+      <Table cabecalhoFixo>
         <thead>
-          <tr>
-            <Th>Produto</Th>
-            <Th>Situação</Th>
-            <Th className="w-20">Curva fat.</Th>
-            <Th className="w-20">Curva rent.</Th>
-            <Th numeric className="w-32">Cobertura</Th>
-            <Th numeric className="w-40">{referencia === 'caixas' ? 'Qtd. (cx)' : 'Qtd. (un.)'}</Th>
-            <Th className="w-24 text-right">Ações</Th>
-          </tr>
+          {/* C-049: a visão Em trânsito tem grade própria, como no legado — o que importa é quanto vem e quando cobre. */}
+          {visao === 'transito' ? (
+            <tr>
+              <Th>Produto</Th>
+              <Th>Situação</Th>
+              <Th numeric className="w-28">Estoque</Th>
+              <Th numeric className="w-40">Em trânsito</Th>
+              <Th numeric className="w-32">Preço compra</Th>
+              <Th numeric className="w-36">Sugestão</Th>
+              <Th className={`${FIXA_ACOES} text-right`}>Ações</Th>
+            </tr>
+          ) : (
+            <tr>
+              <Th>Produto</Th>
+              <Th>Situação</Th>
+              {curvasNumaColuna ? <Th className="w-16" title="Curva de faturamento / de rentabilidade">Curvas F/R</Th> : (
+                <>
+                  <Th className="w-20">Curva fat.</Th>
+                  <Th className="w-20">Curva rent.</Th>
+                </>
+              )}
+              <Th numeric className="w-32">Cobertura</Th>
+              <Th numeric className={`w-40 ${FIXA_QTD}`}>{referencia === 'caixas' ? 'Qtd. (cx)' : 'Qtd. (un.)'}</Th>
+              <Th className={`${FIXA_ACOES} text-right`}>Ações</Th>
+            </tr>
+          )}
         </thead>
         <tbody>
           {visiveis.map((linha) => {
@@ -191,19 +225,22 @@ export function ListaProdutos({
             const escolhida = quantidades[codprod] ?? quantidadeInicial(linha);
             const ativa = codprod === selecionado;
             const aberto = emPedidoAberto.get(codprod);
+            const selo = especiais.get(codprod) ?? null;
             return (
               <Tr
                 key={codprod}
                 aria-selected={ativa}
                 onClick={() => onSelecionar(linha)}
-                className={ativa ? 'cursor-pointer border-l-4 border-l-primary bg-accent' : 'cursor-pointer border-l-4 border-l-transparent'}
+                className={ativa ? 'group cursor-pointer border-l-4 border-l-primary bg-accent' : 'group cursor-pointer border-l-4 border-l-transparent'}
               >
                 <Td>
                   <RowTitle>{String(linha.medida.DESCRICAO)}</RowTitle>
                   <RowMeta>
                     <Code prefix="cód.">{codprod}</Code>
-                    {` · ${String(linha.medida.EMBALAGEM) || '—'} · ${moeda(Number(linha.medida.CUSTO_ULT_ENTRADA))}`}
+                    {` · ${String(linha.medida.EMBALAGEM) || '—'} · `}
+                    {rotuloSemCusto(linha.custo) ? <Status tone="alert">{rotuloSemCusto(linha.custo)}</Status> : <span title={`Custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`}>{moeda(linha.custo?.valor ?? 0)}</span>}
                   </RowMeta>
+                  {selo ? <RowMeta><Badge tone={selo.tone}>{selo.texto}</Badge></RowMeta> : null}
                   {linha.silenciado ? (
                     <RowMeta>
                       <Status tone="attention">
@@ -222,8 +259,41 @@ export function ListaProdutos({
                   ) : null}
                 </Td>
                 <Td><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></Td>
-                <Td><LetraCurva letra={linha.curvaFaturamento} linha={linha} /></Td>
-                <Td><LetraCurva letra={linha.curvaRentabilidade} linha={linha} /></Td>
+                {visao === 'transito' ? (
+                  <>
+                    <Td numeric>{quantidade(linha.estoqueAtual)}</Td>
+                    <Td numeric>
+                      <RowTitle>{textoDaSugestao(linha.emTransito, linha.unidadesPorCaixa, referencia)}</RowTitle>
+                      <RowMeta>
+                        {coberturaComTransito(linha) === null
+                          ? 'Sem consumo'
+                          : `${Math.round(coberturaComTransito(linha) ?? 0)} dias com o trânsito`}
+                      </RowMeta>
+                    </Td>
+                    <Td numeric>
+                      {(() => {
+                        const preco = precoDeCompra(linha);
+                        if (!preco) return <Status tone="alert">{rotuloSemCusto(linha.custo) ?? 'Sem custo'}</Status>;
+                        return (
+                          <>
+                            {moeda(preco.valor)}
+                            <RowMeta>{`custo padrão · ${fmtData(preco.dataRef)}`}</RowMeta>
+                          </>
+                        );
+                      })()}
+                    </Td>
+                    <Td numeric>{linha.sugerida > 0 ? textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia) : <Dash />}</Td>
+                  </>
+                ) : (
+                  <>
+                {curvasNumaColuna ? (
+                  <Td><LetraCurva letra={linha.curvaFaturamento} linha={linha} />{' / '}<LetraCurva letra={linha.curvaRentabilidade} linha={linha} /></Td>
+                ) : (
+                  <>
+                    <Td><LetraCurva letra={linha.curvaFaturamento} linha={linha} /></Td>
+                    <Td><LetraCurva letra={linha.curvaRentabilidade} linha={linha} /></Td>
+                  </>
+                )}
                 <Td numeric>
                   {linha.coberturaAtualDias === null
                     ? <span title="Sem giro: não há consumo para dividir"><Dash /></span>
@@ -234,7 +304,7 @@ export function ListaProdutos({
                       : `gatilho ${linha.diasDeGatilho} d${linha.urgente ? ' · urgente' : ''}`}
                   </RowMeta>
                 </Td>
-                <Td numeric onClick={(e) => e.stopPropagation()}>
+                <Td numeric className={`${FIXA_QTD} ${fundoFixo(ativa)}`} onClick={(e) => e.stopPropagation()}>
                   <Input
                     type="number"
                     min={0}
@@ -252,7 +322,9 @@ export function ListaProdutos({
                     {projetadaDe(linha) !== null ? ` · projetada ${textoDaSugestao(projetadaDe(linha) ?? 0, linha.unidadesPorCaixa, referencia)}` : ''}
                   </RowMeta>
                 </Td>
-                <Td className="text-right" onClick={(e) => e.stopPropagation()}>
+                  </>
+                )}
+                <Td className={`${FIXA_ACOES} ${fundoFixo(ativa)} text-right`} onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center justify-end gap-1">
                     <IconButton
                       label={podeOperar ? 'Jogar no carrinho' : motivoBloqueio}
@@ -286,14 +358,17 @@ export function ListaProdutos({
         </tbody>
       </Table>
 
+      <div className="lg:sticky lg:left-0">
       <Pagination
         page={paginaAtual}
         lastPage={ultima}
         total={linhas.length}
         unit="produtos"
-        onPrevious={() => setPagina((p) => Math.max(1, p - 1))}
-        onNext={() => setPagina((p) => Math.min(ultima, p + 1))}
+        onPrevious={() => { setPagina((p) => Math.max(1, p - 1)); rolagem.current?.scrollTo({ top: 0 }); }}
+        onNext={() => { setPagina((p) => Math.min(ultima, p + 1)); rolagem.current?.scrollTo({ top: 0 }); }}
       />
+      </div>
+      </div>
     </Panel>
   );
 }

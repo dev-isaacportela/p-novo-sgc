@@ -150,7 +150,7 @@ export function GraficoComprasVendas({
     <PainelGrafico
       titulo="Compras × vendas"
       hint={`Entradas, vendas e projeção · em ${emCaixas ? 'caixas' : 'unidades'}`}
-      altura={expandido ? 'alta' : 'padrao'}
+      altura={expandido ? 'adaptavel' : 'justa'}
       acoes={
         <>
           <AlternaOpcoes rotulo="Janela do gráfico" opcoes={JANELAS} valor={janela} onValor={setJanela} />

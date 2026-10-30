@@ -22,9 +22,11 @@ const medida = (extra = {}) => ({
   CONSUMO_DIARIO: 2, CONSUMO_DIARIO_PUBLICO: 0, VOLATILIDADE_DIARIA: 0, ...extra,
 });
 const PARAMETRO_FIXO = [{ codprod: 0, coberturaDias: 35, leadTimeDias: 9, gatilhoDias: 15, silenciadoAte: '', motivoSilencio: '' }];
+// R-128: o custo de compra vem do Gestão de Custos; aqui, o mesmo valor da última entrada da medida.
+const custosDe = (medidas) => new Map(medidas.map((m) => [m.CODPROD, { custo: m.CUSTO_ULT_ENTRADA, dataRef: '2026-01-01' }]));
 const linha = (extra = {}) => montarRessuprimento([medida(extra)], PARAMETRO_FIXO, () => 35, new Map(), {
   codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false,
-})[0];
+}, custosDe([medida(extra)]))[0];
 
 test('calendário: set/26, um mês antes de jan/2026 é dez/2025, fevereiro de 2026 tem 28 dias e os 3 meses até 16/09 são jul, ago e set', () => {
   assert.equal(rotuloMes('2026-09'), 'set/26');

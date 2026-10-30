@@ -311,3 +311,21 @@ export function textoDosParametros(r: ResultadoModelo | null): string {
   if (r.parametros.gamma !== undefined) partes.push(`γ ${fmt(r.parametros.gamma)}`);
   return partes.join(' · ');
 }
+
+/**
+ * O resumo de uma linha da seção recolhida (R-126): "Best Fit → Suavização
+ * exponencial · 616 un./mês · sugestão 312 un. (39 cx) · TS sob controle".
+ * Sem histórico, "…"; sem meses suficientes, diz isso.
+ */
+export function resumoVendaFutura({ previsao, modelo, projetada, unidadesPorCaixa }: {
+  previsao: Previsao | null; modelo: ModeloPrevisao; projetada: SugestaoProjetada | null; unidadesPorCaixa: number;
+}): string {
+  if (!previsao) return '…';
+  const r = modeloEscolhido(previsao, modelo);
+  if (!previsao.suficiente || !r) return 'sem meses fechados suficientes · segue o consumo ponderado';
+  const nome = modelo === 'bestfit' ? `Best Fit → ${r.rotulo}` : r.rotulo;
+  const un = Math.round(numero(projetada?.sugestao)).toLocaleString('pt-BR');
+  const cx = numero(unidadesPorCaixa) > 1 && projetada ? ` (${(projetada.sugestao / unidadesPorCaixa).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cx)` : '';
+  const sugestao = projetada ? `sugestão ${un} un.${cx}` : 'sem sugestão projetada';
+  return `${nome} · ${Math.round(r.previsao).toLocaleString('pt-BR')} un./mês · ${sugestao} · TS ${r.sobControle ? 'sob controle' : 'fora de controle'}`;
+}

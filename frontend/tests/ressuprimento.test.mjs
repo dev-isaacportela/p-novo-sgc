@@ -20,6 +20,7 @@ import {
   montarRessuprimento, motivoDaSugestao, resolverParametros,
   RECORTE_INICIAL, alternarSilenciados, escolherVisao,
   campoEmCaixas, quantidadeNaReferencia, rotuloDaQuantidade, unidadesDaDigitada,
+  chaveDaEntrada, custoDaEntrada, coberturaComTransito, precoDeCompra,
 } from '../src/lib/ressuprimento.ts';
 
 /** Uma medida de `sgcWintRessuprimento`, com o caso base do plan. */
@@ -390,11 +391,13 @@ test('RN-013: silenciado até amanhã com hoje continua silenciado, até ontem n
 });
 
 test('RN-015 / R-112: o carrinho agrupa por fornecedor e filial, sobe a prioridade com ruptura no grupo, soma o total e cada item nasce como o ItemPedido INTEIRO', () => {
+  // R-128: o custo de compra é o custo padrão do Gestão de Custos — 10 para os três.
+  const custos = new Map([5401, 5402, 5403].map((c) => [c, { custo: 10, dataRef: '2026-01-01' }]));
   const emRuptura = montarRessuprimento([medida({ CODPROD: 5403, ESTOQUE_ATUAL: 0 })], [], alvoPadrao, new Map(),
-    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false })[0];
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false }, custos)[0];
   const normais = montarRessuprimento(
     [medida({ CODPROD: 5401 }), medida({ CODPROD: 5402 })], [], alvoPadrao, new Map(),
-    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false },
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false }, custos,
   );
   const doFornecedor = (linha, quantidade, codfilial = '1') => ({
     linha, quantidade, codfornec: 1042, codfilial, fornecedor: 'Nestlé', filial: 'Benenutri Matriz',
@@ -564,4 +567,33 @@ test('R-120: o mapa do Gestão de Custos chega à regra — produto com 6 na ges
   assert.equal(semGestao.origemCaixa, 'embalagem');
   const [doErp] = montarRessuprimento([medida({ ESTOQUE_ATUAL: 50, UN_POR_CAIXA_ERP: 24 })], PARAMETRO_FIXO, alvoStub, new Map(), opcoes);
   assert.equal(doErp.origemCaixa, 'erp');
+});
+
+test('R-125: a linha especial do carrinho tem chave própria, o custo da política vale no total do grupo e no item do pedido (tipo especial), e a linha padrão do mesmo produto continua separada', () => {
+  const [l] = montarRessuprimento([medida({ CODPROD: 5401, CUSTO_ULT_ENTRADA: 12 })], [], alvoPadrao, new Map(),
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false }, new Map([[5401, { custo: 10, dataRef: '2026-01-01' }]]));
+  const especial = { politicaId: 7, politicaNome: 'Tabela A', custo: 8 };
+  const padrao = { linha: l, quantidade: 24, codfornec: 1042, codfilial: '1', fornecedor: 'F', filial: 'Matriz' };
+  const comEspecial = { ...padrao, quantidade: 12, especial };
+  assert.equal(chaveDaEntrada(padrao), '5401-1');
+  assert.equal(chaveDaEntrada(comEspecial), '5401-1-especial-7-8');
+  assert.equal(custoDaEntrada(padrao), 10);
+  assert.equal(custoDaEntrada(comEspecial), 8);
+  const [grupo] = agruparCarrinho([padrao, comEspecial]);
+  assert.equal(grupo.itens.length, 2);
+  assert.equal(grupo.total, 24 * 10 + 12 * 8);
+  assert.deepEqual(grupo.itens[1].especial, especial);
+  const item = itemDoCarrinho(l, 12, 42, especial);
+  assert.equal(item.precoCusto, 8);
+  assert.equal(item.tipoPreco, 'especial');
+  assert.equal(itemDoCarrinho(l, 24, 42).tipoPreco, 'padrao');
+});
+
+test('C-049 / R-128 (visão Em trânsito): a cobertura conta o trânsito — 50 disponíveis + 100 em trânsito a 2 por dia são 75 dias; sem consumo é nula; o preço de compra é o custo padrão do Gestão de Custos, e sem ele nenhum (sem fallback para o ERP)', () => {
+  assert.equal(coberturaComTransito({ estoqueAtual: 50, emTransito: 100, consumoDiario: 2 }), 75);
+  assert.equal(coberturaComTransito({ estoqueAtual: 50, emTransito: 100, consumoDiario: 0 }), null);
+  assert.deepEqual(precoDeCompra({ custo: { valor: 57.23, dataRef: '2026-01-01', origem: 'gestao' } }), { valor: 57.23, dataRef: '2026-01-01' });
+  assert.equal(precoDeCompra({ custo: { valor: 0, dataRef: '', origem: 'sem' } }), null);
+  assert.equal(precoDeCompra({ custo: { valor: 0, dataRef: '', origem: 'erro' } }), null);
+  assert.equal(precoDeCompra({}), null, 'linha do carrinho salvo antes do R-128');
 });

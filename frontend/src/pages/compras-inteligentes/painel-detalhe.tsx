@@ -9,14 +9,14 @@
 // selecionado e ficam em cache; este arquivo só desenha o que recebeu. As
 // vendas do período continuam no diálogo de sempre (1 execução, ao abrir).
 import * as React from 'react';
-import { Eye, ShoppingCart, VolumeX } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Eye, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
-  Alert, Button, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
+  Alert, Button, ChipContagem, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
   RowTitle, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
-import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa } from '@/lib/compras';
+import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
   JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
@@ -25,7 +25,11 @@ import { filiaisComExcesso, simularCompra } from '@/lib/ressuprimento-detalhe';
 import type { DadosDoSku } from '@/lib/ressuprimento-detalhe';
 import { GraficoComprasVendas } from './grafico';
 import { AnaliseVendaFutura } from './previsao-ui';
-import { modeloEscolhido } from '@/lib/previsao';
+import { OportunidadeEspecial } from './custo-especial-ui';
+import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
+import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import type { LarguraPainel } from '@/lib/largura-painel';
+import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 
 const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = {
@@ -101,6 +105,10 @@ export function PainelDetalhe({
   modelo,
   onModelo,
   projetada,
+  sugestoesEspeciais,
+  onAdicionarEspecial,
+  largura,
+  onLargura,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -123,9 +131,18 @@ export function PainelDetalhe({
   modelo: ModeloPrevisao;
   onModelo: (modelo: ModeloPrevisao) => void;
   projetada: SugestaoProjetada | null;
+  /** R-125: as sugestões por cliente das políticas de preço especial do produto aberto. */
+  sugestoesEspeciais: SugestaoCliente[];
+  onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
+  /** R-129: a largura do painel e o passo −/+ (a tela guarda a preferência). */
+  largura: LarguraPainel;
+  onLargura: (passo: 1 | -1) => void;
 }) {
+  const rolagem = React.useRef<HTMLDivElement>(null);
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
+  // C-048: um gráfico por vez — "Compras × vendas" (padrão) ou "Preço especial".
+  const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
   // C-037: o campo segue a referência (caixas ou unidades); `simulada` é o texto digitado nela.
   const [referenciaAnterior, setReferenciaAnterior] = React.useState(referencia);
   if (referencia !== referenciaAnterior) {
@@ -140,7 +157,10 @@ export function PainelDetalhe({
   if (codprod !== ultimo) {
     setUltimo(codprod);
     setSimulada('');
+    setAbaGrafico('vendas');
   }
+  // R-129: escolheu outro produto, o painel volta ao topo.
+  React.useEffect(() => { rolagem.current?.scrollTo({ top: 0 }); }, [codprod]);
 
   if (!linha) {
     return (
@@ -163,15 +183,27 @@ export function PainelDetalhe({
   const quantidadeSimulada = simulada === '' ? sugestaoDePartida : unidadesDaDigitada(Number(simulada) || 0, linha.unidadesPorCaixa, referencia);
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
-  const custoAtual = Number(m.CUSTO_ATUAL ?? 0);
 
   return (
-    <div className="flex flex-col gap-3">
+    // R-129: o painel tem a altura da lista e rola por dentro; produto e gráfico ficam grudados no
+    // topo. Em tela baixa (até 760 px) eles ocupariam o painel inteiro e "Mais detalhes" não teria
+    // onde aparecer: aí o topo rola junto — ao escolher o produto o painel volta ao início, com
+    // nome e gráfico inteiros à vista.
+    <div ref={rolagem} className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+      <div className="flex flex-col gap-3 bg-ground lg:pb-1 lg:[@media(min-height:761px)]:sticky lg:[@media(min-height:761px)]:top-0 lg:[@media(min-height:761px)]:z-20">
       <Panel>
         <PanelHeader
           title={`${codprod} · ${String(m.DESCRICAO)}`}
           hint={`${String(m.EMBALAGEM) || '—'} · ${fornecedor || '—'}`}
         >
+          <span className="hidden lg:inline-flex">
+            <IconButton label="Painel mais estreito (Alt+→)" disabled={largura === 'estreito'} onClick={() => onLargura(-1)}>
+              <ChevronsRight aria-hidden />
+            </IconButton>
+            <IconButton label="Painel mais largo (Alt+←)" disabled={largura === 'metade'} onClick={() => onLargura(1)}>
+              <ChevronsLeft aria-hidden />
+            </IconButton>
+          </span>
           <IconButton label="Abrir o detalhe completo do produto" onClick={() => onVerDetalheCompleto(linha)}>
             <Eye aria-hidden />
           </IconButton>
@@ -202,18 +234,38 @@ export function PainelDetalhe({
 
       <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
 
-      <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} projecaoMes={projetada ? modeloEscolhido(previsao as Previsao, modelo)?.previsao ?? null : null} />
+      {/* C-048: abas em pílula no topo do card; a especial só com oportunidade, e nunca os dois gráficos juntos. */}
+      {temAbaEspecial(sugestoesEspeciais) ? (
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Gráfico do produto">
+          <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'vendas'} onClick={() => setAbaGrafico('vendas')}>Compras × vendas</ChipContagem>
+          <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial'} onClick={() => setAbaGrafico('especial')} tone="attention">Preço especial</ChipContagem>
+        </div>
+      ) : null}
+      {abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial' ? (
+        <OportunidadeEspecial
+          linha={linha}
+          sugestoes={sugestoesEspeciais}
+          quantidade={simulacao.quantidade}
+          referencia={referencia}
+          podeOperar={podeOperar}
+          motivoBloqueio={motivoBloqueio}
+          onAdicionarEspecial={onAdicionarEspecial}
+        />
+      ) : (
+        <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} projecaoMes={projetada ? modeloEscolhido(previsao as Previsao, modelo)?.previsao ?? null : null} />
+      )}
+      </div>
 
       <Panel>
         <PanelHeader title="Mais detalhes" hint={dados.erro || 'Abra só o que precisar; nada aqui custa consulta nova.'} />
 
         <Disclosure
           titulo="Análise de venda futura"
-          resumo={!previsao ? '…' : !previsao.suficiente ? 'sem meses fechados suficientes' : `${modeloEscolhido(previsao, modelo)?.rotulo ?? ''} · projeção ${Math.round(modeloEscolhido(previsao, modelo)?.previsao ?? 0).toLocaleString('pt-BR')} un./mês · sug. projetada ${projetada ? textoDaSugestao(projetada.sugestao, linha.unidadesPorCaixa, referencia) : '—'}`}
+          resumo={resumoVendaFutura({ previsao, modelo, projetada, unidadesPorCaixa: linha.unidadesPorCaixa })}
           aberta={abertas.has('previsao')}
           onToggle={() => alterna('previsao')}
         >
-          <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} compacto />
+          <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} hoje={hoje} compacto />
         </Disclosure>
 
         <Disclosure
@@ -250,7 +302,7 @@ export function PainelDetalhe({
             <Table>
               <tbody>
                 <Tr><Td>Quantidade em caixas</Td><Td numeric>{quantidade(simulacao.caixas)}</Td></Tr>
-                <Tr><Td>Total ao custo da última entrada</Td><Td numeric>{moeda(simulacao.total)}</Td></Tr>
+                <Tr><Td>Total ao custo padrão (Gestão de Custos)</Td><Td numeric>{rotuloSemCusto(linha.custo) ?? moeda(simulacao.total)}</Td></Tr>
                 <Tr><Td>Cobertura depois da compra</Td><Td numeric>{dias(simulacao.coberturaFuturaDias)}</Td></Tr>
                 <Tr><Td>Nível depois da compra</Td><Td numeric>{pct(simulacao.nivelFuturoPct)}</Td></Tr>
               </tbody>
@@ -274,8 +326,8 @@ export function PainelDetalhe({
               <Tr><Td>Unidades por caixa</Td><Td numeric>{`${linha.unidadesPorCaixa} (${ROTULO_ORIGEM_CAIXA[linha.origemCaixa]})`}</Td></Tr>
               <Tr><Td>Departamento · seção</Td><Td numeric>{`${m.CODEPTO} · ${m.CODSEC}`}</Td></Tr>
               <Tr><Td>Código de fábrica</Td><Td numeric>{m.CODFAB ? <Code>{String(m.CODFAB)}</Code> : <Dash />}</Td></Tr>
-              <Tr><Td>Custo da última entrada</Td><Td numeric>{moeda(Number(m.CUSTO_ULT_ENTRADA))}</Td></Tr>
-              <Tr><Td>Custo atual</Td><Td numeric>{custoAtual > 0 ? moeda(custoAtual) : <Dash />}</Td></Tr>
+              <Tr><Td>Preço da última entrada (histórico ERP)</Td><Td numeric>{moeda(Number(m.CUSTO_ULT_ENTRADA))}</Td></Tr>
+              <Tr><Td>Custo padrão (Gestão de Custos)</Td><Td numeric>{rotuloSemCusto(linha.custo) ? <Status tone="alert">{rotuloSemCusto(linha.custo)}</Status> : `${moeda(linha.custo?.valor ?? 0)} · ${fmtData(linha.custo?.dataRef ?? '')}`}</Td></Tr>
               <Tr><Td>Última entrada · última saída</Td><Td numeric>{`${fmtData(String(m.DT_ULT_ENTRADA)) || '—'} · ${fmtData(String(m.DT_ULT_SAIDA)) || '—'}`}</Td></Tr>
             </tbody>
           </Table>

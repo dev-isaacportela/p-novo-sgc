@@ -210,4 +210,35 @@ export const DDL = [
     CODPROD INT PRIMARY KEY,
     UNIDADES_POR_CAIXA DECIMAL(15,3)
   )`,
+
+  // As políticas de preço especial da conexão gestao-de-custos (projeto 60574):
+  // sgcCustoEspeciaisProdutos (INTEGRATION, R-125) lê as três.
+  `CREATE TABLE IF NOT EXISTS COST_POLICIES (
+    ID INT PRIMARY KEY,
+    NAME VARCHAR(200),
+    STATUS VARCHAR(20),
+    DT_START VARCHAR(10),
+    DT_END VARCHAR(10),
+    CLIENTE_ID INT,
+    FILIAL_ID INT
+  )`,
+  `CREATE TABLE IF NOT EXISTS POLICY_ITEMS (
+    ID INT PRIMARY KEY,
+    POLICY_ID INT,
+    PRODUCT_ID INT,
+    SPECIAL_COST DECIMAL(15,4),
+    VARIATION_PERCENT DECIMAL(9,2)
+  )`,
+  // O custo padrão por produto e data de referência (R-128): sgcCustoPadraoAtual lê o mais recente.
+  `CREATE TABLE IF NOT EXISTS CUSTOPRODUTO (
+    ID INT PRIMARY KEY,
+    CODPROD INT,
+    CUSTO DECIMAL(15,4),
+    DATA_REF VARCHAR(10)
+  )`,
+  `CREATE TABLE IF NOT EXISTS COST_POLICY_CLIENTS (
+    ID INT PRIMARY KEY,
+    POLICY_ID INT,
+    CLIENTE_ID INT
+  )`,
 ];

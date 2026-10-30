@@ -15,8 +15,8 @@
 
 // Extensão explícita, como em `compras.ts`: `allowImportingTsExtensions` está
 // ligado e é assim que o `node --test` de frontend/tests/ resolve o módulo.
-import { arredondarPorCaixa, curvaPorValor, origemUnidadesPorCaixa, piorCurva, unidadesPorCaixa } from './compras.ts';
-import type { CurvaAbc, ItemPedido, OrigemUnidadesPorCaixa } from './compras.ts';
+import { arredondarPorCaixa, curvaPorValor, custoPadraoDe, origemUnidadesPorCaixa, piorCurva, unidadesPorCaixa } from './compras.ts';
+import type { CurvaAbc, ItemPedido, OrigemUnidadesPorCaixa, CustoPadrao, MapaCustoPadrao } from './compras.ts';
 
 export type StatusRessuprimento =
   'ruptura' | 'excesso' | 'elevada_exposicao' | 'baixa_exposicao' | 'adequado';
@@ -235,6 +235,8 @@ export interface LinhaRessuprimento extends Ressuprimento {
   medida: MedidaRessuprimento;
   /** R-122: a curva que vale (alvo de cobertura, item do pedido, ordem) é a PIOR das duas. */
   curva: CurvaAbc; curvaFaturamento: CurvaAbc; curvaRentabilidade: CurvaAbc;
+  /** R-128: o custo de compra — o custo padrão do Gestão de Custos (opcional para o carrinho salvo antes dele). */
+  custo?: CustoPadrao;
   parametros: ParametrosResolvidos; unidadesPorCaixa: number; silenciado: boolean;
   silenciadoAte: string; motivoSilencio: string;
   /** R-120: de onde veio a caixa — Gestão de Custos, cadastro do ERP, embalagem ou avulso. */
@@ -287,6 +289,8 @@ export function montarRessuprimento(
   alvoDaCurvaDias: AlvoDaCurva,
   unidadesPorCaixaPorProduto: Map<number, number>,
   opcoes: { codfornec: number; hoje: string; desconsiderarLicitacao: boolean },
+  /** R-128: o custo padrão do Gestão de Custos; `null` = a consulta falhou; ausente = ainda não veio. */
+  custos?: MapaCustoPadrao | null,
 ): LinhaRessuprimento[] {
   const lista = medidas ?? [];
   const curvas = curvasDoRessuprimento(lista);
@@ -315,6 +319,7 @@ export function montarRessuprimento(
       curva,
       curvaFaturamento: daLinha.faturamento,
       curvaRentabilidade: daLinha.rentabilidade,
+      custo: custoPadraoDe(custos, codprod),
       parametros: resolvidos,
       unidadesPorCaixa: porCaixa,
       origemCaixa: origemUnidadesPorCaixa(medida, daGestao),
@@ -353,6 +358,7 @@ export function itemDoCarrinho(
   linha: LinhaRessuprimento,
   quantidade: number,
   coberturaLimite: number,
+  especial?: EspecialDoCarrinho,
 ): ItemPedido {
   const m = linha.medida;
   return {
@@ -369,8 +375,9 @@ export function itemDoCarrinho(
     qtTransito: linha.emTransito,
     qtSugerida: linha.sugerida,
     qtPedida: Math.max(0, numero(quantidade)),
-    precoCusto: numero(m.CUSTO_ULT_ENTRADA),
-    tipoPreco: 'padrao',
+    // R-125: a linha especial leva o custo da política; R-128: a padrão, o custo padrão do Gestão de Custos.
+    precoCusto: especial ? numero(especial.custo) : custoDaLinha(linha),
+    tipoPreco: especial ? 'especial' : 'padrao',
     curvaAbc: linha.curva,
     coberturaDias: coberturaFuturaComCompra(linha, quantidade) ?? 0,
     coberturaLimite: numero(coberturaLimite),
@@ -383,6 +390,9 @@ export function itemDoCarrinho(
   };
 }
 
+/** R-125: a linha especial do carrinho — a política e o custo dela, que substitui o custo do item. */
+export interface EspecialDoCarrinho { politicaId: number; politicaNome: string; custo: number }
+
 export interface EntradaCarrinho {
   linha: LinhaRessuprimento;
   quantidade: number;
@@ -390,12 +400,29 @@ export interface EntradaCarrinho {
   codfilial: string;
   fornecedor: string;
   filial: string;
+  especial?: EspecialDoCarrinho;
+}
+
+/** A identidade de uma entrada: produto + filial, e a política + custo quando é especial (R-125). */
+export function chaveDaEntrada(e: Pick<EntradaCarrinho, 'linha' | 'codfilial' | 'especial'>): string {
+  const base = `${numero(e.linha.medida.CODPROD)}-${String(e.codfilial)}`;
+  return e.especial ? `${base}-especial-${numero(e.especial.politicaId)}-${numero(e.especial.custo)}` : base;
+}
+
+/** R-128: o custo de compra da linha — o custo padrão do Gestão de Custos, ou 0 ("Sem custo"/"Erro custo"). */
+export function custoDaLinha(l: Pick<LinhaRessuprimento, 'custo'>): number {
+  return numero(l?.custo?.valor);
+}
+
+/** O custo que vale para a entrada: o especial, ou o custo padrão (R-128). */
+export function custoDaEntrada(e: Pick<EntradaCarrinho, 'linha' | 'especial'>): number {
+  return e.especial ? numero(e.especial.custo) : custoDaLinha(e.linha);
 }
 
 export interface GrupoCarrinho {
   codfornec: number; codfilial: string; fornecedor: string; filial: string;
   prioridade: 'normal' | 'alta'; total: number;
-  itens: { linha: LinhaRessuprimento; quantidade: number }[];
+  itens: { linha: LinhaRessuprimento; quantidade: number; especial?: EspecialDoCarrinho }[];
 }
 
 /** RN-015: um grupo por fornecedor + filial; prioridade alta com ruptura no grupo. */
@@ -412,8 +439,8 @@ export function agruparCarrinho(itens: EntradaCarrinho[]): GrupoCarrinho[] {
       total: 0,
       itens: [],
     };
-    grupo.itens.push({ linha: entrada.linha, quantidade: Math.max(0, numero(entrada.quantidade)) });
-    grupo.total += Math.max(0, numero(entrada.quantidade)) * numero(entrada.linha.medida.CUSTO_ULT_ENTRADA);
+    grupo.itens.push({ linha: entrada.linha, quantidade: Math.max(0, numero(entrada.quantidade)), ...(entrada.especial ? { especial: entrada.especial } : {}) });
+    grupo.total += Math.max(0, numero(entrada.quantidade)) * custoDaEntrada(entrada);
     if (entrada.linha.status === 'ruptura') grupo.prioridade = 'alta';
     grupos.set(chave, grupo);
   }
@@ -459,6 +486,20 @@ export function quantidadeParaCompletar(l: LinhaRessuprimento): number {
 /** RF-014: em trânsito é quem tem trânsito, silenciado ou não. */
 export function emTransito(linhas: LinhaRessuprimento[]): LinhaRessuprimento[] {
   return (linhas ?? []).filter((l) => l.emTransito > 0);
+}
+
+/**
+ * C-049 (visão Em trânsito): a cobertura CONTANDO o trânsito — (disponível +
+ * trânsito) ÷ consumo diário —, ou `null` sem consumo ("Sem consumo").
+ */
+export function coberturaComTransito(l: Pick<Ressuprimento, 'estoqueAtual' | 'emTransito' | 'consumoDiario'>): number | null {
+  if (!(numero(l.consumoDiario) > 0)) return null;
+  return (numero(l.estoqueAtual) + numero(l.emTransito)) / numero(l.consumoDiario);
+}
+
+/** C-049 / R-128: o preço de compra da visão Em trânsito — o custo padrão do Gestão de Custos; sem ele, nada ("Sem custo"/"Erro custo"). */
+export function precoDeCompra(l: Pick<LinhaRessuprimento, 'custo'>): { valor: number; dataRef: string } | null {
+  return l?.custo?.origem === 'gestao' ? { valor: numero(l.custo.valor), dataRef: l.custo.dataRef } : null;
 }
 
 /** As linhas de uma visão; "todos" é a lista inteira, na ordem de chegada. */
@@ -629,6 +670,6 @@ export function linhaCsv(l: LinhaRessuprimento): (string | number)[] {
     l.coberturaAtualDias === null ? 'sem giro' : decimal(l.coberturaAtualDias, 1),
     l.diasDeGatilho === null ? 'sem giro' : l.diasDeGatilho,
     decimal(l.sugerida, 3),
-    decimal(numero(l.medida.CUSTO_ULT_ENTRADA), 2),
+    decimal(custoDaLinha(l), 2),
   ];
 }

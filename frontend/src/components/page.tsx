@@ -839,15 +839,23 @@ export function BoardCard({ children }: { children: React.ReactNode }) {
 export function Table({
   children,
   className,
+  cabecalhoFixo = false,
 }: {
   children: React.ReactNode;
   className?: string;
+  /**
+   * R-129: quem rola é o contêiner de fora (lista de altura fixa); o cabeçalho
+   * das colunas fica grudado no topo dele. Sem a rolagem própria do wrapper,
+   * que prenderia o `sticky`.
+   */
+  cabecalhoFixo?: boolean;
 }) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className={cabecalhoFixo ? 'w-full' : 'w-full overflow-x-auto'}>
       <table
         className={cn(
           'w-full border-collapse text-[13px] [&_tr:last-child>td]:border-b-0',
+          cabecalhoFixo && '[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card',
           className
         )}
       >
@@ -1187,7 +1195,11 @@ export function PainelGrafico({
   titulo: string;
   hint?: React.ReactNode;
   acoes?: React.ReactNode;
-  altura?: 'padrao' | 'alta';
+  /**
+   * `adaptavel`: 220 px em tela baixa, 320 px a partir de 800 px de altura (R-127).
+   * `justa`: 150 px em tela baixa (até 760 px), 220 px acima — o painel lateral (R-129).
+   */
+  altura?: 'padrao' | 'alta' | 'adaptavel' | 'justa';
   largura?: 'padrao' | 'total';
   rodape?: React.ReactNode;
   children: React.ReactNode;
@@ -1203,7 +1215,7 @@ export function PainelGrafico({
         </div>
         {acoes ? <div className="flex items-center gap-2">{acoes}</div> : null}
       </div>
-      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : 'h-[220px]')}>
+      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : altura === 'adaptavel' ? 'h-[220px] [@media(min-height:800px)]:h-[320px]' : altura === 'justa' ? 'h-[150px] [@media(min-height:761px)]:h-[220px]' : 'h-[220px]')}>
         {children}
       </div>
       {rodape}
@@ -1235,7 +1247,8 @@ export function CardVisao({
       onClick={onClick}
       aria-pressed={ativo}
       className={cn(
-        'flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors',
+        // Em tela baixa (R-129) o card encolhe para a lista e o painel caberem.
+        'flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors [@media(max-height:760px)]:gap-0 [@media(max-height:760px)]:p-2',
         'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
         ativo ? 'border-primary bg-primary text-primary-foreground' : 'border-rule-row bg-card text-ink hover:bg-accent',
       )}
@@ -1243,7 +1256,7 @@ export function CardVisao({
       <span className={cn('text-[11px] font-semibold tracking-wide uppercase', ativo ? 'text-primary-foreground/80' : 'text-ink-muted')}>
         {rotulo}
       </span>
-      <span className="font-title text-2xl font-bold">
+      <span className="font-title text-2xl font-bold [@media(max-height:760px)]:text-lg">
         {contagem === null ? <Dash /> : contagem.toLocaleString('pt-BR')}
       </span>
     </button>
@@ -1252,7 +1265,7 @@ export function CardVisao({
 
 /** A fileira de cards de visão: dois por linha no mobile, quatro a partir de `xl`. */
 export function GradeVisoes({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{children}</div>;
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>;
 }
 
 /**
@@ -1351,26 +1364,85 @@ export function MiniCartao({
   valor,
   hint,
   tone = 'neutral',
+  title,
 }: {
   rotulo: string;
   valor: React.ReactNode;
+  /** Curto, de uma linha; a explicação longa vai em `title`. */
   hint?: React.ReactNode;
   tone?: 'neutral' | 'attention';
+  title?: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2" title={title}>
       <span className="truncate text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
       <span className={cn('truncate text-[13px] font-bold', tone === 'attention' ? 'text-attention' : 'text-ink')}>{valor}</span>
-      {hint ? <span className="truncate text-[11px] text-ink-secondary">{hint}</span> : null}
+      {/* R-126: o subtítulo quebra a linha, nunca corta com reticência. */}
+      {hint ? <span className="text-[11px] break-words text-ink-secondary">{hint}</span> : null}
     </div>
   );
 }
 
 /** A grade dos mini-cartões: 2 por linha no mobile, 3 em `sm`, `colunas` a partir de `lg`. */
-export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 2 | 3 | 4 | 6 }) {
+export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 1 | 2 | 3 | 4 | 6 | 7 }) {
+  // 7: a faixa densa do topo da Análise do Produto — 4 + 3 em telas estreitas, uma fileira a partir de `lg`.
+  if (colunas === 7) return <div className="grid grid-cols-4 gap-2 lg:grid-cols-7">{children}</div>;
+  if (colunas === 1) return <div className="grid grid-cols-1 gap-2">{children}</div>;
   if (colunas === 2) return <div className="grid grid-cols-2 gap-2">{children}</div>;
   const emLg = { 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 6: 'lg:grid-cols-6' }[colunas];
   return <div className={cn('grid grid-cols-2 gap-2 sm:grid-cols-3', emLg)}>{children}</div>;
+}
+
+/**
+ * Seção recolhível em card (R-126): título, resumo de uma linha com o
+ * essencial e chevron; NASCE RECOLHIDA, e o cabeçalho inteiro é o botão
+ * (`aria-expanded`, foco visível). `extra` é um selo ao lado do resumo. Quem
+ * controla `aberta` é a tela, para tudo voltar recolhido ao trocar de produto.
+ * Vale para toda seção com título, subtítulo e grade de KPIs do SGC 2.
+ */
+export function SecaoRecolhivel({
+  titulo,
+  resumo,
+  extra,
+  acao,
+  aberta,
+  onToggle,
+  children,
+}: {
+  titulo: string;
+  resumo?: React.ReactNode;
+  extra?: React.ReactNode;
+  /** A ação principal da seção, visível mesmo recolhida (fora do botão de abrir). */
+  acao?: React.ReactNode;
+  aberta: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Panel>
+      <div className="flex items-center">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={aberta}
+        className={cn(
+          'flex min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-accent',
+          'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+          aberta && 'rounded-b-none',
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-title text-[15px] font-bold text-ink">{titulo}</span>
+          {resumo ? <span className="mt-0.5 block truncate text-[12px] text-ink-secondary">{resumo}</span> : null}
+        </span>
+        {extra ? <span className="shrink-0">{extra}</span> : null}
+        <ChevronDown className={cn('size-4 shrink-0 text-ink-muted transition-transform', aberta && 'rotate-180')} aria-hidden />
+      </button>
+      {acao ? <div className="shrink-0 pr-4">{acao}</div> : null}
+      </div>
+      {aberta ? <div className="border-t border-rule-row p-4">{children}</div> : null}
+    </Panel>
+  );
 }
 
 /**

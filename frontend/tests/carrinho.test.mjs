@@ -21,9 +21,11 @@ const medida = (extra = {}) => ({
   LEAD_TIME_MEDIDO: 0, VENDA_PERIODO: 306, VENDA_PUBLICA: 0,
   CONSUMO_DIARIO: 2, CONSUMO_DIARIO_PUBLICO: 0, VOLATILIDADE_DIARIA: 0, ...extra,
 });
+// R-128: o custo de compra vem do Gestão de Custos; aqui, o mesmo valor da última entrada de cada medida.
+const custosDe = (medidas) => new Map(medidas.map((m) => [m.CODPROD, { custo: m.CUSTO_ULT_ENTRADA, dataRef: '2026-01-01' }]));
 const linhas = (medidas) => montarRessuprimento(medidas, [], () => 35, new Map(), {
   codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false,
-});
+}, custosDe(medidas));
 const [l5401, l5402, l5403] = linhas([
   medida(),
   medida({ CODPROD: 5402, DESCRICAO: 'BARRA DE PROTEINA CACAU 45 G', CODFAB: 'FAB-5402', ESTOQUE_ATUAL: 0, CUSTO_ULT_ENTRADA: 12, CUSTO_ATUAL: 12 }),
