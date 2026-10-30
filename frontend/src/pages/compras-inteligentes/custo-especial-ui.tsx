@@ -113,7 +113,7 @@ function CardTabela({
           ))}
         </ul>
 
-        <GradeMini colunas={6}>
+        <GradeMini colunas={3}>
           <MiniCartao rotulo="Limite seguro" valor={`${quantidade(tabela.seguro)} un.`} />
           <MiniCartao rotulo="Custo" valor={moeda(tabela.custoEspecial)} hint={`economia ${moeda(tabela.economiaUnit)} por un.`} />
           <MiniCartao rotulo="Ganho da compra" valor={moeda(tabela.ganhoEstimado)} />
