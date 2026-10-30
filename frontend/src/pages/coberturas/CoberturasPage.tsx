@@ -16,8 +16,8 @@
 import * as React from 'react';
 import { Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
-  Alert, Button, Code, Dash, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
-  DialogTitle, EmptyState, GradeKpi, IconButton, Input, Kpi, LabelledField, PageHeader,
+  Alert, Button, Code, Dash, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader,
+  DialogTitle, EmptyState, IconButton, Input, LabelledField, PageHeader,
   Pagination, Panel, PanelHeader, RowMeta, RowTitle, SelectMenu, Status, Table, Tabs,
   TabsContent, TabsList, TabsTrigger, Td, Th, Toolbar, Tr,
 } from '@/components/page';
@@ -77,42 +77,71 @@ interface LinhaLog {
   CAMPO: unknown; ANTES: unknown; DEPOIS: unknown; ACAO: unknown; POR_NOME: unknown; EM: unknown;
 }
 
-/** Um painel de curva do formulário: alvo, tolerância e o máximo sem justificativa (C-013). */
-function PainelCurva({
-  curva, valor, desabilitado, onAlvo, onTolerancia,
+/**
+ * As três curvas do formulário numa tabela — uma linha por curva, colunas
+ * alvo, tolerância e o máximo sem justificativa (C-013). Rótulos e dicas uma
+ * vez só, no cabeçalho e no rodapé, em vez de três painéis repetidos.
+ */
+function TabelaCurvas({
+  curvas, desabilitado, onAlterar,
 }: {
-  curva: CurvaAbc;
-  valor: { alvoDias: number; toleranciaPct: number };
+  curvas: Cobertura['curvas'];
   desabilitado: boolean;
-  onAlvo: (valor: string) => void;
-  onTolerancia: (valor: string) => void;
+  onAlterar: (curva: CurvaAbc, campo: 'alvoDias' | 'toleranciaPct', valor: string) => void;
 }) {
-  const teto = tetoDaCurva(valor.alvoDias, valor.toleranciaPct);
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-rule-row p-3">
-      <p className="font-title text-[13px] font-bold text-ink">{`Curva ${curva}`}</p>
-      <LabelledField label="Alvo (dias)" obrigatorio hint="O que a compra mira.">
-        <Input
-          type="number"
-          min={0}
-          value={valor.alvoDias ? String(valor.alvoDias) : ''}
-          disabled={desabilitado}
-          onChange={(evento) => onAlvo(evento.target.value)}
-        />
-      </LabelledField>
-      <LabelledField label="Tolerância (%)" hint="0 = nenhuma folga.">
-        <Input
-          type="number"
-          min={0}
-          value={valor.toleranciaPct ? String(valor.toleranciaPct) : ''}
-          disabled={desabilitado}
-          onChange={(evento) => onTolerancia(evento.target.value)}
-        />
-      </LabelledField>
-      <Kpi
-        rotulo="Máximo sem justificativa"
-        valor={teto === null ? <Dash /> : `${dias(teto)} dias`}
-      />
+    <div className="flex flex-col gap-2">
+      <Table>
+        <thead>
+          <tr>
+            <Th className="w-24">Curva</Th>
+            <Th numeric className="w-36">Alvo (dias) <span className="text-destructive" title="Campo obrigatório" aria-label="obrigatório">*</span></Th>
+            <Th numeric className="w-36">Tolerância (%)</Th>
+            <Th numeric>Máximo sem justificativa</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {CURVAS.map((curva) => {
+            const valor = curvas[curva];
+            const teto = tetoDaCurva(valor.alvoDias, valor.toleranciaPct);
+            return (
+              <Tr key={curva}>
+                <Td><RowTitle>{`Curva ${curva}`}</RowTitle></Td>
+                <Td numeric>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="text-right"
+                    aria-label={`Alvo em dias da curva ${curva}`}
+                    value={valor.alvoDias ? String(valor.alvoDias) : ''}
+                    disabled={desabilitado}
+                    onChange={(evento) => onAlterar(curva, 'alvoDias', evento.target.value)}
+                  />
+                </Td>
+                <Td numeric>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="text-right"
+                    aria-label={`Tolerância em % da curva ${curva}`}
+                    value={valor.toleranciaPct ? String(valor.toleranciaPct) : ''}
+                    disabled={desabilitado}
+                    onChange={(evento) => onAlterar(curva, 'toleranciaPct', evento.target.value)}
+                  />
+                </Td>
+                <Td numeric>
+                  <span className="font-title text-[15px] font-bold text-ink">
+                    {teto === null ? <Dash /> : `${dias(teto)} dias`}
+                  </span>
+                </Td>
+              </Tr>
+            );
+          })}
+        </tbody>
+      </Table>
+      <RowMeta>
+        O alvo é o que a compra mira. Tolerância 0 significa nenhuma folga; o máximo sem justificativa é o alvo mais a tolerância.
+      </RowMeta>
     </div>
   );
 }
@@ -450,48 +479,42 @@ export default function CoberturasPage() {
       </Tabs>
 
       <Dialog open={emEdicao !== null} onOpenChange={(aberto) => { if (!aberto) { setEmEdicao(null); setAntesDaEdicao(null); } }}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{antesDaEdicao ? 'Editar cobertura' : 'Nova cobertura'}</DialogTitle>
+            <DialogDescription>O mais específico vence: produto, depois seção, departamento e fornecedor.</DialogDescription>
           </DialogHeader>
           <DialogBody>
             <div className="flex flex-col gap-4">
               {podeManter ? null : <Alert tone="info">{motivoBloqueio}</Alert>}
-              <LabelledField label="Nível" hint="O mais específico vence: produto, depois seção, departamento e fornecedor.">
-                <SelectMenu
-                  label="Nível da cobertura"
-                  value={emEdicao?.nivel ?? 'sku'}
-                  options={NIVEIS.map(({ value, label }) => ({ value: String(value), label }))}
-                  disabled={!podeManter}
-                  onChange={(valor) => setEmEdicao((atual) => (atual ? { ...atual, nivel: valor as NivelCobertura } : atual))}
-                />
-              </LabelledField>
-              <LabelledField label="Código" obrigatorio hint={NIVEIS.find((item) => item.value === emEdicao?.nivel)?.hint}>
-                <Input
-                  value={emEdicao?.codigo ?? ''}
-                  disabled={!podeManter}
-                  onChange={(evento) => setEmEdicao((atual) => (atual ? { ...atual, codigo: evento.target.value } : atual))}
-                />
-              </LabelledField>
-              <LabelledField label="Descrição" hint="O nome que aparece nesta lista.">
-                <Input
-                  value={emEdicao?.descricao ?? ''}
-                  disabled={!podeManter}
-                  onChange={(evento) => setEmEdicao((atual) => (atual ? { ...atual, descricao: evento.target.value } : atual))}
-                />
-              </LabelledField>
-              <GradeKpi>
-                {emEdicao ? CURVAS.map((curva) => (
-                  <PainelCurva
-                    key={curva}
-                    curva={curva}
-                    valor={emEdicao.curvas[curva]}
-                    desabilitado={!podeManter}
-                    onAlvo={(valor) => alterarCurva(curva, 'alvoDias', valor)}
-                    onTolerancia={(valor) => alterarCurva(curva, 'toleranciaPct', valor)}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <LabelledField label="Nível">
+                  <SelectMenu
+                    label="Nível da cobertura"
+                    value={emEdicao?.nivel ?? 'sku'}
+                    options={NIVEIS.map(({ value, label }) => ({ value: String(value), label }))}
+                    disabled={!podeManter}
+                    onChange={(valor) => setEmEdicao((atual) => (atual ? { ...atual, nivel: valor as NivelCobertura } : atual))}
                   />
-                )) : null}
-              </GradeKpi>
+                </LabelledField>
+                <LabelledField label="Código" obrigatorio hint={NIVEIS.find((item) => item.value === emEdicao?.nivel)?.hint}>
+                  <Input
+                    value={emEdicao?.codigo ?? ''}
+                    disabled={!podeManter}
+                    onChange={(evento) => setEmEdicao((atual) => (atual ? { ...atual, codigo: evento.target.value } : atual))}
+                  />
+                </LabelledField>
+                <LabelledField label="Descrição" hint="O nome que aparece na lista." className="sm:col-span-2">
+                  <Input
+                    value={emEdicao?.descricao ?? ''}
+                    disabled={!podeManter}
+                    onChange={(evento) => setEmEdicao((atual) => (atual ? { ...atual, descricao: evento.target.value } : atual))}
+                  />
+                </LabelledField>
+              </div>
+              {emEdicao ? (
+                <TabelaCurvas curvas={emEdicao.curvas} desabilitado={!podeManter} onAlterar={alterarCurva} />
+              ) : null}
             </div>
           </DialogBody>
           <DialogFooter>

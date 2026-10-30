@@ -212,7 +212,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-010 | desativada, a parametrização não aparece na listagem e não entra na resolução; regravada, volta com os valores enviados | regra de negócio |
 
 - O que só olho humano verifica fica em **Verificação manual**:
-  - [ ] C-013 — os três painéis de curva lado a lado no desktop, empilhados no celular, com o máximo sem justificativa legível nos dois temas
+  - [x] C-013 — as três curvas numa tabela (uma linha por curva: alvo, tolerância e o máximo sem justificativa), com nível e código lado a lado e as dicas uma vez só; legível nos dois temas *(revisado em 2026-10-30 a pedido do usuário: os três painéis lado a lado ficavam apertados na janela)*
   - [ ] C-010 — parametrização inativa sinalizada por texto, nunca só por cor, e nunca em vermelho
   - [ ] C-011 — formulário inteiro desabilitado (não escondido) para quem só lê, com o motivo visível
   - [ ] C-014 — a aba de histórico com muitas linhas rola sem empurrar o cabeçalho da página
