@@ -25,7 +25,7 @@ import { instanteIso, periodoPadrao, PRIORIDADES, tituloDoPedido, validarNovoPed
 import { QUADRO_COMPRAS } from '@/lib/quadro';
 import { DatePicker } from '@/components/DatePicker';
 import {
-  Alert, Button, Code, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader,
+  Alert, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader,
   DialogTitle, Field, SelectMenu,
 } from '@/components/page';
 
@@ -187,8 +187,8 @@ export function NovoPedidoDialogo({
           <DialogTitle>Novo pedido</DialogTitle>
           <DialogDescription>O pedido nasce na Análise/Montagem, com você como criadora e responsável.</DialogDescription>
         </DialogHeader>
-        <DialogBody>
-          <div className="flex flex-col gap-4">
+        <DialogBody className="overflow-x-hidden">
+          <div className="flex min-w-0 flex-col gap-4">
             {falha ? <Alert tone="error">{falha}</Alert> : null}
             {fornecedores !== null && fornecedores.length === 0 ? (
               <Alert tone="warn">
@@ -201,7 +201,7 @@ export function NovoPedidoDialogo({
               </Alert>
             ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Fornecedor" obrigatorio hint={erros.fornecedor}>
                 <SelectMenu
                   label="Fornecedor do pedido"
@@ -244,13 +244,11 @@ export function NovoPedidoDialogo({
                   options={PRIORIDADES.map((valor) => ({ value: valor, label: ROTULO_PRIORIDADE[valor] }))}
                 />
               </Field>
-              <Field label="Título do pedido" hint="Gerado a partir da filial e do fornecedor; não é editável.">
-                <div
-                  className="flex h-9 min-w-0 items-center overflow-hidden rounded-xl border border-input bg-muted px-3"
-                  title={titulo.trim() === '·' ? undefined : titulo}
-                >
-                  <span className="truncate"><Code>{titulo.trim() === '·' ? 'FILIAL · FORNECEDOR' : titulo}</Code></span>
-                </div>
+              <Field label="Título do pedido" hint="Gerado a partir da filial e do fornecedor; não é editável." className="sm:col-span-2">
+                {/* Texto somente leitura que quebra linha — nunca um input desabilitado vazando. */}
+                <p className="min-w-0 rounded-xl border border-input bg-muted px-3 py-2 text-[13px] break-words text-ink">
+                  {titulo.trim() === '·' ? <span className="text-ink-muted">FILIAL · FORNECEDOR</span> : titulo}
+                </p>
               </Field>
             </div>
           </div>
