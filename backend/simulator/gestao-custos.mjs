@@ -11,12 +11,20 @@
 //   SQLite, sobre a tabela CUSTO_PRODUTOS que o seed da 003 já tem no lugar da
 //   PRODUTOS do Gestão de Custos. Determinístico e sem rede.
 // - `SIMULATOR_GESTAO_CUSTOS=mitra` no backend/.env: a consulta vai à
-//   plataforma, como LEITURA, com `MITRA_BASE_URL`/`MITRA_TOKEN` (nunca
-//   commitados). Primeiro `runQueryMitra` direto no projeto
-//   `GESTAO_CUSTOS_PROJECT_ID` (60574); se o token não alcança esse projeto, cai
-//   em `callIntegrationMitra` pela conexão `gestao-de-custos` do projeto
-//   `MITRA_PROJECT_ID` (o caminho da produção). O que valeu aparece no log e no
-//   /health. Cache em memória por CODPROD (5 min) para não martelar a plataforma.
+//   plataforma, como LEITURA, com variáveis SÓ deste adaptador —
+//   `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`, `GESTAO_CUSTOS_PROJECT_ID`
+//   (60574, `runQuery` direto, o caminho preferido) e, só para o fallback pela
+//   conexão `gestao-de-custos`, `GESTAO_CUSTOS_INTEGRATIONS_URL` e
+//   `GESTAO_CUSTOS_CONEXAO_PROJECT_ID` (o projeto que tem a conexão). O SDK é
+//   uma INSTÂNCIA própria (`createMitraSdkInstance`): nada global, nada em
+//   `process.env`. O caminho que valeu aparece no log e no /health. Cache em
+//   memória por CODPROD (5 min) para não martelar a plataforma.
+//
+// NUNCA preencha MITRA_BASE_URL / MITRA_TOKEN / MITRA_BASE_URL_INTEGRATIONS /
+// MITRA_PROJECT_ID na VPS: são as variáveis de ESCRITA dos add-*.mjs e do
+// setup-backend.mjs (o `MITRA_BASE_URL` vazio é a trava "este script roda no
+// sandbox", CLAUDE.md regras 1 e 2). Este módulo não as lê — com só elas
+// preenchidas, ele NÃO liga (G-004 do smoke).
 //
 // Nunca escrita: só SELECT/WITH passam, e nada de runDml/runDdl aqui.
 
@@ -91,31 +99,33 @@ export function executorSqlite(db) {
 export async function abrirGestaoCustos({ env = process.env, log = console, db = null } = {}) {
   if (env.SIMULATOR_GESTAO_CUSTOS !== 'mitra') return db ? executorSqlite(db) : null;
 
-  const faltam = ['MITRA_BASE_URL', 'MITRA_TOKEN'].filter((chave) => !env[chave]);
-  if (faltam.length) throw new Error(`SIMULATOR_GESTAO_CUSTOS=mitra exige ${faltam.join(', ')} no backend/.env (nunca commitado).`);
+  // Só GESTAO_CUSTOS_*: as MITRA_* dos add-* nunca são lidas aqui.
+  const faltam = ['GESTAO_CUSTOS_BASE_URL', 'GESTAO_CUSTOS_TOKEN'].filter((chave) => !env[chave]);
+  if (faltam.length) throw new Error(`SIMULATOR_GESTAO_CUSTOS=mitra exige ${faltam.join(', ')} no backend/.env (nunca commitado; nunca preencha MITRA_* na VPS).`);
 
   const projectId = Number(env.GESTAO_CUSTOS_PROJECT_ID || GESTAO_CUSTOS_PROJECT_ID_PADRAO);
-  const projetoDaConexao = Number(env.MITRA_PROJECT_ID || 0);
-  const sdk = await import('mitra-sdk');
-  sdk.configureSdkMitra({
-    baseURL: env.MITRA_BASE_URL,
-    token: env.MITRA_TOKEN,
-    integrationURL: env.MITRA_BASE_URL_INTEGRATIONS || env.MITRA_BASE_URL,
+  const projetoDaConexao = Number(env.GESTAO_CUSTOS_CONEXAO_PROJECT_ID || 0);
+  const { createMitraSdkInstance } = await import('mitra-sdk');
+  // Instância própria: não configura o SDK global nem escreve em process.env.
+  const sdk = createMitraSdkInstance({
+    baseURL: env.GESTAO_CUSTOS_BASE_URL,
+    token: env.GESTAO_CUSTOS_TOKEN,
+    integrationURL: env.GESTAO_CUSTOS_INTEGRATIONS_URL || env.GESTAO_CUSTOS_BASE_URL,
   });
 
   let caminho = 'runQuery';
   async function consultar(sql) {
     if (caminho === 'runQuery') {
       try {
-        const resposta = await sdk.runQueryMitra({ projectId, sql });
+        const resposta = await sdk.runQuery({ projectId, sql });
         return resposta?.result?.rows ?? resposta?.rows ?? [];
       } catch (erro) {
-        if (!projetoDaConexao) throw erro;
+        if (!projetoDaConexao || typeof sdk.callIntegration !== 'function') throw erro;
         log.warn(`[gestao-custos] runQuery no projeto ${projectId} recusado (${String(erro.message).split('\n')[0]}); usando a conexão ${CONEXAO_GESTAO_CUSTOS} do projeto ${projetoDaConexao}.`);
         caminho = 'integration';
       }
     }
-    const resposta = await sdk.callIntegrationMitra({
+    const resposta = await sdk.callIntegration({
       projectId: projetoDaConexao, connection: CONEXAO_GESTAO_CUSTOS, method: 'POST', endpoint: 'runQuery', body: { sql },
     });
     const corpo = resposta?.body ?? resposta;

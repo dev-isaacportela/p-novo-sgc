@@ -44,14 +44,25 @@ export async function suite(ctx) {
     assert.deepEqual((await execute(def, { codprods: '' }, U.ana)).rows, []);
   });
 
-  await teste('G-004: sem SIMULATOR_GESTAO_CUSTOS=mitra, abrirGestaoCustos devolve o executor em SQLite (ou null sem banco); com a chave e sem token recusa nomeando MITRA_TOKEN, sem tentar rede', async () => {
+  await teste('G-004: sem SIMULATOR_GESTAO_CUSTOS=mitra, abrirGestaoCustos devolve o executor em SQLite (ou null sem banco); com a chave e SÓ as MITRA_* dos add-* preenchidas NÃO liga (recusa nomeando GESTAO_CUSTOS_TOKEN, sem rede); com GESTAO_CUSTOS_BASE_URL e GESTAO_CUSTOS_TOKEN liga, sem tocar em process.env', async () => {
     const silencioso = { log() {}, warn() {} };
     const local = await abrirGestaoCustos({ env: {}, log: silencioso, db });
     assert.equal(local.descricao, 'sqlite (CUSTO_PRODUTOS do seed)');
     assert.equal(await abrirGestaoCustos({ env: {}, log: silencioso }), null);
     await assert.rejects(
-      abrirGestaoCustos({ env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', MITRA_BASE_URL: 'http://x' }, log: silencioso, db }),
-      /MITRA_TOKEN/,
+      abrirGestaoCustos({
+        env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', MITRA_BASE_URL: 'http://x', MITRA_TOKEN: 't', MITRA_BASE_URL_INTEGRATIONS: 'http://x', MITRA_PROJECT_ID: '1' },
+        log: silencioso, db,
+      }),
+      /GESTAO_CUSTOS_BASE_URL, GESTAO_CUSTOS_TOKEN/,
     );
+    const antes = JSON.stringify(process.env);
+    const remoto = await abrirGestaoCustos({
+      env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local', GESTAO_CUSTOS_TOKEN: 'segredo' },
+      log: silencioso, db,
+    });
+    assert.equal(remoto.descricao, 'mitra projeto 60574 via runQuery');
+    assert.equal(typeof remoto.executar, 'function');
+    assert.equal(JSON.stringify(process.env), antes, 'o adaptador nao escreve em process.env');
   });
 }

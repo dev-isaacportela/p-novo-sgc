@@ -210,11 +210,20 @@ executa por `gestao-custos.mjs`, irmão do `winthor-oracle.mjs`:
 
 - **sem env** (padrão, e o que `npm test` usa): o SQL roda no SQLite sobre a
   `CUSTO_PRODUTOS` do seed da 003, no lugar da `PRODUTOS` do Gestão de Custos;
-- **`SIMULATOR_GESTAO_CUSTOS=mitra`** no `backend/.env`, com `MITRA_BASE_URL` e
-  `MITRA_TOKEN`: leitura na plataforma — `runQueryMitra` no projeto
-  `GESTAO_CUSTOS_PROJECT_ID` (60574) ou, se o token não o alcança, a conexão
-  `gestao-de-custos` do `MITRA_PROJECT_ID`. Só SELECT/WITH; `event.<param>` só
-  numérico; cache por CODPROD de 5 minutos. `GET /health` mostra `gestaoCustos:`.
+- **`SIMULATOR_GESTAO_CUSTOS=mitra`** no `backend/.env`, com as variáveis SÓ do
+  adaptador: `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`,
+  `GESTAO_CUSTOS_PROJECT_ID` (60574; `runQuery` direto, o caminho preferido) e,
+  só para o fallback pela conexão `gestao-de-custos`, `GESTAO_CUSTOS_INTEGRATIONS_URL`
+  e `GESTAO_CUSTOS_CONEXAO_PROJECT_ID`. O SDK é uma instância própria; nada vai
+  para `process.env`. Só SELECT/WITH; `event.<param>` só numérico; cache por
+  CODPROD de 5 minutos. `GET /health` mostra `gestaoCustos:`.
+
+  **Nunca preencha `MITRA_BASE_URL`, `MITRA_TOKEN`, `MITRA_BASE_URL_INTEGRATIONS`
+  nem `MITRA_PROJECT_ID` na VPS**: são as variáveis de escrita dos `add-*.mjs` e
+  do `setup-backend.mjs`, e o `MITRA_BASE_URL` vazio é a trava que impede um
+  `node add-*.mjs` de aplicar DDL/SF em produção sem migration (CLAUDE.md,
+  regras 1 e 2). O adaptador não as lê: com só elas preenchidas, ele não liga
+  (G-004 do smoke).
 
 Checagem ao vivo (regra 7: vazio não é verde): `npm run sim:gestao-custos` imprime a
 contagem de produtos com `UNIDADES_POR_CAIXA > 1` vinda da plataforma e falha se for 0.
