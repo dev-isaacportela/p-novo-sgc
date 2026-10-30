@@ -489,3 +489,17 @@ test('C-037: a referência Unidades/Caixas só muda o texto da sugestão — 48 
   assert.equal(textoDaSugestao(48, 12, 'caixas'), '4 cx · 48 un.');
   assert.equal(textoDaSugestao(48, 1, 'caixas'), '48 un.');
 });
+
+test('R-120: o mapa do Gestão de Custos chega à regra — produto com 6 na gestão e "CX 12" na embalagem fica com caixa 6 (origem gestão) e a sugestão sobe em múltiplos de 6; sem o mapa, 12 pela embalagem', () => {
+  const m = medida({ ESTOQUE_ATUAL: 50, EMBALAGEM: 'CX 12', UN_POR_CAIXA_ERP: 0 });
+  const opcoes = { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false };
+  const [comGestao] = montarRessuprimento([m], PARAMETRO_FIXO, alvoStub, new Map([[5401, 6]]), opcoes);
+  assert.equal(comGestao.unidadesPorCaixa, 6);
+  assert.equal(comGestao.origemCaixa, 'gestao');
+  assert.equal(comGestao.sugerida, 24, '70 − 50 = 20 → 4 caixas de 6');
+  const [semGestao] = montarRessuprimento([m], PARAMETRO_FIXO, alvoStub, new Map(), opcoes);
+  assert.equal(semGestao.unidadesPorCaixa, 12);
+  assert.equal(semGestao.origemCaixa, 'embalagem');
+  const [doErp] = montarRessuprimento([medida({ ESTOQUE_ATUAL: 50, UN_POR_CAIXA_ERP: 24 })], PARAMETRO_FIXO, alvoStub, new Map(), opcoes);
+  assert.equal(doErp.origemCaixa, 'erp');
+});

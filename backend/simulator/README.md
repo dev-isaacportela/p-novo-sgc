@@ -202,6 +202,24 @@ por `onQuery`, que nada do que foi por `runQueryMitra` cita tabela PC*.
 Testes: `smoke/000-winthor-real.mjs` (W-001..W-004) prova o roteamento com um
 executor falso, sem rede.
 
+## Gestão de Custos no simulador (`gestao-custos.mjs`)
+
+A Server Function `sgcCustoUnidadesPorCaixa` (add-006) é `INTEGRATION`: o `code` é um
+JSON com a conexão `gestao-de-custos` e o SQL com `event.codprods`. O simulador a
+executa por `gestao-custos.mjs`, irmão do `winthor-oracle.mjs`:
+
+- **sem env** (padrão, e o que `npm test` usa): o SQL roda no SQLite sobre a
+  `CUSTO_PRODUTOS` do seed da 003, no lugar da `PRODUTOS` do Gestão de Custos;
+- **`SIMULATOR_GESTAO_CUSTOS=mitra`** no `backend/.env`, com `MITRA_BASE_URL` e
+  `MITRA_TOKEN`: leitura na plataforma — `runQueryMitra` no projeto
+  `GESTAO_CUSTOS_PROJECT_ID` (60574) ou, se o token não o alcança, a conexão
+  `gestao-de-custos` do `MITRA_PROJECT_ID`. Só SELECT/WITH; `event.<param>` só
+  numérico; cache por CODPROD de 5 minutos. `GET /health` mostra `gestaoCustos:`.
+
+Checagem ao vivo (regra 7: vazio não é verde): `npm run sim:gestao-custos` imprime a
+contagem de produtos com `UNIDADES_POR_CAIXA > 1` vinda da plataforma e falha se for 0.
+Testes sem rede: `smoke/000-gestao-custos.mjs` (G-001..G-004).
+
 ## Diagnóstico e voltar ao Mitra real
 
 Iguais ao kit da skill `mitra-escopo` (`GET /health`, `VITE_MITRA_AUTH_URL` no

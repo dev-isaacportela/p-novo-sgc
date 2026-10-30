@@ -124,6 +124,32 @@ export function unidadesPorCaixa(
   return 1;
 }
 
+/** De onde veio a caixa (RN-002): a mesma cadeia de `unidadesPorCaixa`, nomeada para a tela (R-120). */
+export type OrigemUnidadesPorCaixa = 'gestao' | 'erp' | 'embalagem' | 'avulso';
+
+export const ROTULO_ORIGEM_CAIXA: Record<OrigemUnidadesPorCaixa, string> = {
+  gestao: 'Gestão de Custos',
+  erp: 'cadastro do ERP',
+  embalagem: 'embalagem',
+  avulso: 'avulso',
+};
+
+export function origemUnidadesPorCaixa(
+  linha: Pick<LinhaAnalise, 'EMBALAGEM' | 'UN_POR_CAIXA_ERP'>,
+  daGestaoDeCustos?: number,
+): OrigemUnidadesPorCaixa {
+  const gestao = Number(String(daGestaoDeCustos ?? '').replace(',', '.'));
+  if (Number.isFinite(gestao) && gestao > 1) return 'gestao';
+  const erp = Number(String(linha?.UN_POR_CAIXA_ERP ?? '').replace(',', '.'));
+  if (Number.isFinite(erp) && erp > 1) return 'erp';
+  const achado = EMBALAGEM_EM_CAIXA.exec(String(linha?.EMBALAGEM ?? '').toUpperCase());
+  if (achado) {
+    const valor = Number(achado[1] ?? achado[2]);
+    if (Number.isFinite(valor) && valor > 1) return 'embalagem';
+  }
+  return 'avulso';
+}
+
 /** RN-002: sobe para o próximo múltiplo da caixa. */
 export function arredondarPorCaixa(sugestao: number, unidades: number): number {
   if (numero(sugestao) <= 0 || numero(unidades) <= 1) return numero(sugestao);

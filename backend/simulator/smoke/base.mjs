@@ -15,6 +15,7 @@ import { SEED, FRONTEND_MAP } from '../config.mjs';
 import { seedDatabase, USUARIOS, CENARIO, FASES } from '../seed.mjs';
 import { registerMysqlFunctions } from '../mysql-dialect.mjs';
 import { loadDefinitions, createRunner } from '../runtime.mjs';
+import { executorSqlite } from '../gestao-custos.mjs';
 import { idsDoMapa } from '../../ids-do-mapa.mjs';
 
 export { assert, USUARIOS, CENARIO, FASES, FRONTEND_MAP };
@@ -45,6 +46,8 @@ export async function abrirContexto() {
   const execute = createRunner(db, {
     resolveById: (id) => byId.get(id) ?? null,
     onEmail: (email) => emails.push(email),
+    // A INTEGRATION gestao-de-custos (sgcCustoUnidadesPorCaixa) roda no SQLite.
+    externos: [executorSqlite(db)],
   });
 
   const U = CENARIO.usuarios;

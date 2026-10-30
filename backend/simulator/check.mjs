@@ -16,6 +16,7 @@ import { SEED, CHECK_INPUT } from './config.mjs';
 import { seedDatabase } from './seed.mjs';
 import { registerMysqlFunctions } from './mysql-dialect.mjs';
 import { loadDefinitions, createRunner } from './runtime.mjs';
+import { executorSqlite } from './gestao-custos.mjs';
 
 // Banco descartavel proprio (como o smoke): o banco de desenvolvimento em
 // simulator/data/ pode ser anterior ao schema atual e faria o check mentir.
@@ -25,7 +26,8 @@ seedDatabase(DB, { reset: true });
 const db = new DatabaseSync(DB);
 registerMysqlFunctions(db);
 const { byName, overridden } = await loadDefinitions();
-const execute = createRunner(db);
+// A INTEGRATION gestao-de-custos roda no SQLite (CUSTO_PRODUTOS do seed), como no simulador.
+const execute = createRunner(db, { externos: [executorSqlite(db)] });
 
 const resultados = [];
 for (const [name, definition] of byName) {
@@ -33,7 +35,7 @@ for (const [name, definition] of byName) {
     resultados.push({ name, status: 'pulado', detalhe: 'JAVASCRIPT' });
     continue;
   }
-  if (!/^\s*(SELECT|WITH)/i.test(definition.code)) {
+  if (definition.type !== 'INTEGRATION' && !/^\s*(SELECT|WITH)/i.test(definition.code)) {
     // Diferenca que o dialeto esconde: no MySQL, `INSERT ... SELECT <expr> WHERE ...`
     // sem FROM e erro de sintaxe (precisa de FROM DUAL); o SQLite aceita. O
     // tradutor apaga o FROM DUAL, entao o unico jeito de pegar isso aqui e olhar

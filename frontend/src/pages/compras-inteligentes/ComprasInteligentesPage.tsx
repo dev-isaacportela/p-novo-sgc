@@ -4,13 +4,15 @@
 // de visão, lista à esquerda e painel de detalhe fixo à direita, carrinho em
 // janela.
 //
-// Custo de execução (RNF-001, emendada em R-117): abrir a tela custa 4
+// Custo de execução (RNF-001, emendada em R-117 e R-120): abrir a tela custa 4
 // chamadas (fornecedores, eficiência, quadro e o resumo por fornecedor);
 // escolher o fornecedor custa 1 (filiais e pedido mínimo); escolher a filial
-// custa 7 — cinco em paralelo (parâmetros, vendas desconsideradas, coberturas,
-// pedido aberto e itens em pedido aberto) e, com a lista de vendas
-// desconsideradas em mãos, UMA `sgcWintRessuprimento`. Selecionar um produto
-// custa 3, uma vez por produto (cache). Nada por linha.
+// custa 8 — cinco em paralelo (parâmetros, vendas desconsideradas, coberturas,
+// pedido aberto e itens em pedido aberto), UMA `sgcWintRessuprimento` com a
+// lista de vendas desconsideradas em mãos e, com os produtos em mãos, UMA
+// `sgcCustoUnidadesPorCaixa` (lotes de 1000 códigos: 300 produtos = 1
+// execução). Selecionar um produto custa 3, uma vez por produto (cache). Nada
+// por linha.
 //
 // Filtrar, ordenar, trocar de visão, ligar o seletor de licitação e alternar
 // Unidades/Caixas não custam nenhuma execução (RNF-005): a fórmula é
@@ -58,6 +60,8 @@ const REFERENCIAS: { value: ReferenciaSugestao; label: string }[] = [
   { value: 'unidades', label: 'Unidades' }, { value: 'caixas', label: 'Caixas' },
 ];
 const DIAS_RESUMO = 90;
+/** Lote de códigos por chamada ao Gestão de Custos (R-120). */
+const LOTE_CAIXAS = 1000;
 
 /** A janela da tela: 153 dias terminados hoje, fixa e mostrada (D-016). */
 function janelaDeHoje() {
@@ -103,6 +107,7 @@ export default function ComprasInteligentesPage() {
   const [boardId, setBoardId] = React.useState(0);
 
   const [medidas, setMedidas] = React.useState<MedidaRessuprimento[]>([]);
+  const [porCaixa, setPorCaixa] = React.useState<Map<number, number>>(() => new Map());
   const [parametros, setParametros] = React.useState<ParametroCompra[]>([]);
   const [coberturas, setCoberturas] = React.useState<Cobertura[]>([]);
   const [desconsideradas, setDesconsideradas] = React.useState<{ numtransitem: number; codprod: number }[]>([]);
@@ -231,6 +236,22 @@ export default function ComprasInteligentesPage() {
         setMedidas(rows as unknown as MedidaRessuprimento[]);
         setQuantidades({});
         setErro('');
+
+        // R-120: as unidades por caixa do Gestão de Custos, UMA execução por lote
+        // de 1000 códigos. A integração pode não existir no ambiente: sem ela,
+        // a caixa cai no cadastro do ERP e na embalagem (RN-002 da 003).
+        const codprods = rows.map((r) => Number(r.CODPROD)).filter((n) => n > 0);
+        const mapa = new Map<number, number>();
+        try {
+          for (let i = 0; i < codprods.length; i += LOTE_CAIXAS) {
+            const lote = codprods.slice(i, i + LOTE_CAIXAS);
+            for (const linha of await linhas('sgcCustoUnidadesPorCaixa', { codprods: lote.join(',') })) {
+              mapa.set(Number(linha.CODPROD), Number(linha.UNIDADES_POR_CAIXA));
+            }
+          }
+        } catch { /* a embalagem resolve */ }
+        if (!vivo) return;
+        setPorCaixa(mapa);
       })
       .catch(() => {
         if (!vivo) return;
@@ -283,13 +304,13 @@ export default function ComprasInteligentesPage() {
     codepto: Number(l.medida.CODEPTO), codfornec: Number(codfornec),
   }, l.curva).limiteDias, [coberturas, codfornec]);
 
-  // O mapa de unidades por caixa vem vazio de propósito: `sgcCustoUnidadesPorCaixa`
-  // seria mais uma execução na carga. Sem ele, `unidadesPorCaixa` cai no
-  // cadastro do ERP e, na falta dele, na embalagem — a cadeia de RN-002 da 003.
+  // R-120: o mapa de unidades por caixa vem do Gestão de Custos (uma execução
+  // por carga); o que não está lá cai no cadastro do ERP e na embalagem — a
+  // cadeia de RN-002 da 003, e a origem fica na linha para o painel mostrar.
   const todas = React.useMemo(() => montarRessuprimento(
-    medidas, parametros, alvoDaCurvaDias, new Map(),
+    medidas, parametros, alvoDaCurvaDias, porCaixa,
     { codfornec: Number(codfornec), hoje, desconsiderarLicitacao },
-  ), [medidas, parametros, alvoDaCurvaDias, codfornec, hoje, desconsiderarLicitacao]);
+  ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao]);
 
   const contagens = React.useMemo(() => contarVisoes(todas), [todas]);
 

@@ -288,7 +288,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 
 | ID | Requisito | Como se mede |
 |---|---|---|
-| RNF-001 | Abrir a tela custa no máximo **4** chamadas ao servidor (R-117: fornecedores, eficiência, quadro e o resumo por fornecedor); escolher o fornecedor **1**; escolher a filial **7**; selecionar um produto **3**, uma vez por produto — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
+| RNF-001 | Abrir a tela custa no máximo **4** chamadas ao servidor (R-117: fornecedores, eficiência, quadro e o resumo por fornecedor); escolher o fornecedor **1**; escolher a filial **8** (R-120: a oitava é a das unidades por caixa do Gestão de Custos, em lotes de até 1000 produtos); selecionar um produto **3**, uma vez por produto — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
 | RNF-002 | Criar o pedido a partir do carrinho custa **3** chamadas por fornecedor e filial, qualquer que seja o número de itens | Contador com 1 e com 60 itens no carrinho: sempre 3 |
 | RNF-003 | Selecionar um produto na lista custa **3** chamadas, uma vez por produto (o detalhe completo reusa o que já veio); abrir a lista de vendas para desconsiderar, mais **1**; desconsiderar ou reconsiderar uma venda, **3** (gravar, reler a lista do que ficou desconsiderado e refazer a medida) | Contador ao selecionar, ao abrir o diálogo de vendas e ao marcar uma venda |
 | RNF-004 | A lista de um fornecedor com 300 produtos volta em uma consulta e é desenhada em até 3 s | Cronômetro sobre o fornecedor com mais produtos |
@@ -334,6 +334,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **RN-025 — Filial com excesso.** Cobertura da filial = estoque disponível ÷ (venda de 3 meses ÷ 90). Há excesso quando a cobertura passa do teto (a cobertura alvo do produto) ou quando há estoque sem venda nenhuma. A filial da tela nunca entra. Sem giro primeiro, depois a maior cobertura.
 - **RN-026 — Resumo por fornecedor.** É estimativa: venda dos últimos 90 dias sem ponderação, cobertura de 35 dias, estoque disponível e pedido ao ERP somados em todas as filiais, custo da última entrada, nenhum parâmetro de SKU nem curva. Serve ao rótulo do seletor; a sugestão exata é a da lista.
 - **RN-027 — Variação e economia.** Variação = (custo atual − custo da última entrada) ÷ custo da última entrada; vermelho quando subiu, verde quando caiu; sem um dos dois custos não há variação. Economia no custo = soma de (última entrada − atual) × quantidade só nos itens em que o custo caiu.
+- **RN-028 — Unidades por caixa (R-120).** A caixa de cada produto vem do Gestão de Custos quando ele a tem; senão do cadastro do ERP; senão da embalagem; senão é avulso — a mesma cadeia da montagem do pedido (RN-002 da 003). A tela mostra de onde veio, e a sugestão, a referência Unidades/Caixas e a simulação usam a caixa resolvida.
 
 ## Testes
 
@@ -396,6 +397,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-037 | (48, 12, unidades) → "48 un. · 4 cx"; (48, 12, caixas) → "4 cx · 48 un."; (48, 1) → "48 un." | regra de tela |
 | C-038 | ordem por código, nome e curva (A, B, C); cada filtro de movimentação devolve só as linhas certas | regra de tela |
 | C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
+| RN-028 | produto com 6 no Gestão de Custos e "CX 12" na embalagem fica com caixa 6 e origem gestão (sugestão em múltiplos de 6); sem o mapa, 12 pela embalagem; com 24 no ERP, origem ERP; a integração no simulador devolve 12 e 24 para 5001 e 5002 e nada para 5010 | regra de tela + regra de negócio |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-001 — a lista com 300 produtos rola sem travar, com os números alinhados à direita e o código do produto discreto

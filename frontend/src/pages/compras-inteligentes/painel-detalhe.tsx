@@ -16,7 +16,7 @@ import {
   RowTitle, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
-import { arredondarPorCaixa } from '@/lib/compras';
+import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa } from '@/lib/compras';
 import { JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, textoDaSugestao } from '@/lib/ressuprimento';
 import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from '@/lib/ressuprimento';
 import { filiaisComExcesso, simularCompra } from '@/lib/ressuprimento-detalhe';
@@ -196,7 +196,7 @@ export function PainelDetalhe({
               <Tr><Td>Disponível</Td><Td numeric>{quantidade(linha.estoqueAtual)}</Td></Tr>
               <Tr><Td>Pedido ao ERP · em trânsito</Td><Td numeric>{`${quantidade(m.QT_PEDIDA_ERP)} · ${quantidade(m.QT_TRANSITO)}`}</Td></Tr>
               <Tr><Td>Embalagem · unidade</Td><Td numeric>{`${String(m.EMBALAGEM) || '—'} · ${String(m.UNIDADE) || '—'}`}</Td></Tr>
-              <Tr><Td>Unidades por caixa</Td><Td numeric>{linha.unidadesPorCaixa}</Td></Tr>
+              <Tr><Td>Unidades por caixa</Td><Td numeric>{`${linha.unidadesPorCaixa} (${ROTULO_ORIGEM_CAIXA[linha.origemCaixa]})`}</Td></Tr>
               <Tr><Td>Departamento · seção</Td><Td numeric>{`${m.CODEPTO} · ${m.CODSEC}`}</Td></Tr>
               <Tr><Td>Código de fábrica</Td><Td numeric>{m.CODFAB ? <Code>{String(m.CODFAB)}</Code> : <Dash />}</Td></Tr>
               <Tr><Td>Custo da última entrada</Td><Td numeric>{moeda(Number(m.CUSTO_ULT_ENTRADA))}</Td></Tr>
@@ -303,6 +303,7 @@ export function PainelDetalhe({
               <Tr><Td>Estoque de segurança</Td><Td numeric>{quantidade(linha.estoqueSeguranca)}</Td></Tr>
               <Tr><Td>Ponto de pedido</Td><Td numeric>{quantidade(linha.pontoDePedido)}</Td></Tr>
               <Tr><Td>Estoque máximo</Td><Td numeric>{quantidade(linha.estoqueMaximo)}</Td></Tr>
+              <Tr><Td>Unidades por caixa</Td><Td numeric>{`${linha.unidadesPorCaixa} (${ROTULO_ORIGEM_CAIXA[linha.origemCaixa]})`}</Td></Tr>
               <Tr><Td>Janela de venda</Td><Td numeric>{`${JANELA_DIAS} dias`}</Td></Tr>
             </tbody>
           </Table>

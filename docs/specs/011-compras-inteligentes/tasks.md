@@ -138,6 +138,7 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 - [x] **T-099** — Testes: `tests/ressuprimento.test.mjs` (C-026, C-027, RN-020, C-038, C-031, C-037), `tests/ressuprimento-detalhe.test.mjs` (C-032, C-033, C-034, RN-025), `tests/carrinho.test.mjs` (C-028, C-029, C-030, C-039, RN-021..RN-023, RN-027), `smoke/011` (C-035, C-036, C-039)
 - [x] **T-100** — `npm test` verde nos dois lados; `npm run build` e `npm run lint` limpos
 - [x] **T-101** — Verificação manual no simulador (VPS, WinThor real, Coloplast × filial 1): cards de visão, seleção e painel compacto, gráfico com rótulos, carrinho com mínimo, variação e arquivo, retomada do carrinho salvo — nos dois temas
+- [x] **T-102** — *(R-120)* `sgcCustoUnidadesPorCaixa` uma vez por carga (lotes de 1000) → `Map` de `montarRessuprimento`; `origemCaixa` na linha (`origemUnidadesPorCaixa` em `lib/compras.ts`) e no painel; simulador roda a INTEGRATION (`gestao-custos.mjs`: SQLite por padrão, plataforma com `SIMULATOR_GESTAO_CUSTOS=mitra`); testes em `tests/compras.test.mjs`, `tests/ressuprimento.test.mjs` e `smoke/000-gestao-custos.mjs`; checagem ao vivo `npm run sim:gestao-custos` → `frontend/src/pages/compras-inteligentes/ComprasInteligentesPage.tsx`, `lib/compras.ts`, `lib/ressuprimento.ts`, `backend/simulator/gestao-custos.mjs`
 
 ## Dependências
 

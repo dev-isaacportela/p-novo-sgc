@@ -15,8 +15,8 @@
 
 // Extensão explícita, como em `compras.ts`: `allowImportingTsExtensions` está
 // ligado e é assim que o `node --test` de frontend/tests/ resolve o módulo.
-import { arredondarPorCaixa, curvaAbc, unidadesPorCaixa } from './compras.ts';
-import type { CurvaAbc, ItemPedido } from './compras.ts';
+import { arredondarPorCaixa, curvaAbc, origemUnidadesPorCaixa, unidadesPorCaixa } from './compras.ts';
+import type { CurvaAbc, ItemPedido, OrigemUnidadesPorCaixa } from './compras.ts';
 
 export type StatusRessuprimento =
   'ruptura' | 'excesso' | 'elevada_exposicao' | 'baixa_exposicao' | 'adequado';
@@ -233,6 +233,8 @@ export interface LinhaRessuprimento extends Ressuprimento {
   medida: MedidaRessuprimento; curva: CurvaAbc;
   parametros: ParametrosResolvidos; unidadesPorCaixa: number; silenciado: boolean;
   silenciadoAte: string; motivoSilencio: string;
+  /** R-120: de onde veio a caixa — Gestão de Custos, cadastro do ERP, embalagem ou avulso. */
+  origemCaixa: OrigemUnidadesPorCaixa;
 }
 
 /** O alvo em dias da curva do item. A TELA injeta; esta lib não conhece `SGC_COBERTURA`. */
@@ -267,7 +269,8 @@ export function montarRessuprimento(
       curva,
     );
     const resolvidos = resolverParametros(doSku, doFornecedor, numero(medida.LEAD_TIME_MEDIDO), alvo);
-    const porCaixa = unidadesPorCaixa(medida, unidadesPorCaixaPorProduto?.get(codprod));
+    const daGestao = unidadesPorCaixaPorProduto?.get(codprod);
+    const porCaixa = unidadesPorCaixa(medida, daGestao);
     const calculo = calcularRessuprimento(medida, resolvidos, {
       unidadesPorCaixa: porCaixa,
       desconsiderarLicitacao: opcoes.desconsiderarLicitacao,
@@ -278,6 +281,7 @@ export function montarRessuprimento(
       curva,
       parametros: resolvidos,
       unidadesPorCaixa: porCaixa,
+      origemCaixa: origemUnidadesPorCaixa(medida, daGestao),
       silenciado: estaSilenciado(doSku?.silenciadoAte ?? '', opcoes.hoje),
       silenciadoAte: doSku?.silenciadoAte ?? '',
       motivoSilencio: doSku?.motivoSilencio ?? '',

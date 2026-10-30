@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  mesesDoPeriodo, sugestaoDeCompra, unidadesPorCaixa, arredondarPorCaixa,
+  mesesDoPeriodo, sugestaoDeCompra, unidadesPorCaixa, arredondarPorCaixa, origemUnidadesPorCaixa,
   curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens, itemDeLinha, itemDeProdutoBuscado,
 } from '../src/lib/compras.ts';
 
@@ -151,4 +151,13 @@ test('RF-022: itemDeLinha lê ID_SOLICITACAO e SOLICITACAO_VENDEDOR; item sem so
   const semOrigem = itemDeLinha(base);
   assert.equal(semOrigem.idSolicitacao, 0, 'coluna ausente não vira NaN');
   assert.equal(semOrigem.solicitacaoDe, '', 'sem vendedor a etiqueta não aparece');
+});
+
+test('R-120 / RN-002: a origem das unidades por caixa segue a mesma cadeia — gestão de custos, cadastro do ERP, embalagem, avulso', () => {
+  const l = (EMBALAGEM, UN_POR_CAIXA_ERP) => ({ EMBALAGEM, UN_POR_CAIXA_ERP });
+  assert.equal(origemUnidadesPorCaixa(l('CX 12', 24), 6), 'gestao');
+  assert.equal(origemUnidadesPorCaixa(l('CX 12', 24)), 'erp');
+  assert.equal(origemUnidadesPorCaixa(l('CX 12', 0)), 'embalagem');
+  assert.equal(origemUnidadesPorCaixa(l('FRASCO 100 ML', 0)), 'avulso');
+  assert.equal(origemUnidadesPorCaixa(l('FRASCO 100 ML', 1), 1), 'avulso', '1 não é caixa');
 });
