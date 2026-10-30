@@ -203,8 +203,9 @@ export interface ItemDeMenu {
 
 const MENU: readonly (ItemDeMenu & { exige: keyof Permissoes })[] = [
   { grupo: 'Compras', to: '/quadro', label: 'Quadro de compras', exige: 'verQuadro' },
-  { grupo: 'Compras', to: '/pedidos/novo', label: 'Novo pedido', exige: 'criarPedido' },
-  // Onda 4 (R-095): logo depois de "Novo pedido"; o comercial continua fora.
+  // R-118 (2026-10-30): "Novo pedido" saiu do menu — criar pedido é só pelo
+  // botão do quadro, numa janela sobre ele.
+  // Onda 4 (R-095): logo depois do quadro; o comercial continua fora.
   { grupo: 'Compras', to: '/compras-inteligentes', label: 'Compras inteligentes', exige: 'verComprasInteligentes' },
   // Onda 3 (R-056/R-063): com este item o comercial passa a ter DOIS de menu
   // — Solicitações e Produtos em B.O.

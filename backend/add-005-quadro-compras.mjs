@@ -389,7 +389,7 @@ FROM (${notificacoesUniao()}) N`,
     {
       name: 'sgcEscPedidoCriar',
       type: 'SQL',
-      description: 'RF-001 - capa do pedido criado pela TELA (:VAR_USER), depois de kbCardCriar. Idempotente por ID_CARD. A origem vem de quem chama, com lista fechada (R-098/R-106): /pedidos/novo manda "manual", o carrinho da 011 manda "compras_inteligentes"; o cron da agenda tem a sua propria escrita (sgcEscPedidoCapaInserir). Params: cardId, codfornec, fornecedor, codfilial, filial, periodoInicio, periodoFim, origem, agora.',
+      description: 'RF-001 - capa do pedido criado pela TELA (:VAR_USER), depois de kbCardCriar. Idempotente por ID_CARD. A origem vem de quem chama, com lista fechada (R-098/R-106): a janela Novo pedido do quadro manda "manual", o carrinho da 011 manda "compras_inteligentes"; o cron da agenda tem a sua propria escrita (sgcEscPedidoCapaInserir). Params: cardId, codfornec, fornecedor, codfilial, filial, periodoInicio, periodoFim, origem, agora.',
       code: `INSERT INTO SGC_PEDIDO
   (ID_CARD, CODFORNEC, FORNECEDOR, CODFILIAL, FILIAL, PERIODO_INICIO, PERIODO_FIM, ORIGEM, ID_AGENDA, CRIADO_POR, CRIADO_EM, ATUALIZADO_EM)
 SELECT {{cardId}}, {{codfornec}}, '{{fornecedor}}', '{{codfilial}}', '{{filial}}',

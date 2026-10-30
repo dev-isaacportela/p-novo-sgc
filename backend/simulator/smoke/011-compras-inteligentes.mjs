@@ -274,7 +274,7 @@ export async function suite(ctx) {
     assert.equal(String(produto(rows, 5401).CODFAB), 'FAB-5401');
   });
 
-  await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho de /pedidos/novo — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
+  await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho do Novo pedido do quadro — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
     const medidas = await ressuprimento();
     assert.ok(medidas.length > 0, 'consulta ao WinThor sem linha nao e verde');
 

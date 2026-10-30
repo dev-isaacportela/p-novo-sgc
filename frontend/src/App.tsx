@@ -10,7 +10,6 @@ import { Alert, Button, Card } from '@/components/page';
 import LoginPage from '@/pages/LoginPage';
 import QuadroPage from '@/pages/quadros/QuadroPage';
 import QuadroAdminPage from '@/pages/quadros/QuadroAdminPage';
-import NovoPedidoPage from '@/pages/pedidos/NovoPedidoPage';
 import FornecedoresPage from '@/pages/fornecedores/FornecedoresPage';
 import FornecedorPage from '@/pages/fornecedores/FornecedorPage';
 import CoberturasPage from '@/pages/coberturas/CoberturasPage';
@@ -94,7 +93,8 @@ function Autenticado() {
         <Route index element={<Navigate to="/quadro" replace />} />
         <Route path="quadro" element={<QuadroPage />} />
         <Route path="quadro/admin" element={<QuadroAdminPage />} />
-        <Route path="pedidos/novo" element={<NovoPedidoPage />} />
+        {/* R-118: o Novo pedido é janela sobre o quadro; o link antigo abre a janela. */}
+        <Route path="pedidos/novo" element={<Navigate to="/quadro?novo=1" replace />} />
         <Route path="compras-inteligentes" element={<ComprasInteligentesPage />} />
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="fornecedores/:codfornec" element={<FornecedorPage />} />

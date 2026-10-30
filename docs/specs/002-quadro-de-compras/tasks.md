@@ -69,6 +69,8 @@ com o id no título.
 - [ ] **T-092** — verificação manual no simulador, com os 5 logins do seed: C-035 (a capa do cartão), C-040 (ação desabilitada com o motivo), C-023 (destino apagado ao lado da ação "Cancelar compra"), C-041 e C-042 (as duas telas novas)
 - [ ] **T-093** — as quatro telas nos dois temas (claro e escuro), sem cor literal e sem `style={{}}`
 
+- [x] **T-034b** — *(2026-10-30, R-118)* `NovoPedidoPage` vira `NovoPedidoDialogo` (janela sobre o quadro, estado na URL `?novo=1`); `QuadroPage` abre a janela no `novoCard` e remonta o quadro ao criar; `/pedidos/novo` redireciona para `/quadro?novo=1`; item de menu, ícone e `ROTA_NOVO_PEDIDO` saem; testes C-036 e do menu ajustados → `frontend/src/pages/pedidos/NovoPedidoDialogo.tsx`, `pages/quadros/QuadroPage.tsx`, `App.tsx`, `lib/permissoes.ts`, `components/AdminLayout.tsx`, `lib/quadro.ts`
+
 ## Dependências
 
 ```

@@ -18,7 +18,8 @@ import { acao, linhas } from '@/lib/mitra-api';
 import { usePersona } from '@/lib/persona';
 import { estadoDoPedido, type PedidoCapa } from '@/lib/pedido';
 import { motivoDeDestino, motivoDeExcluir, type ChaveFase } from '@/lib/transicoes';
-import { ATUALIZAR_A_CADA_MS, QUADRO_COMPRAS, ROTA_NOVO_PEDIDO, ROTULO_NOVO_PEDIDO } from '@/lib/quadro';
+import { ATUALIZAR_A_CADA_MS, QUADRO_COMPRAS, ROTULO_NOVO_PEDIDO } from '@/lib/quadro';
+import { NovoPedidoDialogo } from '@/pages/pedidos/NovoPedidoDialogo';
 import { Alert, EmptyState, PageHeader } from '@/components/page';
 import AcoesDoPedido, { type MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
 import { PedidoProvider } from '@/pages/quadros/abas/PedidoProvider';
@@ -58,6 +59,13 @@ export default function QuadroPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const cardId = Number(params.get('card') || 0) || null;
+  // C-036 (R-118): a janela "Novo pedido" vive na URL (?novo=1), como o card
+  // aberto — assim o link antigo /pedidos/novo, que redireciona para cá, abre
+  // a janela sem estado extra.
+  const novoAberto = params.get('novo') === '1';
+  // Trocar a `key` remonta o quadro: é como a lista mostra o card recém-criado
+  // sem esperar os 60 s da atualização periódica (a lib não expõe recarga por fora).
+  const [boardVersao, setBoardVersao] = React.useState(0);
   const sessao = usePersona();
   const fases = useMapaDeFases();
   const [pedido, setPedido] = React.useState<PedidoCapa | null>(null);
@@ -169,13 +177,14 @@ export default function QuadroPage() {
   return (
     <PedidoProvider>
     <KanbanBoard
+      key={boardVersao}
       slug={QUADRO_COMPRAS}
       cardId={cardId}
       onCardChange={(id) => setParams(id ? { card: String(id) } : {}, { replace: true })}
       onAdministrar={sessao.permissoes.administrarQuadro ? () => navigate('/quadro/admin') : undefined}
       novoCard={
         sessao.permissoes.criarPedido
-          ? { rotulo: ROTULO_NOVO_PEDIDO, onClick: () => navigate(ROTA_NOVO_PEDIDO) }
+          ? { rotulo: ROTULO_NOVO_PEDIDO, onClick: () => setParams({ novo: '1' }, { replace: true }) }
           : false
       }
       atualizarACadaMs={ATUALIZAR_A_CADA_MS}
@@ -193,6 +202,16 @@ export default function QuadroPage() {
         />
       )}
     />
+    {sessao.permissoes.criarPedido ? (
+      <NovoPedidoDialogo
+        aberto={novoAberto}
+        onFechar={() => setParams({}, { replace: true })}
+        onCriado={(id) => {
+          setBoardVersao((atual) => atual + 1);
+          setParams({ card: String(id) }, { replace: true });
+        }}
+      />
+    ) : null}
     </PedidoProvider>
   );
 }

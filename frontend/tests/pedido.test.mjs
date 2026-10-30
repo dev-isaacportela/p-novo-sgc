@@ -6,8 +6,9 @@ import {
   estadoDoPedido, periodoPadrao, PERIODO_PADRAO_DIAS, PRIORIDADES,
   tituloDoPedido, validarEnvio, validarMotivo, validarNovoPedido,
 } from '../src/lib/pedido.ts';
+import { PERSONAS, menuParaPersona, permissoesDe } from '../src/lib/permissoes.ts';
 import {
-  ATUALIZAR_A_CADA_MS, QUADRO_COMPRAS, ROTA_NOVO_PEDIDO, ROTULO_NOVO_PEDIDO,
+  ATUALIZAR_A_CADA_MS, QUADRO_COMPRAS, ROTULO_NOVO_PEDIDO,
 } from '../src/lib/quadro.ts';
 
 test('RN-014: o título é "FILIAL · FORNECEDOR", em maiúsculas', () => {
@@ -79,10 +80,15 @@ test('RN-018: a prioridade é normal, alta ou urgente, e nasce normal', () => {
   assert.equal(PRIORIDADES[0], 'normal');
 });
 
-test('C-036: o quadro oferece um botão "Novo pedido", que leva à criação do SGC', () => {
+test('C-036 (R-118): o quadro oferece um botão "Novo pedido" que abre a criação numa janela sobre o quadro — e o menu de nenhuma persona leva a /pedidos/novo', () => {
   assert.equal(ROTULO_NOVO_PEDIDO, 'Novo pedido');
-  assert.equal(ROTA_NOVO_PEDIDO, '/pedidos/novo');
   assert.equal(QUADRO_COMPRAS, 'compras');
+  for (const persona of PERSONAS) {
+    for (const nivel of ['ADMIN', 'MEMBER', 'RESTRICTED', 'READ_ONLY']) {
+      const rotas = menuParaPersona(permissoesDe(persona, nivel)).map((item) => item.to);
+      assert.equal(rotas.includes('/pedidos/novo'), false, `${persona}/${nivel} ainda tem Novo pedido no menu`);
+    }
+  }
 });
 
 test('C-037 / RNF-002: o quadro se atualiza sozinho a cada 60 segundos', () => {

@@ -9,9 +9,7 @@
 import * as React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, BarChart3, Bell, CalendarClock, ClipboardList, FileText, Gauge,
-  KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, PlusCircle, Receipt,
-  ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
+  AlertTriangle, BarChart3, Bell, CalendarClock, ClipboardList, FileText, Gauge, KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Receipt, ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -25,7 +23,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 // O que cada pessoa vê é regra de permissão (P-03, spec 002 T-040): vem de
 // menuParaPersona; aqui só o ícone de cada rota. Comercial fica com zero itens.
 const ICONES: Record<string, LucideIcon> = {
-  '/quadro': KanbanSquare, '/pedidos/novo': PlusCircle, '/agenda': CalendarClock, '/notificacoes': Bell,
+  '/quadro': KanbanSquare, '/agenda': CalendarClock, '/notificacoes': Bell,
   '/fornecedores': Truck, '/coberturas': Gauge, '/seguranca': ShieldCheck,
   // Onda 2 (005-007):
   '/notas-fiscais': FileText, '/faturamentos-pendentes': Receipt, '/nfs-em-atraso': AlertTriangle, '/bo': PackageX,

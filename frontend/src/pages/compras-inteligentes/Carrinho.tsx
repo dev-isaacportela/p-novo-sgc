@@ -1,7 +1,7 @@
 // O carrinho em janela do layout legado da 011 (R-117 / C-028..C-030, RF-017,
 // RF-018 / C-018, C-019, RN-015, RN-016, RN-022, RN-023, RN-027).
 //
-// O pedido nasce pelo MESMO caminho de `/pedidos/novo` (R-091/D-007): três
+// O pedido nasce pelo MESMO caminho do "Novo pedido" do quadro (R-091/D-007): três
 // execuções por grupo de fornecedor + filial — `api.cardCriar`,
 // `sgcEscPedidoCriar` com `origem: 'compras_inteligentes'` e `sgcItensGravar`
 // em lote. Nenhuma Server Function JavaScript nova. O "Por que comprar" vai

@@ -78,17 +78,17 @@ test('RN-015 / P-13: excluem pedido admin, gestor e diretoria; veem Segurança a
   assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').aprovarDiretoria), ['admin', 'diretoria']);
 });
 
-test('menuParaPersona: o menu do analista tem quadro, novo pedido, agenda, notificações, B.O., fornecedores e o grupo Fiscal — e nada de segurança nem coberturas', () => {
+test('menuParaPersona: o menu do analista tem quadro, compras inteligentes, agenda, notificações, B.O., fornecedores e o grupo Fiscal — nada de novo pedido (R-118), segurança nem coberturas', () => {
   const rotas = menuParaPersona(permissoesDe('analista', 'MEMBER')).map((item) => item.to);
   assert.deepEqual(rotas, [
-    '/quadro', '/pedidos/novo', '/compras-inteligentes', '/solicitacoes', '/agenda', '/notificacoes',
+    '/quadro', '/compras-inteligentes', '/solicitacoes', '/agenda', '/notificacoes',
     '/bo', '/fornecedores',
     '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso',
     '/analises',
   ]);
   assert.ok(menuParaPersona(permissoesDe('admin', 'ADMIN')).some((item) => item.to === '/seguranca'));
   assert.ok(menuParaPersona(permissoesDe('gestor', 'MEMBER')).some((item) => item.to === '/coberturas'));
-  // Somente leitura vê o quadro, mas não a criação de pedido.
+  // Somente leitura vê o quadro; a criação de pedido não está no menu de ninguém (R-118).
   const leitura = menuParaPersona(permissoesDe('gestor', 'READ_ONLY')).map((item) => item.to);
   assert.ok(leitura.includes('/quadro'));
   assert.equal(leitura.includes('/pedidos/novo'), false);
@@ -178,11 +178,11 @@ test('C-023 / RN-019 (011, R-095): chaves novas de compras inteligentes — ver 
   assert.equal(restrito.operarComprasInteligentes, true);
   assert.equal(restrito.somenteProprios, true);
 
-  // Menu: grupo Compras, logo depois de "Novo pedido"; o comercial fica fora.
+  // Menu: grupo Compras, logo depois do quadro (R-118 tirou "Novo pedido"); o comercial fica fora.
   const compras = menuParaPersona(permissoesDe('gestor', 'MEMBER')).filter((i) => i.grupo === 'Compras');
-  assert.equal(compras[1].to, '/pedidos/novo');
-  assert.equal(compras[2].to, '/compras-inteligentes');
-  assert.equal(compras[2].label, 'Compras inteligentes');
+  assert.equal(compras[0].to, '/quadro');
+  assert.equal(compras[1].to, '/compras-inteligentes');
+  assert.equal(compras[1].label, 'Compras inteligentes');
   assert.equal(
     menuParaPersona(permissoesDe('comercial', 'MEMBER')).some((i) => i.to === '/compras-inteligentes'),
     false,

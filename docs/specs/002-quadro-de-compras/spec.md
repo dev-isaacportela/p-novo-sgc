@@ -235,10 +235,10 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém olha o quadro
 - **Então** o cartão mostra os quatro dados, os responsáveis, as etiquetas e os três tempos; na etapa de Análise mostra também os alertas pendentes e, em Canceladas, o motivo
 
-**C-036 — Criar pedido é pelo botão do SGC**
+**C-036 — Criar pedido é pelo botão do SGC** *(revisado em 2026-10-30, R-118)*
 - **Dado que** qualquer pessoa com permissão de criar abre o quadro
 - **Quando** procura como criar
-- **Então** existe um único botão, "Novo pedido", que abre a criação de pedido do SGC — não o formulário genérico de card
+- **Então** existe um único botão, "Novo pedido", que abre a criação do pedido numa janela sobre o quadro — não o formulário genérico de card, e não uma página à parte; o menu lateral não tem "Novo pedido", e o pedido criado aparece na etapa de Análise e abre em seguida
 
 **C-037 — O quadro atualiza sozinho**
 - **Dado que** o quadro está aberto e outra pessoa move um pedido
@@ -286,7 +286,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-005 | O quadro DEVE ter as dez etapas do processo, na ordem, identificadas por uma chave que não muda quando o administrador renomeia ou recolore | renomear "Produtos em B.O." para "Pendências" não quebra nenhuma regra de C-004 a C-034 | must |
 | RF-006 | O cartão DEVE mostrar fornecedor, filial, valor total e prioridade, mais alertas pendentes na Análise e o motivo em Canceladas | C-035 | must |
 | RF-007 | O quadro DEVE se atualizar sozinho a cada 60 segundos | C-037 | should |
-| RF-008 | O quadro DEVE oferecer "Novo pedido" no lugar do botão genérico de criar cartão | C-036: existe um botão, e ele abre a criação do SGC | must |
+| RF-008 | O quadro DEVE oferecer "Novo pedido" no lugar do botão genérico de criar cartão, abrindo a criação numa janela sobre o quadro; criar pedido não é item de menu (R-118) | C-036: existe um botão, ele abre a janela, e nenhum menu leva a uma página de criação | must |
 | RF-009 | As transições DEVEM ser exatamente: Análise→Técnica; Técnica→Diretoria ou →Análise; Diretoria→Envio, →Técnica ou →Análise; Envio→Enviado ou →Diretoria; Enviado→Trânsito; Trânsito→Faturamento; Faturamento→B.O. ou →Concluídas; B.O.→Faturamento ou →Concluídas; qualquer etapa ativa→Canceladas | as 10 etapas × 10 destinos conferidas uma a uma: 22 pares liberados (14 do fluxo + 8 cancelamentos), os demais recusados | must |
 | RF-010 | Destino fora da regra DEVE aparecer desabilitado com o motivo, nunca sumir | C-005, C-006, C-017, C-023, C-029 | must |
 | RF-011 | A mesma regra de movimentação DEVE valer no servidor, independentemente da tela | C-011: a chamada direta é recusada com o mesmo motivo | must |
@@ -395,7 +395,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-033 | entrar na etapa 9 com 2 anexos: o corpo lista as 2 linhas "nome — endereço"; sem anexos, "Nenhum anexo" | regra de negócio |
 | C-034 | entrar na etapa 10: assunto de cancelado e o motivo no corpo | regra de negócio |
 | C-035 | o cartão devolve os 4 valores de capa e, na etapa 1, o número de alertas pendentes | regra de tela |
-| C-036 | o quadro expõe 1 botão de criação e ele leva para a criação do SGC | regra de tela |
+| C-036 | o rótulo do botão é "Novo pedido" e o menu de nenhuma persona, em nenhum nível, tem `/pedidos/novo` (R-118); a janela em si é verificação manual | regra de tela |
 | C-037 | o intervalo de atualização configurado é 60000 ms | regra de tela |
 | C-038 | gestor: administração recusada; admin: liberada | regra de negócio |
 | C-039 | excluir como analista → recusa; como gestor → aceito; como diretoria → aceito | regra de negócio |
