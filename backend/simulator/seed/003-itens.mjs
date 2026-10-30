@@ -205,6 +205,11 @@ export function seed003(db, cenario) {
   const inserirCusto = db.prepare('INSERT INTO CUSTO_PRODUTOS (CODPROD, UNIDADES_POR_CAIXA) VALUES (?, ?)');
   inserirCusto.run(5001, 12);
   inserirCusto.run(5002, 24);
+  // R-128: custo padrão do Gestão de Custos — o 5001 tem dois (vale o mais recente, 11,50), o 5002 um.
+  const inserirCustoPadrao = db.prepare('INSERT OR IGNORE INTO CUSTOPRODUTO (ID, CODPROD, CUSTO, DATA_REF) VALUES (?, ?, ?, ?)');
+  inserirCustoPadrao.run(1, 5001, 10.0, '2025-01-01');
+  inserirCustoPadrao.run(2, 5001, 11.5, '2026-01-01');
+  inserirCustoPadrao.run(3, 5002, 20.0, '2026-01-01');
 
   /* ── SGC: coberturas por curva (C-008 da 003; C-001/C-002 da 012) ──
      Valores de referencia de R-089: departamento 2 = A 35/20 %, B 45/10 %,

@@ -16,7 +16,7 @@ import {
   RowTitle, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
-import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa } from '@/lib/compras';
+import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
   JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
@@ -174,7 +174,6 @@ export function PainelDetalhe({
   const quantidadeSimulada = simulada === '' ? sugestaoDePartida : unidadesDaDigitada(Number(simulada) || 0, linha.unidadesPorCaixa, referencia);
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
-  const custoAtual = Number(m.CUSTO_ATUAL ?? 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -280,7 +279,7 @@ export function PainelDetalhe({
             <Table>
               <tbody>
                 <Tr><Td>Quantidade em caixas</Td><Td numeric>{quantidade(simulacao.caixas)}</Td></Tr>
-                <Tr><Td>Total ao custo da última entrada</Td><Td numeric>{moeda(simulacao.total)}</Td></Tr>
+                <Tr><Td>Total ao custo padrão (Gestão de Custos)</Td><Td numeric>{rotuloSemCusto(linha.custo) ?? moeda(simulacao.total)}</Td></Tr>
                 <Tr><Td>Cobertura depois da compra</Td><Td numeric>{dias(simulacao.coberturaFuturaDias)}</Td></Tr>
                 <Tr><Td>Nível depois da compra</Td><Td numeric>{pct(simulacao.nivelFuturoPct)}</Td></Tr>
               </tbody>
@@ -304,8 +303,8 @@ export function PainelDetalhe({
               <Tr><Td>Unidades por caixa</Td><Td numeric>{`${linha.unidadesPorCaixa} (${ROTULO_ORIGEM_CAIXA[linha.origemCaixa]})`}</Td></Tr>
               <Tr><Td>Departamento · seção</Td><Td numeric>{`${m.CODEPTO} · ${m.CODSEC}`}</Td></Tr>
               <Tr><Td>Código de fábrica</Td><Td numeric>{m.CODFAB ? <Code>{String(m.CODFAB)}</Code> : <Dash />}</Td></Tr>
-              <Tr><Td>Custo da última entrada</Td><Td numeric>{moeda(Number(m.CUSTO_ULT_ENTRADA))}</Td></Tr>
-              <Tr><Td>Custo atual</Td><Td numeric>{custoAtual > 0 ? moeda(custoAtual) : <Dash />}</Td></Tr>
+              <Tr><Td>Preço da última entrada (histórico ERP)</Td><Td numeric>{moeda(Number(m.CUSTO_ULT_ENTRADA))}</Td></Tr>
+              <Tr><Td>Custo padrão (Gestão de Custos)</Td><Td numeric>{rotuloSemCusto(linha.custo) ? <Status tone="alert">{rotuloSemCusto(linha.custo)}</Status> : `${moeda(linha.custo?.valor ?? 0)} · ${fmtData(linha.custo?.dataRef ?? '')}`}</Td></Tr>
               <Tr><Td>Última entrada · última saída</Td><Td numeric>{`${fmtData(String(m.DT_ULT_ENTRADA)) || '—'} · ${fmtData(String(m.DT_ULT_SAIDA)) || '—'}`}</Td></Tr>
             </tbody>
           </Table>

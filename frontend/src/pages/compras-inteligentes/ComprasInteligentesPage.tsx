@@ -45,6 +45,8 @@ import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
 import { DADOS_VAZIOS, desconsideradasPorMes } from '@/lib/ressuprimento-detalhe';
 import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
 import { lotesDeCodigos, oportunidadesDoItem, seloEspecial, sugestaoPorCliente } from '@/lib/custo-especial';
+import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
+import type { MapaCustoPadrao } from '@/lib/compras';
 import type { CustoEspecial, Oportunidade, SugestaoCliente, TabelaEspecial, VendaCliente } from '@/lib/custo-especial';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import type { DadosDoSku, PontoHistorico, PosicaoFilial, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
@@ -113,6 +115,8 @@ export default function ComprasInteligentesPage() {
 
   const [medidas, setMedidas] = React.useState<MedidaRessuprimento[]>([]);
   const [porCaixa, setPorCaixa] = React.useState<Map<number, number>>(() => new Map());
+  // R-128: o custo de compra é o custo padrão do Gestão de Custos; `null` = a consulta falhou.
+  const [custosPadrao, setCustosPadrao] = React.useState<MapaCustoPadrao | null | undefined>(undefined);
   // R-125: as políticas de preço especial e a venda por cliente, uma carga por filial.
   const [custosEspeciais, setCustosEspeciais] = React.useState<CustoEspecial[]>([]);
   const [vendasClientes, setVendasClientes] = React.useState<VendaCliente[]>([]);
@@ -267,8 +271,10 @@ export default function ComprasInteligentesPage() {
             }
           }
         } catch { /* a embalagem resolve */ }
+        const padrao = await carregarCustoPadrao(codprods);
         if (!vivo) return;
         setPorCaixa(mapa);
+        setCustosPadrao(padrao);
 
         // R-125: as políticas de preço especial (gestao-de-custos) e, só se
         // houver alguma, a venda por cliente destes produtos (WinThor) — ambas
@@ -346,8 +352,8 @@ export default function ComprasInteligentesPage() {
   // cadeia de RN-002 da 003, e a origem fica na linha para o painel mostrar.
   const todas = React.useMemo(() => montarRessuprimento(
     medidas, parametros, alvoDaCurvaDias, porCaixa,
-    { codfornec: Number(codfornec), hoje, desconsiderarLicitacao },
-  ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao]);
+    { codfornec: Number(codfornec), hoje, desconsiderarLicitacao }, custosPadrao,
+  ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao, custosPadrao]);
 
   const contagens = React.useMemo(() => contarVisoes(todas), [todas]);
 
@@ -365,7 +371,7 @@ export default function ComprasInteligentesPage() {
   }, [todas, visao, filtros, termo]);
 
   const sugestaoTotal = React.useMemo(
-    () => lista.reduce((soma, l) => soma + l.sugerida * Number(l.medida.CUSTO_ULT_ENTRADA), 0),
+    () => lista.reduce((soma, l) => soma + l.sugerida * Number(l.custo?.valor ?? 0), 0),
     [lista],
   );
 
@@ -403,7 +409,8 @@ export default function ComprasInteligentesPage() {
     if (custosEspeciais.length === 0) return mapa;
     for (const l of todas) {
       const lista = oportunidadesDoItem({
-        codprod: Number(l.medida.CODPROD), custoAtual: Number(l.medida.CUSTO_ATUAL ?? 0), custoUltimaEntrada: Number(l.medida.CUSTO_ULT_ENTRADA),
+        // R-128: a economia é contra o custo padrão do Gestão de Custos, sem fallback para o ERP.
+        codprod: Number(l.medida.CODPROD), custoAtual: Number(l.custo?.valor ?? 0), custoUltimaEntrada: 0,
         sugerida: l.sugerida, coberturaDias: l.coberturaDias,
       }, custosEspeciais, vendasClientes, JANELA_DIAS);
       if (lista.length > 0) mapa.set(Number(l.medida.CODPROD), lista);
@@ -595,7 +602,16 @@ export default function ComprasInteligentesPage() {
   }
 
   const resumoSalvo = carrinhoSalvo ? resumoDoCarrinho(carrinhoSalvo.itens) : null;
-  const resumoCarrinho = resumoDoCarrinho(carrinho);
+  // R-128: as entradas da filial aberta usam a linha de AGORA (o custo padrão de agora, inclusive no
+  // carrinho salvo antes dele); as de outras filiais ficam como foram guardadas.
+  // Depois do retorno antecipado da página: cálculo simples, sem hook.
+  const carrinhoAtualizado = (() => {
+    if (todas.length === 0) return carrinho;
+    const agora = new Map(todas.map((l) => [Number(l.medida.CODPROD), l]));
+    return carrinho.map((e) => (e.codfilial === codfilial && Number(e.codfornec) === Number(codfornec) && agora.has(Number(e.linha.medida.CODPROD))
+      ? { ...e, linha: agora.get(Number(e.linha.medida.CODPROD)) ?? e.linha } : e));
+  })();
+  const resumoCarrinho = resumoDoCarrinho(carrinhoAtualizado);
   const opcoesFornecedor: Opcao[] = fornecedores.map((f) => {
     const resumo = resumos.get(Number(f.value));
     return resumo
@@ -628,7 +644,7 @@ export default function ComprasInteligentesPage() {
         <SelectMenu
           label="Filial"
           value={codfilial}
-          onChange={(valor) => { setCarregando(true); setErro(''); setSelecionado(0); setCodfilial(valor); }}
+          onChange={(valor) => { setCarregando(true); setErro(''); setAvisoCarrinho(''); setSelecionado(0); setCodfilial(valor); }}
           options={filiais}
           placeholder={codfornec ? 'Escolha a filial' : 'Escolha o fornecedor primeiro'}
           disabled={!codfornec || !filiais.length}
@@ -654,6 +670,7 @@ export default function ComprasInteligentesPage() {
       </div>
 
       {erro ? <Alert tone="error" className="mt-4">{erro}</Alert> : null}
+      {medidas.length > 0 && custosPadrao === null ? <Alert tone="error" className="mt-4">{AVISO_ERRO_CUSTO}</Alert> : null}
       {avisoCarrinho ? <Alert tone="warn" className="mt-4">{avisoCarrinho}</Alert> : null}
 
       {/* C-028: o aviso só aparece quando há carrinho guardado e o da tela está vazio. */}
@@ -768,7 +785,7 @@ export default function ComprasInteligentesPage() {
       <CarrinhoDialogo
         aberto={carrinhoAberto}
         onFechar={() => setCarrinhoAberto(false)}
-        itens={carrinho}
+        itens={carrinhoAtualizado}
         abertoEm={carrinhoMeta.abertoEm}
         abertoPor={carrinhoMeta.abertoPor}
         salvoEm={carrinhoMeta.salvoEm}

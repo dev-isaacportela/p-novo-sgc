@@ -7,7 +7,8 @@
 
 import { createRunner } from '../runtime.mjs';
 import {
-  abrirGestaoCustos, codprodsDe, custosEspeciaisDeRegistros, ehCustosEspeciais, ehGestaoCustos, executorSqlite, montarSql, origemDe,
+  abrirGestaoCustos, codprodsDe, custoPadraoDeRegistros, custosEspeciaisDeRegistros, ehCustoPadrao, ehCustosEspeciais, ehGestaoCustos,
+  executorSqlite, montarSql, origemDe,
   unidadesDeRegistros,
 } from '../gestao-custos.mjs';
 import { assert } from './base.mjs';
@@ -17,7 +18,7 @@ export async function suite(ctx) {
 
   await teste('G-001: ehGestaoCustos aceita sgcCustoUnidadesPorCaixa e sgcCustoEspeciaisProdutos (INTEGRATION com connection gestao-de-custos) e recusa toda outra definition carregada, uma INTEGRATION de outra conexão e JSON inválido', async () => {
     const aceitas = [...byName.values()].filter(ehGestaoCustos).map((d) => d.name).sort();
-    assert.deepEqual(aceitas, ['sgcCustoEspeciaisProdutos', 'sgcCustoUnidadesPorCaixa']);
+    assert.deepEqual(aceitas, ['sgcCustoEspeciaisProdutos', 'sgcCustoPadraoAtual', 'sgcCustoUnidadesPorCaixa']);
     assert.equal(ehGestaoCustos({ type: 'INTEGRATION', code: JSON.stringify({ connection: 'outra', body: { sql: 'SELECT 1' } }) }), false);
     assert.equal(ehGestaoCustos({ type: 'INTEGRATION', code: '{nao e json' }), false);
     assert.equal(ehGestaoCustos({ type: 'SQL', code: 'SELECT 1' }), false);
@@ -193,5 +194,27 @@ export async function suite(ctx) {
     ]);
     assert.equal(saida[2].VARIACAO_PERCENTUAL, -5);
     assert.deepEqual(custosEspeciaisDeRegistros({ politicas, itens, clientes }, [], '2026-10-30'), []);
+  });
+
+  await teste('G-008 / R-128: custoPadraoDeRegistros emula a sgcCustoPadraoAtual sobre a CUSTOPRODUTO do REST — a DATA_REF mais recente por produto pedido (empate: maior ID), sem os não pedidos; ehCustoPadrao reconhece a definition; pelo runner em SQLite, o 5001 do seed vale 11,50 (2026) e o 5010 não volta', async () => {
+    assert.equal(ehCustoPadrao(byName.get('sgcCustoPadraoAtual')), true);
+    assert.equal(ehCustoPadrao(byName.get('sgcCustoUnidadesPorCaixa')), false);
+    const registros = [
+      { ID: 1, CODPROD: 54, CUSTO: 51.1, DATA_REF: '2025-01-01' },
+      { ID: 2, CODPROD: 54, CUSTO: 57.23, DATA_REF: '2026-01-01' },
+      { ID: 3, CODPROD: 7, CUSTO: 9, DATA_REF: '2026-01-01' },
+      { ID: 4, CODPROD: 7, CUSTO: 9.5, DATA_REF: '2026-01-01' },
+      { ID: 5, CODPROD: 99, CUSTO: 1, DATA_REF: '2026-01-01' },
+    ];
+    assert.deepEqual(custoPadraoDeRegistros(registros, [54, 7, 8]), [
+      { CODPROD: 54, CUSTO: 57.23, DATA_REF: '2026-01-01' },
+      { CODPROD: 7, CUSTO: 9.5, DATA_REF: '2026-01-01' },
+    ]);
+    const execute = createRunner(db, { externos: [executorSqlite(db)] });
+    const { rows } = await execute(byName.get('sgcCustoPadraoAtual'), { codprods: '5001,5002,5010' }, U.ana);
+    const mapa = new Map(rows.map((r) => [Number(r.CODPROD), [Number(r.CUSTO), String(r.DATA_REF)]]));
+    assert.deepEqual(mapa.get(5001), [11.5, '2026-01-01']);
+    assert.deepEqual(mapa.get(5002), [20, '2026-01-01']);
+    assert.equal(mapa.has(5010), false);
   });
 }

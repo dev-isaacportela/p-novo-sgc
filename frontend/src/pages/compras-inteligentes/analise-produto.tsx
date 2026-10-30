@@ -17,7 +17,7 @@ import {
   TextLink, Th, Tr, SecaoRecolhivel,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
-import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa } from '@/lib/compras';
+import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
   JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
@@ -147,9 +147,9 @@ export function AnaliseProdutoDialogo({
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const comSugestao = simularCompra(linha, linha.sugerida);
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
-  const custoAtual = Number(m.CUSTO_ATUAL ?? 0);
-  const custo = custoAtual > 0 ? custoAtual : Number(m.CUSTO_ULT_ENTRADA);
-  const origemCusto = custoAtual > 0 ? 'custo atual do ERP' : 'custo da última entrada';
+  // R-128: o custo de compra é o custo padrão do Gestão de Custos; o ERP fica como histórico.
+  const semCusto = rotuloSemCusto(linha.custo);
+  const origemCusto = semCusto ? semCusto : `custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`;
   const compras = dados.compras as unknown as CompraDoProduto[];
   const ultima = compras[0];
   const entradas = todasEntradas ? compras : compras.slice(0, ENTRADAS_VISIVEIS);
@@ -185,7 +185,7 @@ export function AnaliseProdutoDialogo({
               <MiniCartao rotulo="Cob. futura" valor={dias(comSugestao.coberturaFuturaDias)} title="Cobertura com a quantidade sugerida" />
               <MiniCartao rotulo="Necessidade" valor={`${quantidade(necessidade(linha))} un.`} title="O que falta ao estoque máximo" />
               <MiniCartao rotulo="Sugestão" valor={textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)} title={linha.sugerida > 0 ? `${moeda(comSugestao.total)} ao ${origemCusto}` : 'Nada a comprar agora'} />
-              <MiniCartao rotulo="Custo" valor={moeda(custo)} title={origemCusto} />
+              <MiniCartao rotulo="Custo" valor={semCusto ?? moeda(linha.custo?.valor ?? 0)} tone={semCusto ? 'attention' : 'neutral'} title={origemCusto} />
             </GradeMini>
 
             <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
@@ -373,8 +373,8 @@ export function AnaliseProdutoDialogo({
                       <MiniCartao rotulo="Unidade" valor={`${String(m.EMBALAGEM) || '—'} · ${String(m.UNIDADE) || '—'}`} />
                       <MiniCartao rotulo="Un. por caixa" valor={String(linha.unidadesPorCaixa)} hint={ROTULO_ORIGEM_CAIXA[linha.origemCaixa]} />
                       <MiniCartao rotulo="Cobertura" valor={`${linha.coberturaDias} d`} hint={`${ORIGEM_COBERTURA[linha.parametros.origemCobertura]} · gatilho ${linha.gatilhoDias} d`} />
-                      <MiniCartao rotulo="Origem do custo" valor={custoAtual > 0 ? 'Custo atual (ERP)' : 'Última entrada'} hint={custoAtual > 0 ? `Última entrada ${moeda(Number(m.CUSTO_ULT_ENTRADA))}` : undefined} />
-                      <MiniCartao rotulo="Data do custo" valor={data(m.DT_ULT_ENTRADA)} hint="Última entrada" />
+                      <MiniCartao rotulo="Origem do custo" valor={semCusto ?? 'Gestão de Custos'} hint={`última entrada (ERP) ${moeda(Number(m.CUSTO_ULT_ENTRADA))}`} />
+                      <MiniCartao rotulo="Data do custo" valor={linha.custo?.dataRef ? data(linha.custo.dataRef) : <Dash />} hint="data de referência" />
                     </GradeMini>
                   </div>
                 </SecaoRecolhivel>

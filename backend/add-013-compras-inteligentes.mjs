@@ -481,6 +481,26 @@ GROUP BY M.CODPROD, M.CODCLI`;
 // política, o CLIENTE_ID da própria política e, sem nenhum dos dois, a política
 // aberta (CODCLI 0) — unidas e filtradas por custo > 0, status não encerrado e
 // vigência em CURDATE(). `event.codprods` é substituição textual (lotes de 500).
+// R-128: o custo de compra é o custo PADRÃO do Gestão de Custos (CUSTOPRODUTO,
+// a linha de DATA_REF mais recente por produto), não o do ERP; o ERP fica como
+// histórico. Sem linha, o produto fica "Sem custo" (sem fallback); a consulta
+// que falha deixa a tela inteira em "Erro custo". `event.codprods` em lotes.
+const CODE_CUSTO_PADRAO = JSON.stringify({
+  connection: 'gestao-de-custos',
+  method: 'POST',
+  endpoint: 'runQuery',
+  body: {
+    sql: `SELECT C1.CODPROD, C1.CUSTO, C1.DATA_REF
+FROM CUSTOPRODUTO C1
+JOIN (
+  SELECT CODPROD, MAX(DATA_REF) AS DATA_MAX
+  FROM CUSTOPRODUTO
+  WHERE CODPROD IN (event.codprods)
+  GROUP BY CODPROD
+) C2 ON C2.CODPROD = C1.CODPROD AND C2.DATA_MAX = C1.DATA_REF`,
+  },
+});
+
 const CODE_CUSTOS_ESPECIAIS = JSON.stringify({
   connection: 'gestao-de-custos',
   method: 'POST',
@@ -616,6 +636,12 @@ export const definitions = [
     description: f.resumo,
     code: f.code,
   })),
+  {
+    name: 'sgcCustoPadraoAtual',
+    type: 'INTEGRATION',
+    description: 'R-128 - custo padrao atual por produto (CODPROD, CUSTO, DATA_REF: a linha de DATA_REF mais recente da CUSTOPRODUTO), da conexao gestao-de-custos. Params: codprods lista (lotes de 500)',
+    code: CODE_CUSTO_PADRAO,
+  },
   {
     name: 'sgcCustoEspeciaisProdutos',
     type: 'INTEGRATION',

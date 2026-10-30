@@ -17,8 +17,9 @@ import {
 import { acao, linhas } from '@/lib/mitra-api';
 import { moeda } from '@/lib/formato';
 import type { ItemPedido, LinhaAnalise } from '@/lib/compras';
+import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
 import {
-  coberturaDoItem, itemDeProdutoBuscado, mesesDoPeriodo, montarItens, totalDoPedido,
+  coberturaDoItem, itemDeProdutoBuscado, mesesDoPeriodo, montarItens, totalDoPedido, custoPadraoDe,
 } from '@/lib/compras';
 import { acimaDoLimite, coberturaDeLinha, type Cobertura } from '@/lib/cobertura';
 import { usePedido } from './pedido-contexto';
@@ -41,6 +42,7 @@ export default function AbaItens(ctx: ExtensaoContexto) {
   const [itens, setItens] = React.useState<ItemPedido[]>([]);
   const [alterados, setAlterados] = React.useState<number[]>([]);
   const [erro, setErro] = React.useState('');
+  const [avisoCusto, setAvisoCusto] = React.useState('');
   const [salvoEm, setSalvoEm] = React.useState('');
   const [ocupado, setOcupado] = React.useState(false);
   const [buscando, setBuscando] = React.useState(false);
@@ -99,6 +101,9 @@ export default function AbaItens(ctx: ExtensaoContexto) {
           porCaixa.set(Number(linha.CODPROD), Number(linha.UNIDADES_POR_CAIXA));
         }
       } catch { /* embalagem resolve */ }
+      // R-128: o custo de compra é o custo padrão do Gestão de Custos (lotes de 500); falhou, "Erro custo" em todos.
+      const custos = await carregarCustoPadrao(analise.map((linha) => Number(linha.CODPROD)));
+      setAvisoCusto(custos === null ? AVISO_ERRO_CUSTO : '');
 
       const parametros = coberturas.map(coberturaDeLinha);
       setParametrizacao(parametros);
@@ -108,6 +113,7 @@ export default function AbaItens(ctx: ExtensaoContexto) {
         porCaixa,
         { inicio: capa.periodoInicio, fim: capa.periodoFim },
         capa.codfornec,
+        custos,
       );
       // O que já estava na lista manda: a análise não apaga decisão tomada.
       const jaNaLista = new Map(itens.map((item) => [item.codprod, item]));
@@ -186,6 +192,7 @@ export default function AbaItens(ctx: ExtensaoContexto) {
   return (
     <div className="flex flex-col gap-4">
       {erro ? <Alert tone="error">{erro}</Alert> : null}
+      {avisoCusto ? <Alert tone="error">{avisoCusto}</Alert> : null}
 
       <Panel>
         <PanelHeader
@@ -354,6 +361,12 @@ export default function AbaItens(ctx: ExtensaoContexto) {
             setItens((atual) => [...atual, novo]);
             setAlterados((atual) => [...atual, novo.codprod]);
             setBuscando(false);
+            // R-128: o custo do produto acrescentado vem do Gestão de Custos (1 execução).
+            void carregarCustoPadrao([novo.codprod]).then((custos) => {
+              const custo = custoPadraoDe(custos, novo.codprod);
+              if (custos === null) setAvisoCusto(AVISO_ERRO_CUSTO);
+              setItens((atual) => atual.map((item) => (item.codprod === novo.codprod ? { ...item, precoCusto: custo.valor } : item)));
+            });
           }}
         />
       ) : null}

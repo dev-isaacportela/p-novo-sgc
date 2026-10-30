@@ -229,6 +229,13 @@ export const DDL = [
     SPECIAL_COST DECIMAL(15,4),
     VARIATION_PERCENT DECIMAL(9,2)
   )`,
+  // O custo padrão por produto e data de referência (R-128): sgcCustoPadraoAtual lê o mais recente.
+  `CREATE TABLE IF NOT EXISTS CUSTOPRODUTO (
+    ID INT PRIMARY KEY,
+    CODPROD INT,
+    CUSTO DECIMAL(15,4),
+    DATA_REF VARCHAR(10)
+  )`,
   `CREATE TABLE IF NOT EXISTS COST_POLICY_CLIENTS (
     ID INT PRIMARY KEY,
     POLICY_ID INT,

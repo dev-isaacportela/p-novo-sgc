@@ -391,11 +391,13 @@ test('RN-013: silenciado até amanhã com hoje continua silenciado, até ontem n
 });
 
 test('RN-015 / R-112: o carrinho agrupa por fornecedor e filial, sobe a prioridade com ruptura no grupo, soma o total e cada item nasce como o ItemPedido INTEIRO', () => {
+  // R-128: o custo de compra é o custo padrão do Gestão de Custos — 10 para os três.
+  const custos = new Map([5401, 5402, 5403].map((c) => [c, { custo: 10, dataRef: '2026-01-01' }]));
   const emRuptura = montarRessuprimento([medida({ CODPROD: 5403, ESTOQUE_ATUAL: 0 })], [], alvoPadrao, new Map(),
-    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false })[0];
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false }, custos)[0];
   const normais = montarRessuprimento(
     [medida({ CODPROD: 5401 }), medida({ CODPROD: 5402 })], [], alvoPadrao, new Map(),
-    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false },
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false }, custos,
   );
   const doFornecedor = (linha, quantidade, codfilial = '1') => ({
     linha, quantidade, codfornec: 1042, codfilial, fornecedor: 'Nestlé', filial: 'Benenutri Matriz',
@@ -568,8 +570,8 @@ test('R-120: o mapa do Gestão de Custos chega à regra — produto com 6 na ges
 });
 
 test('R-125: a linha especial do carrinho tem chave própria, o custo da política vale no total do grupo e no item do pedido (tipo especial), e a linha padrão do mesmo produto continua separada', () => {
-  const [l] = montarRessuprimento([medida({ CODPROD: 5401, CUSTO_ULT_ENTRADA: 10 })], [], alvoPadrao, new Map(),
-    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false });
+  const [l] = montarRessuprimento([medida({ CODPROD: 5401, CUSTO_ULT_ENTRADA: 12 })], [], alvoPadrao, new Map(),
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false }, new Map([[5401, { custo: 10, dataRef: '2026-01-01' }]]));
   const especial = { politicaId: 7, politicaNome: 'Tabela A', custo: 8 };
   const padrao = { linha: l, quantidade: 24, codfornec: 1042, codfilial: '1', fornecedor: 'F', filial: 'Matriz' };
   const comEspecial = { ...padrao, quantidade: 12, especial };
@@ -587,10 +589,11 @@ test('R-125: a linha especial do carrinho tem chave própria, o custo da políti
   assert.equal(itemDoCarrinho(l, 24, 42).tipoPreco, 'padrao');
 });
 
-test('C-049 (visão Em trânsito): a cobertura conta o trânsito — 50 disponíveis + 100 em trânsito a 2 por dia são 75 dias; sem consumo é nula; o preço de compra é o custo atual, senão o da última entrada, senão nenhum', () => {
+test('C-049 / R-128 (visão Em trânsito): a cobertura conta o trânsito — 50 disponíveis + 100 em trânsito a 2 por dia são 75 dias; sem consumo é nula; o preço de compra é o custo padrão do Gestão de Custos, e sem ele nenhum (sem fallback para o ERP)', () => {
   assert.equal(coberturaComTransito({ estoqueAtual: 50, emTransito: 100, consumoDiario: 2 }), 75);
   assert.equal(coberturaComTransito({ estoqueAtual: 50, emTransito: 100, consumoDiario: 0 }), null);
-  assert.deepEqual(precoDeCompra({ CUSTO_ATUAL: 11, CUSTO_ULT_ENTRADA: 12 }), { valor: 11, origem: 'atual' });
-  assert.deepEqual(precoDeCompra({ CUSTO_ATUAL: 0, CUSTO_ULT_ENTRADA: 12 }), { valor: 12, origem: 'ultima' });
-  assert.equal(precoDeCompra({ CUSTO_ATUAL: 0, CUSTO_ULT_ENTRADA: 0 }), null);
+  assert.deepEqual(precoDeCompra({ custo: { valor: 57.23, dataRef: '2026-01-01', origem: 'gestao' } }), { valor: 57.23, dataRef: '2026-01-01' });
+  assert.equal(precoDeCompra({ custo: { valor: 0, dataRef: '', origem: 'sem' } }), null);
+  assert.equal(precoDeCompra({ custo: { valor: 0, dataRef: '', origem: 'erro' } }), null);
+  assert.equal(precoDeCompra({}), null, 'linha do carrinho salvo antes do R-128');
 });

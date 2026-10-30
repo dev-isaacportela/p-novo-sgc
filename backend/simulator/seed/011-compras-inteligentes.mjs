@@ -251,6 +251,14 @@ export function seed011(db, cenario) {
   inserirItemPolitica.run(5, 4, 5405, 7.0);
   db.prepare('INSERT OR IGNORE INTO COST_POLICY_CLIENTS (ID, POLICY_ID, CLIENTE_ID) VALUES (1, 1, 9301)').run();
 
+  // R-128: custo padrão do Gestão de Custos para a faixa da 011 — o 5401 tem dois (vale 11,00, o de
+  // 2026); o 5402 não tem ("Sem custo"); os demais, 10,00.
+  const inserirCustoPadrao = db.prepare('INSERT OR IGNORE INTO CUSTOPRODUTO (ID, CODPROD, CUSTO, DATA_REF) VALUES (?, ?, ?, ?)');
+  inserirCustoPadrao.run(101, 5401, 12.0, '2025-01-01');
+  inserirCustoPadrao.run(102, 5401, 11.0, '2026-01-01');
+  let idCusto = 103;
+  for (let codprod = 5403; codprod <= 5420; codprod += 1) inserirCustoPadrao.run(idCusto++, codprod, 10.0, '2026-01-01');
+
   const inserirEntrada = db.prepare(`INSERT INTO PCMOV
     (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED, NUMTRANSENT, NUMNOTA)
     VALUES (?, ?, ?, NULL, 'E', ?, ?, ?, ?, NULL, NULL)`);

@@ -238,9 +238,13 @@ export function montarItens(
   unidadesPorCaixaPorProduto: Map<number, number>,
   periodo: { inicio: string; fim: string },
   codfornec: number,
+  /** R-128: o custo padrão do Gestão de Custos; sem o mapa, o custo da última entrada (só o legado de teste). */
+  custos?: MapaCustoPadrao | null,
 ): ItemPedido[] {
   const meses = mesesDoPeriodo(periodo.inicio, periodo.fim);
-  const curvas = curvaAbc(linhas);
+  const custoDe = (linha: LinhaAnalise) => (custos === undefined ? numero(linha.CUSTO_ULT_ENTRADA) : custoPadraoDe(custos, Number(linha.CODPROD)).valor);
+  // A curva pesa venda × custo: com o mapa, o custo padrão (R-128).
+  const curvas = curvaAbc((linhas ?? []).map((l) => ({ ...l, CUSTO_ULT_ENTRADA: custoDe(l) })));
 
   return (linhas ?? []).map((linha) => {
     const codprod = Number(linha.CODPROD);
@@ -266,7 +270,7 @@ export function montarItens(
       qtTransito: numero(linha.TRANSITO),
       qtSugerida: sugerida,
       qtPedida: 0,
-      precoCusto: numero(linha.CUSTO_ULT_ENTRADA),
+      precoCusto: custoDe(linha),
       tipoPreco: 'padrao',
       curvaAbc: curvas.get(codprod) ?? 'C',
       coberturaDias: coberturaFuturaDias(numero(linha.VENDA_PERIODO), numero(linha.ESTOQUE), numero(linha.TRANSITO), 0, meses) ?? 0,
@@ -345,4 +349,46 @@ export function itemDeProdutoBuscado(
     idSolicitacao: 0,
     solicitacaoDe: '',
   };
+}
+
+/* ─────────────── R-128: o custo de compra é o custo padrão do Gestão de Custos ─────────────── */
+
+/** De onde veio o custo: o Gestão de Custos; produto sem linha lá; consulta que falhou; ainda carregando. */
+export type OrigemCusto = 'gestao' | 'sem' | 'erro' | 'carregando';
+
+export interface CustoPadrao { valor: number; dataRef: string; origem: OrigemCusto }
+
+/** O mapa por CODPROD que a tela monta com `sgcCustoPadraoAtual`; `null` = a consulta falhou; `undefined` = ainda não veio. */
+export type MapaCustoPadrao = Map<number, { custo: number; dataRef: string }>;
+
+/** As linhas de `sgcCustoPadraoAtual` → o mapa (a data mais recente vence, se vierem duas). */
+export function mapaDeCustoPadrao(linhas: Record<string, unknown>[]): MapaCustoPadrao {
+  const mapa: MapaCustoPadrao = new Map();
+  for (const l of linhas ?? []) {
+    const codprod = numero(l.CODPROD);
+    if (!(codprod > 0)) continue;
+    const dataRef = String(l.DATA_REF ?? '').slice(0, 10);
+    const atual = mapa.get(codprod);
+    if (!atual || dataRef >= atual.dataRef) mapa.set(codprod, { custo: numero(l.CUSTO), dataRef });
+  }
+  return mapa;
+}
+
+/**
+ * O custo de um produto: o do Gestão de Custos; sem linha lá, 0 e "Sem custo";
+ * com a consulta falhando, 0 e "Erro custo" em TODOS — nunca custo parcial,
+ * que seria indistinguível de "produto sem custo". Sem fallback para o ERP.
+ */
+export function custoPadraoDe(mapa: MapaCustoPadrao | null | undefined, codprod: number): CustoPadrao {
+  if (mapa === undefined) return { valor: 0, dataRef: '', origem: 'carregando' };
+  if (mapa === null) return { valor: 0, dataRef: '', origem: 'erro' };
+  const achado = mapa.get(numero(codprod));
+  if (!achado || !(achado.custo > 0)) return { valor: 0, dataRef: '', origem: 'sem' };
+  return { valor: achado.custo, dataRef: achado.dataRef, origem: 'gestao' };
+}
+
+/** O texto de um custo que não tem valor; `null` quando há valor (a tela formata em reais). */
+export function rotuloSemCusto(c: Pick<CustoPadrao, 'origem'> | null | undefined): string | null {
+  if (!c || c.origem === 'gestao') return null;
+  return c.origem === 'erro' ? 'Erro custo' : c.origem === 'carregando' ? '…' : 'Sem custo';
 }

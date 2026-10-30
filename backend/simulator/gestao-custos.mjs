@@ -129,6 +129,31 @@ export function unidadesDeRegistros(registros) {
 const STATUS_ENCERRADOS = new Set(['INATIVA', 'INACTIVE', 'CANCELADA', 'CANCELADO', 'REJEITADA', 'REPROVADA']);
 const dataIso = (valor) => String(valor ?? '').slice(0, 10);
 
+/** A SQL de uma definition é a do custo padrão atual (R-128)? */
+export function ehCustoPadrao(definition) {
+  return /\bCUSTOPRODUTO\b/.test(String(definicaoDeIntegracao(definition)?.body?.sql ?? ''));
+}
+
+/**
+ * O que a sgcCustoPadraoAtual devolveria (REST `records`): por produto pedido,
+ * a linha de DATA_REF mais recente (empate: maior ID) com CODPROD, CUSTO e
+ * DATA_REF; produto sem linha não volta.
+ */
+export function custoPadraoDeRegistros(registros, codprods) {
+  const pedidos = new Set((codprods ?? []).map(Number));
+  const melhor = new Map();
+  for (const r of registros ?? []) {
+    const codprod = Number(r?.CODPROD);
+    if (!pedidos.has(codprod)) continue;
+    const atual = melhor.get(codprod);
+    const data = String(r.DATA_REF ?? '').slice(0, 10);
+    if (!atual || data > atual.DATA_REF || (data === atual.DATA_REF && Number(r.ID ?? 0) > atual.ID)) {
+      melhor.set(codprod, { CODPROD: codprod, CUSTO: Number(r.CUSTO ?? 0), DATA_REF: data, ID: Number(r.ID ?? 0) });
+    }
+  }
+  return [...melhor.values()].map(({ ID: _id, ...linha }) => linha);
+}
+
 /** A SQL de uma definition é a das políticas de preço especial (R-125)? */
 export function ehCustosEspeciais(definition) {
   return /\bCOST_POLICIES\b/.test(String(definicaoDeIntegracao(definition)?.body?.sql ?? ''));
@@ -294,7 +319,9 @@ export async function abrirGestaoCustos({
       let linhas = caminho === 'runQuery' ? await consultar(montarSql(definition, { ...input, codprods: faltam.join(',') })) : null;
       if (!linhas) {
         const pedidos = new Set(faltam);
-        linhas = ehCustosEspeciais(definition)
+        linhas = ehCustoPadrao(definition)
+          ? custoPadraoDeRegistros(await tabelaPeloRest('CUSTOPRODUTO'), faltam)
+          : ehCustosEspeciais(definition)
           ? await custosEspeciaisPeloRest(faltam)
           : unidadesDeRegistros(await produtosPeloRest()).filter((linha) => pedidos.has(linha.CODPROD));
       }

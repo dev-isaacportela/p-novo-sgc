@@ -30,3 +30,16 @@ if (!(acimaDeUm.length > 0)) {
   }
   process.exit(1);
 }
+
+// R-128: o custo padrão atual (CUSTOPRODUTO) também tem de vir com contagem > 0.
+if (typeof executor.executar === 'function') {
+  const { definitions } = await import('../add-013-compras-inteligentes.mjs');
+  const def = definitions.find((d) => d.name === 'sgcCustoPadraoAtual');
+  const amostra = produtos.slice(0, 500).map((p) => Number(p.CODPROD)).filter((n) => n > 0).join(',');
+  const custos = await executor.executar(def, { codprods: amostra });
+  console.log(`Custo padrão (sgcCustoPadraoAtual) para ${amostra.split(',').length} produtos: ${custos.length} com custo · ex.: ${JSON.stringify(custos.slice(0, 3))}`);
+  if (!(custos.length > 0)) {
+    console.error('FALHOU: custo padrão com contagem zero — vazio não é verde.');
+    process.exit(1);
+  }
+}

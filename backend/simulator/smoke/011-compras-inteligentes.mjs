@@ -310,6 +310,14 @@ export async function suite(ctx) {
     }
   });
 
+  await teste('C-050 / R-128: sgcCustoPadraoAtual devolve o custo padrao mais recente do Gestao de Custos por produto — 5401 vale 11 (2026, nao os 12 de 2025), 5403 vale 10, e o 5402 (sem linha na CUSTOPRODUTO) nao volta', async () => {
+    const rows = await linhas('sgcCustoPadraoAtual', { codprods: '5401,5402,5403' }, U.ana);
+    const mapa = new Map(rows.map((r) => [Number(r.CODPROD), Number(r.CUSTO)]));
+    assert.equal(mapa.get(5401), 11);
+    assert.equal(mapa.get(5403), 10);
+    assert.equal(mapa.has(5402), false, 'sem custo padrao, nada volta: a tela mostra "Sem custo"');
+  });
+
   await teste('C-046 / R-125: sgcCustoEspeciaisProdutos (INTEGRATION gestao-de-custos) devolve so as politicas vigentes com custo — 5401 e 5403 para a Farmacia Central (tabela 1), 5405 aberta (CODCLI 0, tabela 4); a inativa (5402) e a vencida (5404) ficam fora', async () => {
     const rows = await linhas('sgcCustoEspeciaisProdutos', { codprods: '5401,5402,5403,5404,5405' }, U.ana);
     const vistos = rows.map((r) => [Number(r.CODPROD), Number(r.CODCLI), Number(r.CUSTO_ESPECIAL), Number(r.POLITICA_ID)]).sort((a, b) => a[0] - b[0]);

@@ -177,7 +177,8 @@ export interface SimulacaoCompra {
 export function simularCompra(l: LinhaRessuprimento, quantidadeDigitada: number): SimulacaoCompra {
   const quantidade = arredondarPorCaixa(Math.max(0, numero(quantidadeDigitada)), l.unidadesPorCaixa);
   const caixas = l.unidadesPorCaixa > 1 ? quantidade / l.unidadesPorCaixa : quantidade;
-  const total = Math.round(quantidade * numero(l.medida.CUSTO_ULT_ENTRADA) * 100) / 100;
+  // R-128: ao custo padrão do Gestão de Custos (o mesmo do carrinho).
+  const total = Math.round(quantidade * numero(l.custo?.valor) * 100) / 100;
   return {
     quantidade, caixas, total,
     coberturaFuturaDias: coberturaFuturaComCompra(l, quantidade),

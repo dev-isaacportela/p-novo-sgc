@@ -13,7 +13,7 @@ import {
   Badge,  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
   SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
 } from '@/components/page';
-import { arredondarPorCaixa } from '@/lib/compras';
+import { arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import { fmtData, moeda } from '@/lib/formato';
 import {
   OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, coberturaComTransito, precoDeCompra, quantidadeNaReferencia, quantidadeParaCompletar,
@@ -219,7 +219,8 @@ export function ListaProdutos({
                   <RowTitle>{String(linha.medida.DESCRICAO)}</RowTitle>
                   <RowMeta>
                     <Code prefix="cód.">{codprod}</Code>
-                    {` · ${String(linha.medida.EMBALAGEM) || '—'} · ${moeda(Number(linha.medida.CUSTO_ULT_ENTRADA))}`}
+                    {` · ${String(linha.medida.EMBALAGEM) || '—'} · `}
+                    {rotuloSemCusto(linha.custo) ? <Status tone="alert">{rotuloSemCusto(linha.custo)}</Status> : <span title={`Custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`}>{moeda(linha.custo?.valor ?? 0)}</span>}
                   </RowMeta>
                   {selo ? <RowMeta><Badge tone={selo.tone}>{selo.texto}</Badge></RowMeta> : null}
                   {linha.silenciado ? (
@@ -253,12 +254,12 @@ export function ListaProdutos({
                     </Td>
                     <Td numeric>
                       {(() => {
-                        const preco = precoDeCompra(linha.medida);
-                        if (!preco) return <Status tone="alert">Sem custo</Status>;
+                        const preco = precoDeCompra(linha);
+                        if (!preco) return <Status tone="alert">{rotuloSemCusto(linha.custo) ?? 'Sem custo'}</Status>;
                         return (
                           <>
                             {moeda(preco.valor)}
-                            <RowMeta>{preco.origem === 'atual' ? 'custo atual' : 'última entrada'}</RowMeta>
+                            <RowMeta>{`custo padrão · ${fmtData(preco.dataRef)}`}</RowMeta>
                           </>
                         );
                       })()}
