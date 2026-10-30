@@ -122,10 +122,11 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Quando** a compradora liga "desconsiderar licitação"
 - **Então** o consumo passa a **1,5**, o estoque máximo cai de 70 para **52,5**, a sugestão cai de 48 para **24** e a situação passa de baixa exposição para **adequado**; desligando o seletor, tudo volta
 
-**C-015 — Curva ABC por valor, dentro do fornecedor e da filial**
-- **Dado que** o fornecedor tem 5 produtos com valor de venda na janela (venda × custo) de R$ 500, R$ 250, R$ 150, R$ 70 e R$ 30 — total R$ 1.000
-- **Quando** a curva é calculada
-- **Então** os dois primeiros são **A** (acumulado 50 % e 75 %), o terceiro é **B** (90 %) e os dois últimos são **C** (97 % e 100 %)
+**C-015 — Duas curvas ABC, dentro do fornecedor e da filial, e a pior das duas vale**
+- **Dado que** o fornecedor tem 5 produtos com faturamento na janela de R$ 500, R$ 250, R$ 150, R$ 70 e R$ 30 (total R$ 1.000) e rentabilidade de R$ 30, R$ 500, R$ 250, R$ 150 e R$ 70 (total R$ 1.000)
+- **Quando** as curvas são calculadas
+- **Então** pela curva de **faturamento** os dois primeiros são **A** (acumulado 50 % e 75 %), o terceiro é **B** (90 %) e os dois últimos são **C**; pela curva de **rentabilidade** o primeiro é **C** e os demais são **A, A, B, C**; a curva do produto — a que define o alvo de cobertura e viaja com o item do pedido — é a **pior das duas**: C, A, B, C, C. A lista mostra as duas letras lado a lado, com a que vale em destaque
+- **E** se a consulta ainda não devolve faturamento e rentabilidade (função não republicada), as duas curvas são a antiga, venda × custo
 
 **C-016 — Sem parâmetro, a cobertura é o alvo da curva do produto**
 - **Dado que** o produto não tem parâmetro próprio nem o fornecedor tem, e a curva dele é **A**, cujo alvo é 35 dias
@@ -259,7 +260,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RF-006 | O sistema DEVE calcular, por produto: estoque de segurança (lead × consumo), ponto de pedido (2 × lead × consumo), estoque máximo (cobertura × consumo), quantidade sugerida, cobertura atual em dias e dias de gatilho | Os números de C-002 a C-007 | must |
 | RF-007 | A quantidade sugerida DEVE ser zero quando há trânsito, zero quando não há venda nem consumo, e nunca negativa; nos demais casos é o que falta para o estoque máximo, arredondado para cima em caixas cheias | C-002 a C-007, C-025 | must |
 | RF-008 | Cada produto DEVE receber uma das cinco situações: ruptura, excesso, elevada exposição, baixa exposição ou adequado | C-002 a C-007 | must |
-| RF-009 | O sistema DEVE classificar os produtos em curva A, B ou C pelo valor de venda da janela, dentro do fornecedor e da filial | Os cortes de 80 % e 95 % de C-015 | must |
+| RF-009 | O sistema DEVE classificar os produtos em duas curvas A, B ou C — pelo faturamento e pela rentabilidade da janela —, dentro do fornecedor e da filial, mostrar as duas e usar a pior delas como a curva do produto | Os cortes de 80 % e 95 % e a pior das duas de C-015 | must |
 | RF-010 | Cobertura, lead time e gatilho DEVEM ser parametrizáveis por fornecedor e por produto, valendo o mais específico; sem parâmetro, a cobertura é o alvo da curva do produto, o lead time é o medido e, na falta dele, 9 dias, e o gatilho é 15 dias | C-010, C-011, C-016 | must |
 | RF-011 | O sistema DEVE permitir silenciar um produto por um prazo, com motivo, tirando-o da fila de compra sem tirá-lo da lista, e restaurá-lo a qualquer momento | C-012 | must |
 | RF-012 | O sistema DEVE permitir desconsiderar uma venda específica do cálculo da demanda, com motivo, e reconsiderá-la | C-013 | must |
@@ -315,7 +316,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **RN-007 — Quantidade sugerida.** Com trânsito maior que zero, é **0**. Sem venda na janela e sem consumo, é **0**. Nos demais casos, é `máximo − disponível − trânsito`, arredondado para cima, nunca negativo, e depois arredondado para a caixa cheia. Unidades por caixa seguem a mesma regra da montagem do pedido.
 - **RN-008 — Cobertura atual e dias de gatilho.** Cobertura atual = disponível ÷ consumo. Dias de gatilho = parte inteira de `(disponível + trânsito − segurança) ÷ consumo − lead`. Sem consumo, as duas não existem: a tela mostra "sem giro", nunca um número.
 - **RN-009 — Situação.** Avaliada nesta ordem: **ruptura** (disponível ≤ 0); **excesso** (disponível + trânsito maior que o máximo); **elevada exposição** (disponível ≤ ponto de pedido e cobertura atual menor que o lead time); **baixa exposição** (disponível ≤ ponto de pedido); senão **adequado**.
-- **RN-010 — Curva.** Valor = venda da janela × custo da última entrada. Os produtos do fornecedor e da filial são ordenados por valor decrescente; enquanto o acumulado for até 80 % do total é A, até 95 % é B, o resto é C. Sem valor total, todos são C. É a mesma régua da montagem do pedido.
+- **RN-010 — Curvas.** Duas curvas pela mesma régua da montagem do pedido (ordenar por valor decrescente dentro do fornecedor e da filial; acumulado até 80 % é A, até 95 % é B, o resto é C; sem valor total, todos C): a de **faturamento**, cujo valor é o que o produto vendeu na janela (quantidade × preço de cada venda), e a de **rentabilidade**, cujo valor é a margem da janela (quantidade × (preço − custo financeiro) de cada venda; margem negativa vale zero). A **curva do produto** é a pior das duas (A < B < C) — é ela que escolhe o alvo de cobertura (RN-004), vai no item do pedido (RN-015) e ordena a lista. A venda desconsiderada (RN-012) e a devolução ficam fora dos dois valores. Sem os dois valores na consulta, as duas curvas são a antiga: venda × custo da última entrada.
 - **RN-011 — Licitação.** A venda a clientes de órgão público (atividades 11 a 15 e 20) entra na demanda por padrão e aparece à parte. O seletor "desconsiderar licitação" subtrai a parte pública do consumo e recalcula tudo na tela, sem nova consulta.
 - **RN-012 — Venda desconsiderada.** A venda marcada é tirada da demanda na origem, antes de qualquer média — não é descontada depois. No máximo 500 vendas desconsideradas por consulta.
 - **RN-013 — Silenciamento.** Silenciar guarda a data até quando e o motivo; o padrão são **30 dias** a partir de hoje. Produto silenciado sai da aba "a comprar" e continua na aba "todos" com a marca, o motivo e a data. Restaurar apaga a data.
@@ -353,7 +354,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-012 | gravar silenciamento até hoje+30 e ler de volta a data e o motivo; a regra tira o produto de "a comprar" e o mantém em "todos"; restaurar apaga a data e o produto volta | regra de negócio + regra de tela |
 | C-013 | consulta sem exclusão → venda 90; com a venda de 60 na lista de exclusão → venda 30 e consumo menor; a lista de desconsideradas traz 1 linha com o motivo; reconsiderar deixa a lista vazia e a venda volta a 90 | regra de negócio |
 | C-014 | consumo total 2,0 e público 0,5, disponível 30: com licitação → máximo 70, sugerida 48, `baixa_exposicao`; sem licitação → consumo 1,5, máximo 52,5, sugerida 24, `adequado` | regra de tela |
-| C-015 | 5 produtos com valores 500, 250, 150, 70 e 30 → A, A, B, C, C | regra de tela |
+| C-015 | faturamento 500/250/150/70/30 e rentabilidade 30/500/250/150/70 → faturamento A, A, B, C, C; rentabilidade C, A, A, B, C; curva do produto C, A, B, C, C; sem os dois valores, venda × custo nas duas | regra de tela |
 | C-016 | sem parâmetro nenhum, alvo da curva A = 35 → máximo 70; curva B = 45 → 90; curva C = 60 → 120; sem regra alcançável → 35 | regra de tela |
 | C-017 | sugestão 48 e caixa 12: quantidade digitada 50 → 60; digitada 48 → 48; digitada 0 → 0 | regra de tela |
 | C-018 | criar o pedido a partir de um carrinho de 3 itens (um em ruptura) devolve 1 card na fase de análise, com origem `compras_inteligentes`, prioridade `alta`, período da janela, valor total igual à soma e 3 itens gravados completos: quantidade pedida, sugerida, custo e curva, **e** descrição não vazia e limite de cobertura maior que zero nos três | regra de negócio |
@@ -395,6 +396,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-036, RN-026 | o resumo do 1042 devolve os itens ativos do catálogo menos o inativo e o do departamento 4, e valor estimado > 0 | regra de negócio |
 | C-037 | (48, 12, unidades) → "48 un. · 4 cx"; (48, 12, caixas) → "4 cx · 48 un."; (48, 1) → "48 un." | regra de tela |
 | C-038 | ordem por código, nome e curva (A, B, C); cada filtro de movimentação devolve só as linhas certas | regra de tela |
+| C-040 | consulta do ressuprimento: o 5410 (50 un. a 20 com custo financeiro 12) devolve faturamento 1000 e rentabilidade 400; devolução e venda desconsiderada ficam fora dos dois; produto sem venda tem 0 e 0 | regra de negócio |
 | C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
@@ -412,7 +414,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - [ ] **Diálogo de bloqueios de lote** — **adiado** (R-117): o layout do sistema antigo o tinha; entra numa rodada futura, com consulta própria aos lotes.
 - [x] ~~**Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.~~ Existia (R-117): entrou como RF-031 / C-030.
 - [ ] **Planilha (xlsx) e PDF** — a exportação é em texto separado por ponto e vírgula, como nas demais telas.
-- [ ] **Curva por rentabilidade e "a pior das duas"** — a curva é uma só, a mesma da montagem do pedido.
+- [x] ~~**Curva por rentabilidade e "a pior das duas"** — a curva é uma só, a mesma da montagem do pedido.~~ Entrou (R-122): RN-010 e C-015 têm as duas curvas e a pior das duas; a montagem do pedido (003) segue com a régua única até a consulta dela trazer os dois valores.
 - [ ] **Custo padrão vindo da gestão de custos** — o custo é o da última entrada, como na montagem; dívida registrada.
 - [x] ~~**"Completar compra"** (sugestão complementar para atingir pedido mínimo) e **pedido mínimo por fornecedor.**~~ Entraram (R-117): RF-026 / C-027 e RF-030 / C-029; o mínimo é o da parametrização do fornecedor (001).
 - [ ] **Selo de "custo especial"** no carrinho — **adiado**: depende do módulo de custos (a variação e a economia de RN-027 entraram).
