@@ -28,7 +28,7 @@ import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
 import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
 import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
-import { modeloEscolhido } from '@/lib/previsao';
+import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 
 const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = {
@@ -239,11 +239,11 @@ export function PainelDetalhe({
 
         <Disclosure
           titulo="Análise de venda futura"
-          resumo={!previsao ? '…' : !previsao.suficiente ? 'sem meses fechados suficientes' : `${modeloEscolhido(previsao, modelo)?.rotulo ?? ''} · projeção ${Math.round(modeloEscolhido(previsao, modelo)?.previsao ?? 0).toLocaleString('pt-BR')} un./mês · sug. projetada ${projetada ? textoDaSugestao(projetada.sugestao, linha.unidadesPorCaixa, referencia) : '—'}`}
+          resumo={resumoVendaFutura({ previsao, modelo, projetada, unidadesPorCaixa: linha.unidadesPorCaixa })}
           aberta={abertas.has('previsao')}
           onToggle={() => alterna('previsao')}
         >
-          <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} compacto />
+          <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} hoje={hoje} compacto />
         </Disclosure>
 
         <Disclosure

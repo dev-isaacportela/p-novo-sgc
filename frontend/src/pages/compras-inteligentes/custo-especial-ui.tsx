@@ -11,8 +11,8 @@ import { ShoppingCart } from 'lucide-react';
 
 import {
   AlternaOpcoes, Badge, Bar, BarraConsumo, Button, CartesianGrid, ChartContainer, ChartTooltip, ChartTooltipContent,
-  ChipContagem, ComposedChart, GradeMini, Input, LabelList, MiniCartao, Panel, PanelHeader, RowMeta, Status, XAxis, YAxis,
-  corDeSerie,
+  ChipContagem, ComposedChart, GradeMini, Input, LabelList, MiniCartao, Panel, PanelHeader, RowMeta, SecaoRecolhivel, Status,
+  XAxis, YAxis, corDeSerie,
 } from '@/components/page';
 import type { ChartConfig } from '@/components/page';
 import { arredondarPorCaixa } from '@/lib/compras';
@@ -166,20 +166,29 @@ export function OportunidadeEspecial({
 }) {
   const plano = React.useMemo(() => planoEspecial(sugestoes, quantidadeSimulada), [sugestoes, quantidadeSimulada]);
   const [aba, setAba] = React.useState(0);
+  // R-126: nasce recolhida; trocar de produto recolhe de novo.
+  const [aberta, setAberta] = React.useState(false);
+  const codprod = Number(linha.medida.CODPROD);
+  const [ultimoCodprod, setUltimoCodprod] = React.useState(codprod);
+  if (codprod !== ultimoCodprod) {
+    setUltimoCodprod(codprod);
+    setAberta(false);
+    setAba(0);
+  }
   const indice = Math.min(aba, Math.max(0, plano.tabelas.length - 1));
   const cx = linha.unidadesPorCaixa;
   if (plano.tabelas.length === 0) return null;
   const tabela = plano.tabelas[indice];
 
   return (
-    <Panel>
-      <PanelHeader
-        title="Oportunidade com preço especial"
-        hint={`${plano.tabelas.length} ${plano.tabelas.length === 1 ? 'tabela' : 'tabelas'} · ganho estimado ${moeda(plano.ganhoEstimado)}`}
-      >
-        <Badge tone="accent">{`Especial ${quantidade(plano.especialTotal)} un.`}</Badge>
-      </PanelHeader>
-      <div className="flex flex-col gap-3 p-4">
+    <SecaoRecolhivel
+      titulo="Oportunidade com preço especial"
+      resumo={`${plano.tabelas.length} ${plano.tabelas.length === 1 ? 'tabela' : 'tabelas'} · ganho estimado ${moeda(plano.ganhoEstimado)}`}
+      extra={<Badge tone="accent">{`Especial ${quantidade(plano.especialTotal)} un.`}</Badge>}
+      aberta={aberta}
+      onToggle={() => setAberta((atual) => !atual)}
+    >
+      <div className="flex flex-col gap-3">
         <GradeMini colunas={3}>
           <MiniCartao rotulo="Comprar padrão" valor={textoDaSugestao(plano.comprarPadrao, cx, referencia)} hint="O que fica no custo padrão" />
           <MiniCartao rotulo="Tabelas especiais" valor={String(plano.tabelas.length)} />
@@ -205,6 +214,6 @@ export function OportunidadeEspecial({
         />
         <RowMeta>O saldo acima do limite seguro, ou acima da quantidade simulada, fica como compra padrão.</RowMeta>
       </div>
-    </Panel>
+    </SecaoRecolhivel>
   );
 }

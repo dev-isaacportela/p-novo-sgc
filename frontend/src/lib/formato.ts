@@ -30,3 +30,10 @@ export function hojeIso(): string {
   const dois = (n: number) => String(n).padStart(2, '0');
   return `${agora.getFullYear()}-${dois(agora.getMonth() + 1)}-${dois(agora.getDate())}`;
 }
+
+/** Número em pt-BR com casas FIXAS (`1234.5`, 1 → `1.234,5`; 0 casas arredonda). Não numérico vira traço. */
+export function numeroPt(valor: string | number | null | undefined, casas = 0): string {
+  if (valor === null || valor === undefined || String(valor).trim() === '') return '—';
+  const n = Number(valor);
+  return Number.isFinite(n) ? n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '—';
+}

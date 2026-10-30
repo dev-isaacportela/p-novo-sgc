@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LIMITE_TS, MODELOS, PONTOS_MINIMOS, ajustarOutliers, holt, holtWinters, mediasDaSerie, metricas, mmp, mms,
-  modeloEscolhido, periodoSazonal, preverVendas, se, serieFechada, sugestaoProjetada, textoDosParametros,
+  modeloEscolhido, periodoSazonal, preverVendas, se, serieFechada, sugestaoProjetada, textoDosParametros, resumoVendaFutura,
 } from '../src/lib/previsao.ts';
 
 const ponto = (mes, valor) => ({ mes, valor, original: valor, ajustado: false });
@@ -118,4 +118,15 @@ test('RN-031: sugestão projetada — previsão 300/mês é 10/dia; cobertura 35
   assert.deepEqual(sugestaoProjetada(300, l), { demandaDiaria: 10, sugestao: 204, alvoLeadTime: 110 });
   assert.equal(sugestaoProjetada(30, l).sugestao, 0, '35 − 150 < 0');
   assert.equal(sugestaoProjetada(300, { ...l, unidadesPorCaixa: 1 }).sugestao, 200);
+});
+
+test('R-126: o resumo recolhido da venda futura — "Best Fit → Holt · 60 un./mês · sugestão 312 un. (26 cx) · TS sob controle" (a série linear 10..50 segue para 60); com um modelo escolhido vem só o nome dele; sem histórico "…"; com menos de 3 pontos avisa', () => {
+  const p = preverVendas([10, 20, 30, 40, 50].map((v, i) => ponto(`2026-0${i + 1}`, v)));
+  const projetada = { demandaDiaria: 1.33, sugestao: 312, alvoLeadTime: 32 };
+  assert.equal(resumoVendaFutura({ previsao: p, modelo: 'bestfit', projetada, unidadesPorCaixa: 12 }), 'Best Fit → Holt · 60 un./mês · sugestão 312 un. (26 cx) · TS sob controle');
+  assert.equal(resumoVendaFutura({ previsao: p, modelo: 'mms', projetada, unidadesPorCaixa: 1 }), 'Média móvel simples · 40 un./mês · sugestão 312 un. · TS sob controle');
+  assert.equal(resumoVendaFutura({ previsao: p, modelo: 'mms', projetada: null, unidadesPorCaixa: 1 }), 'Média móvel simples · 40 un./mês · sem sugestão projetada · TS sob controle');
+  assert.equal(resumoVendaFutura({ previsao: null, modelo: 'bestfit', projetada: null, unidadesPorCaixa: 1 }), '…');
+  const curta = preverVendas([10, 20].map((v, i) => ponto(`2026-0${i + 1}`, v)));
+  assert.equal(resumoVendaFutura({ previsao: curta, modelo: 'bestfit', projetada: null, unidadesPorCaixa: 1 }), 'sem meses fechados suficientes · segue o consumo ponderado');
 });

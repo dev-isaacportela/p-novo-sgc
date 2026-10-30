@@ -13,8 +13,8 @@ import { BarChart3, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 
 import {
   Alert, Button, ChipContagem, Code, Dash, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
-  DialogTitle, EmptyState, GradeMini, Input, MiniCartao, Panel, PanelHeader, RowMeta, Status, Table, Td,
-  TextLink, Th, Tr,
+  DialogTitle, EmptyState, GradeMini, Input, MiniCartao, Panel, RowMeta, Status, Table, Td,
+  TextLink, Th, Tr, SecaoRecolhivel,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa } from '@/lib/compras';
@@ -23,7 +23,7 @@ import {
 } from '@/lib/ressuprimento';
 import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from '@/lib/ressuprimento';
 import {
-  ENTRADAS_VISIVEIS, desconsideradasPorMes, entradaAtrasou, filiaisComExcesso, necessidade, simularCompra, totaisDoRodape,
+  ENTRADAS_VISIVEIS, desconsideradasPorMes, entradaAtrasou, filiaisComExcesso, necessidade, simularCompra,
 } from '@/lib/ressuprimento-detalhe';
 import type { CompraDoProduto, DadosDoSku, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
 import { GraficoComprasVendas } from './grafico';
@@ -32,7 +32,7 @@ import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
 import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
 import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
-import { modeloEscolhido } from '@/lib/previsao';
+import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import { VendasDoProduto } from './dialogos';
 import type { VendasDoProdutoProps } from './dialogos';
@@ -106,6 +106,13 @@ export function AnaliseProdutoDialogo({
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
   const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
+  // R-126: as seções em card nascem recolhidas; trocar de produto recolhe tudo.
+  const [abertas, setAbertas] = React.useState<Set<string>>(() => new Set());
+  const alternarSecao = (secao: string) => setAbertas((atual) => {
+    const proximo = new Set(atual);
+    if (proximo.has(secao)) proximo.delete(secao); else proximo.add(secao);
+    return proximo;
+  });
   const [simulada, setSimulada] = React.useState('');
   // C-037: o campo segue a referência (caixas ou unidades); `simulada` é o texto digitado nela.
   const [referenciaAnterior, setReferenciaAnterior] = React.useState(referencia);
@@ -124,6 +131,7 @@ export function AnaliseProdutoDialogo({
     setUltimo(codprod);
     setAba('analise');
     setAbaGrafico('vendas');
+    setAbertas(new Set());
     setSimulada('');
     setTodasEntradas(false);
     setTotalVendas(null);
@@ -147,8 +155,6 @@ export function AnaliseProdutoDialogo({
   const entradas = todasEntradas ? compras : compras.slice(0, ENTRADAS_VISIVEIS);
   const doSku = desconsideradas.filter((v) => v.codprod === codprod);
   const foraPorMes = desconsideradasPorMes(doSku);
-  const totais = totaisDoRodape(dados.historico, hoje, linha.consumoDiario);
-  const leadMedido = Number(m.LEAD_TIME_MEDIDO ?? 0);
 
   return (
     <Dialog open onOpenChange={(aberto) => !aberto && !ocupado && onFechar()}>
@@ -209,9 +215,8 @@ export function AnaliseProdutoDialogo({
             ) : (
               <>
                 {/* 4a. Simulação de compra */}
-                <Panel>
-                  <PanelHeader title="Simulação de compra" hint="A quantidade sobe para a caixa cheia; o valor usa o custo da última entrada." />
-                  <div className="flex flex-col gap-3 p-4">
+                <SecaoRecolhivel titulo="Simulação de compra" resumo={`${textoDaSugestao(simulacao.quantidade, linha.unidadesPorCaixa, referencia)} · ${moeda(simulacao.total)} · cobertura futura ${dias(simulacao.coberturaFuturaDias)}`} aberta={abertas.has('simulacao')} onToggle={() => alternarSecao('simulacao')}>
+                  <div className="flex flex-col gap-3">
                     <div className="flex flex-wrap items-end gap-3">
                       <label className="flex w-48 flex-col gap-1 text-[12px] text-ink-secondary">
                         {`Quantidade (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 'caixas' : 'unidades'})`}
@@ -248,7 +253,7 @@ export function AnaliseProdutoDialogo({
                       <MiniCartao rotulo="Cobertura" valor={dias(simulacao.coberturaFuturaDias)} hint="Depois da compra" />
                     </GradeMini>
                   </div>
-                </Panel>
+                </SecaoRecolhivel>
 
                 {/* 4b. Compras × vendas | Preço especial — um gráfico por vez (C-048) */}
                 {temAbaEspecial(sugestoesEspeciais) ? (
@@ -281,20 +286,9 @@ export function AnaliseProdutoDialogo({
                 )}
 
                 {/* 4c. Análise de venda futura */}
-                <Panel>
-                  <PanelHeader title="Análise de venda futura" hint="A projeção pelo modelo escolhido, sobre os meses fechados, e o que a regra de ressuprimento calcula sobre a janela." />
-                  <div className="flex flex-col gap-4 p-4">
-                    <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} />
-                    <GradeMini colunas={6}>
-                      <MiniCartao rotulo="Consumo diário" valor={linha.consumoDiario.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} hint="Ponderado por recência" />
-                      <MiniCartao rotulo="Projeção do mês" valor={`${totais.projecaoMes.toLocaleString('pt-BR')} un.`} hint="Consumo × dias do mês seguinte" />
-                      <MiniCartao rotulo="Estoque de segurança" valor={`${quantidade(linha.estoqueSeguranca)} un.`} hint="Lead time × consumo" />
-                      <MiniCartao rotulo="Ponto de pedido" valor={`${quantidade(linha.pontoDePedido)} un.`} hint="2 × lead time × consumo" />
-                      <MiniCartao rotulo="Estoque máximo" valor={`${quantidade(linha.estoqueMaximo)} un.`} hint={`Cobertura de ${linha.coberturaDias} dias`} />
-                      <MiniCartao rotulo="Lead time medido" valor={leadMedido > 0 ? `${leadMedido} d` : <Dash />} hint={leadMedido > 0 ? 'Média das entradas de 12 meses' : 'Sem entrada casada com pedido'} />
-                    </GradeMini>
-                  </div>
-                </Panel>
+                <SecaoRecolhivel titulo="Análise de venda futura" resumo={resumoVendaFutura({ previsao, modelo, projetada, unidadesPorCaixa: linha.unidadesPorCaixa })} aberta={abertas.has('previsao')} onToggle={() => alternarSecao('previsao')}>
+                  <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} hoje={hoje} />
+                </SecaoRecolhivel>
 
                 {/* 4d. Excesso em outras filiais */}
                 {dados.pronto && excessos.length > 0 ? (
@@ -310,8 +304,7 @@ export function AnaliseProdutoDialogo({
                 ) : null}
 
                 {/* 4e. Compras do produto */}
-                <Panel>
-                  <PanelHeader title="Compras do produto" hint={!dados.pronto ? 'Carregando…' : ultima ? 'A última entrada e o histórico, em qualquer filial.' : 'Nenhuma entrada registrada.'} />
+                <SecaoRecolhivel titulo="Compras do produto" resumo={!dados.pronto ? 'Carregando…' : !ultima ? 'nenhuma entrada registrada' : `última em ${fmtData(String(ultima.DT_ENTRADA))} · ${quantidade(ultima.QUANTIDADE)} un. · ${moeda(Number(ultima.VALOR_TOTAL))} · ${compras.length} ${compras.length === 1 ? 'entrada' : 'entradas'}`} aberta={abertas.has('compras')} onToggle={() => alternarSecao('compras')}>
                   {!dados.pronto ? (
                     <EmptyState title="Carregando…" />
                   ) : !ultima ? (
@@ -367,11 +360,10 @@ export function AnaliseProdutoDialogo({
                       ) : null}
                     </div>
                   )}
-                </Panel>
+                </SecaoRecolhivel>
 
                 {/* 4f. Parâmetros do cálculo */}
-                <Panel>
-                  <PanelHeader title="Parâmetros do cálculo" hint="O que entrou na conta deste produto nesta filial." />
+                <SecaoRecolhivel titulo="Parâmetros do cálculo" resumo={`janela ${JANELA_DIAS} dias · lead time ${linha.leadTimeDias} d (${ORIGEM_LEAD[linha.parametros.origemLeadTime]}) · cobertura ${linha.coberturaDias} d (${ORIGEM_COBERTURA[linha.parametros.origemCobertura]})`} aberta={abertas.has('parametros')} onToggle={() => alternarSecao('parametros')}>
                   <div className="p-4">
                     <GradeMini colunas={6}>
                       <MiniCartao rotulo="Janela" valor={`${JANELA_DIAS} dias`} hint={`${fmtData(periodo.inicio)} a ${fmtData(periodo.fim)}`} />
@@ -388,7 +380,7 @@ export function AnaliseProdutoDialogo({
                       <MiniCartao rotulo="Data do custo" valor={data(m.DT_ULT_ENTRADA)} hint="Última entrada" />
                     </GradeMini>
                   </div>
-                </Panel>
+                </SecaoRecolhivel>
               </>
             )}
           </div>

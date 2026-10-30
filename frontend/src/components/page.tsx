@@ -1351,26 +1351,77 @@ export function MiniCartao({
   valor,
   hint,
   tone = 'neutral',
+  title,
 }: {
   rotulo: string;
   valor: React.ReactNode;
+  /** Curto, de uma linha; a explicação longa vai em `title`. */
   hint?: React.ReactNode;
   tone?: 'neutral' | 'attention';
+  title?: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2" title={title}>
       <span className="truncate text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
       <span className={cn('truncate text-[13px] font-bold', tone === 'attention' ? 'text-attention' : 'text-ink')}>{valor}</span>
-      {hint ? <span className="truncate text-[11px] text-ink-secondary">{hint}</span> : null}
+      {/* R-126: o subtítulo quebra a linha, nunca corta com reticência. */}
+      {hint ? <span className="text-[11px] break-words text-ink-secondary">{hint}</span> : null}
     </div>
   );
 }
 
 /** A grade dos mini-cartões: 2 por linha no mobile, 3 em `sm`, `colunas` a partir de `lg`. */
-export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 2 | 3 | 4 | 6 }) {
+export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 1 | 2 | 3 | 4 | 6 }) {
+  if (colunas === 1) return <div className="grid grid-cols-1 gap-2">{children}</div>;
   if (colunas === 2) return <div className="grid grid-cols-2 gap-2">{children}</div>;
   const emLg = { 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 6: 'lg:grid-cols-6' }[colunas];
   return <div className={cn('grid grid-cols-2 gap-2 sm:grid-cols-3', emLg)}>{children}</div>;
+}
+
+/**
+ * Seção recolhível em card (R-126): título, resumo de uma linha com o
+ * essencial e chevron; NASCE RECOLHIDA, e o cabeçalho inteiro é o botão
+ * (`aria-expanded`, foco visível). `extra` é um selo ao lado do resumo. Quem
+ * controla `aberta` é a tela, para tudo voltar recolhido ao trocar de produto.
+ * Vale para toda seção com título, subtítulo e grade de KPIs do SGC 2.
+ */
+export function SecaoRecolhivel({
+  titulo,
+  resumo,
+  extra,
+  aberta,
+  onToggle,
+  children,
+}: {
+  titulo: string;
+  resumo?: React.ReactNode;
+  extra?: React.ReactNode;
+  aberta: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Panel>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={aberta}
+        className={cn(
+          'flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-accent',
+          'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+          aberta && 'rounded-b-none',
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-title text-[15px] font-bold text-ink">{titulo}</span>
+          {resumo ? <span className="mt-0.5 block truncate text-[12px] text-ink-secondary">{resumo}</span> : null}
+        </span>
+        {extra ? <span className="shrink-0">{extra}</span> : null}
+        <ChevronDown className={cn('size-4 shrink-0 text-ink-muted transition-transform', aberta && 'rotate-180')} aria-hidden />
+      </button>
+      {aberta ? <div className="border-t border-rule-row p-4">{children}</div> : null}
+    </Panel>
+  );
 }
 
 /**
