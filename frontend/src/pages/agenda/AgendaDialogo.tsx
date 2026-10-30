@@ -107,7 +107,8 @@ export function AgendaDialogo({ open, onOpenChange, idAgenda, onSalvo }: AgendaD
         observacao: String(row.OBSERVACAO || ''),
       });
       const ids = String(row.PARTICIPANTES_IDS || '').split(',').filter(Boolean).map(Number);
-      const nomes = String(row.PARTICIPANTES_NOMES || '').split(', ').filter(Boolean);
+      // O separador é ', ' no MySQL, mas o GROUP_CONCAT do SQLite vira ',' — aceita os dois.
+      const nomes = String(row.PARTICIPANTES_NOMES || '').split(/\s*,\s*/).filter(Boolean);
       setParticipantes(ids.map((id, i) => ({ ID: id, NOME: nomes[i] || `#${id}`, EMAIL: '' })));
       // Filiais atendidas pelo fornecedor já carregado — precisa de sgcFornecedorCarregar
       // porque sgcFornecedorListar só traz a contagem (C-09).
@@ -216,7 +217,14 @@ export function AgendaDialogo({ open, onOpenChange, idAgenda, onSalvo }: AgendaD
               <SelectMenu
                 label="Fornecedor" value={form.codfornec ? String(form.codfornec) : ''}
                 onChange={alterarFornecedor} placeholder="Selecione o fornecedor"
-                options={fornecedores.map((f) => ({ value: String(f.CODFORNEC), label: f.FORNECEDOR }))}
+                // O fornecedor do agendamento entra mesmo se ficou inativo (RN-015): editar
+                // não pode mostrar o campo vazio nem obrigar a trocar de fornecedor.
+                options={[
+                  ...(form.codfornec && !fornecedores.some((f) => f.CODFORNEC === form.codfornec)
+                    ? [{ value: String(form.codfornec), label: form.fornecedor || `Fornecedor ${form.codfornec}`, hint: 'inativo' }]
+                    : []),
+                  ...fornecedores.map((f) => ({ value: String(f.CODFORNEC), label: f.FORNECEDOR })),
+                ]}
               />
             </Field>
             <Field label="Filial" obrigatorio>
@@ -228,16 +236,20 @@ export function AgendaDialogo({ open, onOpenChange, idAgenda, onSalvo }: AgendaD
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {/* Rótulos de uma linha só: um rótulo que quebra empurra o campo para
+              baixo e desalinha a linha inteira. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)]">
             <Field label="Data da análise" obrigatorio>
               <DatePicker value={form.dataAnalise} onChange={alterarDataAnalise} aria-label="Data da análise" />
             </Field>
-            <LabelledField label="Duração do período (dias)">
+            <Field label="Duração (dias)">
               <Input
                 type="number" min={1} value={form.periodoDias}
+                aria-label="Duração do período em dias"
+                className="text-right"
                 onChange={(e) => alterarDias(Number(e.target.value) || 1)}
               />
-            </LabelledField>
+            </Field>
             <Field label="Recorrência">
               <SelectMenu
                 label="Recorrência" value={form.recorrencia}
@@ -272,9 +284,9 @@ export function AgendaDialogo({ open, onOpenChange, idAgenda, onSalvo }: AgendaD
               placeholder="Selecionar participante" options={usuariosDisponiveis.map((u) => ({ value: String(u.ID), label: u.NOME, hint: u.EMAIL }))}
             />
             {participantes.length > 0 ? (
-              <ul className="mt-2 flex flex-col gap-1">
+              <ul className="mt-2 flex flex-wrap gap-1.5">
                 {participantes.map((p) => (
-                  <li key={p.ID} className="flex items-center justify-between gap-2 rounded-lg bg-accent px-2.5 py-1.5 text-[13px]">
+                  <li key={p.ID} className="inline-flex items-center gap-1 rounded-xl bg-accent py-0.5 pr-0.5 pl-2.5 text-[12px] text-accent-foreground">
                     <span>{p.NOME}</span>
                     <IconButton label={`Remover ${p.NOME}`} onClick={() => removerParticipante(p.ID)}>
                       <IconeRemover />

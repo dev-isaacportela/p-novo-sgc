@@ -578,19 +578,25 @@ const STATUS_TONE = {
   alert: { dot: 'bg-destructive', text: 'text-destructive' },
 } as const;
 
-/** Estado dentro de tabela: ponto + texto. Selo preenchido não entra em célula. */
+/**
+ * Estado dentro de tabela: ponto + texto. Selo preenchido não entra em célula.
+ * `truncar` é para célula estreita (calendário): o texto corta com reticências
+ * em vez de vazar para a célula vizinha — o completo vai no `title` de quem chama.
+ */
 export function Status({
   tone,
   children,
+  truncar,
 }: {
   tone: keyof typeof STATUS_TONE;
   children: React.ReactNode;
+  truncar?: boolean;
 }) {
   const style = STATUS_TONE[tone];
   return (
-    <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', style.text)}>
+    <span className={cn('inline-flex items-center gap-1.5', truncar ? 'min-w-0 max-w-full' : 'whitespace-nowrap', style.text)}>
       <span className={cn('size-1.5 shrink-0 rounded-full', style.dot)} aria-hidden />
-      {children}
+      {truncar ? <span className="truncate">{children}</span> : children}
     </span>
   );
 }
