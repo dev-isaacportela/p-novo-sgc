@@ -24,6 +24,7 @@ import { usePersona } from '@/lib/persona';
 import { instanteIso, periodoPadrao, PRIORIDADES, tituloDoPedido, validarNovoPedido } from '@/lib/pedido';
 import { QUADRO_COMPRAS } from '@/lib/quadro';
 import { DatePicker } from '@/components/DatePicker';
+import { diasEntre } from '@/lib/data';
 import {
   Alert, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader,
   DialogTitle, Field, SelectMenu,
@@ -137,6 +138,7 @@ export function NovoPedidoDialogo({
   }
 
   const lista = fornecedores ?? [];
+  const diasDoPeriodo = diasEntre(periodo.inicio, periodo.fim);
   const nomeFornecedor = lista.find((item) => item.value === codfornec)?.label ?? '';
   const nomeFilial = filiais.find((item) => item.value === codfilial)?.label ?? '';
   const titulo = tituloDoPedido(nomeFilial, nomeFornecedor);
@@ -222,17 +224,21 @@ export function NovoPedidoDialogo({
                   disabled={!codfornec || !filiais.length}
                 />
               </Field>
-              <Field label="Início do período de vendas" obrigatorio hint={erros.periodo}>
+              {/* R-119 / C-045: data ou quantidade de dias — o início conta para
+                  trás a partir do fim, o fim para a frente a partir do início. */}
+              <Field label="Início do período de vendas" obrigatorio hint={erros.periodo ?? 'Digite a data ou a quantidade de dias'}>
                 <DatePicker
                   value={periodo.inicio}
                   onChange={(valor) => setPeriodo((atual) => ({ ...atual, inicio: valor }))}
+                  relativo={{ base: periodo.fim, sentido: -1 }}
                   aria-label="Início do período de vendas"
                 />
               </Field>
-              <Field label="Fim do período de vendas" obrigatorio>
+              <Field label="Fim do período de vendas" obrigatorio hint={diasDoPeriodo === null ? undefined : `Período de ${diasDoPeriodo} ${diasDoPeriodo === 1 ? 'dia' : 'dias'}`}>
                 <DatePicker
                   value={periodo.fim}
                   onChange={(valor) => setPeriodo((atual) => ({ ...atual, fim: valor }))}
+                  relativo={{ base: periodo.inicio, sentido: 1 }}
                   aria-label="Fim do período de vendas"
                 />
               </Field>

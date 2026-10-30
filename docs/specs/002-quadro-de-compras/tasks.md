@@ -70,6 +70,7 @@ com o id no título.
 - [ ] **T-093** — as quatro telas nos dois temas (claro e escuro), sem cor literal e sem `style={{}}`
 
 - [x] **T-034b** — *(2026-10-30, R-118)* `NovoPedidoPage` vira `NovoPedidoDialogo` (janela sobre o quadro, estado na URL `?novo=1`); `QuadroPage` abre a janela no `novoCard` e remonta o quadro ao criar; `/pedidos/novo` redireciona para `/quadro?novo=1`; item de menu, ícone e `ROTA_NOVO_PEDIDO` saem; testes C-036 e do menu ajustados → `frontend/src/pages/pedidos/NovoPedidoDialogo.tsx`, `pages/quadros/QuadroPage.tsx`, `App.tsx`, `lib/permissoes.ts`, `components/AdminLayout.tsx`, `lib/quadro.ts`
+- [x] **T-034c** — *(2026-10-30, R-119)* `lib/data.ts` ganha `diasRelativos`, `resolverRelativo` e `diasEntre` (testes em `tests/data.test.mjs`, C-045); `DatePicker` ganha a prop opcional `relativo` (sem ela, idêntico ao de hoje); a janela "Novo pedido" usa a prop nos dois campos do período e mostra "Período de N dias" → `frontend/src/lib/data.ts`, `components/DatePicker.tsx`, `pages/pedidos/NovoPedidoDialogo.tsx`
 
 ## Dependências
 

@@ -63,6 +63,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** move o pedido para "Aprovação Técnica"
 - **Então** o pedido fica em "Aprovação Técnica" e a passagem fica registrada
 
+**C-045 — O período aceita a quantidade de dias** *(2026-10-30, R-119)*
+- **Dado que** a pessoa está criando o pedido e o fim do período de vendas é 30/10/2026
+- **Quando** ela escreve "45" (ou "45 dias") no início do período e sai do campo
+- **Então** o início vira 15/09/2026 — a mesma conta do período padrão —, e o campo passa a mostrar a data; escrevendo "60 dias" no fim, o fim vira o início + 60 dias; a tela mostra "Período de N dias"; uma data escrita por extenso continua valendo como sempre, e o que não é data nem dias segue a validação de hoje
+
 **C-005 — A Análise nunca vai direto para a Diretoria**
 - **Dado que** o pedido 10 está em "Análise/Montagem de Pedido"
 - **Quando** qualquer pessoa tenta mandá-lo para "Aprovação da Diretoria"
@@ -279,7 +284,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 
 | ID | Requisito | Critério de aceite | Prioridade |
 |---|---|---|---|
-| RF-001 | O sistema DEVE criar o pedido a partir de fornecedor, filial e período de vendas, os três obrigatórios | C-001 cria 1 pedido na primeira etapa; C-002 recusa citando o campo em falta | must |
+| RF-001 | O sistema DEVE criar o pedido a partir de fornecedor, filial e período de vendas, os três obrigatórios; cada data do período pode ser escrita como data ou como quantidade de dias a partir da outra ponta (R-119) | C-001 cria 1 pedido na primeira etapa; C-002 recusa citando o campo em falta; C-045 resolve "45" para a data | must |
 | RF-002 | O título do pedido DEVE ser gerado como "FILIAL · FORNECEDOR" e não é editável | pedido de filial "1 — Matriz" e fornecedor "Nutrilatina" nasce "1 — MATRIZ · NUTRILATINA" | must |
 | RF-003 | O período de vendas DEVE vir sugerido com os últimos 45 dias, editável | em 15/09/2026 a sugestão é 01/08/2026 a 15/09/2026 | must |
 | RF-004 | O criador do pedido DEVE ser quem criou e também o responsável inicial | o pedido de C-001 mostra a Ana nos dois papéis | must |
@@ -404,6 +409,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-042 | salvar persona "gestor" para o Gil devolve 1 linha atualizada; a mesma escrita como analista → recusa | regra de negócio |
 | C-043 | depois das 4 decisões, o histórico do pedido tem 4 linhas de decisão, cada uma com quem e quando | regra de negócio |
 | C-044 | persona comercial: o menu devolve 0 itens de compras, a rota do quadro é recusada e `PODE = 0` em mover e excluir, com a frase do perfil | regra de tela e de negócio |
+| C-045 | `diasRelativos` aceita "45", "45d", "45 dias" e recusa "1234", "abc", "15/09"; `resolverRelativo("45", 30/10/2026, −1)` = 15/09/2026, `("30", 01/10, 1)` = 31/10, `"0"` = a base, vira mês e ano; `diasEntre` 15/09→30/10 = 45 | regra de tela |
 | RN-001 | sem persona e acesso comum → analista; acesso administrador → admin; acesso restrito → comercial | regra de tela |
 | RN-002 | somente leitura + persona gestor → não opera; restrito + analista → só os próprios | regra de tela |
 | RN-021 | comercial: `verQuadro` falso na tela e recusa no servidor em mover e excluir | regra de tela e de negócio |
