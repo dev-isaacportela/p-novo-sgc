@@ -9,11 +9,11 @@
 // com preço especial (módulo de custos), os modelos de previsão (Best Fit,
 // Holt…) e o fator Z do estoque de segurança (onda 5).
 import * as React from 'react';
-import { BarChart3, ShoppingCart, SlidersHorizontal } from 'lucide-react';
+import { ShoppingCart, SlidersHorizontal } from 'lucide-react';
 
 import {
   Alert, Button, ChipContagem, Code, Dash, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
-  DialogTitle, EmptyState, GradeMini, Input, MiniCartao, Panel, RowMeta, Status, Table, Td,
+  DialogTitle, EmptyState, GradeMini, Input, MiniCartao, RowMeta, Status, Table, Td,
   TextLink, Th, Tr, SecaoRecolhivel,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
@@ -160,46 +160,35 @@ export function AnaliseProdutoDialogo({
     <Dialog open onOpenChange={(aberto) => !aberto && !ocupado && onFechar()}>
       <DialogContent className="sm:max-w-6xl">
         <DialogHeader>
-          <DialogTitle>{`Análise do Produto ${codprod}`}</DialogTitle>
-        </DialogHeader>
-        <DialogBody>
-          <div className="flex flex-col gap-4">
-            {dados.erro ? <Alert tone="error">{dados.erro}</Alert> : null}
-
-            {/* 1. Cabeçalho */}
-            <Panel className="flex items-center gap-3 px-4 py-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary" aria-hidden>
-                <BarChart3 className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="font-title truncate text-[15px] font-bold text-ink">{`${codprod} - ${String(m.DESCRICAO)}`}</h2>
-                <p className="truncate text-[12px] text-ink-secondary">{`${String(m.EMBALAGEM) || '—'} · ${fornecedor || '—'}`}</p>
-              </div>
-              <Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status>
-            </Panel>
-
-            {/* 2. Métricas */}
-            <GradeMini colunas={4}>
-              <MiniCartao rotulo="Estoque" valor={`${quantidade(linha.estoqueAtual)} un.`} hint="Disponível na filial" />
-              <MiniCartao rotulo="Em trânsito" valor={`${quantidade(linha.emTransito)} un.`} hint="Pedido ao ERP + trânsito" />
-              <MiniCartao rotulo="Cobertura" valor={`${dias(linha.coberturaAtualDias)} · ${pct(nivel)}`} hint={`Nível: % do máximo de ${Math.round(linha.estoqueMaximo).toLocaleString('pt-BR')} un.`} />
-              <MiniCartao rotulo="Cobertura futura" valor={dias(comSugestao.coberturaFuturaDias)} hint="Com a quantidade sugerida" />
-            </GradeMini>
-            <GradeMini colunas={3}>
-              <MiniCartao rotulo="Necessidade" valor={`${quantidade(necessidade(linha))} un.`} hint="O que falta ao estoque máximo" />
-              <MiniCartao rotulo="Sugestão" valor={textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)} hint={linha.sugerida > 0 ? `${moeda(comSugestao.total)} ao ${origemCusto}` : 'Nada a comprar agora'} />
-              <MiniCartao rotulo="Custo" valor={moeda(custo)} hint={origemCusto} />
-            </GradeMini>
-
-            <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
-
-            {/* 3. Abas em pílula */}
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Seções da análise">
+          {/* R-127: o cabeçalho do produto cabe no título — código, descrição, embalagem · fornecedor, abas e situação numa linha. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 pr-8">
+            <DialogTitle className="min-w-0 truncate">{`${codprod} - ${String(m.DESCRICAO)}`}</DialogTitle>
+            <span className="min-w-0 truncate text-[12px] text-ink-secondary">{`${String(m.EMBALAGEM) || '—'} · ${fornecedor || '—'}`}</span>
+            <Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status>
+            <div className="ml-auto flex gap-1.5" role="tablist" aria-label="Seções da análise">
               <ChipContagem ativo={aba === 'analise'} onClick={() => setAba('analise')}>Análise</ChipContagem>
               <ChipContagem ativo={aba === 'vendas'} onClick={() => setAba('vendas')}>
                 {totalVendas === null ? 'Vendas' : `Vendas (${totalVendas.toLocaleString('pt-BR')})`}
               </ChipContagem>
             </div>
+          </div>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-3">
+            {dados.erro ? <Alert tone="error">{dados.erro}</Alert> : null}
+
+            {/* Os 7 números numa faixa densa; a explicação de cada um vai no title. */}
+            <GradeMini colunas={7}>
+              <MiniCartao rotulo="Estoque" valor={`${quantidade(linha.estoqueAtual)} un.`} title="Disponível na filial: total menos bloqueado, avariado e reservado" />
+              <MiniCartao rotulo="Em trânsito" valor={`${quantidade(linha.emTransito)} un.`} title="Pedido ao ERP + trânsito" />
+              <MiniCartao rotulo="Cobertura" valor={`${dias(linha.coberturaAtualDias)} · ${pct(nivel)}`} title={`Dias de estoque · nível: % do máximo de ${Math.round(linha.estoqueMaximo).toLocaleString('pt-BR')} un.`} />
+              <MiniCartao rotulo="Cob. futura" valor={dias(comSugestao.coberturaFuturaDias)} title="Cobertura com a quantidade sugerida" />
+              <MiniCartao rotulo="Necessidade" valor={`${quantidade(necessidade(linha))} un.`} title="O que falta ao estoque máximo" />
+              <MiniCartao rotulo="Sugestão" valor={textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)} title={linha.sugerida > 0 ? `${moeda(comSugestao.total)} ao ${origemCusto}` : 'Nada a comprar agora'} />
+              <MiniCartao rotulo="Custo" valor={moeda(custo)} title={origemCusto} />
+            </GradeMini>
+
+            <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
 
             {aba === 'vendas' ? (
               <VendasDoProduto
@@ -214,48 +203,7 @@ export function AnaliseProdutoDialogo({
               />
             ) : (
               <>
-                {/* 4a. Simulação de compra */}
-                <SecaoRecolhivel titulo="Simulação de compra" resumo={`${textoDaSugestao(simulacao.quantidade, linha.unidadesPorCaixa, referencia)} · ${moeda(simulacao.total)} · cobertura futura ${dias(simulacao.coberturaFuturaDias)}`} aberta={abertas.has('simulacao')} onToggle={() => alternarSecao('simulacao')}>
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-wrap items-end gap-3">
-                      <label className="flex w-48 flex-col gap-1 text-[12px] text-ink-secondary">
-                        {`Quantidade (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 'caixas' : 'unidades'})`}
-                        <Input
-                          type="number"
-                          min={0}
-                          step={rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 1 : linha.unidadesPorCaixa}
-                          value={simulada === '' ? String(quantidadeNaReferencia(sugestaoDePartida, linha.unidadesPorCaixa, referencia)) : simulada}
-                          onChange={(e) => setSimulada(e.target.value)}
-                          onBlur={(e) => setSimulada(String(quantidadeNaReferencia(arredondarPorCaixa(unidadesDaDigitada(Number(e.target.value) || 0, linha.unidadesPorCaixa, referencia), linha.unidadesPorCaixa), linha.unidadesPorCaixa, referencia)))}
-                        />
-                      </label>
-                      <RowMeta>{linha.unidadesPorCaixa > 1 ? `${quantidade(simulacao.caixas)} cx de ${linha.unidadesPorCaixa}` : 'avulso'}</RowMeta>
-                      <div className="ml-auto flex gap-2">
-                        <Button size="sm" disabled={!podeParametrizar} title={podeParametrizar ? undefined : motivoBloqueio} onClick={() => onParametros(linha)}>
-                          <SlidersHorizontal aria-hidden />
-                          Parâmetros
-                        </Button>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={!podeOperar || simulacao.quantidade <= 0}
-                          title={podeOperar ? undefined : motivoBloqueio}
-                          onClick={() => onAdicionar(linha, simulacao.quantidade)}
-                        >
-                          <ShoppingCart aria-hidden />
-                          Adicionar ao carrinho
-                        </Button>
-                      </div>
-                    </div>
-                    <GradeMini colunas={3}>
-                      <MiniCartao rotulo="Valor previsto" valor={moeda(simulacao.total)} />
-                      <MiniCartao rotulo="Estoque final" valor={`${quantidade(linha.estoqueAtual + linha.emTransito + simulacao.quantidade)} un.`} hint={`Nível ${pct(simulacao.nivelFuturoPct)}`} />
-                      <MiniCartao rotulo="Cobertura" valor={dias(simulacao.coberturaFuturaDias)} hint="Depois da compra" />
-                    </GradeMini>
-                  </div>
-                </SecaoRecolhivel>
-
-                {/* 4b. Compras × vendas | Preço especial — um gráfico por vez (C-048) */}
+                {/* 1. Compras × vendas | Preço especial — um gráfico por vez (C-048), logo no alto */}
                 {temAbaEspecial(sugestoesEspeciais) ? (
                   <div className="flex flex-wrap gap-2" role="tablist" aria-label="Gráfico do produto">
                     <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'vendas'} onClick={() => setAbaGrafico('vendas')}>Compras × vendas</ChipContagem>
@@ -284,6 +232,55 @@ export function AnaliseProdutoDialogo({
                     projecaoMes={projetada && resultadoModelo ? resultadoModelo.previsao : null}
                   />
                 )}
+
+                {/* 2. Simulação de compra — depois do gráfico (R-127) */}
+                <SecaoRecolhivel
+                  titulo="Simulação de compra"
+                  resumo={`${textoDaSugestao(simulacao.quantidade, linha.unidadesPorCaixa, referencia)} · ${moeda(simulacao.total)} · cobertura ${dias(simulacao.coberturaFuturaDias)}`}
+                  aberta={abertas.has('simulacao')}
+                  onToggle={() => alternarSecao('simulacao')}
+                  acao={(
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={!podeOperar || simulacao.quantidade <= 0}
+                      title={podeOperar ? undefined : motivoBloqueio}
+                      onClick={() => onAdicionar(linha, simulacao.quantidade)}
+                    >
+                      <ShoppingCart aria-hidden />
+                      Adicionar ao carrinho
+                    </Button>
+                  )}
+                >
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="flex w-48 flex-col gap-1 text-[12px] text-ink-secondary">
+                        {`Quantidade (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 'caixas' : 'unidades'})`}
+                        <Input
+                          type="number"
+                          min={0}
+                          step={rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 1 : linha.unidadesPorCaixa}
+                          value={simulada === '' ? String(quantidadeNaReferencia(sugestaoDePartida, linha.unidadesPorCaixa, referencia)) : simulada}
+                          onChange={(e) => setSimulada(e.target.value)}
+                          onBlur={(e) => setSimulada(String(quantidadeNaReferencia(arredondarPorCaixa(unidadesDaDigitada(Number(e.target.value) || 0, linha.unidadesPorCaixa, referencia), linha.unidadesPorCaixa), linha.unidadesPorCaixa, referencia)))}
+                        />
+                      </label>
+                      <RowMeta>{linha.unidadesPorCaixa > 1 ? `${quantidade(simulacao.caixas)} cx de ${linha.unidadesPorCaixa}` : 'avulso'}</RowMeta>
+                      <div className="ml-auto flex gap-2">
+                        <Button size="sm" disabled={!podeParametrizar} title={podeParametrizar ? undefined : motivoBloqueio} onClick={() => onParametros(linha)}>
+                          <SlidersHorizontal aria-hidden />
+                          Parâmetros
+                        </Button>
+                      </div>
+                    </div>
+                    <GradeMini colunas={3}>
+                      <MiniCartao rotulo="Valor previsto" valor={moeda(simulacao.total)} />
+                      <MiniCartao rotulo="Estoque final" valor={`${quantidade(linha.estoqueAtual + linha.emTransito + simulacao.quantidade)} un.`} hint={`Nível ${pct(simulacao.nivelFuturoPct)}`} />
+                      <MiniCartao rotulo="Cobertura" valor={dias(simulacao.coberturaFuturaDias)} hint="Depois da compra" />
+                    </GradeMini>
+                  </div>
+                </SecaoRecolhivel>
+
 
                 {/* 4c. Análise de venda futura */}
                 <SecaoRecolhivel titulo="Análise de venda futura" resumo={resumoVendaFutura({ previsao, modelo, projetada, unidadesPorCaixa: linha.unidadesPorCaixa })} aberta={abertas.has('previsao')} onToggle={() => alternarSecao('previsao')}>

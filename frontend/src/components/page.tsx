@@ -1187,7 +1187,8 @@ export function PainelGrafico({
   titulo: string;
   hint?: React.ReactNode;
   acoes?: React.ReactNode;
-  altura?: 'padrao' | 'alta';
+  /** `adaptavel`: 220 px em tela baixa, 320 px a partir de 800 px de altura (R-127). */
+  altura?: 'padrao' | 'alta' | 'adaptavel';
   largura?: 'padrao' | 'total';
   rodape?: React.ReactNode;
   children: React.ReactNode;
@@ -1203,7 +1204,7 @@ export function PainelGrafico({
         </div>
         {acoes ? <div className="flex items-center gap-2">{acoes}</div> : null}
       </div>
-      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : 'h-[220px]')}>
+      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : altura === 'adaptavel' ? 'h-[220px] [@media(min-height:800px)]:h-[320px]' : 'h-[220px]')}>
         {children}
       </div>
       {rodape}
@@ -1371,7 +1372,9 @@ export function MiniCartao({
 }
 
 /** A grade dos mini-cartões: 2 por linha no mobile, 3 em `sm`, `colunas` a partir de `lg`. */
-export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 1 | 2 | 3 | 4 | 6 }) {
+export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 1 | 2 | 3 | 4 | 6 | 7 }) {
+  // 7: a faixa densa do topo da Análise do Produto — 4 + 3 em telas estreitas, uma fileira a partir de `lg`.
+  if (colunas === 7) return <div className="grid grid-cols-4 gap-2 lg:grid-cols-7">{children}</div>;
   if (colunas === 1) return <div className="grid grid-cols-1 gap-2">{children}</div>;
   if (colunas === 2) return <div className="grid grid-cols-2 gap-2">{children}</div>;
   const emLg = { 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 6: 'lg:grid-cols-6' }[colunas];
@@ -1389,6 +1392,7 @@ export function SecaoRecolhivel({
   titulo,
   resumo,
   extra,
+  acao,
   aberta,
   onToggle,
   children,
@@ -1396,18 +1400,21 @@ export function SecaoRecolhivel({
   titulo: string;
   resumo?: React.ReactNode;
   extra?: React.ReactNode;
+  /** A ação principal da seção, visível mesmo recolhida (fora do botão de abrir). */
+  acao?: React.ReactNode;
   aberta: boolean;
   onToggle: () => void;
   children: React.ReactNode;
 }) {
   return (
     <Panel>
+      <div className="flex items-center">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={aberta}
         className={cn(
-          'flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-accent',
+          'flex min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-accent',
           'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
           aberta && 'rounded-b-none',
         )}
@@ -1419,6 +1426,8 @@ export function SecaoRecolhivel({
         {extra ? <span className="shrink-0">{extra}</span> : null}
         <ChevronDown className={cn('size-4 shrink-0 text-ink-muted transition-transform', aberta && 'rotate-180')} aria-hidden />
       </button>
+      {acao ? <div className="shrink-0 pr-4">{acao}</div> : null}
+      </div>
       {aberta ? <div className="border-t border-rule-row p-4">{children}</div> : null}
     </Panel>
   );
