@@ -75,6 +75,18 @@ export function montarSql(definition, input) {
   return pronto;
 }
 
+/** Só esquema, host e porta de uma URL; caminho colado junto é descartado com aviso. */
+export function origemDe(texto, log = console) {
+  const bruto = String(texto ?? '').trim();
+  try {
+    const url = new URL(bruto);
+    if (url.pathname && url.pathname !== '/') log.warn(`[gestao-custos] ignorando o caminho "${url.pathname}" da URL — o SDK usa só a origem ${url.origin}.`);
+    return url.origin;
+  } catch {
+    return bruto;
+  }
+}
+
 /** A lista de CODPROD do input, como números (vazia quando não há lista). */
 export function codprodsDe(input) {
   return String(input?.codprods ?? '').split(',').map((parte) => Number(parte.trim())).filter((n) => Number.isInteger(n) && n > 0);
@@ -107,10 +119,13 @@ export async function abrirGestaoCustos({ env = process.env, log = console, db =
   const projetoDaConexao = Number(env.GESTAO_CUSTOS_CONEXAO_PROJECT_ID || 0);
   const { createMitraSdkInstance } = await import('mitra-sdk');
   // Instância própria: não configura o SDK global nem escreve em process.env.
+  // O SDK monta as rotas sobre a ORIGEM (esquema + host + porta); um caminho
+  // colado junto (ex.: /interactions/records) é descartado aqui, com aviso.
+  const baseURL = origemDe(env.GESTAO_CUSTOS_BASE_URL, log);
   const sdk = createMitraSdkInstance({
-    baseURL: env.GESTAO_CUSTOS_BASE_URL,
+    baseURL,
     token: env.GESTAO_CUSTOS_TOKEN,
-    integrationURL: env.GESTAO_CUSTOS_INTEGRATIONS_URL || env.GESTAO_CUSTOS_BASE_URL,
+    integrationURL: origemDe(env.GESTAO_CUSTOS_INTEGRATIONS_URL || baseURL, log),
   });
 
   let caminho = 'runQuery';

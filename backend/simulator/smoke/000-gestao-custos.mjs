@@ -5,7 +5,7 @@
 
 import { createRunner } from '../runtime.mjs';
 import {
-  abrirGestaoCustos, codprodsDe, ehGestaoCustos, executorSqlite, montarSql,
+  abrirGestaoCustos, codprodsDe, ehGestaoCustos, executorSqlite, montarSql, origemDe,
 } from '../gestao-custos.mjs';
 import { assert } from './base.mjs';
 
@@ -64,5 +64,9 @@ export async function suite(ctx) {
     assert.equal(remoto.descricao, 'mitra projeto 60574 via runQuery');
     assert.equal(typeof remoto.executar, 'function');
     assert.equal(JSON.stringify(process.env), antes, 'o adaptador nao escreve em process.env');
+    // A URL base e so a origem: caminho colado junto (como /interactions/records) e descartado.
+    assert.equal(origemDe('https://newmitra.exemplo.com:8080/interactions/records', silencioso), 'https://newmitra.exemplo.com:8080');
+    assert.equal(origemDe('https://api.exemplo.com', silencioso), 'https://api.exemplo.com');
+    assert.equal(origemDe('nao-e-url', silencioso), 'nao-e-url');
   });
 }
