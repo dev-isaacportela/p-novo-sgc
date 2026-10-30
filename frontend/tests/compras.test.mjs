@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   mesesDoPeriodo, sugestaoDeCompra, unidadesPorCaixa, arredondarPorCaixa, origemUnidadesPorCaixa,
   curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens, itemDeLinha, itemDeProdutoBuscado,
+  curvaPorValor, piorCurva,
 } from '../src/lib/compras.ts';
 
 const linha = (codprod, vendaPeriodo, custo, extra = {}) => ({
@@ -160,4 +161,19 @@ test('R-120 / RN-002: a origem das unidades por caixa segue a mesma cadeia — g
   assert.equal(origemUnidadesPorCaixa(l('CX 12', 0)), 'embalagem');
   assert.equal(origemUnidadesPorCaixa(l('FRASCO 100 ML', 0)), 'avulso');
   assert.equal(origemUnidadesPorCaixa(l('FRASCO 100 ML', 1), 1), 'avulso', '1 não é caixa');
+});
+
+test('R-122: curvaPorValor é a régua de curvaAbc sobre qualquer valor (500/250/150/70/30 → A,A,B,C,C; negativo vale zero; sem total, todos C) e piorCurva devolve a letra mais ao fim', () => {
+  const itens = [[1, 500], [2, 250], [3, 150], [4, 70], [5, 30]].map(([codprod, valor]) => ({ codprod, valor }));
+  const curvas = curvaPorValor(itens);
+  assert.deepEqual([1, 2, 3, 4, 5].map((cod) => curvas.get(cod)), ['A', 'A', 'B', 'C', 'C']);
+  assert.deepEqual(curvas, curvaAbc([1, 2, 3, 4, 5].map((cod, i) => linha(cod, [50, 25, 15, 7, 3][i], 10))), 'a mesma régua da 003');
+  // 400/100/100 somam 600: 0,67 → A, 0,83 → B, 1,0 → C; o negativo vale zero e fica no fim, C.
+  const comPrejuizo = curvaPorValor([{ codprod: 1, valor: -100 }, { codprod: 2, valor: 400 }, { codprod: 3, valor: 100 }, { codprod: 4, valor: 100 }]);
+  assert.deepEqual([1, 2, 3, 4].map((cod) => comPrejuizo.get(cod)), ['C', 'A', 'B', 'C']);
+  assert.deepEqual([...curvaPorValor([{ codprod: 1, valor: 0 }]).values()], ['C']);
+  assert.equal(curvaPorValor([]).size, 0);
+  assert.equal(piorCurva('A', 'C'), 'C');
+  assert.equal(piorCurva('B', 'A'), 'B');
+  assert.equal(piorCurva('B', 'B'), 'B');
 });

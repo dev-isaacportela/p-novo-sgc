@@ -139,6 +139,7 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 - [x] **T-100** — `npm test` verde nos dois lados; `npm run build` e `npm run lint` limpos
 - [x] **T-101** — Verificação manual no simulador (VPS, WinThor real, Coloplast × filial 1): cards de visão, seleção e painel compacto, gráfico com rótulos, carrinho com mínimo, variação e arquivo, retomada do carrinho salvo — nos dois temas
 - [x] **T-102** — *(R-120)* `sgcCustoUnidadesPorCaixa` uma vez por carga (lotes de 1000) → `Map` de `montarRessuprimento`; `origemCaixa` na linha (`origemUnidadesPorCaixa` em `lib/compras.ts`) e no painel; simulador roda a INTEGRATION (`gestao-custos.mjs`: SQLite por padrão, plataforma com `SIMULATOR_GESTAO_CUSTOS=mitra`); testes em `tests/compras.test.mjs`, `tests/ressuprimento.test.mjs` e `smoke/000-gestao-custos.mjs`; checagem ao vivo `npm run sim:gestao-custos` → `frontend/src/pages/compras-inteligentes/ComprasInteligentesPage.tsx`, `lib/compras.ts`, `lib/ressuprimento.ts`, `backend/simulator/gestao-custos.mjs`
+- [x] **T-103** — *(R-122)* curvas de faturamento e de rentabilidade e a pior das duas: `FATURAMENTO_PERIODO` e `RENTABILIDADE_PERIODO` em `sgcWintRessuprimento` (PCMOV `PUNIT`/`CUSTOFIN`; `CUSTOFIN` no esquema e no seed do simulador); `curvaPorValor`/`piorCurva` em `lib/compras.ts`, `curvasDoRessuprimento` em `lib/ressuprimento.ts` (`curva` = a pior; `curvaFaturamento`, `curvaRentabilidade`; CSV com 12 colunas); duas colunas na grade com a que vale em destaque e as letras no painel; `test('C-015 …')` reescrito, `test('RN-010 …')`, `test('R-122 …')` e `teste('C-040 …')` → `backend/add-013-compras-inteligentes.mjs`, `frontend/src/lib/compras.ts`, `lib/ressuprimento.ts`, `pages/compras-inteligentes/grid.tsx`
 
 ## Dependências
 
@@ -166,7 +167,7 @@ tudo → T-095 · T-096 → T-097 · T-098
 | RF-006 / C-002..C-006, RN-006, RN-008 | T-030 | T-089, T-091 |
 | RF-007 / C-007, C-025, RN-007 | T-030 | T-089, T-091 |
 | RF-008 / RN-009 | T-030 | T-089, T-091 |
-| RF-009 / C-015, RN-010 | T-014, T-030 | T-092 |
+| RF-009 / C-015, C-040, RN-010 | T-014, T-030, T-103 | T-092, T-103 |
 | RF-010 / C-010, C-011, C-016, RN-004, RN-005 | T-006, T-009, T-030 | T-084, T-090 |
 | RF-011 / C-012, RN-013 | T-009, T-030, T-035 | T-084, T-093 |
 | RF-012 / C-013, RN-012 | T-005, T-010, T-035 | T-083 |

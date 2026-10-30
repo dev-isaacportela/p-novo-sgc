@@ -15,7 +15,7 @@
 
 // Extensão explícita, como em `compras.ts`: `allowImportingTsExtensions` está
 // ligado e é assim que o `node --test` de frontend/tests/ resolve o módulo.
-import { arredondarPorCaixa, curvaAbc, origemUnidadesPorCaixa, unidadesPorCaixa } from './compras.ts';
+import { arredondarPorCaixa, curvaPorValor, origemUnidadesPorCaixa, piorCurva, unidadesPorCaixa } from './compras.ts';
 import type { CurvaAbc, ItemPedido, OrigemUnidadesPorCaixa } from './compras.ts';
 
 export type StatusRessuprimento =
@@ -45,6 +45,8 @@ export interface MedidaRessuprimento {
   ESTOQUE_ATUAL: number; QT_PEDIDA_ERP: number; QT_TRANSITO: number; ESTOQUE_EM_TRANSITO: number;
   LEAD_TIME_MEDIDO: number;          // 0 = não medido
   VENDA_PERIODO: number; VENDA_PUBLICA: number;
+  /** R-122: valor vendido e margem da janela (PCMOV: QT × PUNIT e QT × (PUNIT − CUSTOFIN)); opcionais para a medida antiga continuar válida. */
+  FATURAMENTO_PERIODO?: number; RENTABILIDADE_PERIODO?: number;
   CONSUMO_DIARIO: number; CONSUMO_DIARIO_PUBLICO: number; VOLATILIDADE_DIARIA: number;
 }
 
@@ -230,11 +232,42 @@ export function aderenteASugestao(qtSugerida: number, qtPedida: number): boolean
 }
 
 export interface LinhaRessuprimento extends Ressuprimento {
-  medida: MedidaRessuprimento; curva: CurvaAbc;
+  medida: MedidaRessuprimento;
+  /** R-122: a curva que vale (alvo de cobertura, item do pedido, ordem) é a PIOR das duas. */
+  curva: CurvaAbc; curvaFaturamento: CurvaAbc; curvaRentabilidade: CurvaAbc;
   parametros: ParametrosResolvidos; unidadesPorCaixa: number; silenciado: boolean;
   silenciadoAte: string; motivoSilencio: string;
   /** R-120: de onde veio a caixa — Gestão de Custos, cadastro do ERP, embalagem ou avulso. */
   origemCaixa: OrigemUnidadesPorCaixa;
+}
+
+export interface CurvasDaLinha { faturamento: CurvaAbc; rentabilidade: CurvaAbc; curva: CurvaAbc }
+
+/**
+ * RN-010 (R-122): duas curvas pela mesma régua — a de FATURAMENTO (valor
+ * vendido na janela) e a de RENTABILIDADE (margem da janela) — e a que vale é
+ * a pior das duas, como no sistema antigo. Medida sem as duas colunas (SF
+ * ainda não republicada) cai na régua antiga, venda × custo, nas duas.
+ */
+export function curvasDoRessuprimento(medidas: MedidaRessuprimento[]): Map<number, CurvasDaLinha> {
+  const lista = medidas ?? [];
+  const antiga = (m: MedidaRessuprimento) => Math.max(0, numero(m.VENDA_PERIODO)) * Math.max(0, numero(m.CUSTO_ULT_ENTRADA));
+  const faturamento = curvaPorValor(lista.map((m) => ({
+    codprod: numero(m.CODPROD),
+    valor: m.FATURAMENTO_PERIODO === undefined ? antiga(m) : numero(m.FATURAMENTO_PERIODO),
+  })));
+  const rentabilidade = curvaPorValor(lista.map((m) => ({
+    codprod: numero(m.CODPROD),
+    valor: m.RENTABILIDADE_PERIODO === undefined ? antiga(m) : numero(m.RENTABILIDADE_PERIODO),
+  })));
+  const mapa = new Map<number, CurvasDaLinha>();
+  for (const m of lista) {
+    const codprod = numero(m.CODPROD);
+    const fat = faturamento.get(codprod) ?? 'C';
+    const rent = rentabilidade.get(codprod) ?? 'C';
+    mapa.set(codprod, { faturamento: fat, rentabilidade: rent, curva: piorCurva(fat, rent) });
+  }
+  return mapa;
 }
 
 /** O alvo em dias da curva do item. A TELA injeta; esta lib não conhece `SGC_COBERTURA`. */
@@ -244,8 +277,8 @@ export type AlvoDaCurva = (
 ) => number;
 
 /**
- * A única chamada que a tela faz por carga: curva (régua da 003) -> alvo da
- * curva (injetado) -> precedência dos parâmetros -> as sete grandezas.
+ * A única chamada que a tela faz por carga: curvas (a régua da 003, duas vezes,
+ * e a pior das duas) -> alvo da curva (injetado) -> precedência dos parâmetros -> as sete grandezas.
  * RN-004, RN-010.
  */
 export function montarRessuprimento(
@@ -256,13 +289,14 @@ export function montarRessuprimento(
   opcoes: { codfornec: number; hoje: string; desconsiderarLicitacao: boolean },
 ): LinhaRessuprimento[] {
   const lista = medidas ?? [];
-  const curvas = curvaAbc(lista);
+  const curvas = curvasDoRessuprimento(lista);
   const doFornecedor = (parametros ?? []).find((p) => numero(p.codprod) === 0) ?? null;
   const porSku = new Map((parametros ?? []).filter((p) => numero(p.codprod) > 0).map((p) => [numero(p.codprod), p]));
 
   return lista.map((medida) => {
     const codprod = numero(medida.CODPROD);
-    const curva = curvas.get(codprod) ?? 'C';
+    const daLinha = curvas.get(codprod) ?? { faturamento: 'C' as const, rentabilidade: 'C' as const, curva: 'C' as const };
+    const curva = daLinha.curva;
     const doSku = porSku.get(codprod) ?? null;
     const alvo = alvoDaCurvaDias(
       { codprod, codsec: numero(medida.CODSEC), codepto: numero(medida.CODEPTO), codfornec: numero(opcoes.codfornec) },
@@ -279,6 +313,8 @@ export function montarRessuprimento(
       ...calculo,
       medida,
       curva,
+      curvaFaturamento: daLinha.faturamento,
+      curvaRentabilidade: daLinha.rentabilidade,
       parametros: resolvidos,
       unidadesPorCaixa: porCaixa,
       origemCaixa: origemUnidadesPorCaixa(medida, daGestao),
@@ -518,7 +554,7 @@ export const FILTROS_INICIAIS: FiltrosLista = { situacao: '', ordem: 'padrao', m
 /* ── RF-023 / C-024: a exportação é do que está na tela, por lib/csv.ts (R-037) ── */
 
 export const COLUNAS_CSV: string[] = [
-  'Produto', 'Situação', 'Curva', 'Consumo diário', 'Estoque disponível',
+  'Produto', 'Situação', 'Curva', 'Curva fat.', 'Curva rent.', 'Consumo diário', 'Estoque disponível',
   'Trânsito', 'Cobertura atual', 'Dias de gatilho', 'Sugestão', 'Custo',
 ];
 
@@ -538,6 +574,8 @@ export function linhaCsv(l: LinhaRessuprimento): (string | number)[] {
     `${l.medida.DESCRICAO} (${l.medida.CODPROD})`,
     ROTULO_STATUS[l.status],
     l.curva,
+    l.curvaFaturamento,
+    l.curvaRentabilidade,
     decimal(l.consumoDiario, 4),
     decimal(l.estoqueAtual, 3),
     decimal(l.emTransito, 3),

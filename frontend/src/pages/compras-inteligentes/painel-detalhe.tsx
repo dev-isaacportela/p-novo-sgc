@@ -127,7 +127,7 @@ export function PainelDetalhe({
           <KpiCompacto
             rotulo="Situação"
             valor={<Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status>}
-            hint={linha.silenciado ? `Silenciado até ${fmtData(linha.silenciadoAte)}` : `Curva ${linha.curva}`}
+            hint={linha.silenciado ? `Silenciado até ${fmtData(linha.silenciadoAte)}` : `Curva ${linha.curva} · fat. ${linha.curvaFaturamento} · rent. ${linha.curvaRentabilidade}`}
           />
           <KpiCompacto
             rotulo="Gatilho"

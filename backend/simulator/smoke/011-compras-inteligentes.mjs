@@ -274,6 +274,26 @@ export async function suite(ctx) {
     assert.equal(String(produto(rows, 5401).CODFAB), 'FAB-5401');
   });
 
+  await teste('C-040 / RN-010: sgcWintRessuprimento devolve FATURAMENTO_PERIODO e RENTABILIDADE_PERIODO por produto — o 5410 (50 un. a 20 com custo financeiro 12) fatura 1000 e rende 400; a devolucao (QT negativa) e a venda desconsiderada ficam fora dos dois; produto sem venda tem 0 e 0', async () => {
+    const rows = await ressuprimento();
+    assert.equal(Number(produto(rows, 5410).FATURAMENTO_PERIODO), 1000);
+    assert.equal(Number(produto(rows, 5410).RENTABILIDADE_PERIODO), 400);
+    // So a faixa desta spec (5401..5420): o seed da 003 vende a outro preco.
+    for (const linha of rows.filter((r) => Number(r.CODPROD) >= 5401 && Number(r.CODPROD) <= 5420)) {
+      assert.equal(Number(linha.FATURAMENTO_PERIODO), Number(linha.VENDA_PERIODO) * 20, `faturamento do ${linha.CODPROD}`);
+      assert.equal(Number(linha.RENTABILIDADE_PERIODO), Number(linha.VENDA_PERIODO) * 8, `rentabilidade do ${linha.CODPROD}`);
+    }
+    const semVenda = rows.find((r) => Number(r.CODPROD) >= 5401 && Number(r.VENDA_PERIODO) === 0);
+    assert.ok(semVenda, 'o seed tem produto sem venda na janela');
+    assert.equal(Number(semVenda.FATURAMENTO_PERIODO), 0);
+    assert.equal(Number(semVenda.RENTABILIDADE_PERIODO), 0);
+    // A venda de 60 do 5408 desconsiderada sai dos dois valores (RN-012).
+    const venda = db.prepare("SELECT NUMTRANSITEM FROM PCMOV WHERE CODPROD = 5408 AND CODOPER = 'S' AND QT = 60").get();
+    const semEla = await ressuprimento({ excluir: String(venda.NUMTRANSITEM) });
+    assert.equal(Number(produto(semEla, 5408).FATURAMENTO_PERIODO), 30 * 20);
+    assert.equal(Number(produto(semEla, 5408).RENTABILIDADE_PERIODO), 30 * 8);
+  });
+
   await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho do Novo pedido do quadro — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
     const medidas = await ressuprimento();
     assert.ok(medidas.length > 0, 'consulta ao WinThor sem linha nao e verde');

@@ -275,7 +275,25 @@ test('RN-009: a ordem de avaliação é a regra — disponível 0 com máximo 0 
 
 /* ── T-092 — curva, arredondamento e aderência ───────────────────────── */
 
-test('C-015: a curva é a régua única da 003 sobre a janela da tela — valores 500, 250, 150, 70 e 30 dão A, A, B, C, C', () => {
+test('C-015: duas curvas pela mesma régua e a pior das duas vale — faturamento 500/250/150/70/30 dá A,A,B,C,C; rentabilidade 30/500/250/150/70 dá C,A,A,B,C; a curva da linha é C,A,B,C,C', () => {
+  const medidas = [
+    medida({ CODPROD: 5410, FATURAMENTO_PERIODO: 500, RENTABILIDADE_PERIODO: 30 }),
+    medida({ CODPROD: 5411, FATURAMENTO_PERIODO: 250, RENTABILIDADE_PERIODO: 500 }),
+    medida({ CODPROD: 5412, FATURAMENTO_PERIODO: 150, RENTABILIDADE_PERIODO: 250 }),
+    medida({ CODPROD: 5413, FATURAMENTO_PERIODO: 70, RENTABILIDADE_PERIODO: 150 }),
+    medida({ CODPROD: 5414, FATURAMENTO_PERIODO: 30, RENTABILIDADE_PERIODO: 70 }),
+  ];
+  const linhas = montarRessuprimento(medidas, [], alvoStub, new Map(),
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false });
+  assert.deepEqual(linhas.map((l) => l.curvaFaturamento), ['A', 'A', 'B', 'C', 'C']);
+  assert.deepEqual(linhas.map((l) => l.curvaRentabilidade), ['C', 'A', 'A', 'B', 'C']);
+  assert.deepEqual(linhas.map((l) => l.curva), ['C', 'A', 'B', 'C', 'C']);
+  // A pior das duas é a que vale para o alvo de cobertura (RN-004) e viaja no item (R-112).
+  assert.equal(linhas[0].coberturaDias, ALVO_STUB.C, 'o 5410 é A em faturamento, mas C em rentabilidade: alvo da C');
+  assert.equal(linhas[1].coberturaDias, ALVO_STUB.A);
+});
+
+test('C-015 (medida antiga): sem FATURAMENTO_PERIODO e RENTABILIDADE_PERIODO, as duas curvas são a régua de venda × custo — 500/250/150/70/30 dão A,A,B,C,C nas duas e na linha', () => {
   const medidas = [
     medida({ CODPROD: 5410, VENDA_PERIODO: 50, CUSTO_ULT_ENTRADA: 10 }),
     medida({ CODPROD: 5411, VENDA_PERIODO: 25, CUSTO_ULT_ENTRADA: 10 }),
@@ -286,6 +304,8 @@ test('C-015: a curva é a régua única da 003 sobre a janela da tela — valore
   const linhas = montarRessuprimento(medidas, [], alvoStub, new Map(),
     { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false });
   assert.deepEqual(linhas.map((l) => l.curva), ['A', 'A', 'B', 'C', 'C']);
+  assert.deepEqual(linhas.map((l) => l.curvaFaturamento), linhas.map((l) => l.curva));
+  assert.deepEqual(linhas.map((l) => l.curvaRentabilidade), linhas.map((l) => l.curva));
 });
 
 test('RN-010: lista vazia não produz linha nenhuma; com todos os custos zerados, todos caem em C', () => {
@@ -296,6 +316,17 @@ test('RN-010: lista vazia não produz linha nenhuma; com todos os custos zerados
     [], alvoStub, new Map(), { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false },
   );
   assert.deepEqual(semValor.map((l) => l.curva), ['C', 'C']);
+  // Margem negativa conta como zero: quem só dá prejuízo é C em rentabilidade, mesmo faturando bem.
+  // Faturamento 700/200/100 (A, B, C); rentabilidade −50/300/100 → 0, 300, 100 (C, A, C); a linha fica com a pior.
+  const prejuizo = montarRessuprimento(
+    [
+      medida({ CODPROD: 5410, FATURAMENTO_PERIODO: 700, RENTABILIDADE_PERIODO: -50 }),
+      medida({ CODPROD: 5411, FATURAMENTO_PERIODO: 200, RENTABILIDADE_PERIODO: 300 }),
+      medida({ CODPROD: 5412, FATURAMENTO_PERIODO: 100, RENTABILIDADE_PERIODO: 100 }),
+    ],
+    [], alvoStub, new Map(), { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false },
+  );
+  assert.deepEqual(prejuizo.map((l) => [l.curvaFaturamento, l.curvaRentabilidade, l.curva]), [['A', 'C', 'C'], ['B', 'A', 'B'], ['C', 'C', 'C']]);
 });
 
 test('C-017: a quantidade digitada sobe para a caixa cheia — 50 vira 60, 48 continua 48 e 0 continua 0', () => {
@@ -395,8 +426,8 @@ test('RN-015 / R-112: o carrinho agrupa por fornecedor e filial, sobe a priorida
   assert.match(motivoDaSugestao(emRuptura), /^Ruptura/);
 });
 
-test('C-024: a exportação leva as 10 colunas da tela e 3 linhas, separadas por ponto e vírgula, com as aspas da descrição escapadas', () => {
-  assert.equal(COLUNAS_CSV.length, 10);
+test('C-024: a exportação leva as 12 colunas da tela (as duas curvas inclusas, R-122) e 3 linhas, separadas por ponto e vírgula, com as aspas da descrição escapadas', () => {
+  assert.equal(COLUNAS_CSV.length, 12);
   const linhas = montarRessuprimento(
     [
       medida({ CODPROD: 5401, DESCRICAO: 'WHEY 900 G "ZERO"' }),
@@ -408,7 +439,7 @@ test('C-024: a exportação leva as 10 colunas da tela e 3 linhas, separadas por
   const texto = textoCsv(COLUNAS_CSV, linhas.map(linhaCsv));
   const partes = texto.split('\r\n');
   assert.equal(partes.length, 4);
-  assert.equal(partes[0].split(';').length, 10);
+  assert.equal(partes[0].split(';').length, 12);
   assert.match(partes[1], /"WHEY 900 G ""ZERO"" \(5401\)"/);
   assert.match(partes[3], /sem giro/, 'produto sem giro não inventa número no CSV');
 });
