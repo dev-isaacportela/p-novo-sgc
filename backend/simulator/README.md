@@ -212,7 +212,9 @@ executa por `gestao-custos.mjs`, irmão do `winthor-oracle.mjs`:
   `CUSTO_PRODUTOS` do seed da 003, no lugar da `PRODUTOS` do Gestão de Custos;
 - **`SIMULATOR_GESTAO_CUSTOS=mitra`** no `backend/.env`, com as variáveis SÓ do
   adaptador: `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`,
-  `GESTAO_CUSTOS_PROJECT_ID` (46967) e, opcional, `GESTAO_CUSTOS_CAMINHO`. Dois
+  `GESTAO_CUSTOS_PROJECT_ID` (60574 — o projeto Mitra VIVO; "p-46967" é só o
+  nome do repositório com o código do Gestão de Custos, e a PRODUTOS dele não
+  tem `UNIDADES_POR_CAIXA`) e, opcional, `GESTAO_CUSTOS_CAMINHO`. Dois
   caminhos, nesta ordem: `runQuery` (SQL direto no projeto; exige token de
   desenvolvedor) e, se ele é recusado, `records` — o REST
   `GET /interactions/records/PRODUTOS` com `X-TenantID: <projeto>`, que um token

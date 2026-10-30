@@ -1,7 +1,7 @@
 // Checagem MANUAL do Gestão de Custos ao vivo (regra 7 do CLAUDE.md: vazio não
 // é verde). Só roda com SIMULATOR_GESTAO_CUSTOS=mitra e as credenciais no
 // backend/.env; prova que a plataforma devolve contagem > 0 de produtos com
-// UNIDADES_POR_CAIXA > 1 no projeto GESTAO_CUSTOS_PROJECT_ID (46967), e por qual
+// UNIDADES_POR_CAIXA > 1 no projeto GESTAO_CUSTOS_PROJECT_ID (60574), e por qual
 // caminho (runQuery ou o REST records). Quando a PRODUTOS do projeto não traz a
 // coluna em linha nenhuma, diz isso — é a diferença entre "projeto errado" e
 // "coluna vazia".

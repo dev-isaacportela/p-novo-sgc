@@ -1,5 +1,5 @@
 // Gestão de Custos no simulador — a conexão de integração `gestao-de-custos`
-// (projeto Mitra 46967, banco MySQL do próprio projeto), de onde o SGC lê as
+// (projeto Mitra 60574, banco MySQL do próprio projeto), de onde o SGC lê as
 // unidades por caixa (`PRODUTOS.UNIDADES_POR_CAIXA`). Em produção a Server
 // Function `sgcCustoUnidadesPorCaixa` (add-006, type INTEGRATION) é executada
 // pela plataforma: o `code` é um JSON com `connection`, `method`, `endpoint` e
@@ -13,7 +13,7 @@
 // - `SIMULATOR_GESTAO_CUSTOS=mitra` no backend/.env: a consulta vai à
 //   plataforma, como LEITURA, com variáveis SÓ deste adaptador —
 //   `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`, `GESTAO_CUSTOS_PROJECT_ID`
-//   (46967) e, opcional, `GESTAO_CUSTOS_CAMINHO`. Dois caminhos, nesta ordem:
+//   (60574) e, opcional, `GESTAO_CUSTOS_CAMINHO`. Dois caminhos, nesta ordem:
 //   `runQuery` (SQL direto no projeto; exige token de desenvolvedor) e, se ele
 //   é recusado, `records` — o REST `GET /interactions/records/PRODUTOS` com
 //   `X-TenantID: <projeto>`, que um token business alcança. O `records` não
@@ -35,7 +35,10 @@ import 'dotenv/config';
 import { toSqlite } from './mysql-dialect.mjs';
 
 export const CONEXAO_GESTAO_CUSTOS = 'gestao-de-custos';
-export const GESTAO_CUSTOS_PROJECT_ID_PADRAO = 46967;
+// Projeto Mitra vivo do Gestão de Custos = 60574. O "p-46967" é o nome do
+// REPOSITÓRIO com o código do Gestão de Custos, não o id do projeto (a PRODUTOS
+// do 46967 não tem UNIDADES_POR_CAIXA; a do 60574 tem em todas as linhas).
+export const GESTAO_CUSTOS_PROJECT_ID_PADRAO = 60574;
 const TTL_CACHE_MS = 5 * 60 * 1000;
 
 /** O JSON do `code` de uma definition INTEGRATION, ou `null`. */

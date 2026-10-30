@@ -63,7 +63,7 @@ export async function suite(ctx) {
       env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local', GESTAO_CUSTOS_TOKEN: 'segredo' },
       log: silencioso, db,
     });
-    assert.equal(remoto.descricao, 'mitra projeto 46967 via runQuery');
+    assert.equal(remoto.descricao, 'mitra projeto 60574 via runQuery');
     assert.equal(typeof remoto.executar, 'function');
     assert.equal(JSON.stringify(process.env), antes, 'o adaptador nao escreve em process.env');
     // A URL base e so a origem: caminho colado junto (como /interactions/records) e descartado.
@@ -98,10 +98,10 @@ export async function suite(ctx) {
     ]);
     const { fetch, chamadas } = fetchFalso(PAGINAS);
     const remoto = await abrirGestaoCustos({
-      env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local/interactions/records', GESTAO_CUSTOS_TOKEN: 'segredo', GESTAO_CUSTOS_PROJECT_ID: '46967', GESTAO_CUSTOS_CAMINHO: 'records' },
+      env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local/interactions/records', GESTAO_CUSTOS_TOKEN: 'segredo', GESTAO_CUSTOS_PROJECT_ID: '60574', GESTAO_CUSTOS_CAMINHO: 'records' },
       log: silencioso, fetch,
     });
-    assert.equal(remoto.descricao, 'mitra projeto 46967 via records');
+    assert.equal(remoto.descricao, 'mitra projeto 60574 via records');
     const execute = createRunner(db, { externos: [remoto] });
     const def = byName.get('sgcCustoUnidadesPorCaixa');
     const { rows } = await execute(def, { codprods: '5001,5002,5010' }, U.ana);
@@ -113,7 +113,7 @@ export async function suite(ctx) {
     assert.equal(chamadas[0].url.searchParams.get('size'), '200');
     assert.equal(chamadas[0].method, 'GET');
     assert.equal(chamadas[0].headers.Authorization, 'Bearer segredo');
-    assert.equal(chamadas[0].headers['X-TenantID'], '46967');
+    assert.equal(chamadas[0].headers['X-TenantID'], '60574');
     // Cache: o 5003 ainda não pedido sai da tabela guardada, sem nova chamada.
     const segunda = await execute(def, { codprods: '5003,5001' }, U.ana);
     assert.deepEqual(segunda.rows, [{ CODPROD: 5001, UNIDADES_POR_CAIXA: 12 }, { CODPROD: 5003, UNIDADES_POR_CAIXA: 6 }]);
@@ -143,7 +143,7 @@ export async function suite(ctx) {
     const linhas = await remoto.executar(def, { codprods: '5003' });
     assert.deepEqual(linhas, [{ CODPROD: 5003, UNIDADES_POR_CAIXA: 6 }]);
     assert.equal(remoto.caminho, 'records');
-    assert.equal(remoto.descricao, 'mitra projeto 46967 via records');
+    assert.equal(remoto.descricao, 'mitra projeto 60574 via records');
     assert.equal(avisos.length, 1);
     assert.ok(/ACCESS_DENIED/.test(avisos[0]) && /records/.test(avisos[0]), avisos[0]);
     assert.equal(chamadas.length, 2);
@@ -158,7 +158,7 @@ export async function suite(ctx) {
     });
     assert.deepEqual(await direto.executar(def, { codprods: '5001' }), [{ CODPROD: 5001, UNIDADES_POR_CAIXA: 12 }]);
     assert.equal(direto.caminho, 'runQuery');
-    assert.equal(consultas[0].projectId, 46967);
+    assert.equal(consultas[0].projectId, 60574);
     assert.ok(/IN \(5001\)/.test(consultas[0].sql), consultas[0].sql);
     assert.equal((await direto.produtos()).length, 1);
     assert.equal(consultas.length, 2);
