@@ -52,6 +52,7 @@ cd backend && npm run sim         # simulador em http://localhost:3109 (senha mi
 cd frontend && npm run dev -- --port 5179   # sem VITE_MITRA_AUTH_URL entra no simulador
 cd frontend && npm run build && npm run lint  # obrigatório antes de subir
 # SIMULATOR_WINTHOR=oracle no backend/.env: sgcWint* no WinThor REAL (só onde há acesso ao Oracle; ver simulator/README.md)
+# SIMULATOR_GESTAO_CUSTOS=mitra no backend/.env: unidades por caixa da plataforma (só GESTAO_CUSTOS_*; nunca MITRA_*; sem env, SQLite)
 ```
 
 Ou tudo junto pelo painel: `node ../mitra-hub/server.mjs`.

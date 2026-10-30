@@ -1266,7 +1266,9 @@ seed 011 grava `FAB-<codprod>` e dois custos atuais diferentes do da última ent
    fornecedores, `sgcWintResumoFornecedores` (1) → o `hint` de cada opção do seletor.
 2. Fornecedor: `sgcFornecedorCarregar` (1) → filiais e `PEDIDO_MINIMO`.
 3. Filial: `sgcParametrosCompraListar`, `sgcVendasDesconsideradasListar`, `sgcCoberturaListar`,
-   `sgcPedidoAbertoDoFornecedor`, `sgcItensEmPedidoAberto` em paralelo (5) e `sgcWintRessuprimento` (1).
+   `sgcPedidoAbertoDoFornecedor`, `sgcItensEmPedidoAberto` em paralelo (5), `sgcWintRessuprimento` (1) e,
+   com os códigos da lista, `sgcCustoUnidadesPorCaixa` (R-120, 1 por lote de 1000) → o `Map` de
+   `montarRessuprimento`, que também grava a origem da caixa na linha (`origemCaixa`).
 4. Selecionar um produto (o primeiro vem selecionado): `sgcWintProdutoHistorico` (13 meses),
    `sgcWintProdutoUltimasCompras`, `sgcWintProdutoEstoqueFiliais` (3), em cache por SKU; "Atualizar"
    limpa o cache. O gráfico, as filiais com excesso e a simulação saem desses dados e da linha.
@@ -1294,3 +1296,4 @@ seed 011 grava `FAB-<codprod>` e dois custos atuais diferentes do da última ent
 | D-019 | O arquivo do WinThor é `CODPROD;PRECO;QTD`, ponto decimal, sem cabeçalho, sem BOM, um por grupo | Planilha | É um arquivo para o ERP ler; o formato exato do importador do WinThor deve ser confirmado com quem opera o ERP |
 | D-020 | O resumo do seletor é uma **estimativa** numa consulta para todos os fornecedores, sem filial (RN-026) | A consulta principal por fornecedor | 200 fornecedores × consulta pesada não cabe em nenhum orçamento; a estimativa custa 1 execução e o rótulo diz "sugestão" sem prometer a conta exata |
 | D-021 | O detalhe custa 3 execuções **ao selecionar**, uma vez por SKU, com cache | Carregar o detalhe de toda a lista | Nada por linha; o painel fixo precisa dos dados ao clicar, e a mesma consulta alimenta gráfico, filiais com excesso e compras |
+| D-022 | As unidades por caixa vêm do Gestão de Custos numa execução por carga (R-120) | Mapa vazio, como D-006 fazia por orçamento | A referência Unidades/Caixas e o "N cx" ficavam na embalagem; uma execução em lotes de 1000 é barata, e o simulador agora roda a INTEGRATION (SQLite por padrão, plataforma com env) |

@@ -202,6 +202,40 @@ por `onQuery`, que nada do que foi por `runQueryMitra` cita tabela PC*.
 Testes: `smoke/000-winthor-real.mjs` (W-001..W-004) prova o roteamento com um
 executor falso, sem rede.
 
+## Gestão de Custos no simulador (`gestao-custos.mjs`)
+
+A Server Function `sgcCustoUnidadesPorCaixa` (add-006) é `INTEGRATION`: o `code` é um
+JSON com a conexão `gestao-de-custos` e o SQL com `event.codprods`. O simulador a
+executa por `gestao-custos.mjs`, irmão do `winthor-oracle.mjs`:
+
+- **sem env** (padrão, e o que `npm test` usa): o SQL roda no SQLite sobre a
+  `CUSTO_PRODUTOS` do seed da 003, no lugar da `PRODUTOS` do Gestão de Custos;
+- **`SIMULATOR_GESTAO_CUSTOS=mitra`** no `backend/.env`, com as variáveis SÓ do
+  adaptador: `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`,
+  `GESTAO_CUSTOS_PROJECT_ID` (60574 — o projeto Mitra VIVO; "p-46967" é só o
+  nome do repositório com o código do Gestão de Custos, e a PRODUTOS dele não
+  tem `UNIDADES_POR_CAIXA`) e, opcional, `GESTAO_CUSTOS_CAMINHO`. Dois
+  caminhos, nesta ordem: `runQuery` (SQL direto no projeto; exige token de
+  desenvolvedor) e, se ele é recusado, `records` — o REST
+  `GET /interactions/records/PRODUTOS` com `X-TenantID: <projeto>`, que um token
+  business alcança. O `records` não roda SQL: lê a PRODUTOS inteira (páginas de
+  200, uma vez a cada 5 min) e emula o SELECT da `sgcCustoUnidadesPorCaixa`
+  (CODPROD + COALESCE(UNIDADES_POR_CAIXA, 1)). `GESTAO_CUSTOS_CAMINHO=records`
+  pula o runQuery. O SDK é uma instância própria; nada vai para `process.env`.
+  Só SELECT/WITH e só GET; `event.<param>` só numérico; cache por CODPROD de 5
+  minutos. `GET /health` mostra `gestaoCustos:` com o caminho que valeu.
+
+  **Nunca preencha `MITRA_BASE_URL`, `MITRA_TOKEN`, `MITRA_BASE_URL_INTEGRATIONS`
+  nem `MITRA_PROJECT_ID` na VPS**: são as variáveis de escrita dos `add-*.mjs` e
+  do `setup-backend.mjs`, e o `MITRA_BASE_URL` vazio é a trava que impede um
+  `node add-*.mjs` de aplicar DDL/SF em produção sem migration (CLAUDE.md,
+  regras 1 e 2). O adaptador não as lê: com só elas preenchidas, ele não liga
+  (G-004 do smoke).
+
+Checagem ao vivo (regra 7: vazio não é verde): `npm run sim:gestao-custos` imprime a
+contagem de produtos com `UNIDADES_POR_CAIXA > 1` vinda da plataforma e falha se for 0.
+Testes sem rede: `smoke/000-gestao-custos.mjs` (G-001..G-006; o REST com fetch falso).
+
 ## Diagnóstico e voltar ao Mitra real
 
 Iguais ao kit da skill `mitra-escopo` (`GET /health`, `VITE_MITRA_AUTH_URL` no

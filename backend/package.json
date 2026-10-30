@@ -23,6 +23,7 @@
 		"sim:seed": "node simulator/seed-cli.mjs",
 		"sim:check": "node simulator/check.mjs",
 		"sim:smoke": "node simulator/smoke.mjs",
+		"sim:gestao-custos": "node simulator/gestao-custos-checar.mjs",
 		"test": "npm run sim:check && npm run sim:smoke"
 	},
 	"dependencies": {
