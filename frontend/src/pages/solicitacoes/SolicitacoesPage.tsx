@@ -314,7 +314,7 @@ export default function SolicitacoesPage() {
                 <Th>Vendedor</Th>
                 <Th>Situação</Th>
                 <Th>Atendimento</Th>
-                <Th className="w-28 text-right">Ações</Th>
+                <Th className="w-36 text-right">Ações</Th>
               </tr>
             </thead>
             <tbody>
@@ -359,7 +359,9 @@ export default function SolicitacoesPage() {
                       {registro.TITULO_CARD ? <RowMeta>{registro.TITULO_CARD}</RowMeta> : null}
                     </Td>
                     <Td className="text-right">
-                      <span className="inline-flex items-center justify-end gap-1">
+                      {/* Cada ação tem a sua coluna fixa (olho · avaliar · cancelar): a linha que
+                          não tem uma delas deixa o lugar vazio, e nada salta entre as linhas. */}
+                      <span className="ml-auto grid w-fit grid-cols-[2rem_4.75rem_2rem] items-center justify-items-center gap-1">
                         <IconButton label="Ver o histórico da solicitação" onClick={() => setDetalhando(registro)}>
                           <Eye aria-hidden />
                         </IconButton>
@@ -372,7 +374,7 @@ export default function SolicitacoesPage() {
                           >
                             Avaliar
                           </Button>
-                        ) : null}
+                        ) : <span aria-hidden />}
                         {registro.STATUS === 'pendente' && propria ? (
                           <IconButton
                             // O `label` do primitivo vira `title` E `aria-label`:
@@ -384,7 +386,7 @@ export default function SolicitacoesPage() {
                           >
                             <Ban aria-hidden />
                           </IconButton>
-                        ) : null}
+                        ) : <span aria-hidden />}
                       </span>
                     </Td>
                   </Tr>
