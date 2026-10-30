@@ -39,6 +39,8 @@ export interface MedidaRessuprimento {
   CODPROD: number; DESCRICAO: string; EMBALAGEM: string; UNIDADE: string;
   CODEPTO: number; CODSEC: number; UN_POR_CAIXA_ERP: number;
   CUSTO_ULT_ENTRADA: number; DT_ULT_ENTRADA: string; DT_ULT_SAIDA: string;
+  /** Layout legado (R-117): custo ATUAL do ERP e código de fábrica — opcionais para a medida antiga continuar válida. */
+  CUSTO_ATUAL?: number; CODFAB?: string;
   ESTOQUE_TOTAL: number; QT_BLOQUEADA: number; QT_INDENIZ: number; QT_RESERV: number;
   ESTOQUE_ATUAL: number; QT_PEDIDA_ERP: number; QT_TRANSITO: number; ESTOQUE_EM_TRANSITO: number;
   LEAD_TIME_MEDIDO: number;          // 0 = não medido
@@ -378,6 +380,136 @@ export function agruparCarrinho(itens: EntradaCarrinho[]): GrupoCarrinho[] {
   for (const grupo of grupos.values()) grupo.total = Math.round(grupo.total * 100) / 100;
   return [...grupos.values()];
 }
+
+/* ── Layout legado (R-117): visões, completar compra, ordem, movimentação, nível ── */
+
+export type VisaoRessuprimento = 'comprar' | 'completar' | 'todos' | 'transito';
+
+export const ROTULO_VISAO: Record<VisaoRessuprimento, string> = {
+  comprar: 'A comprar',
+  completar: 'Completar compra',
+  todos: 'Todos',
+  transito: 'Em trânsito',
+};
+
+/**
+ * RN-020 / C-027: "completar compra" é o que NÃO está na fila hoje mas entra
+ * nela no próximo ciclo — sugestão 0, sem trânsito, com giro, e a cobertura
+ * atual dentro de `cobertura alvo + lead time`. Serve para fechar o pedido
+ * mínimo do fornecedor com o que vai faltar em breve, nunca com o que sobra.
+ * Menor cobertura primeiro: é o que fura antes.
+ */
+export function completarCompra(linhas: LinhaRessuprimento[]): LinhaRessuprimento[] {
+  return (linhas ?? [])
+    .filter((l) => l.sugerida <= 0 && !l.silenciado && l.emTransito <= 0 && l.consumoDiario > 0
+      && l.coberturaAtualDias !== null && l.coberturaAtualDias <= l.coberturaDias + l.leadTimeDias)
+    .sort((a, b) => {
+      const ca = a.coberturaAtualDias ?? Number.POSITIVE_INFINITY;
+      const cb = b.coberturaAtualDias ?? Number.POSITIVE_INFINITY;
+      if (ca !== cb) return ca - cb;
+      return String(a.medida.DESCRICAO).localeCompare(String(b.medida.DESCRICAO), 'pt-BR');
+    });
+}
+
+/** RN-020: o complemento proposto é UMA caixa cheia (ou 1 unidade, no avulso). */
+export function quantidadeParaCompletar(l: LinhaRessuprimento): number {
+  return l.unidadesPorCaixa > 1 ? l.unidadesPorCaixa : 1;
+}
+
+/** RF-014: em trânsito é quem tem trânsito, silenciado ou não. */
+export function emTransito(linhas: LinhaRessuprimento[]): LinhaRessuprimento[] {
+  return (linhas ?? []).filter((l) => l.emTransito > 0);
+}
+
+/** As linhas de uma visão; "todos" é a lista inteira, na ordem de chegada. */
+export function linhasDaVisao(linhas: LinhaRessuprimento[], visao: VisaoRessuprimento): LinhaRessuprimento[] {
+  if (visao === 'comprar') return aComprar(linhas);
+  if (visao === 'completar') return completarCompra(linhas);
+  if (visao === 'transito') return emTransito(linhas);
+  return [...(linhas ?? [])];
+}
+
+/** C-026: a contagem que cada card de visão mostra. */
+export function contarVisoes(linhas: LinhaRessuprimento[]): Record<VisaoRessuprimento, number> {
+  return {
+    comprar: aComprar(linhas).length,
+    completar: completarCompra(linhas).length,
+    todos: (linhas ?? []).length,
+    transito: emTransito(linhas).length,
+  };
+}
+
+/**
+ * C-038: a ordem da lista. `padrao` mantém a ordem da visão (urgentes primeiro
+ * em "a comprar", menor cobertura em "completar", descrição nas demais).
+ */
+export type OrdemLista = 'padrao' | 'codigo' | 'nome' | 'curva';
+
+export const OPCOES_ORDEM: { value: OrdemLista; label: string }[] = [
+  { value: 'padrao', label: 'Ordem padrão' },
+  { value: 'codigo', label: 'Código' },
+  { value: 'nome', label: 'Nome' },
+  { value: 'curva', label: 'Curva' },
+];
+
+export function ordenarLinhas(linhas: LinhaRessuprimento[], ordem: OrdemLista): LinhaRessuprimento[] {
+  const lista = [...(linhas ?? [])];
+  if (ordem === 'codigo') return lista.sort((a, b) => numero(a.medida.CODPROD) - numero(b.medida.CODPROD));
+  if (ordem === 'nome') return lista.sort((a, b) => String(a.medida.DESCRICAO).localeCompare(String(b.medida.DESCRICAO), 'pt-BR'));
+  if (ordem === 'curva') {
+    return lista.sort((a, b) => a.curva.localeCompare(b.curva)
+      || String(a.medida.DESCRICAO).localeCompare(String(b.medida.DESCRICAO), 'pt-BR'));
+  }
+  return lista;
+}
+
+/** C-038: os filtros de movimentação do legado que a medida já responde sem nova consulta. */
+export type FiltroMovimentacao = '' | 'com_venda' | 'sem_venda' | 'com_estoque' | 'sem_estoque' | 'com_transito';
+
+export const OPCOES_MOVIMENTACAO: { value: FiltroMovimentacao; label: string }[] = [
+  { value: '', label: 'Qualquer movimentação' },
+  { value: 'com_venda', label: 'Com venda na janela' },
+  { value: 'sem_venda', label: 'Sem venda na janela' },
+  { value: 'com_estoque', label: 'Com estoque disponível' },
+  { value: 'sem_estoque', label: 'Sem estoque disponível' },
+  { value: 'com_transito', label: 'Com trânsito' },
+];
+
+export function filtrarMovimentacao(linhas: LinhaRessuprimento[], filtro: FiltroMovimentacao): LinhaRessuprimento[] {
+  const lista = linhas ?? [];
+  if (filtro === 'com_venda') return lista.filter((l) => numero(l.medida.VENDA_PERIODO) > 0);
+  if (filtro === 'sem_venda') return lista.filter((l) => numero(l.medida.VENDA_PERIODO) <= 0);
+  if (filtro === 'com_estoque') return lista.filter((l) => l.estoqueAtual > 0);
+  if (filtro === 'sem_estoque') return lista.filter((l) => l.estoqueAtual <= 0);
+  if (filtro === 'com_transito') return lista.filter((l) => l.emTransito > 0);
+  return lista;
+}
+
+/** C-031: nível de cobertura = disponível ÷ máximo, em %. Sem máximo (sem giro), `null`. */
+export function nivelDeCobertura(l: Pick<Ressuprimento, 'estoqueAtual' | 'estoqueMaximo'>): number | null {
+  if (!(l.estoqueMaximo > 0)) return null;
+  return (l.estoqueAtual / l.estoqueMaximo) * 100;
+}
+
+/** C-037: a referência da sugestão — unidades ou caixas — é só leitura; a quantidade digitada é sempre em unidades. */
+export type ReferenciaSugestao = 'unidades' | 'caixas';
+
+export function textoDaSugestao(sugerida: number, unidadesPorCaixa: number, referencia: ReferenciaSugestao): string {
+  const un = `${Math.round(numero(sugerida)).toLocaleString('pt-BR')} un.`;
+  if (!(unidadesPorCaixa > 1)) return un;
+  const cx = `${(numero(sugerida) / unidadesPorCaixa).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cx`;
+  return referencia === 'caixas' ? `${cx} · ${un}` : `${un} · ${cx}`;
+}
+
+/** Os filtros locais da lista (C-038): nenhum deles custa execução. */
+export interface FiltrosLista {
+  situacao: '' | StatusRessuprimento;
+  ordem: OrdemLista;
+  movimentacao: FiltroMovimentacao;
+  soSilenciados: boolean;
+}
+
+export const FILTROS_INICIAIS: FiltrosLista = { situacao: '', ordem: 'padrao', movimentacao: '', soSilenciados: false };
 
 /* ── RF-023 / C-024: a exportação é do que está na tela, por lib/csv.ts (R-037) ── */
 

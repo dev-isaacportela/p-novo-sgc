@@ -182,17 +182,23 @@ function pedido(db, cenario, { titulo, fase, codfilial, filial, origem, criadoPo
 export function seed011(db, cenario) {
   /* ── WinThor: catálogo, estoque, trânsito, clientes, movimento, pedido ── */
 
+  // CODFAB = 'FAB-<codprod>': o código de fábrica que o carrinho do layout
+  // legado mostra ao lado do produto (R-117).
   const inserirProduto = db.prepare(`INSERT INTO PCPRODUT
-    (CODPROD, DESCRICAO, EMBALAGEM, UNIDADE, CODFORNEC, CODEPTO, CODSEC, QTUNITCX, OBS2, PRAZOVAL)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 240)`);
-  for (const p of PRODUTOS) inserirProduto.run(p[0], p[1], p[2], p[3], FORNECEDOR_011, p[4], p[5], p[6], p[7]);
+    (CODPROD, DESCRICAO, EMBALAGEM, UNIDADE, CODFORNEC, CODEPTO, CODSEC, QTUNITCX, OBS2, PRAZOVAL, CODFAB)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 240, ?)`);
+  for (const p of PRODUTOS) inserirProduto.run(p[0], p[1], p[2], p[3], FORNECEDOR_011, p[4], p[5], p[6], p[7], `FAB-${p[0]}`);
 
+  // CUSTOFIN é o custo ATUAL do ERP (R-117 / RN-027): o 5401 caiu de 12 para
+  // 11 e o 5403 subiu de 10 para 10,50; os demais não mudaram desde a última
+  // entrada. É o que prova a variação e a economia do carrinho.
+  const CUSTO_ATUAL = { 5401: 11.0, 5403: 10.5 };
   const inserirEstoque = db.prepare(`INSERT INTO PCEST
     (CODPROD, CODFILIAL, QTEST, QTBLOQUEADA, QTINDENIZ, QTRESERV, QTPEDIDA, QTVENDMES, QTVENDMES1,
-     QTVENDMES2, CUSTOULTENT, DTULTENT, DTULTSAIDA)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 12, 10, 8, ?, ?, ?)`);
+     QTVENDMES2, CUSTOULTENT, CUSTOFIN, DTULTENT, DTULTSAIDA)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 12, 10, 8, ?, ?, ?, ?)`);
   for (const e of ESTOQUE) {
-    inserirEstoque.run(e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7], haDias(14), haDias(5));
+    inserirEstoque.run(e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7], CUSTO_ATUAL[e[0]] ?? e[7], haDias(14), haDias(5));
   }
 
   db.prepare("INSERT INTO PCESTTRANSITO (CODPROD, CODFILIAL, QTTRANSITO, DTPREVISTA) VALUES (5404, '1', 7, ?)")

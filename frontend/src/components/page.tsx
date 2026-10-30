@@ -10,18 +10,7 @@
  * nome aqui ou o primitivo está mal ajustado — corrija aqui, não na tela.
  */
 import * as React from 'react';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Minus,
-  Search,
-  SlidersHorizontal,
-  X,
-} from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Search, SlidersHorizontal, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button as ButtonPrimitive } from '@/components/ui/button';
@@ -66,7 +55,7 @@ export {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 export type { ChartConfig } from '@/components/ui/chart';
-export { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+export { Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts';
 
 // ── 8.1 Estrutura de tela ─────────────────────────────────────────────────
 
@@ -1060,6 +1049,28 @@ export function Kpi({
 }
 
 /**
+ * O `Kpi` em versão mínima, para painel lateral onde o gráfico precisa de
+ * espaço (layout legado da 011, R-117): rótulo pequeno e valor na MESMA
+ * linha, sem caixa — a explicação vai no `title`. Quatro cabem numa faixa.
+ */
+export function KpiCompacto({
+  rotulo,
+  valor,
+  hint,
+}: {
+  rotulo: string;
+  valor: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap" title={hint}>
+      <span className="shrink-0 text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
+      <span className="truncate text-[13px] font-bold text-ink">{valor}</span>
+    </div>
+  );
+}
+
+/**
  * A escala da `BarraConsumo`, em doze passos. É FECHADA de propósito: o
  * Tailwind gera classe a partir do código-fonte, nunca de variável, e
  * `style={{}}` não entra neste projeto (§1.4).
@@ -1191,5 +1202,168 @@ export function PainelGrafico({
       </div>
       {rodape}
     </Panel>
+  );
+}
+
+// ── 8.8 Layout legado da 011 (R-117): visões, fichas, seções, alternador ─────
+
+/**
+ * Card de visão que funciona como aba: rótulo + contagem, o ativo em fundo
+ * primário. É botão com `aria-pressed`, não `Tabs`, porque o conteúdo abaixo é
+ * um só e o card muda o RECORTE dele. Sem dado a contagem é `Dash`, nunca 0.
+ */
+export function CardVisao({
+  rotulo,
+  contagem,
+  ativo,
+  onClick,
+}: {
+  rotulo: string;
+  contagem: number | null;
+  ativo: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      className={cn(
+        'flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors',
+        'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+        ativo ? 'border-primary bg-primary text-primary-foreground' : 'border-rule-row bg-card text-ink hover:bg-accent',
+      )}
+    >
+      <span className={cn('text-[11px] font-semibold tracking-wide uppercase', ativo ? 'text-primary-foreground/80' : 'text-ink-muted')}>
+        {rotulo}
+      </span>
+      <span className="font-title text-2xl font-bold">
+        {contagem === null ? <Dash /> : contagem.toLocaleString('pt-BR')}
+      </span>
+    </button>
+  );
+}
+
+/** A fileira de cards de visão: dois por linha no mobile, quatro a partir de `xl`. */
+export function GradeVisoes({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{children}</div>;
+}
+
+/**
+ * Ficha de contagem da linha de chips da lista ("Sugestão 240 un.", "Rupturas
+ * 3"). Só leitura, ou clicável quando é filtro — aí vira botão com
+ * `aria-pressed`, e o ativo ganha o fundo primário.
+ */
+const CHIP_TONE = {
+  neutral: 'bg-muted text-ink-secondary',
+  alert: 'bg-destructive-bg text-destructive',
+  attention: 'border border-input bg-card text-attention',
+} as const;
+
+export function ChipContagem({
+  children,
+  ativo,
+  onClick,
+  title,
+  tone = 'neutral',
+}: {
+  children: React.ReactNode;
+  ativo?: boolean;
+  onClick?: () => void;
+  title?: string;
+  tone?: keyof typeof CHIP_TONE;
+}) {
+  const classes = cn(
+    'inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[12px] whitespace-nowrap',
+    ativo ? 'bg-primary text-primary-foreground' : CHIP_TONE[tone],
+  );
+  if (!onClick) return <span className={classes} title={title}>{children}</span>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={Boolean(ativo)}
+      title={title}
+      className={cn(
+        classes,
+        'transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+        ativo ? 'hover:bg-primary/90' : 'hover:bg-accent hover:text-accent-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Seção recolhível do painel de detalhe: título à esquerda, resumo e seta à
+ * direita, `aria-expanded` no botão. Não é `<details>` nativo (§1.4): o
+ * marcador e o foco seguem o kit.
+ */
+export function Disclosure({
+  titulo,
+  resumo,
+  aberta,
+  onToggle,
+  children,
+}: {
+  titulo: string;
+  resumo?: React.ReactNode;
+  aberta: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-t border-rule-row">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={aberta}
+        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+      >
+        <span className="shrink-0 font-title text-[13px] font-bold text-ink">{titulo}</span>
+        <span className="flex min-w-0 items-center gap-2 text-[12px] text-ink-secondary">
+          <span className="truncate">{resumo}</span>
+          <ChevronDown className={cn('size-4 shrink-0 transition-transform', aberta && 'rotate-180')} aria-hidden />
+        </span>
+      </button>
+      {aberta ? <div className="px-4 pb-4">{children}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Alternador de poucas opções exclusivas (Unidades/Caixas, 6m/13m): o mesmo
+ * desenho do `AlternaVisao`, generalizado. `aria-pressed` na opção ativa.
+ */
+export function AlternaOpcoes<T extends string>({
+  rotulo,
+  opcoes,
+  valor,
+  onValor,
+}: {
+  rotulo: string;
+  opcoes: { value: T; label: string }[];
+  valor: T;
+  onValor: (valor: T) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-0.5" role="group" aria-label={rotulo}>
+      {opcoes.map((opcao) => (
+        <button
+          key={opcao.value}
+          type="button"
+          onClick={() => onValor(opcao.value)}
+          aria-pressed={valor === opcao.value}
+          className={cn(
+            'rounded-lg px-2.5 py-1 text-[12px] font-medium transition-colors',
+            'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+            valor === opcao.value ? 'bg-card text-ink shadow-sm' : 'text-ink-secondary hover:text-ink',
+          )}
+        >
+          {opcao.label}
+        </button>
+      ))}
+    </div>
   );
 }

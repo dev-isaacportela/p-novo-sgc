@@ -1,55 +1,63 @@
 // Spec 011 (compras inteligentes) — `/compras-inteligentes`: o que comprar
-// hoje, por fornecedor e filial.
+// hoje, por fornecedor e filial, no layout legado do SGC anterior (R-117):
+// cabeçalho com ações, barra de recorte, aviso de carrinho salvo, quatro cards
+// de visão, lista à esquerda e painel de detalhe fixo à direita, carrinho em
+// janela.
 //
-// Custo de execução (RNF-001): abrir a tela custa 9 chamadas e trocar de
-// fornecedor ou de filial custa 6, com 20 ou com 300 produtos — nada por linha.
-// A carga da página traz fornecedores, eficiência e o quadro (3); o fornecedor
-// traz as filiais (1); a filial dispara em paralelo parâmetros, vendas
-// desconsideradas, coberturas e pedido aberto (4) e, com a lista de vendas
-// desconsideradas em mãos, UMA `sgcWintRessuprimento` (1).
+// Custo de execução (RNF-001, emendada em R-117): abrir a tela custa 4
+// chamadas (fornecedores, eficiência, quadro e o resumo por fornecedor);
+// escolher o fornecedor custa 1 (filiais e pedido mínimo); escolher a filial
+// custa 7 — cinco em paralelo (parâmetros, vendas desconsideradas, coberturas,
+// pedido aberto e itens em pedido aberto) e, com a lista de vendas
+// desconsideradas em mãos, UMA `sgcWintRessuprimento`. Selecionar um produto
+// custa 3, uma vez por produto (cache). Nada por linha.
 //
-// Filtrar, ordenar, trocar de aba e ligar o seletor de licitação não custam
-// nenhuma execução (RNF-005): a fórmula é recalculada na tela por
-// `montarRessuprimento`, que é regra pura (R-083).
+// Filtrar, ordenar, trocar de visão, ligar o seletor de licitação e alternar
+// Unidades/Caixas não custam nenhuma execução (RNF-005): a fórmula é
+// recalculada na tela por `montarRessuprimento`, que é regra pura (R-083).
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download } from 'lucide-react';
+import { RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useKanban } from '@benenutri/mitra-kanban';
 
 import {
-  Alert, Button, CheckRow, EmptyState, Field, GradeKpi, Kpi, PageHeader, Panel, PanelHeader,
-  SearchInput, SelectMenu, Tabs, TabsContent, TabsList, TabsTrigger, Toolbar,
+  Alert, AlternaOpcoes, Button, CardVisao, EmptyState, GradeVisoes, PageHeader, Panel, SelectMenu,
 } from '@/components/page';
 import { acao, linha as umaLinha, linhas } from '@/lib/mitra-api';
 import { usePersona } from '@/lib/persona';
 import { QUADRO_COMPRAS } from '@/lib/quadro';
 import { baixarCsv, textoCsv } from '@/lib/csv';
-import { hojeIso, moeda } from '@/lib/formato';
+import { fmtDataHora, hojeIso, moeda } from '@/lib/formato';
 import { coberturaDeLinha, limiteDeCobertura } from '@/lib/cobertura';
 import type { Cobertura } from '@/lib/cobertura';
 import {
-  COLUNAS_CSV, JANELA_DIAS, aComprar, linhaCsv, montarRessuprimento, parametroDeLinha,
+  COLUNAS_CSV, FILTROS_INICIAIS, JANELA_DIAS, ROTULO_VISAO, contarVisoes, filtrarMovimentacao, linhaCsv, linhasDaVisao,
+  montarRessuprimento, motivoDaSugestao, ordenarLinhas, parametroDeLinha,
 } from '@/lib/ressuprimento';
 import type {
-  AlvoDaCurva, EntradaCarrinho, LinhaRessuprimento, MedidaRessuprimento, ParametroCompra,
-  StatusRessuprimento,
+  AlvoDaCurva, FiltrosLista, LinhaRessuprimento, MedidaRessuprimento, ParametroCompra, ReferenciaSugestao,
+  VisaoRessuprimento,
 } from '@/lib/ressuprimento';
-import { GradeRessuprimento } from './grid';
-import { Carrinho } from './Carrinho';
+import { CHAVE_CARRINHO, carrinhoDeTexto, resumoDoCarrinho, textoDoCarrinho } from '@/lib/carrinho';
+import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
+import { DADOS_VAZIOS } from '@/lib/ressuprimento-detalhe';
+import type { DadosDoSku, PontoHistorico, PosicaoFilial } from '@/lib/ressuprimento-detalhe';
+import { ListaProdutos } from './grid';
+import type { PedidoAbertoDoItem } from './grid';
+import { CarrinhoDialogo } from './Carrinho';
 import type { PedidoAberto } from './Carrinho';
+import { PainelDetalhe } from './painel-detalhe';
 import { DetalheSku, ParametrosDialogo, SilenciarDialogo, VendasDialogo } from './dialogos';
 import type { AlvoParametro } from './dialogos';
 
 interface Opcao { value: string; label: string; hint?: string }
+interface ResumoFornecedor { itens: number; valorSugerido: number }
 
-const OPCOES_SITUACAO: Opcao[] = [
-  { value: '', label: 'Qualquer situação' },
-  { value: 'ruptura', label: 'Ruptura' },
-  { value: 'elevada_exposicao', label: 'Elevada exposição' },
-  { value: 'baixa_exposicao', label: 'Baixa exposição' },
-  { value: 'adequado', label: 'Adequado' },
-  { value: 'excesso', label: 'Excesso' },
+const VISOES: VisaoRessuprimento[] = ['comprar', 'completar', 'todos', 'transito'];
+const REFERENCIAS: { value: ReferenciaSugestao; label: string }[] = [
+  { value: 'unidades', label: 'Unidades' }, { value: 'caixas', label: 'Caixas' },
 ];
+const DIAS_RESUMO = 90;
 
 /** A janela da tela: 153 dias terminados hoje, fixa e mostrada (D-016). */
 function janelaDeHoje() {
@@ -59,36 +67,66 @@ function janelaDeHoje() {
   return { inicio: inicio.toISOString().slice(0, 10), fim };
 }
 
+function haDias(dias: number) {
+  const data = new Date(`${hojeIso()}T00:00:00Z`);
+  data.setUTCDate(data.getUTCDate() - dias);
+  return data.toISOString().slice(0, 10);
+}
+
 const agoraCurto = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const instante = () => new Date().toISOString().slice(0, 19);
+
+/** `localStorage` pode não existir (navegação privada, bloqueio): a tela vive sem ele. */
+function lerGuardado(chave: string): string | null {
+  try { return window.localStorage.getItem(chave); } catch { return null; }
+}
+function guardar(chave: string, texto: string | null) {
+  try {
+    if (texto === null) window.localStorage.removeItem(chave);
+    else window.localStorage.setItem(chave, texto);
+  } catch { /* sem armazenamento, sem retomada — o carrinho continua na memória */ }
+}
 
 export default function ComprasInteligentesPage() {
   const navigate = useNavigate();
   const api = useKanban();
   const sessao = usePersona();
   const periodo = React.useMemo(() => janelaDeHoje(), []);
+  const hoje = periodo.fim;
 
   const [fornecedores, setFornecedores] = React.useState<Opcao[]>([]);
+  const [resumos, setResumos] = React.useState<Map<number, ResumoFornecedor>>(() => new Map());
   const [filiais, setFiliais] = React.useState<Opcao[]>([]);
+  const [pedidoMinimo, setPedidoMinimo] = React.useState(0);
   const [codfornec, setCodfornec] = React.useState('');
   const [codfilial, setCodfilial] = React.useState('');
   const [boardId, setBoardId] = React.useState(0);
-  const [aderencia, setAderencia] = React.useState<number | null>(null);
 
   const [medidas, setMedidas] = React.useState<MedidaRessuprimento[]>([]);
   const [parametros, setParametros] = React.useState<ParametroCompra[]>([]);
   const [coberturas, setCoberturas] = React.useState<Cobertura[]>([]);
-  const [desconsideradas, setDesconsideradas] = React.useState<number[]>([]);
+  const [desconsideradas, setDesconsideradas] = React.useState<{ numtransitem: number; codprod: number }[]>([]);
   const [pedidoAberto, setPedidoAberto] = React.useState<PedidoAberto | null>(null);
+  const [emPedidoAberto, setEmPedidoAberto] = React.useState<Map<number, PedidoAbertoDoItem>>(() => new Map());
 
   const [desconsiderarLicitacao, setDesconsiderarLicitacao] = React.useState(false);
-  const [aba, setAba] = React.useState('comprar');
-  const [situacao, setSituacao] = React.useState('');
+  const [referencia, setReferencia] = React.useState<ReferenciaSugestao>('unidades');
+  const [visao, setVisao] = React.useState<VisaoRessuprimento>('comprar');
+  const [filtros, setFiltros] = React.useState<FiltrosLista>(FILTROS_INICIAIS);
   const [busca, setBusca] = React.useState('');
   const [quantidades, setQuantidades] = React.useState<Record<number, number>>({});
-  const [carrinho, setCarrinho] = React.useState<EntradaCarrinho[]>([]);
+  const [selecionado, setSelecionado] = React.useState(0);
+  const [cacheSku, setCacheSku] = React.useState<Map<number, DadosDoSku>>(() => new Map());
 
-  const [detalhe, setDetalhe] = React.useState<LinhaRessuprimento | null>(null);
+  const [carrinho, setCarrinho] = React.useState<ItemCarrinho[]>([]);
+  const [carrinhoMeta, setCarrinhoMeta] = React.useState({ abertoEm: '', abertoPor: '', salvoEm: '' });
+  const [carrinhoSalvo, setCarrinhoSalvo] = React.useState<CarrinhoSalvo | null>(null);
+  const [armazenamentoLido, setArmazenamentoLido] = React.useState(0);
+  const [carrinhoAberto, setCarrinhoAberto] = React.useState(false);
+  const [confirmandoDescarte, setConfirmandoDescarte] = React.useState(false);
+  const [avisoCarrinho, setAvisoCarrinho] = React.useState('');
+
+  const [detalheCompleto, setDetalheCompleto] = React.useState<LinhaRessuprimento | null>(null);
   const [silenciando, setSilenciando] = React.useState<LinhaRessuprimento | null>(null);
   const [vendasDe, setVendasDe] = React.useState<LinhaRessuprimento | null>(null);
   const [parametroAlvo, setParametroAlvo] = React.useState<AlvoParametro | null>(null);
@@ -107,19 +145,33 @@ export default function ComprasInteligentesPage() {
       // O board vem aqui e não no carrinho: o id é o mesmo para todos os
       // grupos, e assim "criar pedido" custa 3 execuções por grupo, não 4.
       api.boardCarregar({ slug: QUADRO_COMPRAS }).catch(() => null),
-    ]).then(([registros, eficiencia, quadro]) => {
+    ]).then(([registros, , quadro]) => {
       if (!vivo) return;
       setFornecedores(registros.map((r) => ({
-        value: String(r.CODFORNEC), label: String(r.FORNECEDOR ?? ''), hint: String(r.CNPJ_FORMATADO ?? ''),
+        value: String(r.CODFORNEC), label: `${r.CODFORNEC} — ${String(r.FORNECEDOR ?? '')}`, hint: String(r.CNPJ_FORMATADO ?? ''),
       })));
-      const perc = eficiencia?.PERC_ADERENCIA;
-      setAderencia(perc === null || perc === undefined ? null : Number(perc));
       setBoardId(Number(quadro?.board?.id ?? 0));
     }, () => vivo && setErro('Não foi possível carregar os fornecedores.'));
     return () => { vivo = false; };
   }, [api]);
 
-  /* ── fornecedor escolhido: as filiais que ele atende (1 execução) ── */
+  /* ── o resumo por fornecedor do rótulo do seletor (1 execução, C-036) ── */
+  React.useEffect(() => {
+    if (fornecedores.length === 0) return;
+    let vivo = true;
+    linhas('sgcWintResumoFornecedores', {
+      codfornecs: fornecedores.map((f) => Number(f.value)).filter((n) => n > 0).join(', ') || '0',
+      dataInicio: haDias(DIAS_RESUMO - 1), diasPeriodo: DIAS_RESUMO,
+    }).then(
+      (rows) => vivo && setResumos(new Map(rows.map((r) => [Number(r.CODFORNEC), {
+        itens: Number(r.ITENS ?? 0), valorSugerido: Number(r.VALOR_SUGERIDO ?? 0),
+      }]))),
+      () => undefined, // sem resumo, o rótulo fica só com o nome: é estimativa, não trava a tela
+    );
+    return () => { vivo = false; };
+  }, [fornecedores]);
+
+  /* ── fornecedor escolhido: as filiais que ele atende e o pedido mínimo (1 execução) ── */
   React.useEffect(() => {
     if (!codfornec) return;
     let vivo = true;
@@ -129,7 +181,9 @@ export default function ComprasInteligentesPage() {
         const registros: Record<string, unknown>[] = Array.isArray(dados.filiais) ? dados.filiais : [];
         setFiliais(registros
           .filter((r) => r.CODFILIAL !== undefined && r.CODFILIAL !== null)
-          .map((r) => ({ value: String(r.CODFILIAL), label: String(r.FILIAL ?? r.CODFILIAL) })));
+          .map((r) => ({ value: String(r.CODFILIAL), label: `${r.CODFILIAL} — ${String(r.FILIAL ?? r.CODFILIAL)}` })));
+        const capa = (dados.fornecedor ?? {}) as Record<string, unknown>;
+        setPedidoMinimo(Number(capa.PEDIDO_MINIMO ?? 0) || 0);
       },
       () => vivo && setFiliais([]),
     );
@@ -137,35 +191,41 @@ export default function ComprasInteligentesPage() {
   }, [codfornec]);
 
   /**
-   * A carga pesada: 4 leituras em paralelo e, com o que voltou, UMA ao ERP —
-   * as 5 execuções da troca de filial. `recarga` é o que a escrita de venda
-   * incrementa para a medida ser refeita (a exclusão acontece na origem).
+   * A carga pesada: 5 leituras em paralelo e, com o que voltou, UMA ao ERP —
+   * as 7 execuções da troca de filial. `recarga` é o que "Atualizar" e a
+   * escrita de venda incrementam para a medida ser refeita.
    */
   React.useEffect(() => {
     if (!codfornec || !codfilial) return;
     let vivo = true;
+    const recorte = { codfornec: Number(codfornec), codfilial };
     Promise.all([
-      linhas('sgcParametrosCompraListar', { codfornec: Number(codfornec), codfilial, limite: 600, offset: 0 }),
+      linhas('sgcParametrosCompraListar', { ...recorte, limite: 600, offset: 0 }),
       linhas('sgcVendasDesconsideradasListar', { codfilial, codprod: 0, limite: 500, offset: 0 }),
       linhas('sgcCoberturaListar', { nivel: '', limite: 500, offset: 0 }),
-      linhas('sgcPedidoAbertoDoFornecedor', { codfornec: Number(codfornec), codfilial, limite: 5, offset: 0 }),
+      linhas('sgcPedidoAbertoDoFornecedor', { ...recorte, limite: 5, offset: 0 }),
+      linhas('sgcItensEmPedidoAberto', { ...recorte, limite: 2000, offset: 0 }),
     ])
-      .then(async ([linhasParametro, linhasVenda, linhasCobertura, abertos]) => {
+      .then(async ([linhasParametro, linhasVenda, linhasCobertura, abertos, itensAbertos]) => {
         // D-03: o `{{excluir}}` é montado do que VOLTOU do banco, nunca do que
         // a tela achou que gravou — escrita guardada recusada devolve 0 linhas.
-        const excluir = linhasVenda.map((l) => Number(l.NUMTRANSITEM)).filter((n) => n > 0).slice(0, 500);
+        const vendas = linhasVenda
+          .map((l) => ({ numtransitem: Number(l.NUMTRANSITEM), codprod: Number(l.CODPROD) }))
+          .filter((v) => v.numtransitem > 0)
+          .slice(0, 500);
         if (!vivo) return;
         setParametros(linhasParametro.map(parametroDeLinha));
         setCoberturas(linhasCobertura.map(coberturaDeLinha));
-        setDesconsideradas(excluir);
+        setDesconsideradas(vendas);
         setPedidoAberto(abertos.length > 0
           ? { idCard: Number(abertos[0].ID_CARD), titulo: String(abertos[0].TITULO ?? ''), faseChave: String(abertos[0].FASE_CHAVE ?? '') }
           : null);
+        setEmPedidoAberto(new Map(itensAbertos.map((i) => [Number(i.CODPROD), { idCard: Number(i.ID_CARD), titulo: String(i.TITULO ?? '') }])));
 
         const rows = await linhas('sgcWintRessuprimento', {
-          codfornec: Number(codfornec), codfilial,
+          ...recorte,
           dataInicio: periodo.inicio, dataFim: periodo.fim, diasPeriodo: JANELA_DIAS,
-          excluir: excluir.length > 0 ? excluir.join(', ') : '0',
+          excluir: vendas.length > 0 ? vendas.map((v) => v.numtransitem).join(', ') : '0',
         });
         if (!vivo) return;
         setMedidas(rows as unknown as MedidaRessuprimento[]);
@@ -180,6 +240,33 @@ export default function ComprasInteligentesPage() {
       .finally(() => { if (vivo) setCarregando(false); });
     return () => { vivo = false; };
   }, [codfornec, codfilial, periodo.inicio, periodo.fim, recarga]);
+
+  /* ── o carrinho salvo no navegador (RN-021): lido uma vez por usuário ── */
+  const usuarioId = sessao?.usuarioId ?? 0;
+  // Ajuste de estado durante a renderização, não em efeito: a leitura é
+  // síncrona e idempotente, e acontece uma vez por usuário.
+  if (usuarioId && armazenamentoLido !== usuarioId) {
+    setArmazenamentoLido(usuarioId);
+    setCarrinhoSalvo(carrinhoDeTexto(lerGuardado(CHAVE_CARRINHO(usuarioId))));
+  }
+
+  // Toda mudança do carrinho carimba a hora de salvamento junto (é ela que o
+  // cabeçalho do carrinho mostra); o efeito abaixo só espelha no navegador.
+  const mudarCarrinho = React.useCallback((mudanca: (atual: ItemCarrinho[]) => ItemCarrinho[]) => {
+    setCarrinho(mudanca);
+    setCarrinhoMeta((meta) => ({ ...meta, salvoEm: instante() }));
+  }, []);
+
+  React.useEffect(() => {
+    if (!usuarioId || armazenamentoLido !== usuarioId) return;
+    if (carrinho.length === 0) {
+      if (!carrinhoSalvo) guardar(CHAVE_CARRINHO(usuarioId), null);
+      return;
+    }
+    guardar(CHAVE_CARRINHO(usuarioId), textoDoCarrinho({
+      versao: 1, abertoEm: carrinhoMeta.abertoEm, abertoPor: carrinhoMeta.abertoPor, salvoEm: carrinhoMeta.salvoEm, itens: carrinho,
+    }));
+  }, [carrinho, carrinhoMeta, usuarioId, armazenamentoLido, carrinhoSalvo]);
 
   /**
    * O alvo de cobertura por curva (R-089). Constante única: é a ÚNICA linha
@@ -197,36 +284,60 @@ export default function ComprasInteligentesPage() {
   }, l.curva).limiteDias, [coberturas, codfornec]);
 
   // O mapa de unidades por caixa vem vazio de propósito: `sgcCustoUnidadesPorCaixa`
-  // (7306) seria uma DÉCIMA execução na carga, e RNF-001 fecha em 9. Sem ele,
-  // `unidadesPorCaixa` cai no cadastro do ERP e, na falta dele, na embalagem —
-  // a mesma cadeia de RN-002 da 003, um degrau abaixo.
+  // seria mais uma execução na carga. Sem ele, `unidadesPorCaixa` cai no
+  // cadastro do ERP e, na falta dele, na embalagem — a cadeia de RN-002 da 003.
   const todas = React.useMemo(() => montarRessuprimento(
     medidas, parametros, alvoDaCurvaDias, new Map(),
-    { codfornec: Number(codfornec), hoje: hojeIso(), desconsiderarLicitacao },
-  ), [medidas, parametros, alvoDaCurvaDias, codfornec, desconsiderarLicitacao]);
+    { codfornec: Number(codfornec), hoje, desconsiderarLicitacao },
+  ), [medidas, parametros, alvoDaCurvaDias, codfornec, hoje, desconsiderarLicitacao]);
+
+  const contagens = React.useMemo(() => contarVisoes(todas), [todas]);
 
   const termo = busca.trim().toLowerCase();
-  const casa = React.useCallback((l: LinhaRessuprimento) => (
-    termo === ''
-    || String(l.medida.DESCRICAO).toLowerCase().includes(termo)
-    || String(l.medida.CODPROD).includes(termo)
-  ), [termo]);
+  const lista = React.useMemo(() => {
+    let recorte = linhasDaVisao(todas, visao);
+    if (filtros.soSilenciados) recorte = recorte.filter((l) => l.silenciado);
+    if (filtros.situacao !== '') recorte = recorte.filter((l) => l.status === filtros.situacao);
+    recorte = filtrarMovimentacao(recorte, filtros.movimentacao);
+    if (termo !== '') {
+      recorte = recorte.filter((l) => String(l.medida.DESCRICAO).toLowerCase().includes(termo)
+        || String(l.medida.CODPROD).includes(termo) || String(l.medida.CODFAB ?? '').toLowerCase().includes(termo));
+    }
+    return ordenarLinhas(recorte, filtros.ordem);
+  }, [todas, visao, filtros, termo]);
 
-  const visiveis = React.useMemo(() => {
-    if (aba === 'comprar') return aComprar(todas).filter(casa);
-    if (aba === 'transito') return todas.filter((l) => l.emTransito > 0).filter(casa);
-    return todas.filter((l) => (situacao === '' || l.status === (situacao as StatusRessuprimento))).filter(casa);
-  }, [aba, todas, situacao, casa]);
+  const sugestaoTotal = React.useMemo(
+    () => lista.reduce((soma, l) => soma + l.sugerida * Number(l.medida.CUSTO_ULT_ENTRADA), 0),
+    [lista],
+  );
 
-  const kpis = React.useMemo(() => {
-    const fila = aComprar(todas);
-    return {
-      sugestao: fila.reduce((soma, l) => soma + l.sugerida * Number(l.medida.CUSTO_ULT_ENTRADA), 0),
-      rupturas: todas.filter((l) => l.status === 'ruptura').length,
-      silenciados: todas.filter((l) => l.silenciado).length,
-      publico: todas.reduce((soma, l) => soma + Number(l.medida.VENDA_PUBLICA ?? 0), 0),
-    };
-  }, [todas]);
+  // C-031: o primeiro item é selecionado ao carregar, e a seleção segue a lista.
+  const linhaSelecionada = React.useMemo(
+    () => lista.find((l) => Number(l.medida.CODPROD) === selecionado) ?? lista[0] ?? null,
+    [lista, selecionado],
+  );
+  const codprodSelecionado = linhaSelecionada ? Number(linhaSelecionada.medida.CODPROD) : 0;
+
+  /* ── o detalhe do SKU: 3 execuções, uma vez por produto (cache) ── */
+  // As cargas em andamento ficam num ref, não no estado: o efeito só dispara a
+  // consulta e grava o resultado quando ele volta.
+  const emCarga = React.useRef(new Set<number>());
+  React.useEffect(() => {
+    if (!codprodSelecionado || !codfilial || cacheSku.has(codprodSelecionado) || emCarga.current.has(codprodSelecionado)) return;
+    const codprod = codprodSelecionado;
+    const cargas = emCarga.current;
+    cargas.add(codprod);
+    Promise.all([
+      linhas('sgcWintProdutoHistorico', { codprod, codfilial, meses: 13 }),
+      linhas('sgcWintProdutoUltimasCompras', { codprod }),
+      linhas('sgcWintProdutoEstoqueFiliais', { codprod }),
+    ]).then(
+      ([h, c, f]) => setCacheSku((atual) => new Map(atual).set(codprod, {
+        historico: h as unknown as PontoHistorico[], compras: c, filiais: f as unknown as PosicaoFilial[], pronto: true, erro: '',
+      })),
+      () => setCacheSku((atual) => new Map(atual).set(codprod, { ...DADOS_VAZIOS, pronto: true, erro: 'Não foi possível carregar o detalhe deste produto.' })),
+    ).finally(() => { cargas.delete(codprod); });
+  }, [codprodSelecionado, codfilial, cacheSku]);
 
   const permissoes = sessao?.permissoes;
   const podeOperar = Boolean(permissoes?.operarComprasInteligentes);
@@ -253,14 +364,10 @@ export default function ComprasInteligentesPage() {
   }
 
   const salvarParametro = (valores: { codprod: number; coberturaDias: number; leadTimeDias: number; gatilhoDias: number }) =>
-    comRecarga(linhas('sgcEscParametroCompraSalvar', {
-      codfornec: Number(codfornec), codfilial, ...valores, atualizadoEm: instante(),
-    }));
+    comRecarga(linhas('sgcEscParametroCompraSalvar', { codfornec: Number(codfornec), codfilial, ...valores, atualizadoEm: instante() }));
 
   const silenciar = (valores: { codprod: number; silenciadoAte: string; motivo: string }) =>
-    comRecarga(linhas('sgcEscParametroCompraSilenciar', {
-      codfornec: Number(codfornec), codfilial, ...valores, atualizadoEm: instante(),
-    }));
+    comRecarga(linhas('sgcEscParametroCompraSilenciar', { codfornec: Number(codfornec), codfilial, ...valores, atualizadoEm: instante() }));
 
   const restaurar = (l: LinhaRessuprimento) =>
     comRecarga(linhas('sgcEscParametroCompraRestaurar', {
@@ -273,22 +380,72 @@ export default function ComprasInteligentesPage() {
   const reconsiderarVenda = (numtransitem: number) =>
     comRecarga(linhas('sgcEscVendaReconsiderar', { numtransitem }), true);
 
+  /* ── carrinho ── */
+
+  const semCodigo = (rotulo: string) => rotulo.replace(/^\S+ — /, '');
+  const nomeFornecedor = semCodigo(fornecedores.find((f) => f.value === codfornec)?.label ?? '');
+  const nomeFilial = semCodigo(filiais.find((f) => f.value === codfilial)?.label ?? '');
+
   function adicionar(l: LinhaRessuprimento, quantidade: number) {
     const codprod = Number(l.medida.CODPROD);
-    if (pedidoAberto) return;
-    setCarrinho((atual) => [
+    if (pedidoAberto) {
+      setAvisoCarrinho(`Já existe um pedido aberto para este fornecedor e filial (${pedidoAberto.titulo}). Envie ou cancele esse pedido antes de abrir outro.`);
+      return;
+    }
+    if (quantidade <= 0) return;
+    setAvisoCarrinho('');
+    if (!carrinhoMeta.abertoEm) setCarrinhoMeta({ abertoEm: instante(), abertoPor: sessao?.nome ?? '', salvoEm: '' });
+    mudarCarrinho((atual) => [
       ...atual.filter((e) => Number(e.linha.medida.CODPROD) !== codprod || e.codfilial !== codfilial),
       {
         linha: l, quantidade, codfornec: Number(codfornec), codfilial,
-        fornecedor: fornecedores.find((f) => f.value === codfornec)?.label ?? '',
-        filial: filiais.find((f) => f.value === codfilial)?.label ?? '',
+        fornecedor: nomeFornecedor, filial: nomeFilial,
+        motivo: l.sugerida > 0 ? motivoDaSugestao(l) : 'Completar a compra para o pedido mínimo',
+        pedidoMinimo,
       },
     ]);
   }
 
-  function exportar() {
-    baixarCsv(`compras-inteligentes-${periodo.fim}.csv`, textoCsv(COLUNAS_CSV, visiveis.map(linhaCsv)));
+  const alterarItem = (codprod: number, filial: string, mudanca: Partial<ItemCarrinho>) => mudarCarrinho((atual) => atual.map(
+    (e) => (Number(e.linha.medida.CODPROD) === codprod && e.codfilial === filial ? { ...e, ...mudanca } : e),
+  ));
+
+  function descartarCarrinho() {
+    setCarrinho([]);
+    setCarrinhoMeta({ abertoEm: '', abertoPor: '', salvoEm: '' });
+    setCarrinhoSalvo(null);
+    setConfirmandoDescarte(false);
+    if (usuarioId) guardar(CHAVE_CARRINHO(usuarioId), null);
   }
+
+  function continuarCarrinho() {
+    if (!carrinhoSalvo) return;
+    setCarrinho(carrinhoSalvo.itens);
+    setCarrinhoMeta({ abertoEm: carrinhoSalvo.abertoEm, abertoPor: carrinhoSalvo.abertoPor, salvoEm: carrinhoSalvo.salvoEm });
+    setCarrinhoSalvo(null);
+  }
+
+  function atualizar() {
+    setCarregando(true);
+    setErro('');
+    emCarga.current.clear();
+    setCacheSku(new Map());
+    setRecarga((n) => n + 1);
+  }
+
+  function exportar() {
+    baixarCsv(`compras-inteligentes-${periodo.fim}.csv`, textoCsv(COLUNAS_CSV, lista.map(linhaCsv)));
+  }
+
+  const abrirParametros = (l: LinhaRessuprimento | null) => {
+    const codprod = l ? Number(l.medida.CODPROD) : 0;
+    const atual = parametros.find((p) => p.codprod === codprod);
+    setParametroAlvo({
+      codprod,
+      titulo: l ? `Parâmetros de ${l.medida.DESCRICAO}` : 'Parâmetros deste fornecedor',
+      coberturaDias: atual?.coberturaDias ?? 0, leadTimeDias: atual?.leadTimeDias ?? 0, gatilhoDias: atual?.gatilhoDias ?? 0,
+    });
+  };
 
   if (!sessao) return <EmptyState title="Carregando..." />;
 
@@ -301,181 +458,200 @@ export default function ComprasInteligentesPage() {
     );
   }
 
-  const grade = (
-    <GradeRessuprimento
-      linhas={visiveis}
-      quantidades={quantidades}
-      onQuantidade={(codprod, valor) => setQuantidades((atual) => ({ ...atual, [codprod]: valor }))}
-      podeOperar={podeOperar}
-      podeParametrizar={podeParametrizar}
-      motivoBloqueio={motivoBloqueio}
-      acoes={{
-        onDetalhe: setDetalhe,
-        onVendas: setVendasDe,
-        onSilenciar: setSilenciando,
-        onRestaurar: (l) => void restaurar(l),
-        onParametros: (l) => setParametroAlvo({
-          codprod: Number(l.medida.CODPROD),
-          titulo: `Parâmetros de ${l.medida.DESCRICAO}`,
-          coberturaDias: parametros.find((p) => p.codprod === Number(l.medida.CODPROD))?.coberturaDias ?? 0,
-          leadTimeDias: parametros.find((p) => p.codprod === Number(l.medida.CODPROD))?.leadTimeDias ?? 0,
-          gatilhoDias: parametros.find((p) => p.codprod === Number(l.medida.CODPROD))?.gatilhoDias ?? 0,
-        }),
-        onAdicionar: adicionar,
-      }}
-    />
-  );
+  const resumoSalvo = carrinhoSalvo ? resumoDoCarrinho(carrinhoSalvo.itens) : null;
+  const resumoCarrinho = resumoDoCarrinho(carrinho);
+  const opcoesFornecedor: Opcao[] = fornecedores.map((f) => {
+    const resumo = resumos.get(Number(f.value));
+    return resumo
+      ? { ...f, hint: `${resumo.itens} ${resumo.itens === 1 ? 'item' : 'itens'} · ${moeda(resumo.valorSugerido)}` }
+      : f;
+  });
 
   return (
     <>
-      <PageHeader
-        module="Compras"
-        title="Compras inteligentes"
-        description={`O que comprar hoje, por fornecedor e filial. A janela são os últimos ${JANELA_DIAS} dias.`}
-        meta={salvoEm ? <span>Salvo às {salvoEm}</span> : undefined}
-        actions={
-          <>
-            <Button
-              onClick={() => setParametroAlvo({
-                codprod: 0,
-                titulo: 'Parâmetros deste fornecedor',
-                coberturaDias: parametros.find((p) => p.codprod === 0)?.coberturaDias ?? 0,
-                leadTimeDias: parametros.find((p) => p.codprod === 0)?.leadTimeDias ?? 0,
-                gatilhoDias: parametros.find((p) => p.codprod === 0)?.gatilhoDias ?? 0,
-              })}
-              disabled={!podeParametrizar || !codfilial}
-              title={podeParametrizar ? undefined : motivoBloqueio}
-            >
-              Parâmetros do fornecedor
-            </Button>
-            <Button onClick={exportar} disabled={visiveis.length === 0}>
-              <Download aria-hidden />
-              Exportar CSV
-            </Button>
-          </>
-        }
-      />
-
-      {erro ? <Alert tone="error" className="mb-4">{erro}</Alert> : null}
-
-      <GradeKpi>
-        <Kpi
-          rotulo="Sugestão de compra"
-          valor={kpis.sugestao > 0 ? moeda(kpis.sugestao) : '—'}
-          hint="Soma da sugestão da aba A comprar, ao custo da última entrada."
+      {/* Cabeçalho compacto (pedido do usuário em 2026-10-30): uma linha só —
+          fornecedor e filial à esquerda, as ações à direita; sem título nem
+          descrição. A busca e o seletor de órgãos públicos ficam na lista. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <SelectMenu
+          label="Fornecedor"
+          value={codfornec}
+          onChange={(valor) => {
+            setCodfornec(valor);
+            setCodfilial('');
+            setFiliais([]);
+            setMedidas([]);
+            setSelecionado(0);
+            setCarregando(false);
+          }}
+          options={opcoesFornecedor}
+          placeholder={fornecedores.length ? 'Escolha o fornecedor' : 'Nenhum fornecedor ativo'}
+          disabled={!fornecedores.length}
+          className="w-80"
         />
-        <Kpi rotulo="Rupturas" valor={medidas.length === 0 ? '—' : kpis.rupturas} hint="Produtos sem estoque disponível." />
-        <Kpi rotulo="Silenciados" valor={medidas.length === 0 ? '—' : kpis.silenciados} hint="Fora da fila de compra por prazo e motivo." />
-        <Kpi
-          rotulo="Aderência do comprador"
-          valor={aderencia === null ? '—' : `${aderencia.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %`}
-          hint="Itens de pedidos nascidos aqui dentro de ±20 % da sugestão."
+        <SelectMenu
+          label="Filial"
+          value={codfilial}
+          onChange={(valor) => { setCarregando(true); setErro(''); setSelecionado(0); setCodfilial(valor); }}
+          options={filiais}
+          placeholder={codfornec ? 'Escolha a filial' : 'Escolha o fornecedor primeiro'}
+          disabled={!codfornec || !filiais.length}
+          className="w-72"
         />
-      </GradeKpi>
-
-      <Panel className="mt-4">
-        <PanelHeader
-          title="Ressuprimento"
-          hint={`Janela de ${periodo.inicio} a ${periodo.fim}. Uma consulta ao ERP por carga — filtrar, ordenar e trocar de aba não custam nada.`}
-        />
-        <Toolbar>
-          <Field label="Fornecedor" className="w-64">
-            <SelectMenu
-              label="Fornecedor"
-              value={codfornec}
-              onChange={(valor) => {
-                setCodfornec(valor);
-                setCodfilial('');
-                setFiliais([]);
-                setMedidas([]);
-                setCarregando(false);
-              }}
-              options={fornecedores}
-              placeholder={fornecedores.length ? 'Escolha o fornecedor' : 'Nenhum fornecedor ativo'}
-              disabled={!fornecedores.length}
-            />
-          </Field>
-          <Field label="Filial" className="w-56">
-            <SelectMenu
-              label="Filial"
-              value={codfilial}
-              onChange={(valor) => { setCarregando(true); setErro(''); setCodfilial(valor); }}
-              options={filiais}
-              placeholder={codfornec ? 'Escolha a filial' : 'Escolha o fornecedor primeiro'}
-              disabled={!codfornec || !filiais.length}
-            />
-          </Field>
-          <SearchInput
-            placeholder="Buscar por produto ou código"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="min-w-56 flex-1"
-          />
-          <CheckRow
-            marcado={desconsiderarLicitacao}
-            onToggle={() => setDesconsiderarLicitacao((atual) => !atual)}
-            hint={`Venda pública na janela: ${kpis.publico.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} un.`}
+        {salvoEm ? <span className="text-[12px] text-ink-secondary">Salvo às {salvoEm}</span> : null}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <AlternaOpcoes rotulo="Referência da sugestão" opcoes={REFERENCIAS} valor={referencia} onValor={setReferencia} />
+          <Button
+            onClick={() => abrirParametros(null)}
+            disabled={!podeParametrizar || !codfilial}
+            title={podeParametrizar ? `Cobertura, lead time e gatilho do fornecedor na filial` : motivoBloqueio}
           >
-            Desconsiderar venda para órgãos públicos
-          </CheckRow>
-        </Toolbar>
+            <SlidersHorizontal aria-hidden />
+            Configurar fornecedor
+          </Button>
+          <Button onClick={() => navigate('/coberturas')}>Coberturas ABC</Button>
+          <Button variant="primary" onClick={atualizar} disabled={!codfilial || carregando} title={`Janela de ${periodo.inicio} a ${periodo.fim}`}>
+            <RefreshCw aria-hidden />
+            Atualizar
+          </Button>
+        </div>
+      </div>
 
-        {!codfilial ? (
+      {erro ? <Alert tone="error" className="mt-4">{erro}</Alert> : null}
+      {avisoCarrinho ? <Alert tone="warn" className="mt-4">{avisoCarrinho}</Alert> : null}
+
+      {/* C-028: o aviso só aparece quando há carrinho guardado e o da tela está vazio. */}
+      {carrinhoSalvo && resumoSalvo && carrinho.length === 0 ? (
+        <Alert tone="info" className="mt-4">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span>
+              <strong>Você tem um carrinho salvo.</strong>
+              {` ${resumoSalvo.itens} ${resumoSalvo.itens === 1 ? 'item' : 'itens'} · ${resumoSalvo.pedidos} ${resumoSalvo.pedidos === 1 ? 'pedido' : 'pedidos'} · ${moeda(resumoSalvo.total)} · aberto em ${fmtDataHora(carrinhoSalvo.abertoEm) || '—'}`}
+            </span>
+            {confirmandoDescarte ? (
+              <>
+                <span>Descartar mesmo?</span>
+                <Button size="sm" variant="primary" onClick={descartarCarrinho}>Descartar</Button>
+                <Button size="sm" onClick={() => setConfirmandoDescarte(false)}>Manter</Button>
+              </>
+            ) : (
+              <>
+                <Button size="sm" variant="primary" onClick={continuarCarrinho}>Continuar compra</Button>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmandoDescarte(true)}>Descartar carrinho</Button>
+              </>
+            )}
+          </span>
+        </Alert>
+      ) : null}
+
+      <div className="mt-4">
+        <GradeVisoes>
+          {VISOES.map((v) => (
+            <CardVisao
+              key={v}
+              rotulo={ROTULO_VISAO[v]}
+              contagem={medidas.length === 0 ? null : contagens[v]}
+              ativo={visao === v}
+              onClick={() => setVisao(v)}
+            />
+          ))}
+        </GradeVisoes>
+      </div>
+
+      {!codfilial ? (
+        <Panel className="mt-4">
           <EmptyState
             title="Escolha o fornecedor e a filial"
             hint="A lista traz todos os produtos ativos daquele fornecedor com situação, cobertura, gatilho e sugestão já calculados."
           />
-        ) : carregando ? (
-          <EmptyState title="Carregando a lista..." />
-        ) : medidas.length === 0 ? (
-          <EmptyState title="Nenhum produto ativo deste fornecedor nesta filial" />
-        ) : (
-          <Tabs value={aba} onValueChange={setAba}>
-            <TabsList>
-              <TabsTrigger value="comprar">A comprar</TabsTrigger>
-              <TabsTrigger value="todos">Todos</TabsTrigger>
-              <TabsTrigger value="transito">Em trânsito</TabsTrigger>
-            </TabsList>
-            <TabsContent value="comprar">{grade}</TabsContent>
-            <TabsContent value="todos">
-              <Toolbar>
-                <Field label="Situação" className="w-56">
-                  <SelectMenu label="Situação" value={situacao} onChange={setSituacao} options={OPCOES_SITUACAO} />
-                </Field>
-              </Toolbar>
-              {grade}
-            </TabsContent>
-            <TabsContent value="transito">{grade}</TabsContent>
-          </Tabs>
-        )}
-      </Panel>
+        </Panel>
+      ) : carregando ? (
+        <Panel className="mt-4"><EmptyState title="Carregando a lista..." /></Panel>
+      ) : medidas.length === 0 ? (
+        <Panel className="mt-4"><EmptyState title="Nenhum produto ativo deste fornecedor nesta filial" /></Panel>
+      ) : (
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
+          <ListaProdutos
+            visao={visao}
+            linhas={lista}
+            todas={todas}
+            selecionado={codprodSelecionado}
+            onSelecionar={(l) => setSelecionado(Number(l.medida.CODPROD))}
+            quantidades={quantidades}
+            onQuantidade={(codprod, valor) => setQuantidades((atual) => ({ ...atual, [codprod]: valor }))}
+            referencia={referencia}
+            filtros={filtros}
+            onFiltros={(parcial) => setFiltros((atual) => ({ ...atual, ...parcial }))}
+            busca={busca}
+            onBusca={setBusca}
+            desconsiderarLicitacao={desconsiderarLicitacao}
+            onLicitacao={() => setDesconsiderarLicitacao((atual) => !atual)}
+            emPedidoAberto={emPedidoAberto}
+            sugestaoTotal={sugestaoTotal}
+            carrinho={{ itens: resumoCarrinho.itens, pedidos: resumoCarrinho.pedidos }}
+            podeOperar={podeOperar}
+            podeParametrizar={podeParametrizar}
+            motivoBloqueio={motivoBloqueio}
+            acoes={{
+              onAdicionar: adicionar,
+              onSilenciar: setSilenciando,
+              onRestaurar: (l) => void restaurar(l),
+              onExportar: exportar,
+              onAbrirCarrinho: () => setCarrinhoAberto(true),
+            }}
+          />
+          <PainelDetalhe
+            linha={linhaSelecionada}
+            codfilial={codfilial}
+            fornecedor={nomeFornecedor}
+            hoje={hoje}
+            dados={cacheSku.get(codprodSelecionado) ?? DADOS_VAZIOS}
+            referencia={referencia}
+            desconsideradasDoSku={desconsideradas.filter((v) => v.codprod === codprodSelecionado).length}
+            podeOperar={podeOperar}
+            podeParametrizar={podeParametrizar}
+            motivoBloqueio={motivoBloqueio}
+            onVerDetalheCompleto={setDetalheCompleto}
+            onVerVendas={setVendasDe}
+            onAdicionar={adicionar}
+            onParametros={abrirParametros}
+          />
+        </div>
+      )}
 
-      <div className="mt-4">
-        <Carrinho
-          itens={carrinho}
-          boardId={boardId}
-          usuarioId={sessao.usuarioId}
-          periodo={periodo}
-          pedidoAberto={pedidoAberto}
-          podeOperar={podeOperar}
-          motivoBloqueio={motivoBloqueio}
-          coberturaLimiteDe={coberturaLimiteDe}
-          onRemover={(codprod, filial) => setCarrinho((atual) => atual.filter(
-            (e) => Number(e.linha.medida.CODPROD) !== codprod || e.codfilial !== filial,
-          ))}
-          onLimpar={() => setCarrinho([])}
-          onCriado={(cardId) => navigate(`/quadro?card=${cardId}`)}
-        />
-      </div>
+      <CarrinhoDialogo
+        aberto={carrinhoAberto}
+        onFechar={() => setCarrinhoAberto(false)}
+        itens={carrinho}
+        abertoEm={carrinhoMeta.abertoEm}
+        abertoPor={carrinhoMeta.abertoPor}
+        salvoEm={carrinhoMeta.salvoEm}
+        boardId={boardId}
+        usuarioId={sessao.usuarioId}
+        periodo={periodo}
+        hoje={hoje}
+        pedidoAberto={pedidoAberto}
+        grupoAtual={{ codfornec: Number(codfornec), codfilial }}
+        podeOperar={podeOperar}
+        motivoBloqueio={motivoBloqueio}
+        coberturaLimiteDe={coberturaLimiteDe}
+        onQuantidade={(codprod, filial, quantidade) => alterarItem(codprod, filial, { quantidade })}
+        onMotivo={(codprod, filial, motivo) => alterarItem(codprod, filial, { motivo })}
+        onRemover={(codprod, filial) => mudarCarrinho((atual) => atual.filter(
+          (e) => Number(e.linha.medida.CODPROD) !== codprod || e.codfilial !== filial,
+        ))}
+        onDescartar={descartarCarrinho}
+        onCriado={(cardId) => { setCarrinhoAberto(false); navigate(`/quadro?card=${cardId}`); }}
+      />
 
-      <DetalheSku linha={detalhe} codfilial={codfilial} onFechar={() => setDetalhe(null)} />
+      <DetalheSku linha={detalheCompleto} codfilial={codfilial} onFechar={() => setDetalheCompleto(null)} />
       <ParametrosDialogo alvo={parametroAlvo} onFechar={() => setParametroAlvo(null)} onSalvar={salvarParametro} />
       <SilenciarDialogo linha={silenciando} onFechar={() => setSilenciando(null)} onSilenciar={silenciar} />
       <VendasDialogo
         linha={vendasDe}
         codfilial={codfilial}
         periodo={periodo}
-        desconsideradas={desconsideradas}
+        desconsideradas={desconsideradas.map((v) => v.numtransitem)}
         onFechar={() => setVendasDe(null)}
         onDesconsiderar={desconsiderarVenda}
         onReconsiderar={reconsiderarVenda}

@@ -883,7 +883,9 @@ Mais os primitivos do recharts, reexportados daqui para a tela importar de um
 lugar só: `ChartContainer`, `ChartTooltip`, `ChartTooltipContent`,
 `ChartLegend`, `ChartLegendContent`, o tipo `ChartConfig` e os elementos de
 desenho `BarChart`/`Bar`, `LineChart`/`Line`, `XAxis`, `YAxis`,
-`CartesianGrid` — barra e linha só, porque pizza não existe aqui (§12.3).
+`CartesianGrid`, `ComposedChart` (barra + linha no mesmo eixo) e `LabelList` (o
+valor em cima de cada marca, R-116) — barra e linha só, porque pizza não existe
+aqui (§12.3).
 
 `AlternaVisao` é o par Gráfico/Tabela do `acoes`, com `aria-pressed` no botão
 ativo. Não é um extra: é a versão acessível do desenho (§12.4), e a tabela sai
@@ -910,6 +912,22 @@ gráfico ímpar que sobraria sozinho na última faixa — com a condição do §
 faixa inteira é para quem tem o que fazer com ela.
 
 ---
+
+### 8.8 Visões, fichas, seções e alternador (layout legado da 011, R-117)
+
+```tsx
+CardVisao({ rotulo, contagem, ativo, onClick })   // card que funciona como aba; aria-pressed; null → Dash
+GradeVisoes({ children })                         // 2 por linha, 4 a partir de xl
+ChipContagem({ children, ativo?, onClick?, title? }) // ficha de contagem; com onClick vira filtro
+Disclosure({ titulo, resumo?, aberta, onToggle, children }) // seção recolhível; aria-expanded; sem <details>
+AlternaOpcoes({ rotulo, opcoes, valor, onValor })  // Unidades/Caixas, 6m/13m — o AlternaVisao generalizado
+```
+
+`CardVisao` é botão, não `Tabs`: o conteúdo abaixo é um só e o card muda o
+recorte dele. `Disclosure` não usa `<details>` (§1.4): o marcador e o foco
+seguem o kit. A linha selecionada de uma lista com painel de detalhe leva fundo
+`accent` e uma barra de 4px à esquerda (`border-l-4 border-l-primary`), com
+`aria-selected` no `Tr`.
 
 ## 9. Padrões de tela
 
@@ -1326,8 +1344,10 @@ color: var(--background);
   também. Identidade nunca é só cor.
 - Grade e eixo são recessivos: `border`/`muted-foreground`, sem linha vertical,
   sem moldura em volta do desenho.
-- Número em toda marca não é informação, é poeira: rotule os extremos e o
-  último ponto.
+- **Toda barra e todo ponto de linha mostram o seu valor escrito em cima**
+  (`LabelList`, `position="top"`, texto em `fill-ink`), inclusive a série de
+  projeção — decisão do usuário em 2026-10-30 (R-116), válida para todo
+  gráfico do sistema. Sem valor, nada: `formatter` devolve `''` para `null`.
 - Eixo de valor **começa em zero** em gráfico de barra. Truncar a base
   multiplica visualmente uma diferença de 2%.
 

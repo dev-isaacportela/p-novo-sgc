@@ -8,7 +8,8 @@
 // (sgcWintRessuprimento, sgcWintProdutoHistorico, sgcWintProdutoUltimasCompras,
 // sgcWintProdutoEstoqueFiliais, sgcWintProdutoVendas, sgcParametrosCompraListar,
 // sgcVendasDesconsideradasListar, sgcPedidoAbertoDoFornecedor,
-// sgcEficienciaComprador), escritas 8150-8154 (sgcEscParametroCompraSalvar,
+// sgcEficienciaComprador), 8110-8111 do layout legado (sgcWintResumoFornecedores,
+// sgcItensEmPedidoAberto — R-117), escritas 8150-8154 (sgcEscParametroCompraSalvar,
 // sgcEscParametroCompraSilenciar, sgcEscParametroCompraRestaurar,
 // sgcEscVendaDesconsiderar, sgcEscVendaReconsiderar).
 //
@@ -37,7 +38,8 @@ import { jdbcIdWinthor } from './add-003-jdbc-winthor.mjs';
 
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
 export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico',
-  'sgcWintProdutoUltimasCompras', 'sgcWintProdutoEstoqueFiliais', 'sgcWintProdutoVendas'];
+  'sgcWintProdutoUltimasCompras', 'sgcWintProdutoEstoqueFiliais', 'sgcWintProdutoVendas',
+  'sgcWintResumoFornecedores'];
 
 /* ──────────────────────────────────────────────────────────────────────────
    A guarda de persona — UM texto só, o da 002 (R-013), copiado literalmente de
@@ -98,7 +100,9 @@ const SQL_RESSUPRIMENTO = `WITH
       NVL(P.CODEPTO, 0) AS CODEPTO,
       NVL(P.CODSEC, 0)  AS CODSEC,
       NVL(P.QTUNITCX, 0) AS UN_POR_CAIXA_ERP,
+      NVL(P.CODFAB, '') AS CODFAB,
       NVL(E.CUSTOULTENT, 0) AS CUSTO_ULT_ENTRADA,
+      NVL(E.CUSTOFIN, 0) AS CUSTO_ATUAL,
       TO_CHAR(E.DTULTENT, 'YYYY-MM-DD')   AS DT_ULT_ENTRADA,
       TO_CHAR(E.DTULTSAIDA, 'YYYY-MM-DD') AS DT_ULT_SAIDA,
       NVL(E.QTEST, 0)        AS ESTOQUE_TOTAL,
@@ -181,7 +185,7 @@ const SQL_RESSUPRIMENTO = `WITH
   )
 SELECT
   PB.CODPROD, PB.DESCRICAO, PB.EMBALAGEM, PB.UNIDADE, PB.CODEPTO, PB.CODSEC,
-  PB.UN_POR_CAIXA_ERP, PB.CUSTO_ULT_ENTRADA, PB.DT_ULT_ENTRADA, PB.DT_ULT_SAIDA,
+  PB.UN_POR_CAIXA_ERP, PB.CODFAB, PB.CUSTO_ULT_ENTRADA, PB.CUSTO_ATUAL, PB.DT_ULT_ENTRADA, PB.DT_ULT_SAIDA,
   PB.ESTOQUE_TOTAL, PB.QT_BLOQUEADA, PB.QT_INDENIZ, PB.QT_RESERV, PB.ESTOQUE_ATUAL,
   PB.QT_PEDIDA_ERP, PB.QT_TRANSITO, PB.ESTOQUE_EM_TRANSITO,
   NVL(R.LEAD_TIME_MEDIDO, 0)       AS LEAD_TIME_MEDIDO,
@@ -269,6 +273,50 @@ const SQL_PRODUTO_VENDAS = `SELECT * FROM (
   ORDER BY M.QT DESC, M.DTMOV DESC
 ) WHERE ROWNUM <= 50`;
 
+// Layout legado (R-117 / RN-026): o rótulo do seletor de fornecedor traz
+// "N itens · sugestão R$ X" ANTES de a compradora escolher. É uma ESTIMATIVA
+// barata numa consulta só para todos os fornecedores parametrizados: venda dos
+// últimos {{diasPeriodo}} dias sem ponderação, cobertura padrão de 35 dias,
+// estoque disponível e pedido ao ERP somados em todas as filiais, custo da
+// última entrada. Nada de parâmetro de SKU nem de curva — a sugestão exata
+// continua sendo a da consulta principal, por fornecedor e filial. `{{codfornecs}}`
+// é FRAGMENTO (lista de inteiros sem aspas), como o `{{excluir}}`.
+const SQL_RESUMO_FORNECEDORES = `WITH
+  BASE AS (
+    SELECT P.CODFORNEC, P.CODPROD
+    FROM PCPRODUT P
+    WHERE P.CODFORNEC IN ({{codfornecs}})
+      AND P.CODFORNEC <> 999999
+      AND NVL(LENGTH(TRIM(P.OBS2)), 0) = 0
+      AND NVL(P.CODEPTO, 0) NOT IN (4, 7)
+  ),
+  POSICAO AS (
+    SELECT E.CODPROD,
+      SUM(GREATEST(0, NVL(E.QTEST, 0) - NVL(E.QTBLOQUEADA, 0) - NVL(E.QTINDENIZ, 0) - NVL(E.QTRESERV, 0))) AS DISPONIVEL,
+      SUM(NVL(E.QTPEDIDA, 0)) AS PEDIDO_ERP,
+      MAX(NVL(E.CUSTOULTENT, 0)) AS CUSTO
+    FROM PCEST E
+    JOIN BASE B ON B.CODPROD = E.CODPROD
+    GROUP BY E.CODPROD
+  ),
+  VENDA AS (
+    SELECT M.CODPROD, SUM(M.QT) AS QT
+    FROM PCMOV M
+    JOIN BASE B ON B.CODPROD = M.CODPROD
+    WHERE M.CODOPER = 'S' AND M.QT > 0
+      AND M.DTMOV >= TO_DATE('{{dataInicio}}', 'YYYY-MM-DD')
+    GROUP BY M.CODPROD
+  )
+SELECT
+  B.CODFORNEC,
+  COUNT(*) AS ITENS,
+  ROUND(SUM(GREATEST(0, NVL(V.QT, 0) / GREATEST({{diasPeriodo}}, 1) * 35 - NVL(PO.DISPONIVEL, 0) - NVL(PO.PEDIDO_ERP, 0)) * NVL(PO.CUSTO, 0)), 2) AS VALOR_SUGERIDO
+FROM BASE B
+LEFT JOIN POSICAO PO ON PO.CODPROD = B.CODPROD
+LEFT JOIN VENDA V ON V.CODPROD = B.CODPROD
+GROUP BY B.CODFORNEC
+ORDER BY B.CODFORNEC`;
+
 /* ─────────────── leituras — banco interno ─────────────── */
 
 // A linha do fornecedor (CODPROD = 0) e as linhas de SKU numa consulta só; a
@@ -302,6 +350,21 @@ WHERE P.CODFORNEC = {{codfornec}}
   AND P.CODFILIAL = '{{codfilial}}'
   AND F.CHAVE IN ('analise', 'tecnica', 'diretoria', 'envio')
 ORDER BY P.ID_CARD DESC
+LIMIT {{limite}} OFFSET {{offset}}`;
+
+// Layout legado (R-117 / C-035): os produtos que JÁ estão num pedido aberto do
+// fornecedor na filial — a sublinha "Pedido #N aberto, ainda sem trânsito" da
+// lista. Mesmas fases de RN-016, fase sempre pela CHAVE; uma execução por
+// troca de filial, nada por linha.
+const SQL_ITENS_PEDIDO_ABERTO = `SELECT I.CODPROD, P.ID_CARD, C.TITULO, F.CHAVE AS FASE_CHAVE, I.QT_PEDIDA
+FROM SGC_PEDIDO P
+JOIN KB_CARD C ON C.ID = P.ID_CARD AND C.EXCLUIDO_EM IS NULL
+JOIN SGC_FASE F ON F.FASE_ID = C.FASE_ID
+JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = P.ID_CARD AND I.STATUS <> 'removido'
+WHERE P.CODFORNEC = {{codfornec}}
+  AND P.CODFILIAL = '{{codfilial}}'
+  AND F.CHAVE IN ('analise', 'tecnica', 'diretoria', 'envio')
+ORDER BY I.CODPROD, P.ID_CARD DESC
 LIMIT {{limite}} OFFSET {{offset}}`;
 
 // R-092/RN-018: sem tabela própria — a foto da sugestão já está em
@@ -419,6 +482,16 @@ const LEITURAS = [
     name: 'sgcEficienciaComprador',
     code: SQL_EFICIENCIA,
     resumo: 'RF-021/RN-018 (R-092) - aderencia do comprador: % de itens de pedidos originados das compras inteligentes com QT_PEDIDA dentro de +-20% da QT_SUGERIDA. Params: compradorId int, codfornec int, dataInicio string, dataFim string',
+  },
+  {
+    name: 'sgcWintResumoFornecedores',
+    code: SQL_RESUMO_FORNECEDORES,
+    resumo: 'RF-024/RN-026 (R-117) - por fornecedor da lista: itens ativos e valor sugerido ESTIMADO (venda dos ultimos N dias, cobertura 35, estoque e pedido ao ERP em todas as filiais, custo da ultima entrada), para o rotulo do seletor. Params: codfornecs lista de CODFORNEC (fragmento), dataInicio string, diasPeriodo int',
+  },
+  {
+    name: 'sgcItensEmPedidoAberto',
+    code: SQL_ITENS_PEDIDO_ABERTO,
+    resumo: 'RF-025/C-035 (R-117) - produtos que ja estao em pedido aberto (analise, tecnica, diretoria, envio) do fornecedor na filial, com o card e a fase pela CHAVE. Params: codfornec int, codfilial string, limite int, offset int',
   },
 ];
 

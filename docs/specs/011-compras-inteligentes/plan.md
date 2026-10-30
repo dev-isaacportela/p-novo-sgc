@@ -1225,3 +1225,72 @@ implementa — estão em `tasks.md` como tarefas de base, cada uma com o trecho 
 - **R-113** — os shims encadeados em `toSqlite` sem remover nenhuma reescrita da onda 3, as
   colunas de `PCEST`, a chave de `CHECK_INPUT`, as permissões, a rota, o menu e a página-stub
   (T-020 a T-024, T-037).
+
+## Layout legado — Opção A (R-117, 2026-10-30)
+
+A tela foi redesenhada no layout do sistema antigo (p-60523), mantendo tudo o que a
+spec já tinha e acrescentando os cenários C-026..C-039. Nada da regra pura anterior
+mudou; o que entrou está em módulos próprios para o `max-lines` de 800.
+
+### Arquivos
+
+| Arquivo | Conteúdo |
+|---|---|
+| `frontend/src/lib/ressuprimento.ts` | **+** visões (`linhasDaVisao`, `contarVisoes`, `completarCompra`, `quantidadeParaCompletar`, `emTransito`), ordem (`ordenarLinhas`), movimentação (`filtrarMovimentacao`), `nivelDeCobertura`, `textoDaSugestao`, `FiltrosLista`; a medida ganha `CUSTO_ATUAL` e `CODFAB` opcionais |
+| `frontend/src/lib/ressuprimento-detalhe.ts` | **novo**: `serieComprasVendas`, `totaisDoRodape`, `filiaisComExcesso`, `simularCompra`, calendário de meses, `DadosDoSku` |
+| `frontend/src/lib/carrinho.ts` | **novo**: `ItemCarrinho` (motivo + pedido mínimo), `carrinhoDeTexto`/`textoDoCarrinho` (RN-021), `resumoDoCarrinho`, `variacaoDePreco`, `economiaNoCusto`, `faltaParaMinimo`, `pedidoMinimoDoGrupo`, `filtrarCarrinho`, `textoImportacaoWinthor`, `nomeArquivoWinthor` |
+| `frontend/src/lib/csv.ts` | **+** `baixarTexto` (sem BOM) — o arquivo do WinThor é lido pelo ERP |
+| `frontend/src/components/page.tsx` | **+** §8.8: `CardVisao`, `GradeVisoes`, `ChipContagem`, `Disclosure`, `AlternaOpcoes`; reexporta `ComposedChart` e `LabelList` |
+| `pages/compras-inteligentes/ComprasInteligentesPage.tsx` | orquestração: cabeçalho com ações (Unidades/Caixas, Parâmetros do fornecedor, Coberturas ABC, Atualizar), barra de recorte, aviso de carrinho salvo, cards de visão, duas colunas a partir de `xl` (`xl:grid-cols-[minmax(0,1fr)_440px]`), carrinho em janela, diálogos |
+| `pages/compras-inteligentes/grid.tsx` | `ListaProdutos`: subtítulo, botão do carrinho, chips, tabela com linha selecionável (fundo accent + barra de 4px), paginação |
+| `pages/compras-inteligentes/painel-detalhe.tsx` | `PainelDetalhe`: 4 `Kpi`, o gráfico, as seis `Disclosure` |
+| `pages/compras-inteligentes/grafico.tsx` | `GraficoComprasVendas`: `ComposedChart` com `LabelList` em toda marca (R-116), 6m/13m, Gráfico/Tabela, rodapé |
+| `pages/compras-inteligentes/Carrinho.tsx` | `CarrinhoDialogo` (Dialog `sm:max-w-6xl`): cabeçalho, busca, grupos com `BarraConsumo` do mínimo, colunas do legado, rodapé |
+| `pages/compras-inteligentes/dialogos.tsx` | inalterado: `DetalheSku` (botão olho), `ParametrosDialogo`, `SilenciarDialogo`, `VendasDialogo` |
+
+### Contratos novos (add-013, bloco 81xx)
+
+| Nome | Tipo | Params | Saída | Id local |
+|---|---|---|---|---|
+| `sgcWintResumoFornecedores` | SQL (Oracle, `jdbcId`) | `codfornecs` **fragmento** (lista de CODFORNEC), `dataInicio`, `diasPeriodo` | `CODFORNEC`, `ITENS`, `VALOR_SUGERIDO` (RN-026) | 8110 |
+| `sgcItensEmPedidoAberto` | SQL (banco do projeto) | `codfornec`, `codfilial`, `limite`, `offset` | `CODPROD`, `ID_CARD`, `TITULO`, `FASE_CHAVE`, `QT_PEDIDA` — fases de RN-016, pela CHAVE | 8111 |
+
+`sgcWintRessuprimento` ganha duas colunas: `CODFAB` (`PCPRODUT.CODFAB`) e `CUSTO_ATUAL`
+(`PCEST.CUSTOFIN`). No simulador, `PCEST` ganha `CUSTOFIN` (`schema-winthor.mjs`) e o
+seed 011 grava `FAB-<codprod>` e dois custos atuais diferentes do da última entrada
+(5401: 12 → 11; 5403: 10 → 10,50). `CHECK_INPUT` ganha `codfornecs: '1042'`.
+
+### Fluxo e orçamento (RNF-001 emendada)
+
+1. Abrir: `sgcFornecedorListar` + `sgcEficienciaComprador` + `api.boardCarregar` (3) e, com a lista de
+   fornecedores, `sgcWintResumoFornecedores` (1) → o `hint` de cada opção do seletor.
+2. Fornecedor: `sgcFornecedorCarregar` (1) → filiais e `PEDIDO_MINIMO`.
+3. Filial: `sgcParametrosCompraListar`, `sgcVendasDesconsideradasListar`, `sgcCoberturaListar`,
+   `sgcPedidoAbertoDoFornecedor`, `sgcItensEmPedidoAberto` em paralelo (5) e `sgcWintRessuprimento` (1).
+4. Selecionar um produto (o primeiro vem selecionado): `sgcWintProdutoHistorico` (13 meses),
+   `sgcWintProdutoUltimasCompras`, `sgcWintProdutoEstoqueFiliais` (3), em cache por SKU; "Atualizar"
+   limpa o cache. O gráfico, as filiais com excesso e a simulação saem desses dados e da linha.
+5. Carrinho: cada mudança grava no `localStorage` (`CHAVE_CARRINHO(usuarioId)`), com `abertoEm`,
+   `abertoPor` e `salvoEm`; ao abrir a tela com carrinho da tela vazio e texto guardado, o aviso.
+   "Criar N pedidos" é o mesmo caminho de antes (3 execuções por grupo); o "por que comprar" vai
+   como `observacao` do item. O carrinho só é bloqueado pelo pedido aberto do fornecedor + filial
+   **da tela** (os demais grupos, vindos de um carrinho salvo, não custam consulta extra).
+
+### Testes acrescentados
+
+| Cenário / regra | Arquivo |
+|---|---|
+| C-026, C-027, RN-020, C-038, C-031, C-037 | `frontend/tests/ressuprimento.test.mjs` |
+| C-032, C-033, C-034, RN-025, calendário | `frontend/tests/ressuprimento-detalhe.test.mjs` |
+| C-028, C-029, C-030, C-039 (tela), RN-021, RN-022, RN-023, RN-027 | `frontend/tests/carrinho.test.mjs` |
+| C-035, C-036, C-039 (servidor), RN-026, RN-027 | `backend/simulator/smoke/011-compras-inteligentes.mjs` |
+
+### Decisões
+
+| # | Decisão | Alternativa descartada | Por quê |
+|---|---|---|---|
+| D-017 | O carrinho é guardado no **navegador**, por usuário | Tabela `SGC_CARRINHO` + 3 SFs | Zero execução a mais na carga (RNF-001) e nenhuma tabela nova; retomar de outra máquina é dívida registrada na spec |
+| D-018 | "Completar compra" = sugestão 0, sem trânsito, com giro, cobertura ≤ alvo + lead (RN-020) | Todo produto com sugestão 0 | Com sugestão 0 o disponível já passa do máximo: listar tudo seria oferecer o que sobra para fechar o mínimo; a régua pega o que fura no próximo ciclo |
+| D-019 | O arquivo do WinThor é `CODPROD;PRECO;QTD`, ponto decimal, sem cabeçalho, sem BOM, um por grupo | Planilha | É um arquivo para o ERP ler; o formato exato do importador do WinThor deve ser confirmado com quem opera o ERP |
+| D-020 | O resumo do seletor é uma **estimativa** numa consulta para todos os fornecedores, sem filial (RN-026) | A consulta principal por fornecedor | 200 fornecedores × consulta pesada não cabe em nenhum orçamento; a estimativa custa 1 execução e o rótulo diz "sugestão" sem prometer a conta exata |
+| D-021 | O detalhe custa 3 execuções **ao selecionar**, uma vez por SKU, com cache | Carregar o detalhe de toda a lista | Nada por linha; o painel fixo precisa dos dados ao clicar, e a mesma consulta alimenta gráfico, filiais com excesso e compras |
