@@ -13,7 +13,7 @@
 
 import { assert } from './base.mjs';
 import {
-  CARDS_011, FILIAL_011, FILIAL_ENVIADO_011, FORNECEDOR_011, JANELA, JANELA_CURTA, VENDA_ATIPICA, haDias,
+  CARDS_011, FILIAL_011, FILIAL_ENVIADO_011, FORNECEDOR_011, JANELA, JANELA_CURTA, VENDAS_FORA_011, VENDA_ATIPICA, haDias,
 } from '../seed/011-compras-inteligentes.mjs';
 
 const FAIXA = [5401, 5402, 5403, 5404, 5405, 5406, 5407, 5408, 5409, 5410,
@@ -365,6 +365,30 @@ export async function suite(ctx) {
     assert.equal(String(b.LOG_RESPONSAVEL), 'JOAO PEREIRA');
     assert.equal(String(b.ROTINALANC), 'PCSIS1106');
     assert.deepEqual(await linhas('sgcWintBloqueiosProduto', { codprod: 5403, codfilial: FILIAL_011 }, U.ana), [], 'sem lote bloqueado, nada volta');
+  });
+
+  await teste('C-053 / R-131: a venda valida e um recorte so — a venda entre filiais (ramo 20 e cliente que e filial do grupo) e a remessa de entrega futura (CONDVENDA 8) ficam fora da lista, do historico, da aba Vendas e da venda por cliente; o 5409 segue com 18 (6 publicas) e o publico (ramos 11 a 15) sai segregado, inclusive no faturamento', async () => {
+    const p5409 = produto(await ressuprimento(), 5409);
+    assert.equal(Number(p5409.VENDA_PERIODO), 18, 'as 3 vendas fora (9 + 7 + 4) nao entram');
+    assert.equal(Number(p5409.VENDA_PUBLICA), 6);
+    assert.ok(Number(p5409.FATURAMENTO_PUBLICO) > 0 && Number(p5409.FATURAMENTO_PUBLICO) < Number(p5409.FATURAMENTO_PERIODO), 'o faturamento publico sai segregado');
+    assert.ok(Number(p5409.RENTABILIDADE_PUBLICA) > 0);
+    const p5418 = produto(await ressuprimento(), 5418);
+    assert.equal(Number(p5418.VENDA_PUBLICA), Number(p5418.VENDA_PERIODO), 'o 9305 (ramo 13) e publico');
+
+    const historico = await linhas('sgcWintProdutoHistorico', { codprod: 5409, codfilial: FILIAL_011, meses: 12 }, U.ana);
+    const saidas = historico.reduce((soma, h) => soma + Number(h.SAIDAS), 0);
+    const publicas = historico.reduce((soma, h) => soma + Number(h.SAIDAS_PUBLICAS), 0);
+    assert.equal(saidas, 18, 'o grafico e a previsao contam as mesmas 18');
+    assert.equal(publicas, 6);
+
+    const vendas = await linhas('sgcWintProdutoVendas', { codprod: 5409, codfilial: FILIAL_011, ...JANELA }, U.ana);
+    const itens = vendas.map((v) => Number(v.NUMTRANSITEM));
+    for (const [item] of VENDAS_FORA_011) assert.ok(!itens.includes(item), `a aba Vendas mostrou a venda fora ${item}`);
+    assert.equal(vendas.length, 2);
+
+    const porCliente = await linhas('sgcWintVendasClientesProdutos', { codprods: '5409', codfilial: FILIAL_011, ...JANELA, incluirPublico: 1 }, U.ana);
+    assert.deepEqual(porCliente.map((r) => `${r.CODCLI}=${Number(r.VENDA_CLIENTE_PERIODO)}`).sort(), ['9301=12', '9304=6'], 'nem a filial nem a remessa entram na venda por cliente');
   });
 
   await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho do Novo pedido do quadro — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {

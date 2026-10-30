@@ -212,6 +212,8 @@ export interface VendasDoProdutoProps {
   onReconsiderar: (numtransitem: number) => Promise<void>;
   /** Quantas vendas voltaram (a aba "Vendas (N)" da Análise do Produto). */
   onContagem?: (total: number) => void;
+  /** R-131: com o seletor de órgão público marcado (o padrão), as vendas públicas não aparecem. */
+  semPublico?: boolean;
   onOcupado?: (ocupado: boolean) => void;
 }
 
@@ -229,8 +231,10 @@ export function VendasDoProduto({
   onReconsiderar,
   onContagem,
   onOcupado,
+  semPublico = false,
 }: VendasDoProdutoProps) {
-  const [vendas, setVendas] = React.useState<VendaDoProduto[]>([]);
+  const [todasVendas, setVendas] = React.useState<VendaDoProduto[]>([]);
+  const vendas = React.useMemo(() => (semPublico ? todasVendas.filter((v) => Number(v.PUBLICO) !== 1) : todasVendas), [todasVendas, semPublico]);
   const [pronto, setPronto] = React.useState(false);
   const [mes, setMes] = React.useState('');
   const [motivo, setMotivo] = React.useState('');
@@ -246,14 +250,14 @@ export function VendasDoProduto({
         if (!vivo) return;
         const lista = rows as unknown as VendaDoProduto[];
         setVendas(lista);
-        onContagem?.(lista.length);
+        onContagem?.(semPublico ? lista.filter((v) => Number(v.PUBLICO) !== 1).length : lista.length);
       },
       () => vivo && setErro('Não foi possível carregar as vendas deste produto.'),
     ).finally(() => vivo && setPronto(true));
     return () => { vivo = false; };
     // `onContagem` é um setState da janela: estável.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codprod, codfilial, periodo.inicio, periodo.fim]);
+  }, [codprod, codfilial, periodo.inicio, periodo.fim, semPublico]);
 
   const ocupar = (valor: boolean) => { setOcupado(valor); onOcupado?.(valor); };
 

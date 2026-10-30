@@ -28,11 +28,19 @@ export const DDL = [
     UF VARCHAR(2)
   )`,
 
+  // R-131: CODCLI é o cliente que representa a filial — venda para ele é venda entre filiais.
   `CREATE TABLE IF NOT EXISTS PCFILIAL (
     CODIGO VARCHAR(10) PRIMARY KEY,
     RAZAOSOCIAL VARCHAR(200),
     CGC VARCHAR(18),
-    UF VARCHAR(2)
+    UF VARCHAR(2),
+    CODCLI INT
+  )`,
+
+  // R-131: a nota de saída da venda — CONDVENDA 8 é a remessa de entrega futura.
+  `CREATE TABLE IF NOT EXISTS PCNFSAID (
+    NUMTRANSVENDA INT PRIMARY KEY,
+    CONDVENDA INT
   )`,
 
   // sgcWintAnaliseMontagem / sgcWintBuscarProduto (003). OBS2 marca inativo;
@@ -104,7 +112,8 @@ export const DDL = [
     DTCANCEL VARCHAR(10),
     CODDEVOL INT,
     QTBLOQUEADA DECIMAL(15,3),
-    ROTINALANC VARCHAR(20)
+    ROTINALANC VARCHAR(20),
+    NUMTRANSVENDA INT
   )`,
 
   // Vendedor (RCA) da venda: PCMOV.CODUSUR -> PCUSUARI.NOME, para a aba Vendas

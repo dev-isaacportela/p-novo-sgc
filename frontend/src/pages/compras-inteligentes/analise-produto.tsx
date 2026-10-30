@@ -79,6 +79,7 @@ export function AnaliseProdutoDialogo({
   onAdicionarEspecial,
   lotesBloqueados,
   excessosLista,
+  semPublico = false,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -109,6 +110,8 @@ export function AnaliseProdutoDialogo({
   /** R-130: os lotes bloqueados (carregados só com bloqueio) e o excesso que a lista já calculou. */
   lotesBloqueados: EstadoLotes;
   excessosLista: FilialComExcesso[];
+  /** R-131: o seletor de órgão público (marcado por padrão) — a aba Vendas segue a lista. */
+  semPublico?: boolean;
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
   const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
@@ -208,6 +211,7 @@ export function AnaliseProdutoDialogo({
                 onDesconsiderar={onDesconsiderar}
                 onReconsiderar={onReconsiderar}
                 onContagem={setTotalVendas}
+                semPublico={semPublico}
                 onOcupado={setOcupado}
               />
             ) : (

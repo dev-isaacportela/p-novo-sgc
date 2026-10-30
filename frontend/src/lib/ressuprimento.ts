@@ -47,6 +47,8 @@ export interface MedidaRessuprimento {
   VENDA_PERIODO: number; VENDA_PUBLICA: number;
   /** R-122: valor vendido e margem da janela (PCMOV: QT × PUNIT e QT × (PUNIT − CUSTOFIN)); opcionais para a medida antiga continuar válida. */
   FATURAMENTO_PERIODO?: number; RENTABILIDADE_PERIODO?: number;
+  /** R-131: a parte pública do faturamento e da margem, para as curvas sem o público. */
+  FATURAMENTO_PUBLICO?: number; RENTABILIDADE_PUBLICA?: number;
   CONSUMO_DIARIO: number; CONSUMO_DIARIO_PUBLICO: number; VOLATILIDADE_DIARIA: number;
 }
 
@@ -251,16 +253,18 @@ export interface CurvasDaLinha { faturamento: CurvaAbc; rentabilidade: CurvaAbc;
  * a pior das duas, como no sistema antigo. Medida sem as duas colunas (SF
  * ainda não republicada) cai na régua antiga, venda × custo, nas duas.
  */
-export function curvasDoRessuprimento(medidas: MedidaRessuprimento[]): Map<number, CurvasDaLinha> {
+export function curvasDoRessuprimento(medidas: MedidaRessuprimento[], semPublico = false): Map<number, CurvasDaLinha> {
   const lista = medidas ?? [];
   const antiga = (m: MedidaRessuprimento) => Math.max(0, numero(m.VENDA_PERIODO)) * Math.max(0, numero(m.CUSTO_ULT_ENTRADA));
+  // R-131: com o seletor marcado (o padrão), a venda pública sai das duas réguas também.
+  const menos = (valor: number, publico: unknown) => (semPublico ? Math.max(0, valor - numero(publico)) : valor);
   const faturamento = curvaPorValor(lista.map((m) => ({
     codprod: numero(m.CODPROD),
-    valor: m.FATURAMENTO_PERIODO === undefined ? antiga(m) : numero(m.FATURAMENTO_PERIODO),
+    valor: m.FATURAMENTO_PERIODO === undefined ? antiga(m) : menos(numero(m.FATURAMENTO_PERIODO), m.FATURAMENTO_PUBLICO),
   })));
   const rentabilidade = curvaPorValor(lista.map((m) => ({
     codprod: numero(m.CODPROD),
-    valor: m.RENTABILIDADE_PERIODO === undefined ? antiga(m) : numero(m.RENTABILIDADE_PERIODO),
+    valor: m.RENTABILIDADE_PERIODO === undefined ? antiga(m) : menos(numero(m.RENTABILIDADE_PERIODO), m.RENTABILIDADE_PUBLICA),
   })));
   const mapa = new Map<number, CurvasDaLinha>();
   for (const m of lista) {
@@ -293,7 +297,7 @@ export function montarRessuprimento(
   custos?: MapaCustoPadrao | null,
 ): LinhaRessuprimento[] {
   const lista = medidas ?? [];
-  const curvas = curvasDoRessuprimento(lista);
+  const curvas = curvasDoRessuprimento(lista, opcoes.desconsiderarLicitacao);
   const doFornecedor = (parametros ?? []).find((p) => numero(p.codprod) === 0) ?? null;
   const porSku = new Map((parametros ?? []).filter((p) => numero(p.codprod) > 0).map((p) => [numero(p.codprod), p]));
 

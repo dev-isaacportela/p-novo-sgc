@@ -155,13 +155,26 @@ const ENTRADAS = [
   [960103, 5416, 970003, 10, 50, 12.0],
 ];
 
-// CODCLI, CLIENTE, CODATV1 — 9304 e 9305 são de órgão público (12 e 20).
+// CODCLI, CLIENTE, CODATV1 — 9304 e 9305 são de órgão público (12 e 13). R-131: o
+// ramo 20 é FILIAL (venda entre filiais, fora sempre): 9306 é do ramo 20 e 9307 é
+// o cliente que representa a filial 2 (PCFILIAL.CODCLI), com ramo comum.
 const CLIENTES = [
   [9301, 'Farmacia Central Ltda', 1],
   [9302, 'Distribuidora Vida Ltda', 1],
   [9303, 'Evento Corrida da Cidade Ltda', 1],
   [9304, 'Hospital Regional do Norte', 12],
-  [9305, 'Secretaria Municipal de Esportes', 20],
+  [9305, 'Secretaria Municipal de Esportes', 13],
+  [9306, 'Benenutri Filial Sul (cliente)', 20],
+  [9307, 'Benenutri Filial Norte (cliente)', 1],
+];
+
+// R-131: vendas que NUNCA entram na demanda do 5409 (que segue com 18, 6 públicas) —
+// NUMTRANSITEM, CODCLI, QT, dias atrás, NUMTRANSVENDA. A remessa de entrega
+// futura (CONDVENDA 8) é a 880001; a 880002 é venda comum (CONDVENDA 1).
+export const VENDAS_FORA_011 = [
+  [960026, 9306, 9, 3, 880002],
+  [960027, 9307, 7, 4, 880002],
+  [960028, 9301, 4, 5, 880001],
 ];
 
 /** Ids dos cards desta spec, para o smoke não depender da ordem de inserção. */
@@ -283,6 +296,13 @@ export function seed011(db, cenario) {
     VALUES ('1', 5401, 'L5401B', ?, 'PCSIS1106', ?, ?, ?, ?)`);
   inserirLogLote.run(haDias(12), 'JPEREIRA', '6366:88', 0, 6);
   inserirLogLote.run(haDias(5), 'CLIMA', '6366:99', 6, 4);
+
+  db.prepare("UPDATE PCFILIAL SET CODCLI = 9307 WHERE CODIGO = '2'").run();
+  db.prepare('INSERT OR IGNORE INTO PCNFSAID (NUMTRANSVENDA, CONDVENDA) VALUES (880001, 8), (880002, 1)').run();
+  const inserirVendaFora = db.prepare(`INSERT INTO PCMOV
+    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, CUSTOFIN, CODUSUR, NUMPED, NUMTRANSVENDA)
+    VALUES (?, 5409, '1', ?, 'S', ?, ?, 20, 8, 1, NULL, ?)`);
+  for (const [item, cli, qt, dias, transvenda] of VENDAS_FORA_011) inserirVendaFora.run(item, cli, haDias(dias), qt, transvenda);
 
   const inserirEntrada = db.prepare(`INSERT INTO PCMOV
     (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED, NUMTRANSENT, NUMNOTA)

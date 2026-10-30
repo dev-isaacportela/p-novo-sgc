@@ -42,7 +42,7 @@ import type {
 } from '@/lib/ressuprimento';
 import { CHAVE_CARRINHO, carrinhoDeTexto, resumoDoCarrinho, textoDoCarrinho } from '@/lib/carrinho';
 import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
-import { DADOS_VAZIOS, desconsideradasPorMes } from '@/lib/ressuprimento-detalhe';
+import { DADOS_VAZIOS, desconsideradasPorMes, historicoSemPublico } from '@/lib/ressuprimento-detalhe';
 import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
 import { lotesDeCodigos, oportunidadesDoItem, seloEspecial, sugestaoPorCliente } from '@/lib/custo-especial';
 import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
@@ -142,7 +142,8 @@ export default function ComprasInteligentesPage() {
   const [pedidoAberto, setPedidoAberto] = React.useState<PedidoAberto | null>(null);
   const [emPedidoAberto, setEmPedidoAberto] = React.useState<Map<number, PedidoAbertoDoItem>>(() => new Map());
 
-  const [desconsiderarLicitacao, setDesconsiderarLicitacao] = React.useState(false);
+  // R-131: a venda a órgão público fica FORA por padrão (seletor marcado); desmarcar mostra com ela.
+  const [desconsiderarLicitacao, setDesconsiderarLicitacao] = React.useState(true);
   const [referencia, setReferencia] = React.useState<ReferenciaSugestao>('unidades');
   const [visao, setVisao] = React.useState<VisaoRessuprimento>('comprar');
   // C-012: a visão de onde o chip "Silenciados" saiu, para voltar ao desligar.
@@ -445,8 +446,15 @@ export default function ComprasInteligentesPage() {
   const previsaoDe = React.useCallback((codprod: number): Previsao | null => {
     const dadosSku = cacheSku.get(codprod);
     if (!codprod || !dadosSku?.pronto) return null;
-    return preverVendas(serieFechada(dadosSku.historico, hoje, desconsideradasPorMes(desconsideradas.filter((v) => v.codprod === codprod))));
-  }, [cacheSku, hoje, desconsideradas]);
+    return preverVendas(serieFechada(historicoSemPublico(dadosSku.historico, desconsiderarLicitacao), hoje, desconsideradasPorMes(desconsideradas.filter((v) => v.codprod === codprod))));
+  }, [cacheSku, hoje, desconsideradas, desconsiderarLicitacao]);
+  // R-131: o gráfico e os totais do painel e da janela contam a mesma venda da lista.
+  const dadosDe = React.useCallback((codprod: number): DadosDoSku => {
+    const dadosSku = cacheSku.get(codprod) ?? DADOS_VAZIOS;
+    return desconsiderarLicitacao ? { ...dadosSku, historico: historicoSemPublico(dadosSku.historico, true) } : dadosSku;
+  }, [cacheSku, desconsiderarLicitacao]);
+  const dadosSelecionado = React.useMemo(() => dadosDe(codprodSelecionado), [dadosDe, codprodSelecionado]);
+  const dadosDetalhe = React.useMemo(() => (detalheCompleto ? dadosDe(Number(detalheCompleto.medida.CODPROD)) : DADOS_VAZIOS), [dadosDe, detalheCompleto]);
   const projetar = React.useCallback((previsao: Previsao | null, linha: LinhaRessuprimento | null): SugestaoProjetada | null => {
     const r = previsao ? modeloEscolhido(previsao, modeloPrevisao) : null;
     return r && linha ? sugestaoProjetada(r.previsao, linha) : null;
@@ -825,7 +833,7 @@ export default function ComprasInteligentesPage() {
             codfilial={codfilial}
             fornecedor={nomeFornecedor}
             hoje={hoje}
-            dados={cacheSku.get(codprodSelecionado) ?? DADOS_VAZIOS}
+            dados={dadosSelecionado}
             referencia={referencia}
             desconsideradasDoSku={desconsideradas.filter((v) => v.codprod === codprodSelecionado).length}
             podeOperar={podeOperar}
@@ -880,7 +888,8 @@ export default function ComprasInteligentesPage() {
         codfilial={codfilial}
         fornecedor={nomeFornecedor}
         hoje={hoje}
-        dados={detalheCompleto ? cacheSku.get(Number(detalheCompleto.medida.CODPROD)) ?? DADOS_VAZIOS : DADOS_VAZIOS}
+        dados={dadosDetalhe}
+        semPublico={desconsiderarLicitacao}
         referencia={referencia}
         desconsideradas={desconsideradas}
         periodo={periodo}
@@ -907,6 +916,7 @@ export default function ComprasInteligentesPage() {
       <SilenciarDialogo linha={silenciando} onFechar={() => setSilenciando(null)} onSilenciar={silenciar} />
       <VendasDialogo
         linha={vendasDe}
+        semPublico={desconsiderarLicitacao}
         codfilial={codfilial}
         periodo={periodo}
         desconsideradas={desconsideradas.map((v) => v.numtransitem)}

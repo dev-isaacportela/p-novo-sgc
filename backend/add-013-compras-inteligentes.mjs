@@ -69,8 +69,35 @@ const PARAMETRIZAR = ['admin', 'gestor'];
 /** Operar (desconsiderar venda): admin, analista e gestor (RN-019). */
 const OPERAR = ['admin', 'analista', 'gestor'];
 
-/** Cliente de órgão público — mesmo recorte da 003 (RN-011 daquela spec, R-084). */
-const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15, 20)';
+/**
+ * Cliente de órgão público (ramos 11 a 15 do PCATIVI, "ORGAO PUBLICO …"). R-131:
+ * fica FORA da demanda por padrão — a tela traz o seletor marcado e quem o
+ * desmarca vê com o público; por isso a consulta segue devolvendo a parte
+ * pública segregada. O ramo 20 é "FILIAL" (venda para a própria rede): saiu
+ * daqui e entrou em ENTRE_FILIAIS, que fica fora sempre.
+ */
+const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15)';
+
+/**
+ * R-131: venda para a própria rede — o ramo 20 (FILIAL) ou o cliente que é uma
+ * filial do grupo (PCFILIAL.CODCLI). No WinThor real os dois recortes são o
+ * mesmo (64 linhas, 4.827 un. em 153 dias na filial 1); os dois ficam por
+ * robustez. `NVL(M.CODCLI, 0)`: venda sem cliente não pode virar NULL no NOT.
+ */
+// `NVL(FX.CODCLI, 0) > 0` e não `IS NOT NULL`: o gerador CONNECT BY do dialeto do simulador casa
+// até o próximo `IS NOT NULL` da consulta (o calendário da principal viraria número).
+const ENTRE_FILIAIS = `(NVL(C.CODATV1, 0) = 20 OR NVL(M.CODCLI, 0) IN (SELECT FX.CODCLI FROM PCFILIAL FX WHERE NVL(FX.CODCLI, 0) > 0))`;
+
+/** R-131 (RN-CI-07 e RN-EST-11 do legado): remessa de entrega futura — a venda já contou na nota de venda (CONDVENDA 7). */
+const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA = M.NUMTRANSVENDA AND NF.CONDVENDA = 8)`;
+
+/**
+ * RN-001 (R-131): a venda que conta na 011 — UM recorte só, para lista,
+ * curvas, gráfico, previsão, aba Vendas, custo especial e o resumo do seletor
+ * baterem. Exige PCMOV como `M` e `LEFT JOIN PCCLIENT C`. O público fica de
+ * fora à parte (PUBLICO), porque a tela decide.
+ */
+const VENDA_VALIDA = `(M.CODOPER = 'S' AND M.QT > 0 AND NOT ${ENTRE_FILIAIS} AND NOT ${REMESSA_FUTURA})`;
 
 /* ─────────────── leituras — WinThor (Oracle) ─────────────── */
 
@@ -93,8 +120,11 @@ const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15, 20)';
 // 6. `{{excluir}}` é FRAGMENTO (lista de inteiros sem aspas), `0` quando não há
 //    nenhuma — `NUMTRANSITEM` começa em 1, então `NOT IN (0)` não exclui nada.
 //    Teto de 500 por chamada (R-087, ORA-01795).
-// 7. A venda pública fica na demanda (R-084) e sai segregada em VENDA_PUBLICA e
-//    CONSUMO_DIARIO_PUBLICO: quem decide é o seletor da tela, sem nova consulta.
+// 7. A venda pública sai segregada em VENDA_PUBLICA, CONSUMO_DIARIO_PUBLICO,
+//    FATURAMENTO_PUBLICO e RENTABILIDADE_PUBLICA: quem decide é o seletor da
+//    tela (R-131: marcado por padrão, o público fica fora), sem nova consulta.
+// 8. R-131: só entra a VENDA_VALIDA — venda entre filiais e remessa de entrega
+//    futura (CONDVENDA 8) ficam fora sempre, em todas as SFs que contam venda.
 const SQL_RESSUPRIMENTO = `WITH
   PRODUTOS_BASE AS (
     SELECT
@@ -155,12 +185,13 @@ const SQL_RESSUPRIMENTO = `WITH
       SUM(M.QT) AS QT_DIA,
       SUM(CASE WHEN ${PUBLICO} THEN M.QT ELSE 0 END) AS QT_DIA_PUBLICA,
       SUM(M.QT * NVL(M.PUNIT, 0)) AS VL_DIA,
-      SUM(M.QT * (NVL(M.PUNIT, 0) - NVL(M.CUSTOFIN, 0))) AS MARGEM_DIA
+      SUM(M.QT * (NVL(M.PUNIT, 0) - NVL(M.CUSTOFIN, 0))) AS MARGEM_DIA,
+      SUM(CASE WHEN ${PUBLICO} THEN M.QT * NVL(M.PUNIT, 0) ELSE 0 END) AS VL_DIA_PUBLICO,
+      SUM(CASE WHEN ${PUBLICO} THEN M.QT * (NVL(M.PUNIT, 0) - NVL(M.CUSTOFIN, 0)) ELSE 0 END) AS MARGEM_DIA_PUBLICA
     FROM PCMOV M
     JOIN PRODUTOS_BASE PB ON PB.CODPROD = M.CODPROD
     LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
-    WHERE M.CODOPER = 'S'
-      AND M.QT > 0
+    WHERE ${VENDA_VALIDA}
       AND M.CODFILIAL = '{{codfilial}}'
       AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
       AND M.NUMTRANSITEM NOT IN ({{excluir}})
@@ -173,6 +204,8 @@ const SQL_RESSUPRIMENTO = `WITH
       NVL(V.QT_DIA_PUBLICA, 0) AS QT_DIA_PUBLICA,
       NVL(V.VL_DIA, 0)         AS VL_DIA,
       NVL(V.MARGEM_DIA, 0)     AS MARGEM_DIA,
+      NVL(V.VL_DIA_PUBLICO, 0)     AS VL_DIA_PUBLICO,
+      NVL(V.MARGEM_DIA_PUBLICA, 0) AS MARGEM_DIA_PUBLICA,
       POWER(0.85, D.DIAS_ATE_FIM) AS PESO
     FROM PRODUTOS_BASE PB
     CROSS JOIN DIAS D
@@ -185,6 +218,8 @@ const SQL_RESSUPRIMENTO = `WITH
       SUM(D.QT_DIA_PUBLICA) AS VENDA_PUBLICA,
       SUM(D.VL_DIA)         AS FATURAMENTO_PERIODO,
       SUM(D.MARGEM_DIA)     AS RENTABILIDADE_PERIODO,
+      SUM(D.VL_DIA_PUBLICO)     AS FATURAMENTO_PUBLICO,
+      SUM(D.MARGEM_DIA_PUBLICA) AS RENTABILIDADE_PUBLICA,
       ROUND(SUM(D.QT_DIA * D.PESO)         / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO,
       ROUND(SUM(D.QT_DIA_PUBLICA * D.PESO) / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO_PUBLICO,
       ROUND(SQRT(GREATEST(AVG(D.QT_DIA * D.QT_DIA) - AVG(D.QT_DIA) * AVG(D.QT_DIA), 0)), 4) AS VOLATILIDADE_DIARIA
@@ -201,6 +236,8 @@ SELECT
   NVL(M.VENDA_PUBLICA, 0)          AS VENDA_PUBLICA,
   NVL(M.FATURAMENTO_PERIODO, 0)    AS FATURAMENTO_PERIODO,
   NVL(M.RENTABILIDADE_PERIODO, 0)  AS RENTABILIDADE_PERIODO,
+  NVL(M.FATURAMENTO_PUBLICO, 0)    AS FATURAMENTO_PUBLICO,
+  NVL(M.RENTABILIDADE_PUBLICA, 0)  AS RENTABILIDADE_PUBLICA,
   NVL(M.CONSUMO_DIARIO, 0)         AS CONSUMO_DIARIO,
   NVL(M.CONSUMO_DIARIO_PUBLICO, 0) AS CONSUMO_DIARIO_PUBLICO,
   NVL(M.VOLATILIDADE_DIARIA, 0)    AS VOLATILIDADE_DIARIA
@@ -214,9 +251,9 @@ ORDER BY PB.DESCRICAO`;
 // a janela passa a ser "12 meses a partir de hoje".
 const SQL_PRODUTO_HISTORICO = `SELECT
   TO_CHAR(M.DTMOV, 'YYYY-MM') AS MES,
-  SUM(CASE WHEN M.CODOPER = 'S' THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS,
+  SUM(CASE WHEN ${VENDA_VALIDA} THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS,
   SUM(CASE WHEN M.CODOPER = 'E' THEN NVL(M.QT, 0) ELSE 0 END) AS ENTRADAS,
-  SUM(CASE WHEN M.CODOPER = 'S' AND ${PUBLICO}
+  SUM(CASE WHEN ${VENDA_VALIDA} AND ${PUBLICO}
            THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS_PUBLICAS
 FROM PCMOV M
 LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
@@ -287,8 +324,7 @@ const SQL_PRODUTO_VENDAS = `SELECT * FROM (
   LEFT JOIN PCUSUARI U ON U.CODUSUR = M.CODUSUR
   WHERE M.CODPROD = {{codprod}}
     AND M.CODFILIAL = '{{codfilial}}'
-    AND M.CODOPER = 'S'
-    AND M.QT > 0
+    AND ${VENDA_VALIDA}
     AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
   ORDER BY M.QT DESC, M.DTMOV DESC
 ) WHERE ROWNUM <= 50`;
@@ -323,7 +359,8 @@ const SQL_RESUMO_FORNECEDORES = `WITH
     SELECT M.CODPROD, SUM(M.QT) AS QT
     FROM PCMOV M
     JOIN BASE B ON B.CODPROD = M.CODPROD
-    WHERE M.CODOPER = 'S' AND M.QT > 0
+    LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+    WHERE ${VENDA_VALIDA} AND NOT (${PUBLICO})
       AND M.DTMOV >= TO_DATE('{{dataInicio}}', 'YYYY-MM-DD')
     GROUP BY M.CODPROD
   )
@@ -469,8 +506,7 @@ const SQL_VENDAS_CLIENTES = `SELECT
   SUM(CASE WHEN M.QT > 0 THEN M.QT ELSE 0 END) AS VENDA_CLIENTE_PERIODO
 FROM PCMOV M
 LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
-WHERE M.CODOPER = 'S'
-  AND M.QT > 0
+WHERE ${VENDA_VALIDA}
   AND M.CODFILIAL = '{{codfilial}}'
   AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
   AND M.CODPROD IN ({{codprods}})
