@@ -30,6 +30,8 @@
 //   FROM DUAL                          -> removido (reescrita textual)
 //   REGEXP_SUBSTR(txt, '[^,]+'|'[^:]+', 1, n) -> n-esimo pedaco (R-064); outra
 //                                         forma LANCA, nunca devolve valor
+//   REGEXP_LIKE(txt, '^[0-9]+$')       -> 1/0 (R-130); outra forma LANCA
+//   TO_CHAR(numero)                    -> texto (R-130)
 //   SELECT <x(LEVEL)> FROM DUAL CONNECT BY <x(LEVEL)> IS NOT NULL
 //                                      -> WITH RECURSIVE NIVEL(LVL) … (R-064)
 //   JSON_UNQUOTE(JSON_EXTRACT(c, '$.k')) -> json_extract(c, '$.k')  (R-071)
@@ -324,6 +326,19 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
   def('TO_CHAR', 2, (valor, formato) => {
     const date = readOracleDate(valor);
     return date ? formatOracle(date, formato) : null;
+  });
+  // TO_CHAR(numero) — o código de rotina do PCBLOQUEIOEST no COALESCE de texto
+  // do sgcWintBloqueiosProduto (R-130): o número vira texto, null fica null.
+  def('TO_CHAR', 1, (valor) => (valor == null ? null : String(valor)));
+
+  // REGEXP_LIKE(texto, '^[0-9]+$') — a única forma que os plans usam (R-130:
+  // a matrícula do OBSAPLICACAO do PCLOTELOG). Outra forma LANÇA, pelo mesmo
+  // motivo do REGEXP_SUBSTR abaixo. Devolve 1/0 (verdadeiro/falso no CASE WHEN).
+  def('REGEXP_LIKE', 2, (texto, padrao) => {
+    if (String(padrao) !== '^[0-9]+$') {
+      throw new Error(`REGEXP_LIKE do simulador so implementa '^[0-9]+$' (recebeu ${padrao}) — ver mysql-dialect.mjs`);
+    }
+    return texto != null && /^[0-9]+$/.test(String(texto)) ? 1 : 0;
   });
 
   // TO_NUMBER(texto) — o par de REGEXP_SUBSTR no rastreio da 008 (R-064): o

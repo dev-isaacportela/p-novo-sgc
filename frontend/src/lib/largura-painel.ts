@@ -54,9 +54,17 @@ export function larguraEfetiva(escolhida: LarguraPainel, larguraGrade: number): 
   return 'estreito';
 }
 
+/** Abaixo disto (tela pequena com zoom e menu aberto) só produto, quantidade e ações ficam em coluna. */
+export const LISTA_MINIMA_COLUNAS = 560;
+
 /** A lista entra no modo compacto pela largura MEDIDA dela, não pela opção do painel. */
 export function listaCompacta(larguraLista: number): boolean {
   return larguraLista > 0 && larguraLista < LISTA_COMPACTA;
+}
+
+/** Ainda mais estreita: cobertura, curvas, estoque, preço e sugestão vão para baixo do nome. */
+export function listaMinima(larguraLista: number): boolean {
+  return larguraLista > 0 && larguraLista < LISTA_MINIMA_COLUNAS;
 }
 
 /**

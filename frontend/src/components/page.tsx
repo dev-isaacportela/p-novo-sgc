@@ -674,10 +674,13 @@ export function Alert({
   tone,
   children,
   className,
+  icon,
 }: {
   tone: keyof typeof ALERT_TONE;
   children: React.ReactNode;
   className?: string;
+  /** Ícone lucide à esquerda (o primitivo abre a coluna dele quando há `svg`). */
+  icon?: React.ReactNode;
 }) {
   return (
     <AlertPrimitive
@@ -686,9 +689,11 @@ export function Alert({
       role={tone === 'error' ? 'alert' : 'status'}
       className={className}
     >
+      {icon}
       {/* O primitivo é grid [0_1fr]: texto solto cai na coluna de largura
           zero e quebra palavra a palavra. A descrição o posiciona certo. */}
-      <AlertDescriptionPrimitive>{children}</AlertDescriptionPrimitive>
+      {/* min-w-0: o texto pode truncar em vez de empurrar a faixa para fora (R-130). */}
+      <AlertDescriptionPrimitive className="min-w-0">{children}</AlertDescriptionPrimitive>
     </AlertPrimitive>
   );
 }

@@ -19,7 +19,9 @@ import {
   OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, coberturaComTransito, precoDeCompra, quantidadeNaReferencia, quantidadeParaCompletar,
   rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
-import { listaCompacta } from '@/lib/largura-painel';
+import { resumoExcesso, seloBloqueado, seloExcesso } from '@/lib/avisos-produto';
+import type { FilialComExcesso } from '@/lib/ressuprimento-detalhe';
+import { listaCompacta, listaMinima } from '@/lib/largura-painel';
 import { cn } from '@/lib/utils';
 import type {
   FiltroMovimentacao, FiltrosLista, LinhaRessuprimento, OrdemLista, ReferenciaSugestao, StatusRessuprimento,
@@ -32,6 +34,8 @@ const POR_PAGINA = 25;
 // 900 px ela fica compacta: tabela de colunas fixas e justas, curvas numa coluna
 // só ("F/R"), a situação embaixo do nome e menos respiro nas células — o nome
 // do produto quebra em linhas, a quantidade e as ações cabem sempre.
+/** Card da lista mais baixo que isto: os filtros rolam com as linhas. */
+const CARD_BAIXO = 520;
 const COMPACTA = 'table-fixed [&_td]:px-2 [&_th]:px-2 [&_td]:break-words';
 
 /** §8.4: estado dentro de tabela é ponto + texto, nunca só a cor. */
@@ -85,6 +89,8 @@ export function ListaProdutos({
   desconsiderarLicitacao,
   onLicitacao,
   emPedidoAberto,
+  excessos,
+  contagemAvisos,
   especiais,
   sugestaoProjetada,
   sugestaoTotal,
@@ -112,6 +118,9 @@ export function ListaProdutos({
   onLicitacao: () => void;
   /** Produtos que já estão num pedido aberto do fornecedor nesta filial (C-035). */
   emPedidoAberto: Map<number, PedidoAbertoDoItem>;
+  /** R-130: as filiais com excesso de cada produto (RN-037) e as contagens dos chips no recorte da visão. */
+  excessos: Map<number, FilialComExcesso[]>;
+  contagemAvisos: { bloqueados: number; excesso: number };
   /** R-125: o selo "Especial N un." / "Especial N tabelas" por produto com oportunidade. */
   especiais: Map<number, { texto: string; tone: 'accent' | 'attention' }>;
   /** R-124: a sugestão projetada pelo modelo escolhido, só para o produto aberto no painel. */
@@ -135,8 +144,19 @@ export function ListaProdutos({
     observador.observe(no);
     return () => observador.disconnect();
   }, []);
+  const [alturaCard, setAlturaCard] = React.useState(0);
+  React.useEffect(() => {
+    const card = rolagem.current?.parentElement;
+    if (!card || typeof ResizeObserver === 'undefined') return;
+    const observador = new ResizeObserver(([e]) => setAlturaCard(Math.round(e.contentRect.height)));
+    observador.observe(card);
+    return () => observador.disconnect();
+  }, []);
   const compacta = listaCompacta(larguraLista);
+  // Mais estreita ainda (tela pequena, zoom, menu aberto): só produto, quantidade e ações em coluna.
+  const minima = listaMinima(larguraLista);
   const curvasNumaColuna = compacta;
+  const filtrosRolam = minima || (alturaCard > 0 && alturaCard < CARD_BAIXO);
   const ultima = Math.max(1, Math.ceil(linhas.length / POR_PAGINA));
   const paginaAtual = Math.min(pagina, ultima);
   const visiveis = linhas.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
@@ -160,6 +180,50 @@ export function ListaProdutos({
     return visao === 'completar' && l.sugerida <= 0 ? quantidadeParaCompletar(l) : l.sugerida;
   };
 
+  // R-129: a barra de filtros fica fixa sobre as linhas; com o card baixo (menos de 520 px) ou a
+  // lista mínima, ela rola junto com as linhas — senão não sobraria linha nenhuma à vista.
+  const barra = (
+    <>
+      {/* R-129: em tela baixa a barra aperta (menos linhas) para sobrar altura às linhas da lista. */}
+      <Toolbar className="[@media(max-height:760px)]:gap-2 [@media(max-height:760px)]:py-2">
+        <ChipContagem title="Soma da sugestão das linhas do recorte, em unidades">
+          {`Sugestão ${quantidade(sugestaoUnidades)} un.`}
+        </ChipContagem>
+        <ChipContagem tone="alert" title="Produtos sem estoque disponível nesta filial">{`Rupturas ${rupturas}`}</ChipContagem>
+        <ChipContagem
+          tone="attention"
+          ativo={filtros.soSilenciados}
+          onClick={silenciados > 0 || filtros.soSilenciados ? acoes.onAlternarSilenciados : undefined}
+          title={filtros.soSilenciados ? 'Mostrando só os silenciados, em "Todos" — clique para voltar' : silenciados > 0 ? 'Clique para ver só os silenciados (em "Todos")' : 'Nenhum produto silenciado'}
+        >
+          {`Silenciados ${silenciados}`}
+        </ChipContagem>
+        {/* R-130: os dois avisos viram filtro — no recorte da visão, juntos ou separados. */}
+        <ChipContagem
+          tone="attention"
+          ativo={filtros.soBloqueados}
+          onClick={contagemAvisos.bloqueados > 0 || filtros.soBloqueados ? () => onFiltros({ soBloqueados: !filtros.soBloqueados }) : undefined}
+          title={filtros.soBloqueados ? 'Mostrando só os produtos com estoque bloqueado — clique para voltar' : 'Produtos com estoque bloqueado nesta filial'}
+        >
+          {`Bloqueados ${contagemAvisos.bloqueados}`}
+        </ChipContagem>
+        <ChipContagem
+          tone="attention"
+          ativo={filtros.soExcesso}
+          onClick={contagemAvisos.excesso > 0 || filtros.soExcesso ? () => onFiltros({ soExcesso: !filtros.soExcesso }) : undefined}
+          title={filtros.soExcesso ? 'Mostrando só os produtos com excesso em outras filiais — clique para voltar' : 'Produtos com estoque acima da cobertura (ou sem giro) em outra filial'}
+        >
+          {`Excesso em outras filiais ${contagemAvisos.excesso}`}
+        </ChipContagem>
+        <SelectMenu label="Ordenar" value={filtros.ordem} onChange={(v) => onFiltros({ ordem: v as OrdemLista })} options={OPCOES_ORDEM} className="w-40 lg:w-36" />
+        <SelectMenu label="Movimentação" value={filtros.movimentacao} onChange={(v) => onFiltros({ movimentacao: v as FiltroMovimentacao })} options={OPCOES_MOVIMENTACAO} className="w-52 lg:w-44" />
+        <SelectMenu label="Situação" value={filtros.situacao} onChange={(v) => onFiltros({ situacao: v as '' | StatusRessuprimento })} options={OPCOES_SITUACAO} className="w-44 lg:w-40" />
+        <SearchInput placeholder="Produto ou código" value={busca} onChange={(e) => onBusca(e.target.value)} className="w-56 lg:w-48" />
+        <div><CheckRow marcado={desconsiderarLicitacao} onToggle={onLicitacao}>Desconsiderar venda a órgãos públicos</CheckRow></div>
+      </Toolbar>
+    </>
+  );
+
   return (
     // R-129: no desktop o card tem a altura que sobra na tela; só as linhas rolam, com o cabeçalho grudado.
     <Panel className="lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
@@ -176,28 +240,10 @@ export function ListaProdutos({
         </Button>
       </PanelHeader>
 
-      {/* R-129: em tela baixa a barra aperta (menos linhas) para sobrar altura às linhas da lista. */}
-      <Toolbar className="[@media(max-height:760px)]:gap-2 [@media(max-height:760px)]:py-2">
-        <ChipContagem title="Soma da sugestão das linhas do recorte, em unidades">
-          {`Sugestão ${quantidade(sugestaoUnidades)} un.`}
-        </ChipContagem>
-        <ChipContagem tone="alert" title="Produtos sem estoque disponível nesta filial">{`Rupturas ${rupturas}`}</ChipContagem>
-        <ChipContagem
-          tone="attention"
-          ativo={filtros.soSilenciados}
-          onClick={silenciados > 0 || filtros.soSilenciados ? acoes.onAlternarSilenciados : undefined}
-          title={filtros.soSilenciados ? 'Mostrando só os silenciados, em "Todos" — clique para voltar' : silenciados > 0 ? 'Clique para ver só os silenciados (em "Todos")' : 'Nenhum produto silenciado'}
-        >
-          {`Silenciados ${silenciados}`}
-        </ChipContagem>
-        <SelectMenu label="Ordenar" value={filtros.ordem} onChange={(v) => onFiltros({ ordem: v as OrdemLista })} options={OPCOES_ORDEM} className="w-40 lg:w-36" />
-        <SelectMenu label="Movimentação" value={filtros.movimentacao} onChange={(v) => onFiltros({ movimentacao: v as FiltroMovimentacao })} options={OPCOES_MOVIMENTACAO} className="w-52 lg:w-44" />
-        <SelectMenu label="Situação" value={filtros.situacao} onChange={(v) => onFiltros({ situacao: v as '' | StatusRessuprimento })} options={OPCOES_SITUACAO} className="w-44 lg:w-40" />
-        <SearchInput placeholder="Produto ou código" value={busca} onChange={(e) => onBusca(e.target.value)} className="w-56 lg:w-48" />
-        <div><CheckRow marcado={desconsiderarLicitacao} onToggle={onLicitacao}>Desconsiderar venda a órgãos públicos</CheckRow></div>
-      </Toolbar>
+      {filtrosRolam ? null : barra}
 
       <div ref={rolagem} className="overflow-x-auto lg:min-h-0 lg:flex-1 lg:overflow-x-hidden lg:overflow-y-auto">
+      {filtrosRolam ? barra : null}
       <Table cabecalhoFixo className={compacta ? COMPACTA : undefined}>
         <thead>
           {/* C-049: a visão Em trânsito tem grade própria, como no legado — o que importa é quanto vem e quando cobre. */}
@@ -205,23 +251,23 @@ export function ListaProdutos({
             <tr>
               <Th>Produto</Th>
               {compacta ? null : <Th>Situação</Th>}
-              <Th numeric className={compacta ? 'w-20' : 'w-28'}>Estoque</Th>
+              {minima ? null : <Th numeric className={compacta ? 'w-20' : 'w-28'}>Estoque</Th>}
               <Th numeric className={compacta ? 'w-32' : 'w-40'}>Em trânsito</Th>
-              <Th numeric className={compacta ? 'w-28' : 'w-32'}>Preço compra</Th>
-              <Th numeric className={compacta ? 'w-28' : 'w-36'}>Sugestão</Th>
+              {minima ? null : <Th numeric className={compacta ? 'w-28' : 'w-32'}>Preço compra</Th>}
+              {minima ? null : <Th numeric className={compacta ? 'w-28' : 'w-36'}>Sugestão</Th>}
               <Th className={cn(compacta ? 'w-20' : 'w-24', 'text-right')}>Ações</Th>
             </tr>
           ) : (
             <tr>
               <Th>Produto</Th>
               {compacta ? null : <Th>Situação</Th>}
-              {curvasNumaColuna ? <Th className="w-16" title="Curva de faturamento / de rentabilidade">F/R</Th> : (
+              {minima ? null : curvasNumaColuna ? <Th className="w-16" title="Curva de faturamento / de rentabilidade">F/R</Th> : (
                 <>
                   <Th className="w-20">Curva fat.</Th>
                   <Th className="w-20">Curva rent.</Th>
                 </>
               )}
-              <Th numeric className="w-32">Cobertura</Th>
+              {minima ? null : <Th numeric className={compacta ? 'w-24' : 'w-32'}>Cobertura</Th>}
               <Th numeric className={compacta ? 'w-32' : 'w-40'}>{referencia === 'caixas' ? 'Qtd. (cx)' : 'Qtd. (un.)'}</Th>
               <Th className={cn(compacta ? 'w-20' : 'w-24', 'text-right')}>Ações</Th>
             </tr>
@@ -249,6 +295,21 @@ export function ListaProdutos({
                     {rotuloSemCusto(linha.custo) ? <Status tone="alert">{rotuloSemCusto(linha.custo)}</Status> : <span title={`Custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`}>{moeda(linha.custo?.valor ?? 0)}</span>}
                   </RowMeta>
                   {compacta ? <RowMeta><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></RowMeta> : null}
+                  {minima ? (
+                    <RowMeta>
+                      {visao === 'transito'
+                        ? `est. ${quantidade(linha.estoqueAtual)} · sug. ${linha.sugerida > 0 ? textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia) : '—'}`
+                        : `cob. ${linha.coberturaAtualDias === null ? 'sem giro' : `${Math.round(linha.coberturaAtualDias)} d`} · gatilho ${linha.diasDeGatilho ?? '—'} d · F/R ${linha.curvaFaturamento ?? '—'}/${linha.curvaRentabilidade ?? '—'}`}
+                    </RowMeta>
+                  ) : null}
+                  {seloBloqueado(linha.medida.QT_BLOQUEADA) ? <RowMeta><Status tone="attention">{seloBloqueado(linha.medida.QT_BLOQUEADA)}</Status></RowMeta> : null}
+                  {excessos.has(codprod) ? (
+                    <RowMeta>
+                      <Status tone="attention">
+                        <span title={resumoExcesso(excessos.get(codprod) ?? []) ?? ''}>{seloExcesso(excessos.get(codprod)?.length ?? 0)}</span>
+                      </Status>
+                    </RowMeta>
+                  ) : null}
                   {selo ? <RowMeta><Badge tone={selo.tone}>{selo.texto}</Badge></RowMeta> : null}
                   {linha.silenciado ? (
                     <RowMeta>
@@ -270,7 +331,7 @@ export function ListaProdutos({
                 {compacta ? null : <Td><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></Td>}
                 {visao === 'transito' ? (
                   <>
-                    <Td numeric>{quantidade(linha.estoqueAtual)}</Td>
+                    {minima ? null : <Td numeric>{quantidade(linha.estoqueAtual)}</Td>}
                     <Td numeric>
                       <RowTitle>{textoDaSugestao(linha.emTransito, linha.unidadesPorCaixa, referencia)}</RowTitle>
                       <RowMeta>
@@ -279,7 +340,7 @@ export function ListaProdutos({
                           : `${Math.round(coberturaComTransito(linha) ?? 0)} dias com o trânsito`}
                       </RowMeta>
                     </Td>
-                    <Td numeric>
+                    {minima ? null : <Td numeric>
                       {(() => {
                         const preco = precoDeCompra(linha);
                         if (!preco) return <Status tone="alert">{rotuloSemCusto(linha.custo) ?? 'Sem custo'}</Status>;
@@ -290,12 +351,12 @@ export function ListaProdutos({
                           </>
                         );
                       })()}
-                    </Td>
-                    <Td numeric>{linha.sugerida > 0 ? textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia) : <Dash />}</Td>
+                    </Td>}
+                    {minima ? null : <Td numeric>{linha.sugerida > 0 ? textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia) : <Dash />}</Td>}
                   </>
                 ) : (
                   <>
-                {curvasNumaColuna ? (
+                {minima ? null : curvasNumaColuna ? (
                   <Td><LetraCurva letra={linha.curvaFaturamento} linha={linha} />{' / '}<LetraCurva letra={linha.curvaRentabilidade} linha={linha} /></Td>
                 ) : (
                   <>
@@ -303,7 +364,7 @@ export function ListaProdutos({
                     <Td><LetraCurva letra={linha.curvaRentabilidade} linha={linha} /></Td>
                   </>
                 )}
-                <Td numeric>
+                {minima ? null : <Td numeric>
                   {linha.coberturaAtualDias === null
                     ? <span title="Sem giro: não há consumo para dividir"><Dash /></span>
                     : `${Math.round(linha.coberturaAtualDias)} d`}
@@ -312,7 +373,7 @@ export function ListaProdutos({
                       ? <Status tone="alert">{`gatilho ${linha.diasDeGatilho} d`}</Status>
                       : `gatilho ${linha.diasDeGatilho} d${linha.urgente ? ' · urgente' : ''}`}
                   </RowMeta>
-                </Td>
+                </Td>}
                 <Td numeric onClick={(e) => e.stopPropagation()}>
                   <Input
                     type="number"

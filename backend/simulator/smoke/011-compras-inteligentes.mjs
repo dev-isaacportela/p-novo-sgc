@@ -336,6 +336,37 @@ export async function suite(ctx) {
     assert.deepEqual(mapa(comPublico), ['5408:9301=20', '5408:9302=10', '5408:9303=60', '5409:9301=12', '5409:9304=6']);
   });
 
+  await teste('C-051 / R-130: sgcWintEstoqueFiliaisProdutos devolve, numa chamada para a lista, a posicao das OUTRAS filiais com estoque liquido > 0 — 5403 na filial 2 (120) e na 3 (35 - 5 bloqueados = 30), venda de 3 meses 30; a filial da tela e os produtos sem estoque fora dela nao voltam', async () => {
+    const rows = await linhas('sgcWintEstoqueFiliaisProdutos', { codprods: '5401,5402,5403,5415', codfilial: FILIAL_011 }, U.ana);
+    const vistos = rows.map((r) => `${r.CODPROD}:${r.CODFILIAL}=${Number(r.ESTOQUE_ATUAL)}/${Number(r.VENDA_3_MESES)}`);
+    assert.deepEqual(vistos, ['5403:2=120/30', '5403:3=30/30']);
+    assert.ok(rows.every((r) => String(r.FILIAL).length > 0), 'o nome da filial vem junto');
+    const outraTela = await linhas('sgcWintEstoqueFiliaisProdutos', { codprods: '5403', codfilial: '2' }, U.ana);
+    assert.deepEqual(outraTela.map((r) => String(r.CODFILIAL)), ['1', '3'], 'a filial da tela sai, a 1 entra');
+  });
+
+  await teste('C-052 / R-130: sgcWintBloqueiosProduto devolve os lotes bloqueados do 5401 na filial 1 — L5401A 6 un. (2 reserv.) com motivo 31 AVARIA NO TRANSPORTE pelo PCMOVBLOQUEIO, rotina 1101; L5401B 4 un. (3 reserv.) sem motivo de historico, com a observacao do lote e quem bloqueou pelo PCLOTELOG (JOAO PEREIRA, nao o desbloqueio parcial do CARLOS); o lote sem bloqueio nao volta', async () => {
+    const rows = await linhas('sgcWintBloqueiosProduto', { codprod: 5401, codfilial: FILIAL_011 }, U.ana);
+    assert.deepEqual(rows.map((r) => String(r.NUMLOTE)), ['L5401A', 'L5401B']);
+    const [a, b] = rows;
+    assert.equal(Number(a.QTBLOQUEADA), 6);
+    assert.equal(Number(a.QTRESERV), 2);
+    assert.equal(Number(a.CODDEVOL), 31);
+    assert.equal(String(a.MOTIVO_BLOQUEIO), 'AVARIA NO TRANSPORTE');
+    assert.equal(String(a.TIPO_MOTIVO), 'A');
+    assert.equal(String(a.ORIGEM_MOTIVO), 'PCMOVBLOQUEIO');
+    assert.equal(String(a.ROTINALANC), '1101');
+    assert.equal(String(a.FUNCIONARIO), 'MARIA SOUZA');
+    assert.equal(String(a.DTVALIDADE), '2027-03-31');
+    assert.equal(Number(b.QTBLOQUEADA), 4);
+    assert.equal(b.MOTIVO_BLOQUEIO, null, 'sem historico de motivo: a tela cai na observacao do lote');
+    assert.equal(String(b.OBSBLOQUEIO), 'AGUARDANDO LAUDO DE QUALIDADE');
+    assert.equal(Number(b.LOG_MATRICULA), 88);
+    assert.equal(String(b.LOG_RESPONSAVEL), 'JOAO PEREIRA');
+    assert.equal(String(b.ROTINALANC), 'PCSIS1106');
+    assert.deepEqual(await linhas('sgcWintBloqueiosProduto', { codprod: 5403, codfilial: FILIAL_011 }, U.ana), [], 'sem lote bloqueado, nada volta');
+  });
+
   await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho do Novo pedido do quadro — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
     const medidas = await ressuprimento();
     assert.ok(medidas.length > 0, 'consulta ao WinThor sem linha nao e verde');

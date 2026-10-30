@@ -257,6 +257,8 @@ export const SERVER_FUNCTION_NAMES = {
   sgcItensEmPedidoAberto: 'sgcItensEmPedidoAberto',
   // R-125: oportunidades com custo especial — venda por cliente (WinThor) e políticas (gestao-de-custos).
   sgcWintVendasClientesProdutos: 'sgcWintVendasClientesProdutos',
+  sgcWintEstoqueFiliaisProdutos: 'sgcWintEstoqueFiliaisProdutos',
+  sgcWintBloqueiosProduto: 'sgcWintBloqueiosProduto',
   sgcCustoEspeciaisProdutos: 'sgcCustoEspeciaisProdutos',
   // R-128: custo padrão atual do Gestão de Custos (o custo de compra).
   sgcCustoPadraoAtual: 'sgcCustoPadraoAtual',
@@ -507,6 +509,8 @@ export const SERVER_FUNCTIONS = {
   sgcWintVendasClientesProdutos: '8112',
   sgcCustoEspeciaisProdutos: '8113',
   sgcCustoPadraoAtual: '8114',
+  sgcWintEstoqueFiliaisProdutos: '8115',
+  sgcWintBloqueiosProduto: '8116',
   sgcEscParametroCompraSalvar: '8150',
   sgcEscParametroCompraSilenciar: '8151',
   sgcEscParametroCompraRestaurar: '8152',

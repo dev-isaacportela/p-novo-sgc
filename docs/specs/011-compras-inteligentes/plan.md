@@ -1293,6 +1293,8 @@ seed 011 grava `FAB-<codprod>` e dois custos atuais diferentes do da última ent
 | C-046, C-047 | `smoke/011-compras-inteligentes.mjs` | `sgcCustoEspeciaisProdutos` (INTEGRATION; executor SQLite sobre COST_POLICIES/POLICY_ITEMS/COST_POLICY_CLIENTS do seed) e `sgcWintVendasClientesProdutos`; `smoke/000-gestao-custos.mjs` G-007 prova a emulação REST (`custosEspeciaisDeRegistros`) |
 | RN-032, C-048, RN-033, RN-034 | `tests/custo-especial.test.mjs` + `tests/ressuprimento.test.mjs` (R-125) | `oportunidadesDoItem`, `seloEspecial`, `sugestaoPorCliente`/`capRecenteSku`, `planoEspecial`, `chaveEspecial`/`lotesDeCodigos`; `chaveDaEntrada`, `custoDaEntrada`, `agruparCarrinho` e `itemDoCarrinho` com a linha especial |
 | C-049 | `tests/ressuprimento.test.mjs` | `coberturaComTransito` (50 + 100 a 2/dia → 75; sem consumo → null) e `precoDeCompra` (atual, última, nenhum) |
+| C-051, C-052 | `smoke/011-compras-inteligentes.mjs` + `npm run sim:winthor` | `sgcWintEstoqueFiliaisProdutos` (só as outras filiais com estoque líquido > 0) e `sgcWintBloqueiosProduto` (SQL do legado `ci_buscar_bloqueios_produto`) no seed (lotes do 5401, PCMOVBLOQUEIO, PCLOTELOG, PCEMPR, PCTABDEV); o `sim:winthor` acha no WinThor real um lote bloqueado com estoque e prova contagem > 0 nas duas |
+| RN-037, RN-038 | `tests/avisos-produto.test.mjs` | `excessosPorProduto`, `seloBloqueado`, `seloExcesso`, `filialCurta`, `resumoExcesso`, `motivoDoLote`, `resumoBloqueio`, `fatosDoLote`, `filtrarPorAvisos`, `contarAvisos` |
 
 ### Decisões
 

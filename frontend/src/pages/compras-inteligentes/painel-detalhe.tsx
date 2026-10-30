@@ -13,7 +13,7 @@ import { ChevronsLeft, ChevronsRight, Eye, ShoppingCart, VolumeX } from 'lucide-
 
 import {
   Alert, Button, ChipContagem, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
-  RowTitle, Status, Table, Td, Th, Tr,
+  Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,9 @@ import {
 } from '@/lib/ressuprimento';
 import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from '@/lib/ressuprimento';
 import { filiaisComExcesso, simularCompra } from '@/lib/ressuprimento-detalhe';
-import type { DadosDoSku } from '@/lib/ressuprimento-detalhe';
+import type { DadosDoSku, FilialComExcesso } from '@/lib/ressuprimento-detalhe';
+import { AvisosProduto } from './avisos-ui';
+import type { EstadoLotes } from './use-lotes-bloqueados';
 import { GraficoComprasVendas } from './grafico';
 import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
@@ -112,6 +114,8 @@ export function PainelDetalhe({
   largura,
   podeAlargar,
   onLargura,
+  lotesBloqueados,
+  excessosLista,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -142,6 +146,9 @@ export function PainelDetalhe({
   /** Falso quando a próxima largura deixaria a lista com menos de 640 px. */
   podeAlargar: boolean;
   onLargura: (passo: 1 | -1) => void;
+  /** R-130: os lotes bloqueados (carregados só com bloqueio) e o excesso que a lista já calculou. */
+  lotesBloqueados: EstadoLotes;
+  excessosLista: FilialComExcesso[];
 }) {
   // R-129 (correção): produto e gráfico num bloco fixo e "Mais detalhes" na sua
   // própria rolagem — nada passa por baixo de nada. Sobrando pouca altura para
@@ -208,7 +215,9 @@ export function PainelDetalhe({
   const sugestaoDePartida = projetada ? projetada.sugestao : linha.sugerida;
   const quantidadeSimulada = simulada === '' ? sugestaoDePartida : unidadesDaDigitada(Number(simulada) || 0, linha.unidadesPorCaixa, referencia);
   const simulacao = simularCompra(linha, quantidadeSimulada);
-  const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
+  // A posição por produto (já carregada ao abrir) vale; antes dela, a da lista — a mesma regra (RN-025/RN-037).
+  const excessos = dados.pronto && dados.filiais.length > 0 ? filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias) : excessosLista;
+  const temAviso = Number(m.QT_BLOQUEADA) > 0 || excessos.length > 0;
 
   return (
     // R-129: o painel tem a altura da lista. Bloco fixo (produto e gráfico) + área de detalhes com
@@ -232,6 +241,12 @@ export function PainelDetalhe({
             <Eye aria-hidden />
           </IconButton>
         </PanelHeader>
+        {/* R-130: os avisos logo abaixo do cabeçalho, antes dos números e do gráfico. */}
+        {temAviso ? (
+          <div className="border-t border-rule-row px-4 py-2">
+            <AvisosProduto qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} />
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-rule-row px-4 py-2">
           <KpiCompacto
             rotulo="Estoque"
@@ -409,35 +424,7 @@ export function PainelDetalhe({
           </div>
         </Disclosure>
 
-        <Disclosure
-          titulo="Filiais com excesso"
-          resumo={dados.pronto ? `${excessos.length} ${excessos.length === 1 ? 'filial' : 'filiais'} acima da cobertura alvo` : '…'}
-          aberta={abertas.has('filiais')}
-          onToggle={() => alterna('filiais')}
-        >
-          {dados.pronto && excessos.length === 0 ? (
-            <EmptyState title="Nenhuma outra filial com excesso" hint={`Excesso é cobertura acima de ${linha.coberturaDias} dias, ou estoque sem giro.`} />
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Filial</Th>
-                  <Th numeric>Disponível</Th>
-                  <Th numeric>Cobertura</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {excessos.map((f) => (
-                  <Tr key={f.codfilial}>
-                    <Td><RowTitle>{f.filial}</RowTitle><RowMeta><Code prefix="filial">{f.codfilial}</Code></RowMeta></Td>
-                    <Td numeric>{quantidade(f.estoque)}</Td>
-                    <Td numeric>{dias(f.coberturaDias)}</Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Disclosure>
+        {/* R-130: "Filiais com excesso" subiu para o alerta do topo (o detalhe abre nele). */}
 
         <Disclosure
           titulo="Parâmetros do cálculo"

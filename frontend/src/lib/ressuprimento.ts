@@ -615,9 +615,14 @@ export interface FiltrosLista {
   ordem: OrdemLista;
   movimentacao: FiltroMovimentacao;
   soSilenciados: boolean;
+  /** R-130: os chips "Bloqueados" e "Excesso em outras filiais" (regra em `avisos-produto.ts`). */
+  soBloqueados: boolean;
+  soExcesso: boolean;
 }
 
-export const FILTROS_INICIAIS: FiltrosLista = { situacao: '', ordem: 'padrao', movimentacao: '', soSilenciados: false };
+export const FILTROS_INICIAIS: FiltrosLista = {
+  situacao: '', ordem: 'padrao', movimentacao: '', soSilenciados: false, soBloqueados: false, soExcesso: false,
+};
 
 /**
  * C-012 (o chip "Silenciados N"): a visão e o filtro de silenciados andam
