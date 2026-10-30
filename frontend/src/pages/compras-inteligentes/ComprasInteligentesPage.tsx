@@ -33,7 +33,7 @@ import { fmtDataHora, hojeIso, moeda } from '@/lib/formato';
 import { coberturaDeLinha, limiteDeCobertura } from '@/lib/cobertura';
 import type { Cobertura } from '@/lib/cobertura';
 import {
-  COLUNAS_CSV, FILTROS_INICIAIS, JANELA_DIAS, ROTULO_VISAO, contarVisoes, filtrarMovimentacao, linhaCsv, linhasDaVisao,
+  COLUNAS_CSV, FILTROS_INICIAIS, JANELA_DIAS, ROTULO_VISAO, alternarSilenciados, contarVisoes, escolherVisao, filtrarMovimentacao, linhaCsv, linhasDaVisao,
   montarRessuprimento, motivoDaSugestao, ordenarLinhas, parametroDeLinha,
 } from '@/lib/ressuprimento';
 import type {
@@ -118,7 +118,16 @@ export default function ComprasInteligentesPage() {
   const [desconsiderarLicitacao, setDesconsiderarLicitacao] = React.useState(false);
   const [referencia, setReferencia] = React.useState<ReferenciaSugestao>('unidades');
   const [visao, setVisao] = React.useState<VisaoRessuprimento>('comprar');
+  // C-012: a visão de onde o chip "Silenciados" saiu, para voltar ao desligar.
+  const [visaoAnterior, setVisaoAnterior] = React.useState<VisaoRessuprimento>('comprar');
   const [filtros, setFiltros] = React.useState<FiltrosLista>(FILTROS_INICIAIS);
+
+  /** C-012: visão e filtro de silenciados mudam juntos (regra pura `alternarSilenciados` / `escolherVisao`). */
+  function aplicarRecorte(proximo: { visao: VisaoRessuprimento; soSilenciados: boolean; visaoAnterior: VisaoRessuprimento }) {
+    setVisao(proximo.visao);
+    setVisaoAnterior(proximo.visaoAnterior);
+    setFiltros((atual) => ({ ...atual, soSilenciados: proximo.soSilenciados }));
+  }
   const [busca, setBusca] = React.useState('');
   const [quantidades, setQuantidades] = React.useState<Record<number, number>>({});
   const [selecionado, setSelecionado] = React.useState(0);
@@ -574,7 +583,7 @@ export default function ComprasInteligentesPage() {
               rotulo={ROTULO_VISAO[v]}
               contagem={medidas.length === 0 ? null : contagens[v]}
               ativo={visao === v}
-              onClick={() => setVisao(v)}
+              onClick={() => aplicarRecorte(escolherVisao({ visao, soSilenciados: filtros.soSilenciados, visaoAnterior }, v))}
             />
           ))}
         </GradeVisoes>
@@ -618,6 +627,7 @@ export default function ComprasInteligentesPage() {
               onAdicionar: adicionar,
               onSilenciar: setSilenciando,
               onRestaurar: (l) => void restaurar(l),
+              onAlternarSilenciados: () => aplicarRecorte(alternarSilenciados({ visao, soSilenciados: filtros.soSilenciados, visaoAnterior })),
               onExportar: exportar,
               onAbrirCarrinho: () => setCarrinhoAberto(true),
             }}
@@ -637,6 +647,7 @@ export default function ComprasInteligentesPage() {
             onVerVendas={setVendasDe}
             onAdicionar={adicionar}
             onParametros={abrirParametros}
+            onRestaurar={(l) => void restaurar(l)}
           />
         </div>
       )}
@@ -683,6 +694,7 @@ export default function ComprasInteligentesPage() {
         onFechar={() => setDetalheCompleto(null)}
         onAdicionar={adicionar}
         onParametros={abrirParametros}
+        onRestaurar={(l) => void restaurar(l)}
         onDesconsiderar={desconsiderarVenda}
         onReconsiderar={reconsiderarVenda}
       />

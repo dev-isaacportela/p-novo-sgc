@@ -18,6 +18,7 @@ import {
   COLUNAS_CSV, aComprar, aderenteASugestao, agruparCarrinho, calcularRessuprimento,
   coberturaFuturaComCompra, dataDeSilencio, estaSilenciado, itemDoCarrinho, linhaCsv,
   montarRessuprimento, motivoDaSugestao, resolverParametros,
+  RECORTE_INICIAL, alternarSilenciados, escolherVisao,
 } from '../src/lib/ressuprimento.ts';
 
 /** Uma medida de `sgcWintRessuprimento`, com o caso base do plan. */
@@ -367,6 +368,17 @@ test('C-012 (tela): o produto silenciado sai da aba "a comprar" e continua na li
   const restaurado = montarRessuprimento(medidas, [parametro(5401)], alvoPadrao, new Map(),
     { codfornec: 1042, hoje, desconsiderarLicitacao: false });
   assert.deepEqual(aComprar(restaurado).map((l) => l.medida.CODPROD).sort(), [5401, 5402]);
+});
+
+test('C-012 (chip "Silenciados"): ligar o chip leva a lista para "todos" com só os silenciados; clicar de novo desliga e volta à visão de antes; escolher um card desliga o filtro', () => {
+  const ligado = alternarSilenciados(RECORTE_INICIAL);
+  assert.deepEqual(ligado, { visao: 'todos', soSilenciados: true, visaoAnterior: 'comprar' });
+  assert.deepEqual(alternarSilenciados(ligado), RECORTE_INICIAL, 'desligar volta a "a comprar"');
+  const deTransito = alternarSilenciados({ visao: 'transito', soSilenciados: false, visaoAnterior: 'transito' });
+  assert.equal(deTransito.visao, 'todos');
+  assert.equal(alternarSilenciados(deTransito).visao, 'transito', 'volta para onde estava');
+  assert.deepEqual(escolherVisao(ligado, 'completar'), { visao: 'completar', soSilenciados: false, visaoAnterior: 'completar' });
+  assert.deepEqual(escolherVisao(ligado, 'todos'), { visao: 'todos', soSilenciados: false, visaoAnterior: 'todos' }, 'o card "todos" sem o chip mostra tudo');
 });
 
 test('RN-013: silenciado até amanhã com hoje continua silenciado, até ontem não, e data vazia nunca silencia; o padrão são 30 dias', () => {

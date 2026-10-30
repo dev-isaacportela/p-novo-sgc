@@ -551,6 +551,26 @@ export interface FiltrosLista {
 
 export const FILTROS_INICIAIS: FiltrosLista = { situacao: '', ordem: 'padrao', movimentacao: '', soSilenciados: false };
 
+/**
+ * C-012 (o chip "Silenciados N"): a visão e o filtro de silenciados andam
+ * juntos, como no sistema antigo. "A comprar" exclui silenciados por regra
+ * (RF-014), então ligar o filtro dentro dela daria lista vazia: o chip liga o
+ * filtro E leva a lista para "todos"; clicar de novo desliga e volta à visão
+ * de antes; escolher um card de visão desliga o filtro.
+ */
+export interface RecorteLista { visao: VisaoRessuprimento; soSilenciados: boolean; visaoAnterior: VisaoRessuprimento }
+
+export const RECORTE_INICIAL: RecorteLista = { visao: 'comprar', soSilenciados: false, visaoAnterior: 'comprar' };
+
+export function alternarSilenciados(recorte: RecorteLista): RecorteLista {
+  if (recorte.soSilenciados) return { visao: recorte.visaoAnterior, soSilenciados: false, visaoAnterior: recorte.visaoAnterior };
+  return { visao: 'todos', soSilenciados: true, visaoAnterior: recorte.visao };
+}
+
+export function escolherVisao(_recorte: RecorteLista, visao: VisaoRessuprimento): RecorteLista {
+  return { visao, soSilenciados: false, visaoAnterior: visao };
+}
+
 /* ── RF-023 / C-024: a exportação é do que está na tela, por lib/csv.ts (R-037) ── */
 
 export const COLUNAS_CSV: string[] = [

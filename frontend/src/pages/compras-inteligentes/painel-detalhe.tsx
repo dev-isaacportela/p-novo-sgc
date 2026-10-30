@@ -9,10 +9,10 @@
 // selecionado e ficam em cache; este arquivo só desenha o que recebeu. As
 // vendas do período continuam no diálogo de sempre (1 execução, ao abrir).
 import * as React from 'react';
-import { Eye, ShoppingCart } from 'lucide-react';
+import { Eye, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
-  Button, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
+  Alert, Button, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
   RowTitle, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
@@ -37,6 +37,45 @@ const ORIGEM_LEAD = { sku: 'do produto', fornecedor: 'do fornecedor', medido: 'm
 
 type Secao = 'simulacao' | 'atributos' | 'compras' | 'vendas' | 'filiais' | 'parametros';
 
+/**
+ * C-012: o bloco do produto silenciado, como no sistema antigo — caixa em tom
+ * de atenção com "Silenciado até dd/mm/aaaa", o motivo (ou "Sem motivo
+ * informado") e "Devolver à fila" para quem parametriza. O painel e a janela
+ * Análise do Produto mostram o mesmo bloco.
+ */
+export function BlocoSilenciado({
+  linha,
+  podeParametrizar,
+  motivoBloqueio,
+  onRestaurar,
+}: {
+  linha: LinhaRessuprimento;
+  podeParametrizar: boolean;
+  motivoBloqueio: string;
+  onRestaurar: (linha: LinhaRessuprimento) => void;
+}) {
+  if (!linha.silenciado) return null;
+  return (
+    <Alert tone="warn">
+      <div className="flex flex-wrap items-start gap-3">
+        <VolumeX className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold tracking-wide uppercase">{`Silenciado até ${fmtData(linha.silenciadoAte)}`}</p>
+          <p className="mt-0.5">{linha.motivoSilencio ? `Motivo: ${linha.motivoSilencio}` : 'Sem motivo informado'}</p>
+        </div>
+        <Button
+          size="sm"
+          disabled={!podeParametrizar}
+          title={podeParametrizar ? 'Restaurar: devolver o produto à fila de compra' : motivoBloqueio}
+          onClick={() => onRestaurar(linha)}
+        >
+          Devolver à fila
+        </Button>
+      </div>
+    </Alert>
+  );
+}
+
 export function PainelDetalhe({
   linha,
   codfilial,
@@ -52,6 +91,7 @@ export function PainelDetalhe({
   onVerVendas,
   onAdicionar,
   onParametros,
+  onRestaurar,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -68,6 +108,7 @@ export function PainelDetalhe({
   onVerVendas: (linha: LinhaRessuprimento) => void;
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onParametros: (linha: LinhaRessuprimento) => void;
+  onRestaurar: (linha: LinhaRessuprimento) => void;
 }) {
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
@@ -136,6 +177,8 @@ export function PainelDetalhe({
           />
         </div>
       </Panel>
+
+      <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
 
       <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} />
 

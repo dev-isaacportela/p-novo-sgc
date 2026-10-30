@@ -25,6 +25,7 @@ import {
 } from '@/lib/ressuprimento-detalhe';
 import type { CompraDoProduto, DadosDoSku, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
 import { GraficoComprasVendas } from './grafico';
+import { BlocoSilenciado } from './painel-detalhe';
 import { VendasDoProduto } from './dialogos';
 import type { VendasDoProdutoProps } from './dialogos';
 
@@ -58,6 +59,7 @@ export function AnaliseProdutoDialogo({
   onFechar,
   onAdicionar,
   onParametros,
+  onRestaurar,
   onDesconsiderar,
   onReconsiderar,
 }: {
@@ -77,6 +79,7 @@ export function AnaliseProdutoDialogo({
   onFechar: () => void;
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onParametros: (linha: LinhaRessuprimento) => void;
+  onRestaurar: (linha: LinhaRessuprimento) => void;
   onDesconsiderar: VendasDoProdutoProps['onDesconsiderar'];
   onReconsiderar: VendasDoProdutoProps['onReconsiderar'];
 }) {
@@ -150,6 +153,8 @@ export function AnaliseProdutoDialogo({
               <MiniCartao rotulo="Sugestão" valor={textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)} hint={linha.sugerida > 0 ? `${moeda(comSugestao.total)} ao ${origemCusto}` : 'Nada a comprar agora'} />
               <MiniCartao rotulo="Custo" valor={moeda(custo)} hint={origemCusto} />
             </GradeMini>
+
+            <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
 
             {/* 3. Abas em pílula */}
             <div className="flex flex-wrap gap-2" role="tablist" aria-label="Seções da análise">

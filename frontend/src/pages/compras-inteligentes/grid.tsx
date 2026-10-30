@@ -43,6 +43,8 @@ export interface AcoesDaLista {
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onSilenciar: (linha: LinhaRessuprimento) => void;
   onRestaurar: (linha: LinhaRessuprimento) => void;
+  /** C-012: o chip "Silenciados" — liga o filtro e leva a lista para "todos" (regra em `alternarSilenciados`). */
+  onAlternarSilenciados: () => void;
   onExportar: () => void;
   onAbrirCarrinho: () => void;
 }
@@ -150,8 +152,8 @@ export function ListaProdutos({
         <ChipContagem
           tone="attention"
           ativo={filtros.soSilenciados}
-          onClick={() => onFiltros({ soSilenciados: !filtros.soSilenciados })}
-          title={filtros.soSilenciados ? 'Mostrando só os silenciados — clique para ver todos' : 'Clique para ver só os silenciados'}
+          onClick={silenciados > 0 || filtros.soSilenciados ? acoes.onAlternarSilenciados : undefined}
+          title={filtros.soSilenciados ? 'Mostrando só os silenciados, em "Todos" — clique para voltar' : silenciados > 0 ? 'Clique para ver só os silenciados (em "Todos")' : 'Nenhum produto silenciado'}
         >
           {`Silenciados ${silenciados}`}
         </ChipContagem>
