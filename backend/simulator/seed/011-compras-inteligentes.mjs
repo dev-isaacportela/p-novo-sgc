@@ -297,6 +297,15 @@ export function seed011(db, cenario) {
   inserirLogLote.run(haDias(12), 'JPEREIRA', '6366:88', 0, 6);
   inserirLogLote.run(haDias(5), 'CLIMA', '6366:99', 6, 4);
 
+  // R-132: o 5404 (trânsito 10) tem um pedido pendente na filial 1 que chega em 8 dias; o
+  // 970002 já entregou tudo e não conta. O 5403 tem pedido pendente ATRASADO (previsão há 3 dias).
+  db.prepare(`INSERT INTO PCPEDIDO (NUMPED, CODFORNEC, CODFILIAL, DTEMISSAO, DTPREVENT, VLTOTAL, PRAZO1, PRAZO2, PRAZO3)
+    VALUES (970004, 1042, '1', ?, ?, 0, 0, 0, 0), (970005, 1042, '1', ?, ?, 0, 0, 0, 0)`).run(haDias(2), haDias(-8), haDias(12), haDias(3));
+  const inserirItemCompra = db.prepare('INSERT INTO PCITEM (NUMPED, CODPROD, QTPEDIDA, QTENTREGUE, PCOMPRA) VALUES (?, ?, ?, ?, 10)');
+  inserirItemCompra.run(970004, 5404, 3, 0);
+  inserirItemCompra.run(970002, 5404, 100, 100);
+  inserirItemCompra.run(970005, 5403, 50, 10);
+
   db.prepare("UPDATE PCFILIAL SET CODCLI = 9307 WHERE CODIGO = '2'").run();
   db.prepare('INSERT OR IGNORE INTO PCNFSAID (NUMTRANSVENDA, CONDVENDA) VALUES (880001, 8), (880002, 1)').run();
   const inserirVendaFora = db.prepare(`INSERT INTO PCMOV

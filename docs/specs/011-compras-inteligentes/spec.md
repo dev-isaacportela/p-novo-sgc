@@ -299,6 +299,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Dado que** a compradora abre o card "Em trânsito"
 - **Quando** a lista é mostrada
 - **Então** a grade é própria, como no sistema antigo: Produto · Situação · Estoque · **Em trânsito** (a quantidade em destaque, em caixas na referência Caixas, e embaixo "N dias com o trânsito" — (disponível + trânsito) ÷ consumo diário — ou "Sem consumo") · Preço compra (o custo atual; na falta, o da última entrada; senão "Sem custo", em perigo) · Sugestão (só leitura, na referência) · Ações (carrinho e silenciar); curvas e cobertura saem dessa visão, e as demais visões não mudam
+- **E** (R-132, pedido do usuário: "em trânsito deve mostrar a cobertura futura ao chegar") embaixo da quantidade vêm "chega em DD/MM (N d)" — a menor previsão de entrega dos pedidos da filial com saldo pendente; sem pedido, hoje + lead time e "prev. pelo lead time"; previsão vencida, "(atrasado)", contando como chegando hoje — e "cobre N d ao chegar" = (estoque que sobra até a chegada + trânsito) ÷ consumo diário, ou "Sem consumo"; se o estoque acaba antes de chegar, o selo em perigo "ruptura antes de chegar (N d sem estoque)"; cobertura acima de 365 dias vira "> 365 d" em toda a 011; e a "Cobertura futura" do painel e da janela, com trânsito, usa a mesma conta da chegada
 
 **C-051 — O excesso em outras filiais aparece na lista** *(R-130)*
 - **Dado que** outra filial tem o produto com estoque acima da cobertura alvo dele (ou com estoque e giro nenhum)
@@ -499,6 +500,8 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-048 (aba) | `secaoEspecialAberta`: aba "especial" → expandida; "vendas" → recolhida; sem oportunidade a aba vale "vendas" | regra de tela |
 | C-053 / R-131 | 5409 segue com 18 (6 públicas) com as vendas fora no seed (ramo 20 9 un., cliente-filial 7 un., remessa CONDVENDA 8 4 un.); histórico 18/6; aba Vendas sem as 3; venda por cliente 9301 12 e 9304 6; o 9305 (ramo 13) é público; faturamento e margem públicos segregados | regra de negócio |
 | RN-001 / RN-011 (R-131) | curva de um produto vendido quase só a órgão público cai de A sem o público; histórico sem a parte pública com o seletor marcado, igual desmarcado, nunca negativo | regra de tela |
+| C-054 / R-132 | `sgcWintRessuprimento` traz DT_PREV_CHEGADA: 5404 em 8 dias (o pedido já entregue não conta), 5403 atrasado (há 3 dias), 5405 sem data | regra de negócio |
+| C-049 (R-132) | estoque 50, trânsito 100, 2/dia, chega em 10 d: sobram 30, cobre 65 d; sem pedido, hoje + lead time e "prev. pelo lead time"; estoque 10 a 2/dia e chegada em 12: 7 d sem estoque; atrasado conta como hoje; sem consumo, sem cobertura; 27611 → "> 365 d" | regra de tela |
 | C-045 (resumo) | série 10..50: "Best Fit → Holt · 40 un./mês · sugestão 312 un. (26 cx) · TS sob controle"; modelo escolhido vem só com o nome; sem histórico "…"; com 2 pontos avisa; `numeroPt(1234,5, 1)` = "1.234,5" | regra de tela |
 | RN-031 | previsão 300 → 10/dia; cobertura 35, estoque 100, trânsito 50, caixa 12 → 200 → 204; alvo no lead time (9 d, segurança 20) = 110; nunca negativa | regra de tela |
 | C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |

@@ -1296,6 +1296,7 @@ seed 011 grava `FAB-<codprod>` e dois custos atuais diferentes do da última ent
 | C-051, C-052 | `smoke/011-compras-inteligentes.mjs` + `npm run sim:winthor` | `sgcWintEstoqueFiliaisProdutos` (só as outras filiais com estoque líquido > 0) e `sgcWintBloqueiosProduto` (SQL do legado `ci_buscar_bloqueios_produto`) no seed (lotes do 5401, PCMOVBLOQUEIO, PCLOTELOG, PCEMPR, PCTABDEV); o `sim:winthor` acha no WinThor real um lote bloqueado com estoque e prova contagem > 0 nas duas |
 | RN-037, RN-038 | `tests/avisos-produto.test.mjs` | `excessosPorProduto`, `seloBloqueado`, `seloExcesso`, `filialCurta`, `resumoExcesso`, `motivoDoLote`, `resumoBloqueio`, `fatosDoLote`, `filtrarPorAvisos`, `contarAvisos` |
 | C-053, RN-001 / RN-011 (R-131) | `smoke/011-compras-inteligentes.mjs` + `tests/venda-valida.test.mjs` + `npm run sim:winthor` | fragmento `VENDA_VALIDA` (com `ENTRE_FILIAIS` e `REMESSA_FUTURA`) em todas as SFs da 011 que contam venda; `PUBLICO` só 11 a 15, com faturamento e margem públicos segregados; seed com PCNFSAID e PCFILIAL.CODCLI; `curvasDoRessuprimento(…, semPublico)` e `historicoSemPublico`; o `sim:winthor` prova contagem > 0 de cada exclusão e que a venda do 54 cai |
+| C-054, C-049 (R-132) | `smoke/011-compras-inteligentes.mjs` + `tests/transito.test.mjs` + `npm run sim:winthor` | CTE `PREVISAO_CHEGADA` (PCPEDIDO + PCITEM com saldo pendente) na consulta principal; `chegadaDoTransito`, `rotuloCobertura`, `textoChegada`; `coberturaFuturaComCompra` pela chegada; o `sim:winthor` prova previsão para os itens com trânsito |
 
 ### Decisões
 

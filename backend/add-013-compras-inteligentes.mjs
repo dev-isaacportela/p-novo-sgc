@@ -123,6 +123,11 @@ const VENDA_VALIDA = `(M.CODOPER = 'S' AND M.QT > 0 AND NOT ${ENTRE_FILIAIS} AND
 // 7. A venda pública sai segregada em VENDA_PUBLICA, CONSUMO_DIARIO_PUBLICO,
 //    FATURAMENTO_PUBLICO e RENTABILIDADE_PUBLICA: quem decide é o seletor da
 //    tela (R-131: marcado por padrão, o público fica fora), sem nova consulta.
+// 9. R-132 (C-049): PREVISAO_CHEGADA é a menor previsão de entrega
+//    (PCPEDIDO.DTPREVENT) dos pedidos da filial com saldo pendente no item
+//    (PCITEM: pedida − entregue > 0), dos últimos 12 meses; sem pedido assim, a
+//    tela cai em hoje + lead time e diz isso. Fica ANTES do calendário e sem
+//    "IS NOT NULL": o gerador CONNECT BY do simulador casa até o próximo.
 // 8. R-131: só entra a VENDA_VALIDA — venda entre filiais e remessa de entrega
 //    futura (CONDVENDA 8) ficam fora sempre, em todas as SFs que contam venda.
 const SQL_RESSUPRIMENTO = `WITH
@@ -170,6 +175,16 @@ const SQL_RESSUPRIMENTO = `WITH
       AND M.NUMPED IS NOT NULL
       AND M.DTMOV >= ADD_MONTHS(TRUNC(SYSDATE), -12)
     GROUP BY M.CODPROD
+  ),
+  PREVISAO_CHEGADA AS (
+    SELECT I.CODPROD, MIN(O.DTPREVENT) AS DT_PREV
+    FROM PCPEDIDO O
+    JOIN PCITEM I ON I.NUMPED = O.NUMPED
+    JOIN PRODUTOS_BASE PB ON PB.CODPROD = I.CODPROD
+    WHERE O.CODFILIAL = '{{codfilial}}'
+      AND NVL(I.QTPEDIDA, 0) - NVL(I.QTENTREGUE, 0) > 0
+      AND O.DTEMISSAO >= ADD_MONTHS(TRUNC(SYSDATE), -12)
+    GROUP BY I.CODPROD
   ),
   DIAS AS (
     SELECT
@@ -240,9 +255,11 @@ SELECT
   NVL(M.RENTABILIDADE_PUBLICA, 0)  AS RENTABILIDADE_PUBLICA,
   NVL(M.CONSUMO_DIARIO, 0)         AS CONSUMO_DIARIO,
   NVL(M.CONSUMO_DIARIO_PUBLICO, 0) AS CONSUMO_DIARIO_PUBLICO,
-  NVL(M.VOLATILIDADE_DIARIA, 0)    AS VOLATILIDADE_DIARIA
+  NVL(M.VOLATILIDADE_DIARIA, 0)    AS VOLATILIDADE_DIARIA,
+  TO_CHAR(PC.DT_PREV, 'YYYY-MM-DD') AS DT_PREV_CHEGADA
 FROM PRODUTOS_BASE PB
 LEFT JOIN RESSUPRIMENTO_PRODUTO R ON R.CODPROD = PB.CODPROD
+LEFT JOIN PREVISAO_CHEGADA PC ON PC.CODPROD = PB.CODPROD
 LEFT JOIN METRICAS M ON M.CODPROD = PB.CODPROD
 ORDER BY PB.DESCRICAO`;
 

@@ -273,6 +273,15 @@ export const DDL = [
   )`,
 
   // sgcWintPrazoPagamento (003): condição praticada nos últimos pedidos.
+  // R-132: o item do pedido de compra — o saldo pendente (pedida − entregue) dá a previsão de chegada.
+  `CREATE TABLE IF NOT EXISTS PCITEM (
+    NUMPED INT,
+    CODPROD INT,
+    QTPEDIDA DECIMAL(15,3),
+    QTENTREGUE DECIMAL(15,3),
+    PCOMPRA DECIMAL(15,4)
+  )`,
+
   `CREATE TABLE IF NOT EXISTS PCPEDIDO (
     NUMPED INT PRIMARY KEY,
     CODFORNEC INT,

@@ -16,6 +16,7 @@ import {
   Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
+import { rotuloCobertura } from '@/lib/transito';
 import { cn } from '@/lib/utils';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
@@ -42,7 +43,8 @@ const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = 
 
 const quantidade = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 // Consumo quase nulo dá cobertura de milhares de dias: acima de 999 o número não informa nada.
-const dias = (valor: number | null) => (valor === null ? 'sem giro' : valor >= 1000 ? '999+ d' : `${Math.round(valor)} d`);
+// R-132: cobertura acima de 365 dias (consumo quase nulo) vira "> 365 d", como na lista.
+const dias = (valor: number | null) => rotuloCobertura(valor, 'sem giro');
 const pct = (valor: number | null) => (valor === null ? '—' : `${Math.round(valor)} %`);
 
 const ORIGEM_COBERTURA = { sku: 'do produto', fornecedor: 'do fornecedor', curva: 'alvo da curva' } as const;

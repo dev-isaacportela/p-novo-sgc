@@ -17,6 +17,8 @@
 // ligado e é assim que o `node --test` de frontend/tests/ resolve o módulo.
 import { arredondarPorCaixa, curvaPorValor, custoPadraoDe, origemUnidadesPorCaixa, piorCurva, unidadesPorCaixa } from './compras.ts';
 import type { CurvaAbc, ItemPedido, OrigemUnidadesPorCaixa, CustoPadrao, MapaCustoPadrao } from './compras.ts';
+import { chegadaDoTransito } from './transito.ts';
+import type { ChegadaTransito } from './transito.ts';
 
 export type StatusRessuprimento =
   'ruptura' | 'excesso' | 'elevada_exposicao' | 'baixa_exposicao' | 'adequado';
@@ -49,6 +51,8 @@ export interface MedidaRessuprimento {
   FATURAMENTO_PERIODO?: number; RENTABILIDADE_PERIODO?: number;
   /** R-131: a parte pública do faturamento e da margem, para as curvas sem o público. */
   FATURAMENTO_PUBLICO?: number; RENTABILIDADE_PUBLICA?: number;
+  /** R-132: a previsão de chegada do pedido pendente mais próximo da filial (AAAA-MM-DD) ou null. */
+  DT_PREV_CHEGADA?: string | null;
   CONSUMO_DIARIO: number; CONSUMO_DIARIO_PUBLICO: number; VOLATILIDADE_DIARIA: number;
 }
 
@@ -220,9 +224,11 @@ export function motivoDaSugestao(r: Ressuprimento): string {
 }
 
 /** A cobertura que o item terá com a quantidade escolhida (R-112). Sem consumo, `null`. */
-export function coberturaFuturaComCompra(r: Ressuprimento, quantidade: number): number | null {
+export function coberturaFuturaComCompra(r: Ressuprimento & { chegada?: ChegadaTransito | null }, quantidade: number): number | null {
   if (r.consumoDiario <= 0) return null;
-  return (r.estoqueAtual + r.emTransito + Math.max(0, numero(quantidade))) / r.consumoDiario;
+  // R-132: com trânsito, a conta é a da chegada — o estoque vendido até lá não cobre nada depois.
+  const estoque = r.chegada ? r.chegada.estoqueNaChegada : r.estoqueAtual;
+  return (estoque + r.emTransito + Math.max(0, numero(quantidade))) / r.consumoDiario;
 }
 
 /** RN-018: sugerida > 0 e 0,8 × sugerida <= pedida <= 1,2 × sugerida (inclusive). */
@@ -243,6 +249,8 @@ export interface LinhaRessuprimento extends Ressuprimento {
   silenciadoAte: string; motivoSilencio: string;
   /** R-120: de onde veio a caixa — Gestão de Custos, cadastro do ERP, embalagem ou avulso. */
   origemCaixa: OrigemUnidadesPorCaixa;
+  /** R-132: quando chega o que está a caminho e a cobertura ao chegar; null sem trânsito. */
+  chegada?: ChegadaTransito | null;
 }
 
 export interface CurvasDaLinha { faturamento: CurvaAbc; rentabilidade: CurvaAbc; curva: CurvaAbc }
@@ -320,6 +328,7 @@ export function montarRessuprimento(
     return {
       ...calculo,
       medida,
+      chegada: chegadaDoTransito(calculo, medida.DT_PREV_CHEGADA, opcoes.hoje),
       curva,
       curvaFaturamento: daLinha.faturamento,
       curvaRentabilidade: daLinha.rentabilidade,

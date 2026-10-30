@@ -391,6 +391,13 @@ export async function suite(ctx) {
     assert.deepEqual(porCliente.map((r) => `${r.CODCLI}=${Number(r.VENDA_CLIENTE_PERIODO)}`).sort(), ['9301=12', '9304=6'], 'nem a filial nem a remessa entram na venda por cliente');
   });
 
+  await teste('C-054 / R-132: sgcWintRessuprimento traz a previsao de chegada do que esta a caminho — 5404 chega em 8 dias (pedido 970004 pendente; o 970002 ja entregue nao conta), 5403 com o pedido atrasado (previsao ha 3 dias) e o 5405, sem pedido pendente, sem data', async () => {
+    const rows = await ressuprimento();
+    assert.equal(String(produto(rows, 5404).DT_PREV_CHEGADA), haDias(-8));
+    assert.equal(String(produto(rows, 5403).DT_PREV_CHEGADA), haDias(3));
+    assert.equal(produto(rows, 5405).DT_PREV_CHEGADA, null);
+  });
+
   await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho do Novo pedido do quadro — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
     const medidas = await ressuprimento();
     assert.ok(medidas.length > 0, 'consulta ao WinThor sem linha nao e verde');

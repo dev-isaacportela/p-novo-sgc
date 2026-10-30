@@ -69,6 +69,11 @@ try {
   const consumoPadrao = Number(novo.CONSUMO_DIARIO) - Number(novo.CONSUMO_DIARIO_PUBLICO);
   console.log(`Produto 54 (filial 1, ${inicio} a ${fim}): venda antes ${antigo.VENDA} un. → válida ${novo.VENDA_PERIODO} (pública ${novo.VENDA_PUBLICA}); consumo/dia com público ${novo.CONSUMO_DIARIO} → padrão sem público ${consumoPadrao.toFixed(4)}`);
   if (!(Number(novo.VENDA_PERIODO) - Number(novo.VENDA_PUBLICA) < Number(antigo.VENDA))) { console.error('FALHOU: o consumo do 54 não caiu com o recorte.'); falhou = true; }
+  // R-132: a previsão de chegada vem na mesma carga, para os itens com pedido pendente na filial.
+  const comPrevisao = linhas54.filter((l) => l.DT_PREV_CHEGADA);
+  const comTransito = linhas54.filter((l) => Number(l.ESTOQUE_EM_TRANSITO) > 0);
+  console.log(`Previsão de chegada (fornecedor ${p54.CODFORNEC}, filial 1): ${comPrevisao.length} de ${comTransito.length} itens com trânsito/pedido · ex.: ${JSON.stringify(comPrevisao.slice(0, 3).map((l) => [l.CODPROD, l.ESTOQUE_EM_TRANSITO, l.DT_PREV_CHEGADA]))}`);
+  if (!(comPrevisao.length > 0)) { console.error('FALHOU: nenhuma previsão de chegada.'); falhou = true; }
 } finally {
   await winthor.fechar();
 }

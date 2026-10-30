@@ -17,6 +17,7 @@ import {
   TextLink, Th, Tr, SecaoRecolhivel,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
+import { rotuloCobertura } from '@/lib/transito';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
   JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
@@ -46,7 +47,8 @@ const ORIGEM_COBERTURA = { sku: 'do produto', fornecedor: 'do fornecedor', curva
 const ORIGEM_LEAD = { sku: 'do produto', fornecedor: 'do fornecedor', medido: 'medido no ERP', padrao: 'padrão' } as const;
 
 const quantidade = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
-const dias = (valor: number | null) => (valor === null ? 'sem giro' : valor >= 1000 ? '999+ d' : `${Math.round(valor)} d`);
+// R-132: cobertura acima de 365 dias (consumo quase nulo) vira "> 365 d", como na lista.
+const dias = (valor: number | null) => rotuloCobertura(valor, 'sem giro');
 const pct = (valor: number | null) => (valor === null ? '—' : `${Math.round(valor)} %`);
 const data = (iso: unknown) => (iso ? fmtData(String(iso)) || <Dash /> : <Dash />);
 

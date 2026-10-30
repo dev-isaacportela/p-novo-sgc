@@ -16,12 +16,13 @@ import {
 import { arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import { fmtData, moeda } from '@/lib/formato';
 import {
-  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, coberturaComTransito, precoDeCompra, quantidadeNaReferencia, quantidadeParaCompletar,
+  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, precoDeCompra, quantidadeNaReferencia, quantidadeParaCompletar,
   rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
 import { resumoExcesso, seloBloqueado, seloExcesso } from '@/lib/avisos-produto';
 import type { FilialComExcesso } from '@/lib/ressuprimento-detalhe';
 import { listaCompacta, listaMinima } from '@/lib/largura-painel';
+import { rotuloCobertura, textoChegada } from '@/lib/transito';
 import { cn } from '@/lib/utils';
 import type {
   FiltroMovimentacao, FiltrosLista, LinhaRessuprimento, OrdemLista, ReferenciaSugestao, StatusRessuprimento,
@@ -299,7 +300,7 @@ export function ListaProdutos({
                     <RowMeta>
                       {visao === 'transito'
                         ? `est. ${quantidade(linha.estoqueAtual)} · sug. ${linha.sugerida > 0 ? textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia) : '—'}`
-                        : `cob. ${linha.coberturaAtualDias === null ? 'sem giro' : `${Math.round(linha.coberturaAtualDias)} d`} · gatilho ${linha.diasDeGatilho ?? '—'} d · F/R ${linha.curvaFaturamento ?? '—'}/${linha.curvaRentabilidade ?? '—'}`}
+                        : `cob. ${linha.coberturaAtualDias === null ? 'sem giro' : rotuloCobertura(linha.coberturaAtualDias)} · gatilho ${linha.diasDeGatilho ?? '—'} d · F/R ${linha.curvaFaturamento ?? '—'}/${linha.curvaRentabilidade ?? '—'}`}
                     </RowMeta>
                   ) : null}
                   {seloBloqueado(linha.medida.QT_BLOQUEADA) ? <RowMeta><Status tone="attention">{seloBloqueado(linha.medida.QT_BLOQUEADA)}</Status></RowMeta> : null}
@@ -334,11 +335,16 @@ export function ListaProdutos({
                     {minima ? null : <Td numeric>{quantidade(linha.estoqueAtual)}</Td>}
                     <Td numeric>
                       <RowTitle>{textoDaSugestao(linha.emTransito, linha.unidadesPorCaixa, referencia)}</RowTitle>
-                      <RowMeta>
-                        {coberturaComTransito(linha) === null
-                          ? 'Sem consumo'
-                          : `${Math.round(coberturaComTransito(linha) ?? 0)} dias com o trânsito`}
-                      </RowMeta>
+                      {/* R-132: quando chega e quanto cobre ao chegar (o estoque segue vendendo até lá). */}
+                      {linha.chegada ? (
+                        <>
+                          <RowMeta>{textoChegada(linha.chegada)}</RowMeta>
+                          <RowMeta>{`cobre ${rotuloCobertura(linha.chegada.coberturaAoChegarDias, 'Sem consumo')} ao chegar`}</RowMeta>
+                          {linha.chegada.diasSemEstoque > 0 ? (
+                            <RowMeta><Status tone="alert">{`ruptura antes de chegar (${linha.chegada.diasSemEstoque} d sem estoque)`}</Status></RowMeta>
+                          ) : null}
+                        </>
+                      ) : <RowMeta>Sem consumo</RowMeta>}
                     </Td>
                     {minima ? null : <Td numeric>
                       {(() => {
@@ -367,7 +373,7 @@ export function ListaProdutos({
                 {minima ? null : <Td numeric>
                   {linha.coberturaAtualDias === null
                     ? <span title="Sem giro: não há consumo para dividir"><Dash /></span>
-                    : `${Math.round(linha.coberturaAtualDias)} d`}
+                    : rotuloCobertura(linha.coberturaAtualDias)}
                   <RowMeta>
                     {linha.diasDeGatilho === null ? 'sem gatilho' : linha.diasDeGatilho < 0
                       ? <Status tone="alert">{`gatilho ${linha.diasDeGatilho} d`}</Status>
