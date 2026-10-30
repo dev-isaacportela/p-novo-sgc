@@ -291,6 +291,11 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Então** a linha mostra o selo "Especial N un." (ou "Especial N tabelas", em atenção, quando não há quantidade segura); o painel e a Análise do Produto mostram a seção "Oportunidade com preço especial", aberta, com o resumo (tabelas e ganho estimado), Comprar padrão | Tabelas especiais | Especial total, as tabelas em pílula e o card de cada uma (política, clientes, quantidade a comprar com caixas, risco, uso do limite seguro com compra especial e folga, o gráfico da venda do cliente por mês com a projeção segura, os 5 clientes com média, teto e projeção, o rodapé com limite, custo, ganho, "limitado por", ganho restante e validade); "Adicionar especial" põe no carrinho uma linha própria com o custo da política e o selo dela; o saldo fica como compra padrão
 - **E** o card do gráfico tem abas em pílula — "Compras × vendas" (o padrão, com 6m/13m, Gráfico/Tabela e o rodapé) e "Preço especial" (só quando há oportunidade: os KPIs, as tabelas e o card com o gráfico do cliente) — um gráfico por vez; trocar de produto volta para "Compras × vendas"
 
+**C-049 — A visão Em trânsito mostra a quantidade em trânsito**
+- **Dado que** a compradora abre o card "Em trânsito"
+- **Quando** a lista é mostrada
+- **Então** a grade é própria, como no sistema antigo: Produto · Situação · Estoque · **Em trânsito** (a quantidade em destaque, em caixas na referência Caixas, e embaixo "N dias com o trânsito" — (disponível + trânsito) ÷ consumo diário — ou "Sem consumo") · Preço compra (o custo atual; na falta, o da última entrada; senão "Sem custo", em perigo) · Sugestão (só leitura, na referência) · Ações (carrinho e silenciar); curvas e cobertura saem dessa visão, e as demais visões não mudam
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -462,6 +467,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-048 | selo "Especial 113 un." (positivo) com quantidade segura, "Especial 2 tabelas" (atenção) sem ela, nada sem oportunidade; chave da linha especial `5401-1-especial-7-8`; lotes de 500; a aba "Preço especial" só existe com oportunidade e sem ela a escolha cai em "Compras × vendas" | regra de tela |
 | RN-033 | cliente com 85 % do SKU (306 de 360 em 6 meses de 60): média 51, caps 51, projeção 51, seguro 60 (caixa 12), crescimento 1, seguro, limitado por ambos; previsão 120 não passa do teto; sem série, base 60 e limitado pelo SKU; cap recente 31,25 para 10/20/30/100 | regra de tela |
 | RN-034 | tabelas 1-8 (economia 3, seguro 60) e 2-6 (economia 5, seguro 12 + 12, pior risco arriscado, validade 15/11) com quantidade 100 → 2-6 compra 24, 1-8 compra 60, padrão 16, ganho 300; tabela com seguro 0 fica fora; carrinho: total 24 × 10 + 12 × 8, item especial com preço 8 e tipo especial | regra de tela |
+| C-049 | 50 disponíveis + 100 em trânsito a 2/dia → 75 dias; sem consumo → nulo; preço: atual 11 → 11 (atual), só última 12 → 12 (última), nenhum → nulo | regra de tela |
 | RN-031 | previsão 300 → 10/dia; cobertura 35, estoque 100, trânsito 50, caixa 12 → 200 → 204; alvo no lead time (9 d, segurança 20) = 110; nunca negativa | regra de tela |
 | C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
 | RN-028 | produto com 6 no Gestão de Custos e "CX 12" na embalagem fica com caixa 6 e origem gestão (sugestão em múltiplos de 6); sem o mapa, 12 pela embalagem; com 24 no ERP, origem ERP; a integração no simulador devolve 12 e 24 para 5001 e 5002 e nada para 5010 | regra de tela + regra de negócio |

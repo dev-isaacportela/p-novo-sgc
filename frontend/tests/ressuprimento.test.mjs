@@ -20,7 +20,7 @@ import {
   montarRessuprimento, motivoDaSugestao, resolverParametros,
   RECORTE_INICIAL, alternarSilenciados, escolherVisao,
   campoEmCaixas, quantidadeNaReferencia, rotuloDaQuantidade, unidadesDaDigitada,
-  chaveDaEntrada, custoDaEntrada,
+  chaveDaEntrada, custoDaEntrada, coberturaComTransito, precoDeCompra,
 } from '../src/lib/ressuprimento.ts';
 
 /** Uma medida de `sgcWintRessuprimento`, com o caso base do plan. */
@@ -585,4 +585,12 @@ test('R-125: a linha especial do carrinho tem chave própria, o custo da políti
   assert.equal(item.precoCusto, 8);
   assert.equal(item.tipoPreco, 'especial');
   assert.equal(itemDoCarrinho(l, 24, 42).tipoPreco, 'padrao');
+});
+
+test('C-049 (visão Em trânsito): a cobertura conta o trânsito — 50 disponíveis + 100 em trânsito a 2 por dia são 75 dias; sem consumo é nula; o preço de compra é o custo atual, senão o da última entrada, senão nenhum', () => {
+  assert.equal(coberturaComTransito({ estoqueAtual: 50, emTransito: 100, consumoDiario: 2 }), 75);
+  assert.equal(coberturaComTransito({ estoqueAtual: 50, emTransito: 100, consumoDiario: 0 }), null);
+  assert.deepEqual(precoDeCompra({ CUSTO_ATUAL: 11, CUSTO_ULT_ENTRADA: 12 }), { valor: 11, origem: 'atual' });
+  assert.deepEqual(precoDeCompra({ CUSTO_ATUAL: 0, CUSTO_ULT_ENTRADA: 12 }), { valor: 12, origem: 'ultima' });
+  assert.equal(precoDeCompra({ CUSTO_ATUAL: 0, CUSTO_ULT_ENTRADA: 0 }), null);
 });

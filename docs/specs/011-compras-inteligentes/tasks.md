@@ -144,6 +144,7 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 - [x] **T-105** — *(C-012, retorno do usuário)* silenciados visíveis pelo chip: `alternarSilenciados`/`escolherVisao` em `lib/ressuprimento.ts` (o chip leva a lista para "todos" e volta; card desliga; chip inerte com 0) e `BlocoSilenciado` (data, motivo, "Devolver à fila") no painel e na Análise do Produto; `test('C-012 (chip) …')` → `frontend/src/pages/compras-inteligentes/ComprasInteligentesPage.tsx`, `grid.tsx`, `painel-detalhe.tsx`, `analise-produto.tsx`, `lib/ressuprimento.ts`
 - [x] **T-106** — *(R-124)* previsão de venda com escolha de modelo: `lib/previsao.ts` (série fechada, cap de outliers, MMS/MMP/SE/Holt/Holt-Winters, métricas, Best Fit, sugestão projetada) e `tests/previsao.test.mjs`; `AnaliseVendaFutura` (`pages/compras-inteligentes/previsao-ui.tsx`) no painel (seção nova) e na Análise do Produto; `GraficoComprasVendas`/`serieComprasVendas`/`totaisDoRodape` com `projecaoMes`; a linha selecionada, o simulador e o carrinho do produto aberto partem da sugestão projetada (`sugestaoProjetada` na grade) → `frontend/src/lib/previsao.ts`, `pages/compras-inteligentes/previsao-ui.tsx`, `painel-detalhe.tsx`, `analise-produto.tsx`, `grid.tsx`, `ComprasInteligentesPage.tsx`
 - [x] **T-107** — *(R-125)* oportunidades com custo especial: `sgcCustoEspeciaisProdutos` (INTEGRATION gestao-de-custos) e `sgcWintVendasClientesProdutos` no add-013; adaptador do simulador com o executor SQLite e a emulação REST das políticas (`custosEspeciaisDeRegistros`), tabelas e seed; `lib/custo-especial.ts` e `tests/custo-especial.test.mjs`; `OportunidadeEspecial` (`custo-especial-ui.tsx`) no painel e na Análise do Produto; selo na linha; linha especial do carrinho (`chaveDaEntrada`, `custoDaEntrada`, `itemDoCarrinho` com tipo especial) → `backend/add-013-compras-inteligentes.mjs`, `simulator/gestao-custos.mjs`, `frontend/src/lib/custo-especial.ts`, `pages/compras-inteligentes/custo-especial-ui.tsx`, `Carrinho.tsx`, `ComprasInteligentesPage.tsx`
+- [x] **T-108** — *(C-049)* grade própria da visão Em trânsito (Estoque, Em trânsito em destaque com "N dias com o trânsito" ou "Sem consumo", Preço compra, Sugestão só leitura); `coberturaComTransito` e `precoDeCompra` em `lib/ressuprimento.ts` com `test('C-049 …')` → `frontend/src/pages/compras-inteligentes/grid.tsx`, `lib/ressuprimento.ts`
 
 ## Dependências
 
@@ -185,6 +186,7 @@ tudo → T-095 · T-096 → T-097 · T-098
 | RF-020 / C-021, C-041, C-042 | T-004, T-035, T-104 | T-085, T-104 |
 | RF-033 / C-043, C-044, C-045, RN-029, RN-030, RN-031 | T-106 | T-106 |
 | RF-034 / C-046, C-047, C-048, RN-032, RN-033, RN-034 | T-107 | T-107 |
+| RF-021 / C-049 | T-108 | T-108 |
 | RF-021 / C-022, RN-018 | T-008, T-030 | T-088, T-092 |
 | RF-022 / C-023, RN-019 | T-009, T-010, T-032, T-033, T-037 | T-084, T-094 |
 | RF-023 / C-024 | T-030, T-034 | T-093 |

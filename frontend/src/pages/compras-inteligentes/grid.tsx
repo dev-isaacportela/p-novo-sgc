@@ -16,8 +16,8 @@ import {
 import { arredondarPorCaixa } from '@/lib/compras';
 import { fmtData, moeda } from '@/lib/formato';
 import {
-  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, quantidadeNaReferencia, quantidadeParaCompletar, rotuloDaQuantidade, textoDaSugestao,
-  unidadesDaDigitada,
+  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, coberturaComTransito, precoDeCompra, quantidadeNaReferencia, quantidadeParaCompletar,
+  rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
 import type {
   FiltroMovimentacao, FiltrosLista, LinhaRessuprimento, OrdemLista, ReferenciaSugestao, StatusRessuprimento,
@@ -178,15 +178,28 @@ export function ListaProdutos({
 
       <Table>
         <thead>
-          <tr>
-            <Th>Produto</Th>
-            <Th>Situação</Th>
-            <Th className="w-20">Curva fat.</Th>
-            <Th className="w-20">Curva rent.</Th>
-            <Th numeric className="w-32">Cobertura</Th>
-            <Th numeric className="w-40">{referencia === 'caixas' ? 'Qtd. (cx)' : 'Qtd. (un.)'}</Th>
-            <Th className="w-24 text-right">Ações</Th>
-          </tr>
+          {/* C-049: a visão Em trânsito tem grade própria, como no legado — o que importa é quanto vem e quando cobre. */}
+          {visao === 'transito' ? (
+            <tr>
+              <Th>Produto</Th>
+              <Th>Situação</Th>
+              <Th numeric className="w-28">Estoque</Th>
+              <Th numeric className="w-40">Em trânsito</Th>
+              <Th numeric className="w-32">Preço compra</Th>
+              <Th numeric className="w-36">Sugestão</Th>
+              <Th className="w-24 text-right">Ações</Th>
+            </tr>
+          ) : (
+            <tr>
+              <Th>Produto</Th>
+              <Th>Situação</Th>
+              <Th className="w-20">Curva fat.</Th>
+              <Th className="w-20">Curva rent.</Th>
+              <Th numeric className="w-32">Cobertura</Th>
+              <Th numeric className="w-40">{referencia === 'caixas' ? 'Qtd. (cx)' : 'Qtd. (un.)'}</Th>
+              <Th className="w-24 text-right">Ações</Th>
+            </tr>
+          )}
         </thead>
         <tbody>
           {visiveis.map((linha) => {
@@ -227,6 +240,33 @@ export function ListaProdutos({
                   ) : null}
                 </Td>
                 <Td><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></Td>
+                {visao === 'transito' ? (
+                  <>
+                    <Td numeric>{quantidade(linha.estoqueAtual)}</Td>
+                    <Td numeric>
+                      <RowTitle>{textoDaSugestao(linha.emTransito, linha.unidadesPorCaixa, referencia)}</RowTitle>
+                      <RowMeta>
+                        {coberturaComTransito(linha) === null
+                          ? 'Sem consumo'
+                          : `${Math.round(coberturaComTransito(linha) ?? 0)} dias com o trânsito`}
+                      </RowMeta>
+                    </Td>
+                    <Td numeric>
+                      {(() => {
+                        const preco = precoDeCompra(linha.medida);
+                        if (!preco) return <Status tone="alert">Sem custo</Status>;
+                        return (
+                          <>
+                            {moeda(preco.valor)}
+                            <RowMeta>{preco.origem === 'atual' ? 'custo atual' : 'última entrada'}</RowMeta>
+                          </>
+                        );
+                      })()}
+                    </Td>
+                    <Td numeric>{linha.sugerida > 0 ? textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia) : <Dash />}</Td>
+                  </>
+                ) : (
+                  <>
                 <Td><LetraCurva letra={linha.curvaFaturamento} linha={linha} /></Td>
                 <Td><LetraCurva letra={linha.curvaRentabilidade} linha={linha} /></Td>
                 <Td numeric>
@@ -257,6 +297,8 @@ export function ListaProdutos({
                     {projetadaDe(linha) !== null ? ` · projetada ${textoDaSugestao(projetadaDe(linha) ?? 0, linha.unidadesPorCaixa, referencia)}` : ''}
                   </RowMeta>
                 </Td>
+                  </>
+                )}
                 <Td className="text-right" onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center justify-end gap-1">
                     <IconButton

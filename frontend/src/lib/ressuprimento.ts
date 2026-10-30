@@ -478,6 +478,22 @@ export function emTransito(linhas: LinhaRessuprimento[]): LinhaRessuprimento[] {
   return (linhas ?? []).filter((l) => l.emTransito > 0);
 }
 
+/**
+ * C-049 (visão Em trânsito): a cobertura CONTANDO o trânsito — (disponível +
+ * trânsito) ÷ consumo diário —, ou `null` sem consumo ("Sem consumo").
+ */
+export function coberturaComTransito(l: Pick<Ressuprimento, 'estoqueAtual' | 'emTransito' | 'consumoDiario'>): number | null {
+  if (!(numero(l.consumoDiario) > 0)) return null;
+  return (numero(l.estoqueAtual) + numero(l.emTransito)) / numero(l.consumoDiario);
+}
+
+/** C-049: o preço de compra da visão Em trânsito — o custo atual; na falta, o da última entrada; senão nada ("Sem custo"). */
+export function precoDeCompra(m: Pick<MedidaRessuprimento, 'CUSTO_ATUAL' | 'CUSTO_ULT_ENTRADA'>): { valor: number; origem: 'atual' | 'ultima' } | null {
+  if (numero(m.CUSTO_ATUAL) > 0) return { valor: numero(m.CUSTO_ATUAL), origem: 'atual' };
+  if (numero(m.CUSTO_ULT_ENTRADA) > 0) return { valor: numero(m.CUSTO_ULT_ENTRADA), origem: 'ultima' };
+  return null;
+}
+
 /** As linhas de uma visão; "todos" é a lista inteira, na ordem de chegada. */
 export function linhasDaVisao(linhas: LinhaRessuprimento[], visao: VisaoRessuprimento): LinhaRessuprimento[] {
   if (visao === 'comprar') return aComprar(linhas);
