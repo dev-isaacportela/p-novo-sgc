@@ -26,7 +26,7 @@
 		"test": "npm run sim:check && npm run sim:smoke"
 	},
 	"dependencies": {
-		"@benenutri/mitra-kanban": "^1.3.0",
+		"@benenutri/mitra-kanban": "^1.9.2",
 		"dotenv": "*",
 		"mitra-sdk": "^1.0.58"
 	}

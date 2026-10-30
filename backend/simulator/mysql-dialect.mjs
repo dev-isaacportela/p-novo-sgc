@@ -236,6 +236,19 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
 
   def('CONCAT', null, (...args) => (args.some((a) => a == null) ? null : args.map(String).join('')));
 
+  // Lib 1.9.2 (ordem e responsáveis em lote): FIND_IN_SET(x, 'a,b,c') -> posição 1-based, 0 se não achar;
+  // SUBSTRING_INDEX(s, sep, n): até a n-ésima ocorrência (n < 0: conta do fim). Iguais ao dialeto da lib.
+  def('FIND_IN_SET', 2, (needle, list) => {
+    if (needle == null || list == null) return null;
+    return String(list).split(',').indexOf(String(needle)) + 1;
+  });
+  def('SUBSTRING_INDEX', 3, (text, sep, count) => {
+    if (text == null || sep == null || count == null) return null;
+    const parts = String(text).split(String(sep));
+    const n = Math.trunc(Number(count));
+    return (n >= 0 ? parts.slice(0, n) : parts.slice(n)).join(String(sep));
+  });
+
   def('LEAST', null, (...args) => {
     const valid = args.filter((a) => a != null);
     if (valid.length !== args.length) return null;

@@ -330,19 +330,25 @@ export async function suite(ctx) {
   });
 
   await teste('RN-001: pedido sem envio mede a Análise até hoje; pedido concluído sem nota mede o Faturamento até a conclusão', async () => {
-    const cedo = await doCard(CARD_ABERTO, { hoje: '2026-09-17' });
-    const tarde = await doCard(CARD_ABERTO, { hoje: '2026-09-24' });
-    assert.ok(Number(tarde.DIAS_ANALISE) > Number(cedo.DIAS_ANALISE), 'etapa aberta cresce com o dia de referência');
+    // O seed carimba CRIADO_EM com a data real: fixar a criação (como C-007..C-011) para o teste não depender do calendário.
+    await arranjando('SGC_PEDIDO', 'ID_CARD', CARD_ABERTO, { CRIADO_EM: '2026-09-08T08:00:00' }, async () => {
+      const cedo = await doCard(CARD_ABERTO, { hoje: '2026-09-17' });
+      const tarde = await doCard(CARD_ABERTO, { hoje: '2026-09-24' });
+      assert.ok(Number(tarde.DIAS_ANALISE) > Number(cedo.DIAS_ANALISE), 'etapa aberta cresce com o dia de referência');
+    });
 
-    await arranjando('KB_CARD', 'ID', CARD_ENVIADO,
-      { FASE_ID: fases.concluido, CONCLUIDO_EM: '2026-09-14T10:00:00' }, async () => {
-        const a = await doCard(CARD_ENVIADO, { hoje: '2026-09-20' });
-        const b = await doCard(CARD_ENVIADO, { hoje: '2026-10-30' });
-        assert.equal(a.DT_PRIMEIRA_NF, '', 'o pedido escolhido não tem nota');
-        assert.equal(Number(a.DIAS_FATURAMENTO), Number(b.DIAS_FATURAMENTO),
-          'medido até a conclusão, o número NÃO muda quando hoje avança');
-        assert.equal(Number(a.DIAS_FATURAMENTO), diasUteisEntreJs(DT_ENVIO_DO_CARD, '2026-09-14'));
-      });
+    // Idem: o envio do seed também é relativo à data real; fixa envio e conclusão juntos.
+    await arranjando('SGC_PEDIDO', 'ID_CARD', CARD_ENVIADO, { DT_ENVIO: '2026-09-08' }, async () => {
+      await arranjando('KB_CARD', 'ID', CARD_ENVIADO,
+        { FASE_ID: fases.concluido, CONCLUIDO_EM: '2026-09-14T10:00:00' }, async () => {
+          const a = await doCard(CARD_ENVIADO, { hoje: '2026-09-20' });
+          const b = await doCard(CARD_ENVIADO, { hoje: '2026-10-30' });
+          assert.equal(a.DT_PRIMEIRA_NF, '', 'o pedido escolhido não tem nota');
+          assert.equal(Number(a.DIAS_FATURAMENTO), Number(b.DIAS_FATURAMENTO),
+            'medido até a conclusão, o número NÃO muda quando hoje avança');
+          assert.equal(Number(a.DIAS_FATURAMENTO), diasUteisEntreJs('2026-09-08', '2026-09-14'));
+        });
+    });
   });
 
   /* ─────────── T-084 — C-012 e RN-007 (cancelado fora) ─────────── */

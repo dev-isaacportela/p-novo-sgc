@@ -41,7 +41,10 @@ if (isEntrypoint()) {
   const existentes = new Set(((await sdk.listServerFunctionsMitra({ projectId })).result ?? []).map((f) => f.name));
   const faltam = Object.values(GANCHOS).filter((nome) => !existentes.has(nome));
   const ganchos = faltam.length ? undefined : GANCHOS;
-  const resultado = await instalar({ sdk, projectId, mapaFrontend: MAPA, ganchos });
+  // E-mail do motor (lib 1.6.0): nome curto no assunto/rodape. ponytail: sem urlDoCard ate o
+  // projeto ter URL no Mitra (sem ele o e-mail sai sem botao, nunca com link quebrado).
+  const email = { sistema: 'SGC 2' };
+  const resultado = await instalar({ sdk, projectId, mapaFrontend: MAPA, ganchos, email });
   console.log(`Pronto: motor ${resultado.versao}, ${Object.keys(resultado.funcoes).length} server functions.`);
   if (faltam.length) console.log(`AVISO: ganchos NAO ligados (faltam ${faltam.join(', ')}). Rode o add-005 e depois este script de novo.`);
   else console.log('Ganchos ligados: podeMover -> sgcPodeMover, podeExcluir -> sgcPodeExcluir.');

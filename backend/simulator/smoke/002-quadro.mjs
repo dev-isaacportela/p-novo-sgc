@@ -497,15 +497,16 @@ export async function suite(ctx) {
     assert.match(emails[emails.length - 1].subject, /Aprovação Técnica/);
   });
 
-  await teste('C-033: entrar em Compras Concluidas manda os anexos ao criador — 2 linhas "nome — endereco"; sem anexos, "Nenhum anexo"', async () => {
+  await teste('C-033: entrar em Compras Concluidas manda os anexos ao criador — 2 links nome/endereco; sem anexos, "Nenhum anexo"', async () => {
     const antes = emails.length;
     const movido = await chamar('kbCardMover', { cardId: P5, faseId: fases.concluido, ordem: 0 }, U.gil);
     assert.equal(movido.ok, true, movido.error);
     const comAnexos = emails.slice(antes).find((e) => e.subject.includes('Anexos do pedido'));
     assert.ok(comAnexos, 'a automacao 11 deveria ter mandado o e-mail de anexos');
     assert.deepEqual(comAnexos.to, ['ana@sgc.local'], 'a 11 vai so ao criador');
-    assert.match(comAnexos.body, /Pedido 998877\.pdf — https:\/\/arquivos\.local\/pedido-998877\.pdf/);
-    assert.match(comAnexos.body, /Tabela de precos\.xlsx — https:\/\/arquivos\.local\/tabela-precos\.xlsx/);
+    // lib 1.6.0+: {{anexos}} vira bloco de links no modelo Benenutri (um <a> por anexo), nao "nome — url"
+    assert.match(comAnexos.body, /<a href="https:\/\/arquivos\.local\/pedido-998877\.pdf"[^>]*>Pedido 998877\.pdf<\/a>/);
+    assert.match(comAnexos.body, /<a href="https:\/\/arquivos\.local\/tabela-precos\.xlsx"[^>]*>Tabela de precos\.xlsx<\/a>/);
 
     const semAnexo = await criarPedido();
     emFase(semAnexo, 'faturamento');
