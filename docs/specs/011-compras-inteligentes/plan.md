@@ -1290,6 +1290,8 @@ seed 011 grava `FAB-<codprod>` e dois custos atuais diferentes do da última ent
 | C-032, C-033, C-034, RN-025, calendário | `frontend/tests/ressuprimento-detalhe.test.mjs` |
 | C-028, C-029, C-030, C-039 (tela), RN-021, RN-022, RN-023, RN-027 | `frontend/tests/carrinho.test.mjs` |
 | C-035, C-036, C-039 (servidor), RN-026, RN-027 | `backend/simulator/smoke/011-compras-inteligentes.mjs` |
+| C-046, C-047 | `smoke/011-compras-inteligentes.mjs` | `sgcCustoEspeciaisProdutos` (INTEGRATION; executor SQLite sobre COST_POLICIES/POLICY_ITEMS/COST_POLICY_CLIENTS do seed) e `sgcWintVendasClientesProdutos`; `smoke/000-gestao-custos.mjs` G-007 prova a emulação REST (`custosEspeciaisDeRegistros`) |
+| RN-032, C-048, RN-033, RN-034 | `tests/custo-especial.test.mjs` + `tests/ressuprimento.test.mjs` (R-125) | `oportunidadesDoItem`, `seloEspecial`, `sugestaoPorCliente`/`capRecenteSku`, `planoEspecial`, `chaveEspecial`/`lotesDeCodigos`; `chaveDaEntrada`, `custoDaEntrada`, `agruparCarrinho` e `itemDoCarrinho` com a linha especial |
 
 ### Decisões
 

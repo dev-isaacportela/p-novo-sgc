@@ -353,6 +353,7 @@ export function itemDoCarrinho(
   linha: LinhaRessuprimento,
   quantidade: number,
   coberturaLimite: number,
+  especial?: EspecialDoCarrinho,
 ): ItemPedido {
   const m = linha.medida;
   return {
@@ -369,8 +370,9 @@ export function itemDoCarrinho(
     qtTransito: linha.emTransito,
     qtSugerida: linha.sugerida,
     qtPedida: Math.max(0, numero(quantidade)),
-    precoCusto: numero(m.CUSTO_ULT_ENTRADA),
-    tipoPreco: 'padrao',
+    // R-125: a linha especial leva o custo da política e o tipo de preço especial.
+    precoCusto: especial ? numero(especial.custo) : numero(m.CUSTO_ULT_ENTRADA),
+    tipoPreco: especial ? 'especial' : 'padrao',
     curvaAbc: linha.curva,
     coberturaDias: coberturaFuturaComCompra(linha, quantidade) ?? 0,
     coberturaLimite: numero(coberturaLimite),
@@ -383,6 +385,9 @@ export function itemDoCarrinho(
   };
 }
 
+/** R-125: a linha especial do carrinho — a política e o custo dela, que substitui o custo do item. */
+export interface EspecialDoCarrinho { politicaId: number; politicaNome: string; custo: number }
+
 export interface EntradaCarrinho {
   linha: LinhaRessuprimento;
   quantidade: number;
@@ -390,12 +395,24 @@ export interface EntradaCarrinho {
   codfilial: string;
   fornecedor: string;
   filial: string;
+  especial?: EspecialDoCarrinho;
+}
+
+/** A identidade de uma entrada: produto + filial, e a política + custo quando é especial (R-125). */
+export function chaveDaEntrada(e: Pick<EntradaCarrinho, 'linha' | 'codfilial' | 'especial'>): string {
+  const base = `${numero(e.linha.medida.CODPROD)}-${String(e.codfilial)}`;
+  return e.especial ? `${base}-especial-${numero(e.especial.politicaId)}-${numero(e.especial.custo)}` : base;
+}
+
+/** O custo que vale para a entrada: o especial, ou o da última entrada. */
+export function custoDaEntrada(e: Pick<EntradaCarrinho, 'linha' | 'especial'>): number {
+  return e.especial ? numero(e.especial.custo) : numero(e.linha.medida.CUSTO_ULT_ENTRADA);
 }
 
 export interface GrupoCarrinho {
   codfornec: number; codfilial: string; fornecedor: string; filial: string;
   prioridade: 'normal' | 'alta'; total: number;
-  itens: { linha: LinhaRessuprimento; quantidade: number }[];
+  itens: { linha: LinhaRessuprimento; quantidade: number; especial?: EspecialDoCarrinho }[];
 }
 
 /** RN-015: um grupo por fornecedor + filial; prioridade alta com ruptura no grupo. */
@@ -412,8 +429,8 @@ export function agruparCarrinho(itens: EntradaCarrinho[]): GrupoCarrinho[] {
       total: 0,
       itens: [],
     };
-    grupo.itens.push({ linha: entrada.linha, quantidade: Math.max(0, numero(entrada.quantidade)) });
-    grupo.total += Math.max(0, numero(entrada.quantidade)) * numero(entrada.linha.medida.CUSTO_ULT_ENTRADA);
+    grupo.itens.push({ linha: entrada.linha, quantidade: Math.max(0, numero(entrada.quantidade)), ...(entrada.especial ? { especial: entrada.especial } : {}) });
+    grupo.total += Math.max(0, numero(entrada.quantidade)) * custoDaEntrada(entrada);
     if (entrada.linha.status === 'ruptura') grupo.prioridade = 'alta';
     grupos.set(chave, grupo);
   }

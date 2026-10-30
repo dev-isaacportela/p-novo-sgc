@@ -29,6 +29,8 @@ import type { CompraDoProduto, DadosDoSku, VendaDesconsiderada } from '@/lib/res
 import { GraficoComprasVendas } from './grafico';
 import { BlocoSilenciado } from './painel-detalhe';
 import { AnaliseVendaFutura } from './previsao-ui';
+import { OportunidadeEspecial } from './custo-especial-ui';
+import type { SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
 import { modeloEscolhido } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import { VendasDoProduto } from './dialogos';
@@ -71,6 +73,8 @@ export function AnaliseProdutoDialogo({
   modelo,
   onModelo,
   projetada,
+  sugestoesEspeciais,
+  onAdicionarEspecial,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -96,6 +100,8 @@ export function AnaliseProdutoDialogo({
   modelo: ModeloPrevisao;
   onModelo: (modelo: ModeloPrevisao) => void;
   projetada: SugestaoProjetada | null;
+  sugestoesEspeciais: SugestaoCliente[];
+  onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
   const [simulada, setSimulada] = React.useState('');
@@ -199,6 +205,18 @@ export function AnaliseProdutoDialogo({
               />
             ) : (
               <>
+                {sugestoesEspeciais.length > 0 ? (
+                  <OportunidadeEspecial
+                    linha={linha}
+                    sugestoes={sugestoesEspeciais}
+                    quantidade={simulacao.quantidade}
+                    referencia={referencia}
+                    podeOperar={podeOperar}
+                    motivoBloqueio={motivoBloqueio}
+                    onAdicionarEspecial={onAdicionarEspecial}
+                  />
+                ) : null}
+
                 {/* 4a. Simulação de compra */}
                 <Panel>
                   <PanelHeader title="Simulação de compra" hint="A quantidade sobe para a caixa cheia; o valor usa o custo da última entrada." />

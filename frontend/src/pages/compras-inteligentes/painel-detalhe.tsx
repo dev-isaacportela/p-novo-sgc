@@ -25,6 +25,8 @@ import { filiaisComExcesso, simularCompra } from '@/lib/ressuprimento-detalhe';
 import type { DadosDoSku } from '@/lib/ressuprimento-detalhe';
 import { GraficoComprasVendas } from './grafico';
 import { AnaliseVendaFutura } from './previsao-ui';
+import { OportunidadeEspecial } from './custo-especial-ui';
+import type { SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
 import { modeloEscolhido } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 
@@ -101,6 +103,8 @@ export function PainelDetalhe({
   modelo,
   onModelo,
   projetada,
+  sugestoesEspeciais,
+  onAdicionarEspecial,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -123,6 +127,9 @@ export function PainelDetalhe({
   modelo: ModeloPrevisao;
   onModelo: (modelo: ModeloPrevisao) => void;
   projetada: SugestaoProjetada | null;
+  /** R-125: as sugestões por cliente das políticas de preço especial do produto aberto. */
+  sugestoesEspeciais: SugestaoCliente[];
+  onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
 }) {
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
@@ -203,6 +210,18 @@ export function PainelDetalhe({
       <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
 
       <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} projecaoMes={projetada ? modeloEscolhido(previsao as Previsao, modelo)?.previsao ?? null : null} />
+
+      {sugestoesEspeciais.length > 0 ? (
+        <OportunidadeEspecial
+          linha={linha}
+          sugestoes={sugestoesEspeciais}
+          quantidade={simulacao.quantidade}
+          referencia={referencia}
+          podeOperar={podeOperar}
+          motivoBloqueio={motivoBloqueio}
+          onAdicionarEspecial={onAdicionarEspecial}
+        />
+      ) : null}
 
       <Panel>
         <PanelHeader title="Mais detalhes" hint={dados.erro || 'Abra só o que precisar; nada aqui custa consulta nova.'} />

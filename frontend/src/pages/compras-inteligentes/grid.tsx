@@ -10,7 +10,7 @@ import * as React from 'react';
 import { Download, RotateCcw, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
-  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
+  Badge,  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
   SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
 } from '@/components/page';
 import { arredondarPorCaixa } from '@/lib/compras';
@@ -77,6 +77,7 @@ export function ListaProdutos({
   desconsiderarLicitacao,
   onLicitacao,
   emPedidoAberto,
+  especiais,
   sugestaoProjetada,
   sugestaoTotal,
   carrinho,
@@ -103,6 +104,8 @@ export function ListaProdutos({
   onLicitacao: () => void;
   /** Produtos que já estão num pedido aberto do fornecedor nesta filial (C-035). */
   emPedidoAberto: Map<number, PedidoAbertoDoItem>;
+  /** R-125: o selo "Especial N un." / "Especial N tabelas" por produto com oportunidade. */
+  especiais: Map<number, { texto: string; tone: 'accent' | 'attention' }>;
   /** R-124: a sugestão projetada pelo modelo escolhido, só para o produto aberto no painel. */
   sugestaoProjetada: { codprod: number; sugestao: number } | null;
   /** Soma da sugestão do recorte ao custo da última entrada (R$). */
@@ -191,6 +194,7 @@ export function ListaProdutos({
             const escolhida = quantidades[codprod] ?? quantidadeInicial(linha);
             const ativa = codprod === selecionado;
             const aberto = emPedidoAberto.get(codprod);
+            const selo = especiais.get(codprod) ?? null;
             return (
               <Tr
                 key={codprod}
@@ -204,6 +208,7 @@ export function ListaProdutos({
                     <Code prefix="cód.">{codprod}</Code>
                     {` · ${String(linha.medida.EMBALAGEM) || '—'} · ${moeda(Number(linha.medida.CUSTO_ULT_ENTRADA))}`}
                   </RowMeta>
+                  {selo ? <RowMeta><Badge tone={selo.tone}>{selo.texto}</Badge></RowMeta> : null}
                   {linha.silenciado ? (
                     <RowMeta>
                       <Status tone="attention">

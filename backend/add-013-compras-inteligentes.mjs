@@ -39,7 +39,7 @@ import { jdbcIdWinthor } from './add-003-jdbc-winthor.mjs';
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
 export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico',
   'sgcWintProdutoUltimasCompras', 'sgcWintProdutoEstoqueFiliais', 'sgcWintProdutoVendas',
-  'sgcWintResumoFornecedores'];
+  'sgcWintResumoFornecedores', 'sgcWintVendasClientesProdutos'];
 
 /* ──────────────────────────────────────────────────────────────────────────
    A guarda de persona — UM texto só, o da 002 (R-013), copiado literalmente de
@@ -453,6 +453,66 @@ const SQL_VENDA_RECONSIDERAR = `DELETE FROM SGC_VENDA_DESCONSIDERADA
 WHERE NUMTRANSITEM = {{numtransitem}}
   AND ${guarda(OPERAR)}`;
 
+// R-125 (RN-032): a venda de cada cliente por produto na janela, para cruzar
+// com as políticas de preço especial. O mesmo recorte de saída da consulta
+// principal (CODOPER 'S', QT > 0, filial e janela); diferenças anotadas na
+// spec: a venda desconsiderada NÃO sai daqui, e a venda a órgão público fica
+// de fora por padrão ({{incluirPublico}} 0), como no legado. `{{codprods}}` é
+// FRAGMENTO (lista de inteiros sem aspas), como o `{{excluir}}`; a tela manda
+// em lotes de 500 (teto de 4000 caracteres do literal no Oracle).
+const SQL_VENDAS_CLIENTES = `SELECT
+  M.CODPROD,
+  M.CODCLI,
+  MAX(NVL(C.CLIENTE, '')) AS CLIENTE,
+  SUM(CASE WHEN M.QT > 0 THEN M.QT ELSE 0 END) AS VENDA_CLIENTE_PERIODO
+FROM PCMOV M
+LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+WHERE M.CODOPER = 'S'
+  AND M.QT > 0
+  AND M.CODFILIAL = '{{codfilial}}'
+  AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
+  AND M.CODPROD IN ({{codprods}})
+  AND (NOT (${PUBLICO}) OR {{incluirPublico}} = 1)
+GROUP BY M.CODPROD, M.CODCLI`;
+
+// R-125 (RN-CI-38 do legado): as políticas de preço especial vigentes por
+// produto, na conexão gestao-de-custos (projeto 60574: COST_POLICIES,
+// POLICY_ITEMS, COST_POLICY_CLIENTS). Três origens de cliente — a lista da
+// política, o CLIENTE_ID da própria política e, sem nenhum dos dois, a política
+// aberta (CODCLI 0) — unidas e filtradas por custo > 0, status não encerrado e
+// vigência em CURDATE(). `event.codprods` é substituição textual (lotes de 500).
+const CODE_CUSTOS_ESPECIAIS = JSON.stringify({
+  connection: 'gestao-de-custos',
+  method: 'POST',
+  endpoint: 'runQuery',
+  body: {
+    sql: `SELECT DISTINCT Q.CODPROD, Q.CODCLI, Q.CUSTO_ESPECIAL, Q.VARIACAO_PERCENTUAL, Q.POLITICA_ID, Q.POLITICA_NOME, Q.DATA_FIM
+FROM (
+  SELECT I.PRODUCT_ID AS CODPROD, C.CLIENTE_ID AS CODCLI, I.SPECIAL_COST AS CUSTO_ESPECIAL, I.VARIATION_PERCENT AS VARIACAO_PERCENTUAL,
+         P.ID AS POLITICA_ID, P.NAME AS POLITICA_NOME, P.STATUS AS POLITICA_STATUS, P.DT_START AS DATA_INICIO, P.DT_END AS DATA_FIM
+    FROM COST_POLICIES P
+    JOIN POLICY_ITEMS I ON I.POLICY_ID = P.ID
+    JOIN COST_POLICY_CLIENTS C ON C.POLICY_ID = P.ID
+  UNION ALL
+  SELECT I.PRODUCT_ID, P.CLIENTE_ID, I.SPECIAL_COST, I.VARIATION_PERCENT, P.ID, P.NAME, P.STATUS, P.DT_START, P.DT_END
+    FROM COST_POLICIES P
+    JOIN POLICY_ITEMS I ON I.POLICY_ID = P.ID
+   WHERE COALESCE(P.CLIENTE_ID, 0) > 0
+  UNION ALL
+  SELECT I.PRODUCT_ID, 0, I.SPECIAL_COST, I.VARIATION_PERCENT, P.ID, P.NAME, P.STATUS, P.DT_START, P.DT_END
+    FROM COST_POLICIES P
+    JOIN POLICY_ITEMS I ON I.POLICY_ID = P.ID
+   WHERE P.CLIENTE_ID IS NULL
+     AND NOT EXISTS (SELECT 1 FROM COST_POLICY_CLIENTS X WHERE X.POLICY_ID = P.ID)
+) Q
+WHERE Q.CODPROD IN (event.codprods)
+  AND COALESCE(Q.CUSTO_ESPECIAL, 0) > 0
+  AND UPPER(COALESCE(Q.POLITICA_STATUS, 'ATIVA')) NOT IN ('INATIVA', 'INACTIVE', 'CANCELADA', 'CANCELADO', 'REJEITADA', 'REPROVADA')
+  AND (Q.DATA_INICIO IS NULL OR Q.DATA_INICIO = '' OR Q.DATA_INICIO <= CURDATE())
+  AND (Q.DATA_FIM IS NULL OR Q.DATA_FIM = '' OR Q.DATA_FIM >= CURDATE())`,
+  },
+});
+
 /* ─────────────── a lista publicada ─────────────── */
 
 const LEITURAS = [
@@ -480,6 +540,11 @@ const LEITURAS = [
     name: 'sgcWintProdutoVendas',
     code: SQL_PRODUTO_VENDAS,
     resumo: 'RF-012 - as vendas do produto na janela, maiores primeiro (teto 50), com o NUMTRANSITEM que identifica a venda a desconsiderar. Params: codprod int, codfilial string, dataInicio string, dataFim string',
+  },
+  {
+    name: 'sgcWintVendasClientesProdutos',
+    code: SQL_VENDAS_CLIENTES,
+    resumo: 'R-125/RN-032 - venda de cada cliente por produto na janela (CODPROD, CODCLI, CLIENTE, VENDA_CLIENTE_PERIODO), para as oportunidades com custo especial. Params: codprods fragmento (lotes de 500), codfilial string, dataInicio string, dataFim string, incluirPublico int (0 = sem orgao publico)',
   },
   {
     name: 'sgcParametrosCompraListar',
@@ -542,12 +607,22 @@ const ESCRITAS = [
 ];
 
 // T-011: nenhuma definicao desta spec e JAVASCRIPT e nenhuma tem cron (R-081).
-export const definitions = [...LEITURAS, ...ESCRITAS].map((f) => ({
-  name: f.name,
-  type: 'SQL',
-  description: f.resumo,
-  code: f.code,
-}));
+// R-125: a unica INTEGRATION e a das politicas de preco especial, no molde da
+// sgcCustoUnidadesPorCaixa da 003.
+export const definitions = [
+  ...[...LEITURAS, ...ESCRITAS].map((f) => ({
+    name: f.name,
+    type: 'SQL',
+    description: f.resumo,
+    code: f.code,
+  })),
+  {
+    name: 'sgcCustoEspeciaisProdutos',
+    type: 'INTEGRATION',
+    description: 'R-125/RN-032 - politicas de preco especial vigentes por produto (CODPROD, CODCLI, CUSTO_ESPECIAL, VARIACAO_PERCENTUAL, POLITICA_ID, POLITICA_NOME, DATA_FIM), da conexao gestao-de-custos. Params: codprods lista (lotes de 500)',
+    code: CODE_CUSTOS_ESPECIAIS,
+  },
+];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

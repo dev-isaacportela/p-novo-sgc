@@ -20,6 +20,7 @@ import {
   montarRessuprimento, motivoDaSugestao, resolverParametros,
   RECORTE_INICIAL, alternarSilenciados, escolherVisao,
   campoEmCaixas, quantidadeNaReferencia, rotuloDaQuantidade, unidadesDaDigitada,
+  chaveDaEntrada, custoDaEntrada,
 } from '../src/lib/ressuprimento.ts';
 
 /** Uma medida de `sgcWintRessuprimento`, com o caso base do plan. */
@@ -564,4 +565,24 @@ test('R-120: o mapa do Gestão de Custos chega à regra — produto com 6 na ges
   assert.equal(semGestao.origemCaixa, 'embalagem');
   const [doErp] = montarRessuprimento([medida({ ESTOQUE_ATUAL: 50, UN_POR_CAIXA_ERP: 24 })], PARAMETRO_FIXO, alvoStub, new Map(), opcoes);
   assert.equal(doErp.origemCaixa, 'erp');
+});
+
+test('R-125: a linha especial do carrinho tem chave própria, o custo da política vale no total do grupo e no item do pedido (tipo especial), e a linha padrão do mesmo produto continua separada', () => {
+  const [l] = montarRessuprimento([medida({ CODPROD: 5401, CUSTO_ULT_ENTRADA: 10 })], [], alvoPadrao, new Map(),
+    { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false });
+  const especial = { politicaId: 7, politicaNome: 'Tabela A', custo: 8 };
+  const padrao = { linha: l, quantidade: 24, codfornec: 1042, codfilial: '1', fornecedor: 'F', filial: 'Matriz' };
+  const comEspecial = { ...padrao, quantidade: 12, especial };
+  assert.equal(chaveDaEntrada(padrao), '5401-1');
+  assert.equal(chaveDaEntrada(comEspecial), '5401-1-especial-7-8');
+  assert.equal(custoDaEntrada(padrao), 10);
+  assert.equal(custoDaEntrada(comEspecial), 8);
+  const [grupo] = agruparCarrinho([padrao, comEspecial]);
+  assert.equal(grupo.itens.length, 2);
+  assert.equal(grupo.total, 24 * 10 + 12 * 8);
+  assert.deepEqual(grupo.itens[1].especial, especial);
+  const item = itemDoCarrinho(l, 12, 42, especial);
+  assert.equal(item.precoCusto, 8);
+  assert.equal(item.tipoPreco, 'especial');
+  assert.equal(itemDoCarrinho(l, 24, 42).tipoPreco, 'padrao');
 });

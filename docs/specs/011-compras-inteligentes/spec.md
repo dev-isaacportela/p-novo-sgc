@@ -275,6 +275,21 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Quando** a compradora deixa o seletor em Best Fit (o padrão) ou escolhe um modelo
 - **Então** o Best Fit é o de menor MAD e o seletor diz qual venceu; a seção "Análise de venda futura" do painel e da Análise do Produto mostra projeção mensal, MAD com o MAPE, tracking signal com o limite ±4 e o estado (sob controle / fora), e a sugestão projetada com as caixas; mostra os pontos usados, os outliers ajustados, alpha/beta/gamma e as médias de 3, 6 e 12 meses da série ajustada; a última barra do gráfico passa a ser a projeção do modelo; a linha selecionada, a quantidade do simulador e o "adicionar ao carrinho" desse produto partem da sugestão projetada — as demais linhas seguem no consumo ponderado; a escolha do modelo é estado da tela e não é gravada
 
+**C-046 — As políticas de preço especial vigentes** *(R-125)*
+- **Dado que** o Gestão de Custos tem políticas de preço especial com itens e clientes
+- **Quando** a lista carrega
+- **Então** o sistema lê, por produto da lista, só as políticas vigentes (custo > 0, situação não encerrada, dentro das datas), com o cliente de cada uma — o cliente da lista da política, o cliente da própria política ou, sem nenhum dos dois, a política aberta para qualquer cliente — e a venda de cada cliente a esses produtos na janela, na filial, sem órgão público; nada disso custa mais que duas consultas por lote de 500 produtos
+
+**C-047 — A venda de cada cliente por produto** *(R-125)*
+- **Dado que** a filial vendeu um produto a vários clientes na janela
+- **Quando** a venda por cliente é consultada
+- **Então** vem uma linha por produto e cliente com o nome e a quantidade (só saídas positivas), sem órgão público por padrão e com ele quando pedido
+
+**C-048 — Oportunidade com preço especial no produto** *(R-125)*
+- **Dado que** um produto da lista tem política vigente para um cliente que comprou na janela, com custo especial abaixo do custo atual
+- **Quando** a compradora olha a lista e abre o produto
+- **Então** a linha mostra o selo "Especial N un." (ou "Especial N tabelas", em atenção, quando não há quantidade segura); o painel e a Análise do Produto mostram a seção "Oportunidade com preço especial", aberta, com o resumo (tabelas e ganho estimado), Comprar padrão | Tabelas especiais | Especial total, as tabelas em pílula e o card de cada uma (política, clientes, quantidade a comprar com caixas, risco, uso do limite seguro com compra especial e folga, o gráfico da venda do cliente por mês com a projeção segura, os 5 clientes com média, teto e projeção, o rodapé com limite, custo, ganho, "limitado por", ganho restante e validade); "Adicionar especial" põe no carrinho uma linha própria com o custo da política e o selo dela; o saldo fica como compra padrão
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -312,6 +327,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RF-031 | O carrinho DEVE gerar o arquivo de importação do WinThor, um por fornecedor e filial | C-030 | should |
 | RF-032 | A medida DEVE trazer o custo atual do ERP e o código de fábrica; o carrinho mostra a variação e a economia no custo | C-039 | should |
 | RF-033 | O produto aberto no painel DEVE ter previsão de venda por modelo (MMS, MMP, SE, Holt, Holt-Winters e Best Fit) sobre os meses fechados, com MAD, MAPE e tracking signal, e a sugestão projetada dele; a escolha do modelo é da compradora, Best Fit por padrão | C-043, C-044, C-045 | must |
+| RF-034 | O sistema DEVE mostrar as oportunidades de compra com custo especial do Gestão de Custos — por produto e cliente, com quantidade segura, risco e ganho — e deixar a compradora pôr a quantidade especial no carrinho com o custo da política | C-046, C-047, C-048 | must |
 
 ## Requisitos não-funcionais
 
@@ -367,6 +383,9 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **RN-029 — Série da previsão.** Até 12 meses fechados (mês < mês de hoje) de vendas do produto na filial, em ordem crescente, cada mês menos as vendas desconsideradas dele, com piso zero. Com 4 ou mais pontos: média e desvio populacional; ponto acima de média + 2 desvios vira a média (outlier ajustado). Com menos de 3 pontos não há projeção.
 - **RN-030 — Modelos e erros.** MMS: média dos últimos w = min(3, n−1). MMP: pesos 0,5/0,3/0,2 do mais recente ao mais antigo, truncados a w e normalizados. SE: nível = s0, a cada passo prev = nível e nível = α·s + (1−α)·nível, α de 0,1 a 0,9. Holt: L = s0, T = s1−s0; prev = L+T; L' = α·s + (1−α)(L+T); T = β(L'−L) + (1−β)T; α, β em {0,2; 0,4; 0,6; 0,8}. Holt-Winters aditivo: m = 6 com 12 pontos, senão 4; com n < 2m devolve o Holt "sem sazonalidade"; L0 = média(m primeiros), T0 = (média(m seguintes) − L0)/m, S_k = s_k − L0; prev = L+T+S_k, atualizações com α, β, γ em {0,2; 0,4; 0,6}. Cada modelo devolve a previsão do próximo mês (máx(0, 2 casas)) e os erros real − previsto; MAD = Σ|e|/n; MAPE só sobre reais > 0; CE = Σe; TS = CE/MAD (0 sem MAD); sob controle ⇔ |TS| ≤ 4. Os parâmetros são os de menor MAD (empate: o primeiro). Best Fit = o modelo de menor MAD; é o padrão.
 - **RN-031 — Sugestão projetada.** Demanda diária = previsão/30. Sugestão projetada = arredonda à caixa cheia (demanda × cobertura − disponível − trânsito), nunca negativa, com a cobertura que o item já resolve (RN-004). Alvo no lead time = demanda × lead time + estoque de segurança. Vale só para o produto aberto no painel: a linha selecionada, a quantidade do simulador e o "adicionar ao carrinho" dele; as demais linhas e a consulta seguem na RN-001. A projeção manual em % (badge) não altera o cálculo.
+- **RN-032 — Oportunidade por produto × cliente.** Exige cliente, venda do cliente no período, custo especial e economia unitária = máx(0, custo atual − especial) > 0 (sem custo atual, vale o da última entrada). Cobertura segura = clamp(cobertura resolvida ou 30, 1, 45). Projeção do cliente = teto(venda do cliente ÷ dias do período × cobertura segura). Quantidade segura qs = mín(sugestão, projeção do cliente). Risco: qs ≤ 0 Monitorar; venda ≥ 2·qs Seguro; senão Moderado. Ganho = qs × economia. Ordem por ganho.
+- **RN-033 — Sugestão segura por tabela.** Fator de cobertura = clamp(cobertura, 1, 45)/30; venda mensal do SKU = consumo diário × 30; cap recente do SKU = mediana dos 6 últimos meses fechados com venda, até 25 % acima dela e nunca acima do pico; fator de previsão = projeção do modelo ÷ venda mensal do SKU (1 sem um dos dois). Por cliente: participação = mín(1, venda do cliente ÷ soma dos últimos 12 meses com venda); mensais do cliente = meses × participação; média e cap do cliente = mín(máx mensal, máx(média, mediana × 1,25)); base = média, ou projeção do cliente ÷ fator de cobertura; teto = mín(cap do cliente ou base × 1,05, cap do SKU × participação); projeção mensal = teto(mín(base × fator de previsão, teto)); seguro = à caixa(projeção × fator de cobertura); crescimento = projeção ÷ base; risco Seguro (crescimento ≤ 1 e seguro ≤ projeção do cliente), Moderado (≤ 1,05) ou Arriscado; "limitado por" cliente, SKU ou ambos.
+- **RN-034 — Tabelas e distribuição.** Agrupa por política + custo: soma os seguros e o ganho potencial, junta os clientes, fica com o pior risco e a menor validade. Ficam as tabelas com seguro > 0, por maior economia e depois maior seguro. A quantidade simulada (à caixa) se distribui: cada tabela recebe mín(restante, seguro) e ganho = quantidade × economia; o que sobra é compra padrão. A linha especial do carrinho tem chave própria (produto, filial, política, custo), o custo da política e o tipo de preço especial no item do pedido.
 
 ## Testes
 
@@ -436,6 +455,12 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-044 | 10, 20, 30, 40, 50: MMS prevê 40 (erros 20, 20 → MAD 20, MAPE 45, CE 40, TS 2) e MMP 43 (MAD 17); SE com 10, 20 → alpha 0,1 e previsão 11; Holt na série linear 10, 20, 30 → 40 com MAD 0; Holt-Winters com 5 pontos cai no Holt "sem sazonalidade" e com 8 constantes prevê 10 com MAD 0 | regra de tela |
 | RN-030 | erros 5 ×5 → MAD 5, CE 25, TS 5 fora de controle; MAPE só sobre reais > 0; sem MAD, TS 0 | regra de tela |
 | C-045 | série linear 10..50 → Best Fit = Holt (MAD 0); "bestfit" resolve para ele; com 2 pontos não há modelos; médias 3/6/12 da série ajustada | regra de tela |
+| C-046 | `sgcCustoEspeciaisProdutos` para 5401..5405 → 5401 e 5403 (9301, tabela 1), 5405 aberta (0, tabela 4); inativa e vencida fora; lista vazia → nada | regra de negócio |
+| C-047 | `sgcWintVendasClientesProdutos` 5408/5409 → 9303 60, 9301 20, 9302 10, 9301 12; com órgão público, também 9304 6 | regra de negócio |
+| RN-032 | tabela A para o 9301 (custo 11 − 8 = 3, projeção 70, qs 48, seguro, ganho 144); política aberta para cada cliente; sem economia nada; venda < 2·qs moderado; sugestão 0 monitorar; cobertura 90 vira 45 | regra de tela |
+| C-048 | selo "Especial 113 un." (positivo) com quantidade segura, "Especial 2 tabelas" (atenção) sem ela, nada sem oportunidade; chave da linha especial `5401-1-especial-7-8`; lotes de 500 | regra de tela |
+| RN-033 | cliente com 85 % do SKU (306 de 360 em 6 meses de 60): média 51, caps 51, projeção 51, seguro 60 (caixa 12), crescimento 1, seguro, limitado por ambos; previsão 120 não passa do teto; sem série, base 60 e limitado pelo SKU; cap recente 31,25 para 10/20/30/100 | regra de tela |
+| RN-034 | tabelas 1-8 (economia 3, seguro 60) e 2-6 (economia 5, seguro 12 + 12, pior risco arriscado, validade 15/11) com quantidade 100 → 2-6 compra 24, 1-8 compra 60, padrão 16, ganho 300; tabela com seguro 0 fica fora; carrinho: total 24 × 10 + 12 × 8, item especial com preço 8 e tipo especial | regra de tela |
 | RN-031 | previsão 300 → 10/dia; cobertura 35, estoque 100, trânsito 50, caixa 12 → 200 → 204; alvo no lead time (9 d, segurança 20) = 110; nunca negativa | regra de tela |
 | C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
 | RN-028 | produto com 6 no Gestão de Custos e "CX 12" na embalagem fica com caixa 6 e origem gestão (sugestão em múltiplos de 6); sem o mapa, 12 pela embalagem; com 24 no ERP, origem ERP; a integração no simulador devolve 12 e 24 para 5001 e 5002 e nada para 5010 | regra de tela + regra de negócio |
@@ -451,15 +476,15 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 
 - [x] ~~**Previsão de demanda** (modelos estatísticos, corte de outlier, escolha por menor erro)~~ Entrou (R-124): os cinco modelos do legado, o cap de outliers e o Best Fit, só para o produto aberto no painel (C-043..C-045).
 - [ ] **Estoque de segurança estatístico** (fator de serviço sobre a volatilidade) — a volatilidade é medida e mostrada, mas não entra na fórmula; dívida registrada.
-- [ ] **Na Análise do Produto (R-123)**: a oportunidade com preço especial (depende do módulo de custos) e o fator Z do estoque de segurança ficam para a onda 5. ~~O seletor de modelos de previsão~~ entrou (R-124): C-043..C-045, RN-029..RN-031.
-- [ ] **Oportunidades de custo especial** e políticas de preço por cliente — dependem do módulo de custos.
+- [ ] **Na Análise do Produto (R-123)**: o fator Z do estoque de segurança fica para a onda 5. ~~A oportunidade com preço especial~~ entrou (R-125); ~~o seletor de modelos de previsão~~ entrou (R-124).
+- [x] ~~**Oportunidades de custo especial** e políticas de preço por cliente — dependem do módulo de custos.~~ Entrou (R-125): C-046..C-048, RN-032..RN-034, com o módulo de custos ligado (conexão gestao-de-custos, projeto 60574).
 - [ ] **Diálogo de bloqueios de lote** — **adiado** (R-117): o layout do sistema antigo o tinha; entra numa rodada futura, com consulta própria aos lotes.
 - [x] ~~**Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.~~ Existia (R-117): entrou como RF-031 / C-030.
 - [ ] **Planilha (xlsx) e PDF** — a exportação é em texto separado por ponto e vírgula, como nas demais telas.
 - [x] ~~**Curva por rentabilidade e "a pior das duas"** — a curva é uma só, a mesma da montagem do pedido.~~ Entrou (R-122): RN-010 e C-015 têm as duas curvas e a pior das duas; a montagem do pedido (003) segue com a régua única até a consulta dela trazer os dois valores.
 - [ ] **Custo padrão vindo da gestão de custos** — o custo é o da última entrada, como na montagem; dívida registrada.
 - [x] ~~**"Completar compra"** (sugestão complementar para atingir pedido mínimo) e **pedido mínimo por fornecedor.**~~ Entraram (R-117): RF-026 / C-027 e RF-030 / C-029; o mínimo é o da parametrização do fornecedor (001).
-- [ ] **Selo de "custo especial"** no carrinho — **adiado**: depende do módulo de custos (a variação e a economia de RN-027 entraram).
+- [x] ~~**Selo de "custo especial"** no carrinho — adiado.~~ Entrou (R-125): a linha especial do carrinho leva o selo da política e o custo dela.
 - [ ] **Carrinho guardado no servidor** (retomar de outra máquina ou de outro usuário) — **adiado**: o carrinho fica no navegador (RN-021); custaria uma tabela e três leituras/escritas.
 - [ ] **Juntar itens a um pedido já aberto** — **adiado**: a lista sinaliza o pedido aberto (RF-025); o carrinho continua recusado enquanto ele existir (RF-018).
 - [ ] **Bloco novo no card do pedido** — esta tela existe antes do pedido; o único ponto de contato é a criação pelo carrinho.

@@ -310,6 +310,24 @@ export async function suite(ctx) {
     }
   });
 
+  await teste('C-046 / R-125: sgcCustoEspeciaisProdutos (INTEGRATION gestao-de-custos) devolve so as politicas vigentes com custo — 5401 e 5403 para a Farmacia Central (tabela 1), 5405 aberta (CODCLI 0, tabela 4); a inativa (5402) e a vencida (5404) ficam fora', async () => {
+    const rows = await linhas('sgcCustoEspeciaisProdutos', { codprods: '5401,5402,5403,5404,5405' }, U.ana);
+    const vistos = rows.map((r) => [Number(r.CODPROD), Number(r.CODCLI), Number(r.CUSTO_ESPECIAL), Number(r.POLITICA_ID)]).sort((a, b) => a[0] - b[0]);
+    assert.deepEqual(vistos, [[5401, 9301, 8, 1], [5403, 9301, 9, 1], [5405, 0, 7, 4]]);
+    assert.equal(String(produto(rows, 5401).POLITICA_NOME), 'Tabela especial Farmacia Central');
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(String(produto(rows, 5401).DATA_FIM)), 'validade como data');
+    assert.deepEqual(await linhas('sgcCustoEspeciaisProdutos', { codprods: '' }, U.ana), []);
+  });
+
+  await teste('C-047 / R-125: sgcWintVendasClientesProdutos devolve a venda de cada cliente por produto na janela — 5408: 9303 60, 9301 20, 9302 10; 5409 so o 9301 (12) sem orgao publico, e com incluirPublico 1 tambem o 9304 (6)', async () => {
+    const semPublico = await linhas('sgcWintVendasClientesProdutos', { codprods: '5408,5409', codfilial: FILIAL_011, ...JANELA, incluirPublico: 0 }, U.ana);
+    const mapa = (rows) => rows.map((r) => `${r.CODPROD}:${r.CODCLI}=${Number(r.VENDA_CLIENTE_PERIODO)}`).sort();
+    assert.deepEqual(mapa(semPublico), ['5408:9301=20', '5408:9302=10', '5408:9303=60', '5409:9301=12']);
+    assert.ok(semPublico.every((r) => String(r.CLIENTE).length > 0), 'o nome do cliente vem junto');
+    const comPublico = await linhas('sgcWintVendasClientesProdutos', { codprods: '5408,5409', codfilial: FILIAL_011, ...JANELA, incluirPublico: 1 }, U.ana);
+    assert.deepEqual(mapa(comPublico), ['5408:9301=20', '5408:9302=10', '5408:9303=60', '5409:9301=12', '5409:9304=6']);
+  });
+
   await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho do Novo pedido do quadro — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
     const medidas = await ressuprimento();
     assert.ok(medidas.length > 0, 'consulta ao WinThor sem linha nao e verde');

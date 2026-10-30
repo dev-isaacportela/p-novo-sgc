@@ -255,6 +255,9 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEficienciaComprador: 'sgcEficienciaComprador',
   sgcWintResumoFornecedores: 'sgcWintResumoFornecedores',
   sgcItensEmPedidoAberto: 'sgcItensEmPedidoAberto',
+  // R-125: oportunidades com custo especial — venda por cliente (WinThor) e políticas (gestao-de-custos).
+  sgcWintVendasClientesProdutos: 'sgcWintVendasClientesProdutos',
+  sgcCustoEspeciaisProdutos: 'sgcCustoEspeciaisProdutos',
   sgcEscParametroCompraSalvar: 'sgcEscParametroCompraSalvar',
   sgcEscParametroCompraSilenciar: 'sgcEscParametroCompraSilenciar',
   sgcEscParametroCompraRestaurar: 'sgcEscParametroCompraRestaurar',
@@ -499,6 +502,8 @@ export const SERVER_FUNCTIONS = {
   sgcEficienciaComprador: '8109',
   sgcWintResumoFornecedores: '8110',
   sgcItensEmPedidoAberto: '8111',
+  sgcWintVendasClientesProdutos: '8112',
+  sgcCustoEspeciaisProdutos: '8113',
   sgcEscParametroCompraSalvar: '8150',
   sgcEscParametroCompraSilenciar: '8151',
   sgcEscParametroCompraRestaurar: '8152',

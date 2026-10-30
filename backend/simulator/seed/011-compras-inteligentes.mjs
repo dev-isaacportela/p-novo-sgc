@@ -233,6 +233,24 @@ export function seed011(db, cenario) {
   const inserirVendedor = db.prepare('INSERT OR IGNORE INTO PCUSUARI (CODUSUR, NOME) VALUES (?, ?)');
   for (const [codusur, nome] of VENDEDORES) inserirVendedor.run(codusur, nome);
 
+  // R-125 (C-046): políticas de preço especial do Gestão de Custos. A 1 vale
+  // para a Farmacia Central (9301) no 5401 (custo 8, contra 12 da última
+  // entrada e 11 do custo atual) e no 5403 (9); a 2 está INATIVA; a 3 venceu
+  // ontem; a 4 é aberta (sem cliente) para o 5405.
+  const inserirPolitica = db.prepare(`INSERT OR IGNORE INTO COST_POLICIES
+    (ID, NAME, STATUS, DT_START, DT_END, CLIENTE_ID, FILIAL_ID) VALUES (?, ?, ?, ?, ?, ?, NULL)`);
+  inserirPolitica.run(1, 'Tabela especial Farmacia Central', 'ACTIVE', haDias(30), haDias(-60), 9301);
+  inserirPolitica.run(2, 'Tabela inativa', 'INACTIVE', haDias(30), haDias(-60), 9301);
+  inserirPolitica.run(3, 'Tabela vencida', 'ACTIVE', haDias(60), haDias(1), 9301);
+  inserirPolitica.run(4, 'Tabela aberta', 'ACTIVE', '', '', null);
+  const inserirItemPolitica = db.prepare('INSERT OR IGNORE INTO POLICY_ITEMS (ID, POLICY_ID, PRODUCT_ID, SPECIAL_COST, VARIATION_PERCENT) VALUES (?, ?, ?, ?, 0)');
+  inserirItemPolitica.run(1, 1, 5401, 8.0);
+  inserirItemPolitica.run(2, 1, 5403, 9.0);
+  inserirItemPolitica.run(3, 2, 5402, 5.0);
+  inserirItemPolitica.run(4, 3, 5404, 5.0);
+  inserirItemPolitica.run(5, 4, 5405, 7.0);
+  db.prepare('INSERT OR IGNORE INTO COST_POLICY_CLIENTS (ID, POLICY_ID, CLIENTE_ID) VALUES (1, 1, 9301)').run();
+
   const inserirEntrada = db.prepare(`INSERT INTO PCMOV
     (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED, NUMTRANSENT, NUMNOTA)
     VALUES (?, ?, ?, NULL, 'E', ?, ?, ?, ?, NULL, NULL)`);

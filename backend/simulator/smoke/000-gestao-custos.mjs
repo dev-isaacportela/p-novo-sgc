@@ -7,16 +7,17 @@
 
 import { createRunner } from '../runtime.mjs';
 import {
-  abrirGestaoCustos, codprodsDe, ehGestaoCustos, executorSqlite, montarSql, origemDe, unidadesDeRegistros,
+  abrirGestaoCustos, codprodsDe, custosEspeciaisDeRegistros, ehCustosEspeciais, ehGestaoCustos, executorSqlite, montarSql, origemDe,
+  unidadesDeRegistros,
 } from '../gestao-custos.mjs';
 import { assert } from './base.mjs';
 
 export async function suite(ctx) {
   const { db, byName, teste, U } = ctx;
 
-  await teste('G-001: ehGestaoCustos aceita sgcCustoUnidadesPorCaixa (INTEGRATION com connection gestao-de-custos) e recusa toda outra definition carregada, uma INTEGRATION de outra conexão e JSON inválido', async () => {
-    const aceitas = [...byName.values()].filter(ehGestaoCustos).map((d) => d.name);
-    assert.deepEqual(aceitas, ['sgcCustoUnidadesPorCaixa']);
+  await teste('G-001: ehGestaoCustos aceita sgcCustoUnidadesPorCaixa e sgcCustoEspeciaisProdutos (INTEGRATION com connection gestao-de-custos) e recusa toda outra definition carregada, uma INTEGRATION de outra conexão e JSON inválido', async () => {
+    const aceitas = [...byName.values()].filter(ehGestaoCustos).map((d) => d.name).sort();
+    assert.deepEqual(aceitas, ['sgcCustoEspeciaisProdutos', 'sgcCustoUnidadesPorCaixa']);
     assert.equal(ehGestaoCustos({ type: 'INTEGRATION', code: JSON.stringify({ connection: 'outra', body: { sql: 'SELECT 1' } }) }), false);
     assert.equal(ehGestaoCustos({ type: 'INTEGRATION', code: '{nao e json' }), false);
     assert.equal(ehGestaoCustos({ type: 'SQL', code: 'SELECT 1' }), false);
@@ -162,5 +163,35 @@ export async function suite(ctx) {
     assert.ok(/IN \(5001\)/.test(consultas[0].sql), consultas[0].sql);
     assert.equal((await direto.produtos()).length, 1);
     assert.equal(consultas.length, 2);
+  });
+
+  await teste('G-007 / R-125: custosEspeciaisDeRegistros emula a sgcCustoEspeciaisProdutos sobre as tres tabelas do REST — cliente da lista, CLIENTE_ID da politica (sem repetir) e politica aberta como 0; fora: inativa, vencida, futura, custo 0 e produto nao pedido; ehCustosEspeciais reconhece a definition pela SQL', async () => {
+    assert.equal(ehCustosEspeciais(byName.get('sgcCustoEspeciaisProdutos')), true);
+    assert.equal(ehCustosEspeciais(byName.get('sgcCustoUnidadesPorCaixa')), false);
+    const politicas = [
+      { ID: 36, NAME: 'Tabela B', STATUS: 'ACTIVE', DT_START: '2026-06-30', DT_END: '2026-12-31', CLIENTE_ID: 107982 },
+      { ID: 37, NAME: 'Inativa', STATUS: 'INACTIVE', DT_START: '', DT_END: '', CLIENTE_ID: 1 },
+      { ID: 38, NAME: 'Vencida', STATUS: 'ACTIVE', DT_START: '2026-01-01', DT_END: '2026-06-30', CLIENTE_ID: 1 },
+      { ID: 39, NAME: 'Futura', STATUS: 'ACTIVE', DT_START: '2027-01-01', DT_END: null, CLIENTE_ID: 1 },
+      { ID: 40, NAME: 'Aberta', STATUS: null, DT_START: null, DT_END: null, CLIENTE_ID: null },
+    ];
+    const itens = [
+      { ID: 1, POLICY_ID: 36, PRODUCT_ID: 52, SPECIAL_COST: 41.94, VARIATION_PERCENT: 0 },
+      { ID: 2, POLICY_ID: 36, PRODUCT_ID: 44, SPECIAL_COST: 0, VARIATION_PERCENT: 0 },
+      { ID: 3, POLICY_ID: 36, PRODUCT_ID: 99, SPECIAL_COST: 1, VARIATION_PERCENT: 0 },
+      { ID: 4, POLICY_ID: 37, PRODUCT_ID: 52, SPECIAL_COST: 1, VARIATION_PERCENT: 0 },
+      { ID: 5, POLICY_ID: 38, PRODUCT_ID: 52, SPECIAL_COST: 1, VARIATION_PERCENT: 0 },
+      { ID: 6, POLICY_ID: 39, PRODUCT_ID: 52, SPECIAL_COST: 1, VARIATION_PERCENT: 0 },
+      { ID: 7, POLICY_ID: 40, PRODUCT_ID: 52, SPECIAL_COST: 30, VARIATION_PERCENT: -5 },
+    ];
+    const clientes = [{ ID: 1, POLICY_ID: 36, CLIENTE_ID: 107982 }, { ID: 2, POLICY_ID: 36, CLIENTE_ID: 105542 }];
+    const saida = custosEspeciaisDeRegistros({ politicas, itens, clientes }, [52, 44], '2026-10-30');
+    assert.deepEqual(saida.map((r) => [r.CODPROD, r.CODCLI, r.CUSTO_ESPECIAL, r.POLITICA_ID, r.DATA_FIM]), [
+      [52, 107982, 41.94, 36, '2026-12-31'],
+      [52, 105542, 41.94, 36, '2026-12-31'],
+      [52, 0, 30, 40, null],
+    ]);
+    assert.equal(saida[2].VARIACAO_PERCENTUAL, -5);
+    assert.deepEqual(custosEspeciaisDeRegistros({ politicas, itens, clientes }, [], '2026-10-30'), []);
   });
 }
