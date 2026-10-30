@@ -20,6 +20,7 @@ import {
 import { seedDatabase } from './seed.mjs';
 import { registerMysqlFunctions, toSqlite } from './mysql-dialect.mjs';
 import { loadDefinitions, createRunner } from './runtime.mjs';
+import { abrirWinthor } from './winthor-oracle.mjs';
 
 if (!existsSync(DB_PATH)) {
   console.log('[simulador] banco nao encontrado — gerando dados simulados...');
@@ -81,7 +82,10 @@ function lerMapaDoFrontend() {
   return nomes && ids ? { nomes, ids } : null;
 }
 
-const execute = createRunner(db, { resolveById: (id) => byId.get(id) ?? null });
+// Com SIMULATOR_WINTHOR=oracle no .env, as sgcWint* leem o WinThor REAL em vez
+// das PC* do seed (winthor-oracle.mjs); sem a chave, tudo fica no SQLite.
+const winthor = await abrirWinthor();
+const execute = createRunner(db, { resolveById: (id) => byId.get(id) ?? null, externo: winthor });
 const idsSemDefinicao = new Set();
 const errosPorId = new Map();
 
@@ -187,6 +191,7 @@ const server = createServer(async (req, res) => {
         projeto: PROJECT_LABEL,
         db: DB_PATH,
         projectId: PROJECT_ID,
+        winthor: winthor ? winthor.descricao : 'sqlite (PC* do seed)',
         [HEALTH_TABLE]: db.prepare(`SELECT COUNT(*) AS n FROM ${HEALTH_TABLE}`).get().n,
         serverFunctions: byId.size,
         definicoesCarregadas: byName.size,

@@ -169,6 +169,35 @@ são o contrato que as próximas specs usam; os nomes exibidos podem mudar.
 | Simulador (`npm run sim`) | `3109` |
 | Frontend (`npm run dev`) | ver `frontend/vite.config.ts` / `CLAUDE.md` do projeto |
 
+## WinThor real no simulador (`winthor-oracle.mjs`, opcional)
+
+Por padrão as `sgcWint*` rodam sobre as tabelas PC* imitadas em SQLite
+(`schema-winthor.mjs` + seeds): determinístico, sem rede, e é assim que
+`npm test` (check + smoke) sempre roda. Numa máquina com acesso ao Oracle do
+ERP (a VPS liberada no firewall), `SIMULATOR_WINTHOR=oracle` no `backend/.env`
+faz o `server.mjs` entregar um executor externo ao `createRunner`: toda
+definition `type: 'SQL'` de nome `sgcWint*` roda o seu SQL Oracle, literal
+(sem o dialeto SQLite), no WinThor real, com `WINTHOR_JDBC_URL/USER/PASSWORD`
+— as mesmas chaves que `add-003-jdbc-winthor.mjs` lê. Tudo o mais (banco do
+projeto, `JAVASCRIPT`, `INTEGRATION`) continua no SQLite; uma `JAVASCRIPT` que
+chama uma `sgcWint*` por id também cai no Oracle. O executor só aceita
+`SELECT`/`WITH`.
+
+Pré-requisitos na máquina: `oracledb` (devDependency, já no `npm install`) e o
+**Oracle Instant Client** em modo thick — o usuário do WinThor só tem
+verificador de senha 10G e o modo thin recusa o login (`NJS-116`). Na VPS ele
+está em `/opt/oracle/instantclient_19_26`, registrado em
+`/etc/ld.so.conf.d/oracle-instantclient.conf`; em outra máquina, aponte
+`ORACLE_CLIENT_LIB_DIR` para a pasta. `GET /health` mostra `winthor:` com a
+versão do servidor e o modo (`thick`/`thin`), ou `sqlite (PC* do seed)`.
+
+Atenção: os dados `SGC_*` continuam os do seed; só a leitura do ERP é real. E
+uma `JAVASCRIPT` que mande SQL com PC* por `runQueryMitra` (banco do projeto)
+não chega ao Oracle — nem aqui nem em produção.
+
+Testes: `smoke/000-winthor-real.mjs` (W-001..W-004) prova o roteamento com um
+executor falso, sem rede.
+
 ## Diagnóstico e voltar ao Mitra real
 
 Iguais ao kit da skill `mitra-escopo` (`GET /health`, `VITE_MITRA_AUTH_URL` no

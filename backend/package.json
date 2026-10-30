@@ -29,5 +29,8 @@
 		"@benenutri/mitra-kanban": "^1.9.2",
 		"dotenv": "*",
 		"mitra-sdk": "^1.0.58"
+	},
+	"devDependencies": {
+		"oracledb": "^6.9.0"
 	}
 }

@@ -51,6 +51,7 @@ cd frontend && npm test           # node --test sobre a regra pura de src/lib/
 cd backend && npm run sim         # simulador em http://localhost:3109 (senha mitra123)
 cd frontend && npm run dev -- --port 5179   # sem VITE_MITRA_AUTH_URL entra no simulador
 cd frontend && npm run build && npm run lint  # obrigatório antes de subir
+# SIMULATOR_WINTHOR=oracle no backend/.env: sgcWint* no WinThor REAL (só onde há acesso ao Oracle; ver simulator/README.md)
 ```
 
 Ou tudo junto pelo painel: `node ../mitra-hub/server.mjs`.

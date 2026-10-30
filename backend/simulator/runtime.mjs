@@ -72,8 +72,13 @@ const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
  *                      o codigo publicado mandaria. Sem ele, o e-mail so aparece
  *                      no console; com ele, o smoke confere destinatario,
  *                      assunto e CORPO (spec 002, C-032..C-034).
+ * @param externo       { aceita(definition), query(sql) } opcional — banco
+ *                      EXTERNO para as definitions que `aceita`: o SQL sai
+ *                      ligado (bindParams) e literal, sem passar pelo dialeto
+ *                      SQLite. E assim que winthor-oracle.mjs leva as sgcWint*
+ *                      ao WinThor real; sem ele, tudo roda no SQLite.
  */
-export function createRunner(db, { resolveById = () => null, onQuery, onEmail } = {}) {
+export function createRunner(db, { resolveById = () => null, onQuery, onEmail, externo = null } = {}) {
   const run = (sql) => {
     const translated = toSqlite(sql);
     if (onQuery) onQuery(translated, sql);
@@ -126,6 +131,11 @@ export function createRunner(db, { resolveById = () => null, onQuery, onEmail } 
 
   async function execute(definition, input, userId) {
     if (!definition) return { rows: [], simulatorMissingFunction: true };
+    if (externo && externo.aceita(definition)) {
+      const sql = bindParams(definition.code, input, userId);
+      if (onQuery) onQuery(sql, definition.code);
+      return { rows: await externo.query(sql) };
+    }
     return definition.type === 'JAVASCRIPT'
       ? runJavascript(definition, input, userId)
       : runSql(definition, input, userId);
