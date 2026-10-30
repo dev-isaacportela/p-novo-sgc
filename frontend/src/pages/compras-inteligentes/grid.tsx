@@ -1,146 +1,208 @@
-// A grade de ressuprimento da spec 011 (RF-001, RF-014..RF-016, RF-023).
+// A lista de produtos do layout legado da 011 (R-117): cabeçalho com o
+// subtítulo e o botão do carrinho, a linha de chips (sugestão, rupturas,
+// silenciados, ordem, movimentação, situação), a tabela com a linha
+// selecionável e a paginação.
 //
-// Arquivo próprio — e não um pedaço de `ComprasInteligentesPage.tsx` — porque a
-// tela inteira num arquivo só passa das 800 linhas do `max-lines`.
-//
-// Tudo aqui é local: filtrar, ordenar, paginar e ligar o seletor de licitação
-// não custam nenhuma execução (RNF-005). A linha já chega calculada por
-// `montarRessuprimento`; esta camada só desenha e coleta a quantidade.
+// Tudo aqui é local: filtrar, ordenar, trocar de visão e selecionar não custam
+// nenhuma execução (RNF-005). A linha já chega calculada por
+// `montarRessuprimento`; esta camada só desenha, seleciona e coleta a quantidade.
 import * as React from 'react';
-import { Eye, PlusCircle, Receipt, RotateCcw, SlidersHorizontal, VolumeX } from 'lucide-react';
+import { Download, RotateCcw, ShoppingCart, SlidersHorizontal, VolumeX } from 'lucide-react';
 
 import {
-  Code, Dash, IconButton, Input, Pagination, RowMeta, RowTitle, Status, Table, Td, Th, Tr,
+  Button, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
+  SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
 } from '@/components/page';
 import { arredondarPorCaixa } from '@/lib/compras';
-import { fmtData } from '@/lib/formato';
-import type { LinhaRessuprimento, StatusRessuprimento } from '@/lib/ressuprimento';
-import { ROTULO_STATUS } from '@/lib/ressuprimento';
+import { fmtData, moeda } from '@/lib/formato';
+import {
+  OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, quantidadeParaCompletar, textoDaSugestao,
+} from '@/lib/ressuprimento';
+import type {
+  FiltroMovimentacao, FiltrosLista, LinhaRessuprimento, OrdemLista, ReferenciaSugestao, StatusRessuprimento,
+  VisaoRessuprimento,
+} from '@/lib/ressuprimento';
 
 const POR_PAGINA = 25;
 
 /** §8.4: estado dentro de tabela é ponto + texto, nunca só a cor. */
 const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = {
-  ruptura: 'alert',
-  elevada_exposicao: 'alert',
-  baixa_exposicao: 'attention',
-  excesso: 'attention',
-  adequado: 'live',
+  ruptura: 'alert', elevada_exposicao: 'alert', baixa_exposicao: 'attention', excesso: 'attention', adequado: 'live',
 };
 
-const quantidade = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
-const consumo = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-const dinheiro = (valor: number) => valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const OPCOES_SITUACAO: { value: string; label: string }[] = [
+  { value: '', label: 'Qualquer situação' },
+  ...(Object.keys(ROTULO_STATUS) as StatusRessuprimento[]).map((s) => ({ value: s, label: ROTULO_STATUS[s] })),
+];
 
-export interface AcoesDaGrade {
-  onDetalhe: (linha: LinhaRessuprimento) => void;
-  onParametros: (linha: LinhaRessuprimento) => void;
+const quantidade = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+
+export interface PedidoAbertoDoItem { idCard: number; titulo: string }
+
+export interface AcoesDaLista {
+  onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onSilenciar: (linha: LinhaRessuprimento) => void;
   onRestaurar: (linha: LinhaRessuprimento) => void;
-  onVendas: (linha: LinhaRessuprimento) => void;
-  onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
+  onParametros: (linha: LinhaRessuprimento) => void;
+  onExportar: () => void;
+  onAbrirCarrinho: () => void;
 }
 
-export function GradeRessuprimento({
+export function ListaProdutos({
+  visao,
   linhas,
+  todas,
+  selecionado,
+  onSelecionar,
   quantidades,
   onQuantidade,
+  referencia,
+  filtros,
+  onFiltros,
+  emPedidoAberto,
+  sugestaoTotal,
+  carrinho,
   podeOperar,
   podeParametrizar,
   motivoBloqueio,
   acoes,
 }: {
+  visao: VisaoRessuprimento;
+  /** As linhas da visão, já filtradas e ordenadas pela página. */
   linhas: LinhaRessuprimento[];
+  /** Todas as linhas do fornecedor na filial — é de onde saem as contagens dos chips. */
+  todas: LinhaRessuprimento[];
+  selecionado: number;
+  onSelecionar: (linha: LinhaRessuprimento) => void;
   quantidades: Record<number, number>;
   onQuantidade: (codprod: number, valor: number) => void;
+  referencia: ReferenciaSugestao;
+  filtros: FiltrosLista;
+  onFiltros: (parcial: Partial<FiltrosLista>) => void;
+  /** Produtos que já estão num pedido aberto do fornecedor nesta filial (C-035). */
+  emPedidoAberto: Map<number, PedidoAbertoDoItem>;
+  /** Soma da sugestão do recorte ao custo da última entrada (R$). */
+  sugestaoTotal: number;
+  carrinho: { itens: number; pedidos: number };
   podeOperar: boolean;
   podeParametrizar: boolean;
   /** Por que os controles estão desabilitados — vai no `title`, nunca escondido (§9.4). */
   motivoBloqueio: string;
-  acoes: AcoesDaGrade;
+  acoes: AcoesDaLista;
 }) {
   const [pagina, setPagina] = React.useState(1);
   const ultima = Math.max(1, Math.ceil(linhas.length / POR_PAGINA));
   const paginaAtual = Math.min(pagina, ultima);
   const visiveis = linhas.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
 
-  // A lista mudou de tamanho (filtro, aba, seletor de licitação): volta à primeira.
+  // A lista mudou de tamanho (filtro, visão, seletor de licitação): volta à primeira.
   const [tamanho, setTamanho] = React.useState(linhas.length);
   if (tamanho !== linhas.length) {
     setTamanho(linhas.length);
     setPagina(1);
   }
 
+  const sugestaoUnidades = linhas.reduce((soma, l) => soma + l.sugerida, 0);
+  const rupturas = todas.filter((l) => l.status === 'ruptura').length;
+  const silenciados = todas.filter((l) => l.silenciado).length;
+
+  /** A quantidade pré-carregada: a sugestão, ou uma caixa na visão "completar". */
+  const quantidadeInicial = (l: LinhaRessuprimento) => (visao === 'completar' && l.sugerida <= 0 ? quantidadeParaCompletar(l) : l.sugerida);
+
   return (
-    <>
+    <Panel>
+      <PanelHeader
+        title="Produtos"
+        hint={`${linhas.length.toLocaleString('pt-BR')} ${linhas.length === 1 ? 'produto' : 'produtos'} no recorte · sugestão ${sugestaoTotal > 0 ? moeda(sugestaoTotal) : '—'}`}
+      >
+        <IconButton label="Exportar a lista visível (CSV)" disabled={linhas.length === 0} onClick={acoes.onExportar}>
+          <Download aria-hidden />
+        </IconButton>
+        <Button variant="primary" size="sm" onClick={acoes.onAbrirCarrinho}>
+          <ShoppingCart aria-hidden />
+          {`Carrinho · ${carrinho.itens} ${carrinho.itens === 1 ? 'item' : 'itens'} · ${carrinho.pedidos} ${carrinho.pedidos === 1 ? 'pedido' : 'pedidos'}`}
+        </Button>
+      </PanelHeader>
+
+      <Toolbar>
+        <ChipContagem title="Soma da sugestão das linhas do recorte, em unidades">
+          {`Sugestão ${quantidade(sugestaoUnidades)} un.`}
+        </ChipContagem>
+        <ChipContagem title="Produtos sem estoque disponível nesta filial">{`Rupturas ${rupturas}`}</ChipContagem>
+        <ChipContagem
+          ativo={filtros.soSilenciados}
+          onClick={() => onFiltros({ soSilenciados: !filtros.soSilenciados })}
+          title={filtros.soSilenciados ? 'Mostrando só os silenciados — clique para ver todos' : 'Clique para ver só os silenciados'}
+        >
+          {`Silenciados ${silenciados}`}
+        </ChipContagem>
+        <SelectMenu label="Ordenar" value={filtros.ordem} onChange={(v) => onFiltros({ ordem: v as OrdemLista })} options={OPCOES_ORDEM} className="w-40" />
+        <SelectMenu label="Movimentação" value={filtros.movimentacao} onChange={(v) => onFiltros({ movimentacao: v as FiltroMovimentacao })} options={OPCOES_MOVIMENTACAO} className="w-52" />
+        <SelectMenu label="Situação" value={filtros.situacao} onChange={(v) => onFiltros({ situacao: v as '' | StatusRessuprimento })} options={OPCOES_SITUACAO} className="w-44" />
+      </Toolbar>
+
       <Table>
         <thead>
           <tr>
             <Th>Produto</Th>
             <Th>Situação</Th>
             <Th>Curva</Th>
-            <Th numeric>Consumo/dia</Th>
-            <Th numeric>Estoque</Th>
-            <Th numeric>Trânsito</Th>
-            <Th numeric>Cobertura</Th>
-            <Th numeric>Gatilho</Th>
-            <Th numeric>Sugestão</Th>
-            <Th numeric className="w-28">Quantidade</Th>
-            <Th numeric>Custo</Th>
-            <Th className="w-36 text-right">Ações</Th>
+            <Th numeric className="w-32">Cobertura</Th>
+            <Th numeric className="w-40">Qtd. (un.)</Th>
+            <Th className="w-28 text-right">Ações</Th>
           </tr>
         </thead>
         <tbody>
           {visiveis.map((linha) => {
             const codprod = Number(linha.medida.CODPROD);
-            const escolhida = quantidades[codprod] ?? linha.sugerida;
+            const escolhida = quantidades[codprod] ?? quantidadeInicial(linha);
+            const ativa = codprod === selecionado;
+            const aberto = emPedidoAberto.get(codprod);
             return (
-              <Tr key={codprod}>
+              <Tr
+                key={codprod}
+                aria-selected={ativa}
+                onClick={() => onSelecionar(linha)}
+                className={ativa ? 'cursor-pointer border-l-4 border-l-primary bg-accent' : 'cursor-pointer border-l-4 border-l-transparent'}
+              >
                 <Td>
                   <RowTitle>{String(linha.medida.DESCRICAO)}</RowTitle>
                   <RowMeta>
                     <Code prefix="cód.">{codprod}</Code>
-                    {` · ${String(linha.medida.EMBALAGEM) || '—'} · ${String(linha.medida.UNIDADE) || '—'}`}
+                    {` · ${String(linha.medida.EMBALAGEM) || '—'} · ${moeda(Number(linha.medida.CUSTO_ULT_ENTRADA))}`}
                   </RowMeta>
                   {linha.silenciado ? (
-                    <Status tone="off">
-                      <span title={linha.motivoSilencio || 'Silenciado'}>
-                        {`Silenciado até ${fmtData(linha.silenciadoAte)}`}
-                      </span>
-                    </Status>
+                    <RowMeta>
+                      <Status tone="off">
+                        <span title={linha.motivoSilencio || 'Silenciado'}>
+                          {`Silenciado até ${fmtData(linha.silenciadoAte)}${linha.motivoSilencio ? ` · ${linha.motivoSilencio}` : ''}`}
+                        </span>
+                      </Status>
+                    </RowMeta>
+                  ) : null}
+                  {aberto && linha.emTransito <= 0 ? (
+                    <RowMeta>
+                      <Status tone="attention">
+                        <span title={aberto.titulo}>{`Pedido #${aberto.idCard} aberto, ainda sem trânsito`}</span>
+                      </Status>
+                    </RowMeta>
                   ) : null}
                 </Td>
+                <Td><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></Td>
                 <Td>
-                  <Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status>
+                  <span title={`Alvo de cobertura: ${linha.coberturaDias} dias (${linha.parametros.origemCobertura})`}>{linha.curva}</span>
                 </Td>
-                <Td>
-                  <span title={`Alvo de cobertura: ${linha.coberturaDias} dias (${linha.parametros.origemCobertura})`}>
-                    {linha.curva}
-                  </span>
-                </Td>
-                <Td numeric>{linha.consumoDiario > 0 ? consumo(linha.consumoDiario) : <Dash />}</Td>
-                <Td numeric>{quantidade(linha.estoqueAtual)}</Td>
-                <Td numeric>{linha.emTransito > 0 ? quantidade(linha.emTransito) : <Dash />}</Td>
                 <Td numeric>
                   {linha.coberturaAtualDias === null
                     ? <span title="Sem giro: não há consumo para dividir"><Dash /></span>
                     : `${Math.round(linha.coberturaAtualDias)} d`}
+                  <RowMeta>
+                    {linha.diasDeGatilho === null ? 'sem gatilho' : linha.diasDeGatilho < 0
+                      ? <Status tone="alert">{`gatilho ${linha.diasDeGatilho} d`}</Status>
+                      : `gatilho ${linha.diasDeGatilho} d${linha.urgente ? ' · urgente' : ''}`}
+                  </RowMeta>
                 </Td>
-                <Td numeric>
-                  {linha.diasDeGatilho === null
-                    ? <span title="Sem giro: não há consumo para dividir"><Dash /></span>
-                    : linha.urgente
-                      ? (
-                        <Status tone="alert">
-                          <span title={`Urgente: gatilho de ${linha.parametros.gatilhoDias} dias`}>
-                            {`${linha.diasDeGatilho} d · urgente`}
-                          </span>
-                        </Status>
-                      )
-                      : `${linha.diasDeGatilho} d`}
-                </Td>
-                <Td numeric>{linha.sugerida > 0 ? quantidade(linha.sugerida) : <Dash />}</Td>
-                <Td numeric>
+                <Td numeric onClick={(e) => e.stopPropagation()}>
                   <Input
                     type="number"
                     min={0}
@@ -150,40 +212,22 @@ export function GradeRessuprimento({
                     disabled={!podeOperar}
                     title={podeOperar ? `Sobe para a caixa cheia de ${linha.unidadesPorCaixa} un.` : motivoBloqueio}
                     onChange={(evento) => onQuantidade(codprod, Number(evento.target.value) || 0)}
-                    onBlur={(evento) => onQuantidade(
-                      codprod,
-                      arredondarPorCaixa(Number(evento.target.value) || 0, linha.unidadesPorCaixa),
-                    )}
+                    onBlur={(evento) => onQuantidade(codprod, arredondarPorCaixa(Number(evento.target.value) || 0, linha.unidadesPorCaixa))}
                   />
-                  <RowMeta>
-                    {linha.unidadesPorCaixa > 1
-                      ? `${(escolhida / linha.unidadesPorCaixa).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cx`
-                      : 'unidade avulsa'}
-                  </RowMeta>
+                  <RowMeta>{`sug. ${textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)}`}</RowMeta>
                 </Td>
-                <Td numeric>{dinheiro(Number(linha.medida.CUSTO_ULT_ENTRADA))}</Td>
-                <Td className="text-right">
+                <Td className="text-right" onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center justify-end gap-1">
-                    <IconButton label="Ver o detalhe do produto" onClick={() => acoes.onDetalhe(linha)}>
-                      <Eye aria-hidden />
-                    </IconButton>
                     <IconButton
-                      label={podeOperar ? 'Escolher as vendas que não contam na demanda' : motivoBloqueio}
-                      disabled={!podeOperar}
-                      onClick={() => acoes.onVendas(linha)}
+                      label={podeOperar ? 'Jogar no carrinho' : motivoBloqueio}
+                      disabled={!podeOperar || escolhida <= 0}
+                      onClick={() => acoes.onAdicionar(linha, escolhida)}
                     >
-                      <Receipt aria-hidden />
-                    </IconButton>
-                    <IconButton
-                      label={podeParametrizar ? 'Parâmetros deste produto' : motivoBloqueio}
-                      disabled={!podeParametrizar}
-                      onClick={() => acoes.onParametros(linha)}
-                    >
-                      <SlidersHorizontal aria-hidden />
+                      <ShoppingCart aria-hidden />
                     </IconButton>
                     {linha.silenciado ? (
                       <IconButton
-                        label={podeParametrizar ? 'Devolver o produto à fila de compra' : motivoBloqueio}
+                        label={podeParametrizar ? 'Restaurar: devolver o produto à fila de compra' : motivoBloqueio}
                         disabled={!podeParametrizar}
                         onClick={() => acoes.onRestaurar(linha)}
                       >
@@ -191,7 +235,7 @@ export function GradeRessuprimento({
                       </IconButton>
                     ) : (
                       <IconButton
-                        label={podeParametrizar ? 'Silenciar o produto por um prazo' : motivoBloqueio}
+                        label={podeParametrizar ? 'Silenciar por 30 dias' : motivoBloqueio}
                         disabled={!podeParametrizar}
                         onClick={() => acoes.onSilenciar(linha)}
                       >
@@ -199,11 +243,11 @@ export function GradeRessuprimento({
                       </IconButton>
                     )}
                     <IconButton
-                      label={podeOperar ? 'Jogar no carrinho' : motivoBloqueio}
-                      disabled={!podeOperar || escolhida <= 0}
-                      onClick={() => acoes.onAdicionar(linha, escolhida)}
+                      label={podeParametrizar ? 'Parâmetros deste produto' : motivoBloqueio}
+                      disabled={!podeParametrizar}
+                      onClick={() => acoes.onParametros(linha)}
                     >
-                      <PlusCircle aria-hidden />
+                      <SlidersHorizontal aria-hidden />
                     </IconButton>
                   </span>
                 </Td>
@@ -221,6 +265,6 @@ export function GradeRessuprimento({
         onPrevious={() => setPagina((p) => Math.max(1, p - 1))}
         onNext={() => setPagina((p) => Math.min(ultima, p + 1))}
       />
-    </>
+    </Panel>
   );
 }

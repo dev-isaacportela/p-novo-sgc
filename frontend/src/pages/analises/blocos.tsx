@@ -11,12 +11,13 @@
 // continuam sendo os primitivos — isto é só a montagem deles.
 import * as React from 'react';
 import {
-  Alert, AlternaVisao, Bar, BarChart, CartesianGrid, ChartContainer, ChartTooltip,
-  ChartTooltipContent, ChartLegend, ChartLegendContent, Dash, Line, LineChart,
-  PainelGrafico, Table, Td, Th, Tr, TextLink, XAxis, YAxis, type ChartConfig,
+  Alert, AlternaVisao, Bar, BarChart, CartesianGrid, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, Dash, LabelList, Line, LineChart, PainelGrafico, Table, Td, TextLink, Th, Tr, XAxis, YAxis, type ChartConfig,
 } from '@/components/page';
 import { corDeSerie } from '@/components/page';
 import type { Bloco, PontoComparativo, PontoSerie } from '@/lib/analises';
+
+/** R-116: toda barra e todo ponto de linha mostram o seu valor escrito em cima; sem valor, nada. */
+const rotuloDeValor = (valor: unknown) => (valor === null || valor === undefined ? '' : Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 1 }));
 
 const VAZIO = 'Sem dados no período.';
 
@@ -109,7 +110,9 @@ export function PainelSerie({
                 <XAxis dataKey="name" tickLine={false} axisLine={false} interval="preserveStartEnd" />
                 <YAxis tickLine={false} axisLine={false} width={48} allowDecimals={false} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Line dataKey="value" stroke="var(--color-value)" strokeWidth={2} dot={false} />
+                <Line dataKey="value" stroke="var(--color-value)" strokeWidth={2} dot={false}>
+                  <LabelList dataKey="value" position="top" formatter={rotuloDeValor} className="fill-ink text-[10px]" />
+                </Line>
               </LineChart>
             ) : (
               <BarChart data={serie}>
@@ -117,7 +120,9 @@ export function PainelSerie({
                 <XAxis dataKey="name" tickLine={false} axisLine={false} interval="preserveStartEnd" />
                 <YAxis tickLine={false} axisLine={false} width={48} allowDecimals={false} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="value" fill="var(--color-value)" radius={4} />
+                <Bar dataKey="value" fill="var(--color-value)" radius={4}>
+                  <LabelList dataKey="value" position="top" formatter={rotuloDeValor} className="fill-ink text-[10px]" />
+                </Bar>
               </BarChart>
             )}
           </ChartContainer>
@@ -184,8 +189,12 @@ export function PainelComparativo({
               <YAxis tickLine={false} axisLine={false} width={64} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <ChartLegend content={<ChartLegendContent />} />
-              <Bar dataKey="a" fill="var(--color-a)" radius={4} />
-              <Bar dataKey="b" fill="var(--color-b)" radius={4} />
+              <Bar dataKey="a" fill="var(--color-a)" radius={4}>
+                <LabelList dataKey="a" position="top" formatter={rotuloDeValor} className="fill-ink text-[10px]" />
+              </Bar>
+              <Bar dataKey="b" fill="var(--color-b)" radius={4}>
+                <LabelList dataKey="b" position="top" formatter={rotuloDeValor} className="fill-ink text-[10px]" />
+              </Bar>
             </BarChart>
           </ChartContainer>
         </Conteudo>

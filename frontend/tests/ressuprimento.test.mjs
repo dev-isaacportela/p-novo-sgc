@@ -412,3 +412,80 @@ test('C-024: a exportação leva as 10 colunas da tela e 3 linhas, separadas por
   assert.match(partes[1], /"WHEY 900 G ""ZERO"" \(5401\)"/);
   assert.match(partes[3], /sem giro/, 'produto sem giro não inventa número no CSV');
 });
+
+/* ── Layout legado (R-117): visões, completar compra, ordem, movimentação, nível, referência ── */
+
+import {
+  completarCompra, contarVisoes, filtrarMovimentacao, linhasDaVisao, nivelDeCobertura, ordenarLinhas,
+  quantidadeParaCompletar, textoDaSugestao,
+} from '../src/lib/ressuprimento.ts';
+
+/** O parâmetro do fornecedor que fixa cobertura 35, lead 9 e gatilho 15, qualquer que seja a curva. */
+const PARAMETRO_FIXO = [{ codprod: 0, coberturaDias: 35, leadTimeDias: 9, gatilhoDias: 15, silenciadoAte: '', motivoSilencio: '' }];
+const montar = (medidas) => montarRessuprimento(medidas, PARAMETRO_FIXO, alvoStub, new Map(), {
+  codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false,
+});
+
+test('C-026 / C-027 / RN-020: as quatro visões contam o que mostram — disponível 20 está a comprar; 75 (cobertura 37,5 d, dentro de alvo 35 + lead 9) completa a compra com uma caixa; 200 não completa (cobertura 100 d); e 30 com 20 em trânsito só aparece em trânsito', () => {
+  const linhas = montar([
+    medida({ CODPROD: 1, DESCRICAO: 'A COMPRAR', ESTOQUE_ATUAL: 20 }),
+    medida({ CODPROD: 2, DESCRICAO: 'COMPLETAR', ESTOQUE_ATUAL: 75 }),
+    medida({ CODPROD: 3, DESCRICAO: 'SOBRANDO', ESTOQUE_ATUAL: 200 }),
+    medida({ CODPROD: 4, DESCRICAO: 'A CAMINHO', ESTOQUE_ATUAL: 30, ESTOQUE_EM_TRANSITO: 20 }),
+  ]);
+  assert.deepEqual(contarVisoes(linhas), { comprar: 1, completar: 1, todos: 4, transito: 1 });
+  assert.deepEqual(completarCompra(linhas).map((l) => l.medida.CODPROD), [2]);
+  assert.deepEqual(linhasDaVisao(linhas, 'comprar').map((l) => l.medida.CODPROD), [1]);
+  assert.deepEqual(linhasDaVisao(linhas, 'transito').map((l) => l.medida.CODPROD), [4]);
+  assert.equal(linhasDaVisao(linhas, 'todos').length, 4);
+  assert.equal(quantidadeParaCompletar(completarCompra(linhas)[0]), 12, 'uma caixa de 12');
+  const avulso = montar([medida({ CODPROD: 5, EMBALAGEM: 'FRASCO 100 ML', UN_POR_CAIXA_ERP: 0, ESTOQUE_ATUAL: 75 })]);
+  assert.equal(quantidadeParaCompletar(avulso[0]), 1, 'avulso completa com 1 unidade');
+});
+
+test('RN-020: silenciado, sem giro e com trânsito nunca entram em "completar compra", e a ordem é da menor cobertura para a maior', () => {
+  const linhas = montarRessuprimento([
+    medida({ CODPROD: 1, DESCRICAO: 'B', ESTOQUE_ATUAL: 80 }),
+    medida({ CODPROD: 2, DESCRICAO: 'A', ESTOQUE_ATUAL: 72 }),
+    medida({ CODPROD: 3, DESCRICAO: 'SILENCIADO', ESTOQUE_ATUAL: 72 }),
+    medida({ CODPROD: 4, DESCRICAO: 'SEM GIRO', ESTOQUE_ATUAL: 40, VENDA_PERIODO: 0, CONSUMO_DIARIO: 0 }),
+    medida({ CODPROD: 5, DESCRICAO: 'TRANSITO', ESTOQUE_ATUAL: 72, ESTOQUE_EM_TRANSITO: 5 }),
+  ], [...PARAMETRO_FIXO, { codprod: 3, coberturaDias: 0, leadTimeDias: 0, gatilhoDias: 0, silenciadoAte: '2026-10-16', motivoSilencio: 'indústria' }],
+  alvoStub, new Map(), { codfornec: 1042, hoje: '2026-09-16', desconsiderarLicitacao: false });
+  assert.deepEqual(completarCompra(linhas).map((l) => l.medida.CODPROD), [2, 1]);
+});
+
+test('C-038: ordenar por código, nome e curva, e os filtros de movimentação, sem nenhuma consulta', () => {
+  const linhas = montar([
+    medida({ CODPROD: 30, DESCRICAO: 'ZINCO', ESTOQUE_ATUAL: 0, VENDA_PERIODO: 500, CUSTO_ULT_ENTRADA: 10 }),
+    medida({ CODPROD: 10, DESCRICAO: 'ALBUMINA', ESTOQUE_ATUAL: 50, VENDA_PERIODO: 0, CONSUMO_DIARIO: 0 }),
+    medida({ CODPROD: 20, DESCRICAO: 'MAGNESIO', ESTOQUE_ATUAL: 30, ESTOQUE_EM_TRANSITO: 20, VENDA_PERIODO: 30, CUSTO_ULT_ENTRADA: 1 }),
+  ]);
+  assert.deepEqual(ordenarLinhas(linhas, 'codigo').map((l) => l.medida.CODPROD), [10, 20, 30]);
+  assert.deepEqual(ordenarLinhas(linhas, 'nome').map((l) => l.medida.DESCRICAO), ['ALBUMINA', 'MAGNESIO', 'ZINCO']);
+  // A régua da curva é a de C-015 (500 / 250 / 150 → A, B, C): a ordem por curva é A, B, C.
+  const porCurva = ordenarLinhas(montar([
+    medida({ CODPROD: 3, DESCRICAO: 'C', VENDA_PERIODO: 15, CUSTO_ULT_ENTRADA: 10 }),
+    medida({ CODPROD: 1, DESCRICAO: 'A', VENDA_PERIODO: 50, CUSTO_ULT_ENTRADA: 10 }),
+    medida({ CODPROD: 2, DESCRICAO: 'B', VENDA_PERIODO: 25, CUSTO_ULT_ENTRADA: 10 }),
+  ]), 'curva');
+  assert.deepEqual(porCurva.map((l) => `${l.curva}${l.medida.CODPROD}`), ['A1', 'B2', 'C3']);
+  assert.deepEqual(ordenarLinhas(linhas, 'padrao').map((l) => l.medida.CODPROD), [30, 10, 20], 'padrão mantém a ordem recebida');
+  assert.deepEqual(filtrarMovimentacao(linhas, 'com_venda').map((l) => l.medida.CODPROD), [30, 20]);
+  assert.deepEqual(filtrarMovimentacao(linhas, 'sem_venda').map((l) => l.medida.CODPROD), [10]);
+  assert.deepEqual(filtrarMovimentacao(linhas, 'com_estoque').map((l) => l.medida.CODPROD), [10, 20]);
+  assert.deepEqual(filtrarMovimentacao(linhas, 'sem_estoque').map((l) => l.medida.CODPROD), [30]);
+  assert.deepEqual(filtrarMovimentacao(linhas, 'com_transito').map((l) => l.medida.CODPROD), [20]);
+  assert.equal(filtrarMovimentacao(linhas, '').length, 3);
+});
+
+test('C-031: o nível de cobertura é disponível ÷ máximo — 50 de 70 dá 71,4 %; sem máximo (sem giro) não existe', () => {
+  assert.equal(Math.round(nivelDeCobertura({ estoqueAtual: 50, estoqueMaximo: 70 }) * 10) / 10, 71.4);
+  assert.equal(nivelDeCobertura({ estoqueAtual: 40, estoqueMaximo: 0 }), null);
+});
+
+test('C-037: a referência Unidades/Caixas só muda o texto da sugestão — 48 com caixa de 12 é "48 un. · 4 cx" ou "4 cx · 48 un."; avulso é só unidades', () => {
+  assert.equal(textoDaSugestao(48, 12, 'unidades'), '48 un. · 4 cx');
+  assert.equal(textoDaSugestao(48, 12, 'caixas'), '4 cx · 48 un.');
+  assert.equal(textoDaSugestao(48, 1, 'caixas'), '48 un.');
+});

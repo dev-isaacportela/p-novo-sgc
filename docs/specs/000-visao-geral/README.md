@@ -739,3 +739,10 @@ smoke provam contagem > 0.
 | `/coberturas` (existente) | grid com Alvo · Status · A · B · C (dias e %) e o "máximo sem justificativa"; formulário com três painéis de curva; aba de auditoria (antes → depois); CSV | admin, gestor | 012 |
 
 Menu: grupo **Compras** ganha "Compras inteligentes". Nenhum bloco de card novo (R-050).
+
+## Revisão de layout da 011 e regra de gráfico (2026-10-30)
+
+| # | Decisão | Onde |
+|---|---|---|
+| R-116 | **Valor escrito em toda marca de gráfico.** Decisão do usuário, válida para todo gráfico do sistema: cada barra e cada ponto de linha mostram o seu valor em cima (`LabelList` do recharts), inclusive a série de projeção. Substitui o "rotule os extremos e o último ponto" do `design.md` §12.3. Aplicada nos gráficos de `/analises` e no novo "Compras × vendas" da 011. | `docs/design.md` §12.3, `pages/analises/blocos.tsx`, `pages/compras-inteligentes/grafico.tsx` |
+| R-117 | **`/compras-inteligentes` no layout do sistema antigo (Opção A).** Cabeçalho com Unidades/Caixas, Parâmetros do fornecedor, Coberturas ABC e Atualizar; barra de recorte com o rótulo do fornecedor trazendo itens e sugestão estimada; aviso de carrinho salvo; quatro cards de visão (A comprar · Completar compra · Todos · Em trânsito); lista à esquerda e painel de detalhe fixo à direita (KPIs, gráfico sempre aberto, seis seções recolhidas); carrinho em janela com pedido mínimo por grupo, variação de custo, economia e arquivo de importação do WinThor. Cenários C-026..C-039, RF-024..RF-032, RN-020..RN-027 e RNF-001/RNF-003 emendadas na spec 011; duas SFs novas (`sgcWintResumoFornecedores` 8110, `sgcItensEmPedidoAberto` 8111) e duas colunas em `sgcWintRessuprimento` (`CODFAB`, `CUSTO_ATUAL`). **Adiados**, registrados na spec: diálogo de bloqueios de lote, selo de custo especial, carrinho no servidor, juntar itens a pedido aberto. O carrinho fica no navegador por usuário (D-017). | `docs/specs/011-compras-inteligentes/`, `backend/add-013-compras-inteligentes.mjs`, `frontend/src/pages/compras-inteligentes/` |

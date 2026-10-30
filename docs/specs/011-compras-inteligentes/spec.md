@@ -1,6 +1,6 @@
 # Spec: Compras inteligentes — o que comprar hoje, por fornecedor e filial
 
-**ID:** 011-compras-inteligentes · **Status:** rascunho · **Data:** 2026-09-16
+**ID:** 011-compras-inteligentes · **Status:** rascunho · **Data:** 2026-09-16 · **Revisão:** 2026-10-30 (layout do sistema antigo, R-117)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -177,6 +177,76 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Quando** a lista é calculada
 - **Então** a situação é **excesso**, a sugestão é **0**, e cobertura atual e dias de gatilho aparecem como "sem giro" — nunca como um número inventado
 
+**C-026 — As visões são cards com contagem**
+- **Dado que** a lista do fornecedor na filial foi calculada
+- **Quando** a compradora olha o topo da tela
+- **Então** vê quatro cards — **A comprar**, **Completar compra**, **Todos** e **Em trânsito** —, cada um com a quantidade de produtos que mostra, e clicar num card troca o recorte da lista sem nova consulta
+
+**C-027 — Completar a compra com o que vai faltar em breve**
+- **Dado que** um produto tem sugestão zero, nada em trânsito, giro, e 75 em estoque disponível com consumo de 2 por dia (cobertura de 37,5 dias, dentro de cobertura de 35 + lead de 9)
+- **Quando** a compradora abre "Completar compra"
+- **Então** o produto aparece com uma caixa cheia pré-carregada como complemento; o produto com 200 em estoque (cobertura de 100 dias), o silenciado, o sem giro e o que tem trânsito não aparecem
+
+**C-028 — Carrinho salvo e retomada**
+- **Dado que** a compradora montou um carrinho com 3 itens em 2 pedidos e fechou a tela
+- **Quando** ela volta
+- **Então** vê "Você tem um carrinho salvo", com itens, pedidos, valor e quando foi aberto, e escolhe **continuar** (o carrinho volta inteiro, com quantidades e motivos) ou **descartar** (com confirmação)
+
+**C-029 — Pedido mínimo do fornecedor no carrinho**
+- **Dado que** o fornecedor foi parametrizado com pedido mínimo de R$ 1.000 e o grupo do carrinho soma R$ 300
+- **Quando** a compradora abre o carrinho
+- **Então** o grupo mostra "Faltam R$ 700 para o mínimo" com a barra em 30 %; com R$ 1.200 mostra "Pedido mínimo atingido"; fornecedor sem mínimo parametrizado está sempre atingido
+
+**C-030 — Arquivo de importação do WinThor**
+- **Dado que** o carrinho tem itens de dois fornecedores
+- **Quando** a compradora pede o arquivo de importação
+- **Então** recebe um arquivo por fornecedor e filial, uma linha por item no formato `CODPROD;PRECO;QTD`, sem cabeçalho, preço com ponto decimal e duas casas, quantidade inteira, e item com quantidade zero fica de fora
+
+**C-031 — Painel de detalhe fixo**
+- **Dado que** a lista carregou
+- **Quando** a compradora clica numa linha (o primeiro produto já vem selecionado)
+- **Então** o painel à direita mostra código e descrição, embalagem e fornecedor, quatro números — estoque e trânsito, cobertura e nível (disponível ÷ máximo, 50 de 70 é 71 %), situação, prioridade e gatilho —, o gráfico de compras × vendas e as seções recolhidas de "Mais detalhes"; selecionar um produto custa três consultas, uma vez por produto
+
+**C-032 — Compras × vendas com projeção e valores escritos**
+- **Dado que** o produto vendeu 10 em agosto e 20 em setembro e entrou 24 em agosto, com consumo diário de 2
+- **Quando** o gráfico é desenhado em 6 meses
+- **Então** mostra 6 meses medidos (zero onde não houve movimento) e 3 meses de projeção (62, 60 e 62 para out, nov e dez), cada barra e cada ponto com o valor escrito em cima, com a opção de 13 meses e de ver a mesma série em tabela, e o rodapé soma 3, 6 e 12 meses de vendas e compras e a projeção do próximo mês
+
+**C-033 — Filiais com excesso**
+- **Dado que** o produto tem, noutra filial, 120 em estoque e venda de 90 em 3 meses (cobertura de 120 dias) e, numa terceira, 10 em estoque sem venda
+- **Quando** a compradora abre "Filiais com excesso" com teto de 42 dias
+- **Então** vê as duas filiais, a sem giro primeiro; a filial da tela e a que tem 35 em estoque com a mesma venda (35 dias) não aparecem
+
+**C-034 — Simulação de compra**
+- **Dado que** o produto tem 50 disponíveis, consumo de 2 por dia, máximo de 70, caixa de 12 e custo de R$ 10
+- **Quando** a compradora simula 50 unidades
+- **Então** vê 60 unidades (5 caixas), R$ 600, cobertura de 55 dias e nível de 157 % depois da compra, e pode jogar essa quantidade no carrinho
+
+**C-035 — Produto que já está num pedido aberto**
+- **Dado que** o fornecedor tem um pedido em análise na filial com 5 produtos
+- **Quando** a lista é desenhada
+- **Então** cada um desses 5 produtos traz a nota "Pedido #N aberto, ainda sem trânsito" enquanto não tiver trânsito; para a filial cujo pedido já foi enviado não há nota
+
+**C-036 — O seletor de fornecedor já diz quanto há para comprar**
+- **Dado que** há fornecedores parametrizados
+- **Quando** a compradora abre o seletor
+- **Então** cada opção traz o número de itens ativos e uma **estimativa** do valor sugerido, apurada numa consulta só para todos os fornecedores, sem depender da filial
+
+**C-037 — Unidades ou caixas como referência**
+- **Dado que** a sugestão de um produto é 48 com caixa de 12
+- **Quando** a compradora alterna a referência para caixas
+- **Então** a sugestão passa a ler "4 cx · 48 un."; a quantidade digitada continua sendo em unidades e sobe para a caixa cheia
+
+**C-038 — Ordem, movimentação e silenciados**
+- **Dado que** a lista tem produtos com e sem venda, com e sem estoque e com trânsito
+- **Quando** a compradora ordena por código, nome ou curva, filtra por movimentação ou clica na ficha "Silenciados"
+- **Então** a lista muda na hora, sem consulta, e as fichas de sugestão (unidades), rupturas e silenciados continuam contando o recorte
+
+**C-039 — Custo atual contra o da última entrada**
+- **Dado que** o custo da última entrada de um produto foi R$ 12 e o custo atual do ERP é R$ 11, e noutro foi R$ 10 e hoje é R$ 10,50
+- **Quando** o carrinho é desenhado com 24 do primeiro e 10 do segundo
+- **Então** o primeiro mostra variação de −8,3 % (caiu) e o segundo +5 % (subiu), e a "economia no custo" do carrinho é R$ 24 — só o que caiu conta
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -204,14 +274,23 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RF-021 | O sistema DEVE apurar a aderência do comprador: o percentual de itens de pedidos originados das compras inteligentes em que a quantidade pedida ficou dentro de 20 % para mais ou para menos da sugerida, por comprador e período | C-022 | should |
 | RF-022 | A tela DEVE ser aberta por analista, gestor, admin e diretoria (esta só lê); a parametrização e o silenciamento, só por admin e gestor; o comercial não DEVE alcançá-la | C-023 | must |
 | RF-023 | A lista visível DEVE poder ser exportada | C-024 | should |
+| RF-024 | O seletor de fornecedor DEVE mostrar, por fornecedor, o número de itens ativos e uma estimativa do valor sugerido, apurada numa consulta só | C-036 | should |
+| RF-025 | A lista DEVE sinalizar o produto que já está num pedido aberto do fornecedor na filial e ainda sem trânsito | C-035 | should |
+| RF-026 | A lista DEVE ter quatro visões com contagem — a comprar, completar compra, todos e em trânsito —, ordenação por código, nome ou curva, filtro de movimentação e ficha de silenciados, tudo sem consulta | C-026, C-027, C-038 | must |
+| RF-027 | A tela DEVE ter um painel de detalhe fixo com os quatro números, o gráfico sempre aberto e as seções de simulação, atributos e estoque, compras do produto, vendas do período, filiais com excesso e parâmetros do cálculo | C-031, C-033, C-034 | must |
+| RF-028 | O gráfico de compras × vendas DEVE mostrar 6 ou 13 meses, a projeção dos 3 meses seguintes, o valor escrito em cada barra e ponto, a visão em tabela e o rodapé de 3, 6 e 12 meses | C-032 | must |
+| RF-029 | O carrinho DEVE ficar guardado no navegador de quem o abriu, com quem e quando, e ser oferecido para continuar ou descartar na volta | C-028 | must |
+| RF-030 | O carrinho DEVE mostrar, por grupo, o quanto falta para o pedido mínimo do fornecedor | C-029 | must |
+| RF-031 | O carrinho DEVE gerar o arquivo de importação do WinThor, um por fornecedor e filial | C-030 | should |
+| RF-032 | A medida DEVE trazer o custo atual do ERP e o código de fábrica; o carrinho mostra a variação e a economia no custo | C-039 | should |
 
 ## Requisitos não-funcionais
 
 | ID | Requisito | Como se mede |
 |---|---|---|
-| RNF-001 | Abrir a tela custa no máximo **9** chamadas ao servidor, e trocar de fornecedor ou de filial no máximo **6**, qualquer que seja o número de produtos — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
+| RNF-001 | Abrir a tela custa no máximo **4** chamadas ao servidor (R-117: fornecedores, eficiência, quadro e o resumo por fornecedor); escolher o fornecedor **1**; escolher a filial **7**; selecionar um produto **3**, uma vez por produto — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
 | RNF-002 | Criar o pedido a partir do carrinho custa **3** chamadas por fornecedor e filial, qualquer que seja o número de itens | Contador com 1 e com 60 itens no carrinho: sempre 3 |
-| RNF-003 | Abrir o detalhe de um produto custa **3** chamadas; abrir a lista de vendas para desconsiderar, mais **1**; desconsiderar ou reconsiderar uma venda, **3** (gravar, reler a lista do que ficou desconsiderado e refazer a medida) | Contador ao abrir o detalhe, ao abrir o diálogo de vendas e ao marcar uma venda |
+| RNF-003 | Selecionar um produto na lista custa **3** chamadas, uma vez por produto (o detalhe completo reusa o que já veio); abrir a lista de vendas para desconsiderar, mais **1**; desconsiderar ou reconsiderar uma venda, **3** (gravar, reler a lista do que ficou desconsiderado e refazer a medida) | Contador ao selecionar, ao abrir o diálogo de vendas e ao marcar uma venda |
 | RNF-004 | A lista de um fornecedor com 300 produtos volta em uma consulta e é desenhada em até 3 s | Cronômetro sobre o fornecedor com mais produtos |
 | RNF-005 | Ligar e desligar o seletor de licitação, trocar de aba, filtrar por situação e ordenar não DEVEM custar nenhuma chamada ao servidor | Contador durante a interação: zero |
 | RNF-006 | Nenhuma operação desta tela escreve no ERP | Revisão das consultas: todas são leitura |
@@ -246,6 +325,15 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **RN-017 — O carrinho manda.** Ao montar a análise dentro do pedido, o produto que já está na lista mantém a quantidade que tem; só os produtos novos entram zerados.
 - **RN-018 — Aderência.** Um item é aderente quando a quantidade pedida fica entre 80 % e 120 % da sugerida, limites inclusive, e a sugerida é maior que zero. A aderência é o percentual de itens aderentes entre os itens de pedidos originados das compras inteligentes, no período e por comprador.
 - **RN-019 — Permissões.** Ver a tela: admin, analista, gestor e diretoria. Operar (carrinho, edição de quantidade, desconsiderar venda): admin, analista e gestor, zerado por acesso somente-leitura. Parametrizar e silenciar: admin e gestor. Comercial não vê. Acesso restrito opera e o pedido criado é dele.
+
+- **RN-020 — Completar compra.** Entra na visão o produto com sugestão zero, não silenciado, sem trânsito, com giro, e cobertura atual menor ou igual a `cobertura + lead time`: é o que vai entrar na fila no próximo ciclo. O complemento proposto é **uma caixa cheia** (uma unidade no avulso). Ordem: menor cobertura primeiro.
+- **RN-021 — Carrinho salvo.** O carrinho fica guardado no navegador, por usuário, com os itens, as quantidades, os motivos, quem abriu, quando abriu e quando foi salvo pela última vez. Na volta, com o carrinho da tela vazio, a tela oferece continuar ou descartar; descartar exige confirmação. Guardar no servidor (retomar de outra máquina) é dívida registrada.
+- **RN-022 — Pedido mínimo.** O mínimo do grupo é o pedido mínimo parametrizado do fornecedor (spec 001) no momento em que o item entrou. Falta = mínimo − total do grupo, nunca negativa; sem mínimo parametrizado, está sempre atingido.
+- **RN-023 — Arquivo do WinThor.** Um arquivo por fornecedor e filial, uma linha por item com quantidade, `CODPROD;PRECO;QTD`, sem cabeçalho, preço com ponto decimal e duas casas (o custo atual do ERP, ou o da última entrada na falta dele), quantidade inteira.
+- **RN-024 — Valor escrito em cada marca.** Em todo gráfico do sistema, cada barra e cada ponto de linha mostram o seu valor escrito em cima, inclusive a série de projeção (decisão do usuário, R-116).
+- **RN-025 — Filial com excesso.** Cobertura da filial = estoque disponível ÷ (venda de 3 meses ÷ 90). Há excesso quando a cobertura passa do teto (a cobertura alvo do produto) ou quando há estoque sem venda nenhuma. A filial da tela nunca entra. Sem giro primeiro, depois a maior cobertura.
+- **RN-026 — Resumo por fornecedor.** É estimativa: venda dos últimos 90 dias sem ponderação, cobertura de 35 dias, estoque disponível e pedido ao ERP somados em todas as filiais, custo da última entrada, nenhum parâmetro de SKU nem curva. Serve ao rótulo do seletor; a sugestão exata é a da lista.
+- **RN-027 — Variação e economia.** Variação = (custo atual − custo da última entrada) ÷ custo da última entrada; vermelho quando subiu, verde quando caiu; sem um dos dois custos não há variação. Economia no custo = soma de (última entrada − atual) × quantidade só nos itens em que o custo caiu.
 
 ## Testes
 
@@ -295,6 +383,19 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RN-017 | mesclar a lista montada com a existente mantém a quantidade da existente e zera só as novas | regra de tela |
 | RN-018 | (100, 100) → aderente; (100, 80) → aderente; (100, 120) → aderente; (100, 79) → não; (100, 121) → não; (0, 10) → não | regra de tela |
 | RN-019 | a matriz de C-023, perfil a perfil e nível a nível | regra de tela |
+| C-026, C-027, RN-020 | quatro medidas (20, 75, 200 e 30 com trânsito 20) → contagens 1 / 1 / 4 / 1; completar devolve só o de 75, com uma caixa (12) de complemento; silenciado, sem giro e com trânsito nunca entram; ordem por menor cobertura | regra de tela |
+| C-028, RN-021 | o texto guardado volta ao carrinho só com versão 1 e ao menos um item com quantidade; texto inválido vira `null`; ida e volta sem perda; resumo de 3 itens em 2 filiais = 3 · 2 · total | regra de tela |
+| C-029, RN-022 | (300, 1000) → falta 700, 30 %; (1200, 1000) → atingido; (10, 0) → atingido; mínimo do grupo = maior entre os itens | regra de tela |
+| C-030, RN-023 | 3 itens (um com quantidade 0) → `5401;12.00;24\r\n5403;10.46;12`; nome `winthor-1042-filial-1-2026-09-16.txt` | regra de tela |
+| C-031 | nível: 50 de 70 → 71,4 %; máximo 0 → nulo | regra de tela |
+| C-032, RN-024 | série de 6 meses + 3 de projeção (62, 60, 62 a consumo 2); 13 meses dão 16 pontos; rodapé 3m/6m/12m/projeção com os números da tabela de casos | regra de tela |
+| C-033, RN-025 | posições de 5 filiais com teto 42 → excesso nas filiais 4 (sem giro) e 2 (120 d), nessa ordem | regra de tela |
+| C-034 | simular 50 → 60 un., 5 cx, R$ 600, 55 d, 157 %; sem giro → cobertura nula | regra de tela |
+| C-035 | a consulta de itens em pedido aberto devolve os 5 produtos do pedido em análise do 1042 na filial 1, com card e fase pela chave, e nada para a filial 2 (enviado) | regra de negócio |
+| C-036, RN-026 | o resumo do 1042 devolve os itens ativos do catálogo menos o inativo e o do departamento 4, e valor estimado > 0 | regra de negócio |
+| C-037 | (48, 12, unidades) → "48 un. · 4 cx"; (48, 12, caixas) → "4 cx · 48 un."; (48, 1) → "48 un." | regra de tela |
+| C-038 | ordem por código, nome e curva (A, B, C); cada filtro de movimentação devolve só as linhas certas | regra de tela |
+| C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-001 — a lista com 300 produtos rola sem travar, com os números alinhados à direita e o código do produto discreto
@@ -308,12 +409,15 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - [ ] **Previsão de demanda** (modelos estatísticos, corte de outlier, escolha por menor erro) — dívida registrada para a onda 5; aqui a projeção é a tendência ponderada de RN-001.
 - [ ] **Estoque de segurança estatístico** (fator de serviço sobre a volatilidade) — a volatilidade é medida e mostrada, mas não entra na fórmula; dívida registrada.
 - [ ] **Oportunidades de custo especial** e políticas de preço por cliente — dependem do módulo de custos.
-- [ ] **Diálogo de bloqueios de lote.**
-- [ ] **Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.
+- [ ] **Diálogo de bloqueios de lote** — **adiado** (R-117): o layout do sistema antigo o tinha; entra numa rodada futura, com consulta própria aos lotes.
+- [x] ~~**Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.~~ Existia (R-117): entrou como RF-031 / C-030.
 - [ ] **Planilha (xlsx) e PDF** — a exportação é em texto separado por ponto e vírgula, como nas demais telas.
 - [ ] **Curva por rentabilidade e "a pior das duas"** — a curva é uma só, a mesma da montagem do pedido.
 - [ ] **Custo padrão vindo da gestão de custos** — o custo é o da última entrada, como na montagem; dívida registrada.
-- [ ] **"Completar compra"** (sugestão complementar para atingir pedido mínimo) e **pedido mínimo por fornecedor.**
+- [x] ~~**"Completar compra"** (sugestão complementar para atingir pedido mínimo) e **pedido mínimo por fornecedor.**~~ Entraram (R-117): RF-026 / C-027 e RF-030 / C-029; o mínimo é o da parametrização do fornecedor (001).
+- [ ] **Selo de "custo especial"** no carrinho — **adiado**: depende do módulo de custos (a variação e a economia de RN-027 entraram).
+- [ ] **Carrinho guardado no servidor** (retomar de outra máquina ou de outro usuário) — **adiado**: o carrinho fica no navegador (RN-021); custaria uma tabela e três leituras/escritas.
+- [ ] **Juntar itens a um pedido já aberto** — **adiado**: a lista sinaliza o pedido aberto (RF-025); o carrinho continua recusado enquanto ele existir (RF-018).
 - [ ] **Bloco novo no card do pedido** — esta tela existe antes do pedido; o único ponto de contato é a criação pelo carrinho.
 - [ ] **Alterar o alvo e a tolerância por curva** — é a tela de coberturas (spec 012); aqui a curva só é consumida.
 - [ ] **Sugerir de qual fornecedor comprar hoje** (o painel comparativo entre fornecedores) — fornecedor e filial continuam sendo escolha de quem abre a tela.

@@ -134,6 +134,8 @@ export const CHECK_INPUT = {
   // coberturaDias e curva NÃO entram: com R-083 deixaram de ser parâmetro de
   // SQL — a fórmula e a curva são régua pura da tela.
   diasPeriodo: '153', excluir: '0', meses: '12', compradorId: '0', numtransitem: '960001',
+  // layout legado da 011 (R-117): `codfornecs` é fragmento (lista de CODFORNEC sem aspas).
+  codfornecs: '1042',
   // spec 012 (coberturas por curva): só a chave nova (R-100).
   // nivel, limite e offset vêm da 003; situacao vem da 004, com o mesmo '' que
   // sgcCoberturaListar quer no ramo "todas".

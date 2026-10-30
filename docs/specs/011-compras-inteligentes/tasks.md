@@ -120,6 +120,25 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 > T-097 e T-098 continuam abertas: a S3 não sobe servidor (o smoke roda em banco
 > descartável). Ficam para quem abrir o simulador na integração.
 
+## Layout legado — Opção A (R-117, 2026-10-30)
+
+- [x] **T-040** — `sgcWintResumoFornecedores` (8110) e `sgcItensEmPedidoAberto` (8111) em `add-013`; `CODFAB` e `CUSTO_ATUAL` em `sgcWintRessuprimento`; `WINTHOR` ganha o resumo → `backend/add-013-compras-inteligentes.mjs`
+- [x] **T-041** — `CUSTOFIN` em `PCEST` do simulador; seed 011 com `CODFAB` e custos atuais (5401, 5403); `codfornecs` no `CHECK_INPUT` → `backend/simulator/schema-winthor.mjs`, `seed/011-compras-inteligentes.mjs`, `config.mjs`
+- [x] **T-042** — Mapa 8110/8111 em `SERVER_FUNCTION_NAMES`/`SERVER_FUNCTIONS` → `frontend/src/lib/server-functions.ts`
+- [x] **T-043** `[P]` — Visões, completar compra, ordem, movimentação, nível, referência e `FiltrosLista` → `frontend/src/lib/ressuprimento.ts`
+- [x] **T-044** `[P]` — `lib/ressuprimento-detalhe.ts` (série, rodapé, filiais com excesso, simulação, `DadosDoSku`) → novo
+- [x] **T-045** `[P]` — `lib/carrinho.ts` (persistência, resumo, mínimo, variação, economia, busca, arquivo WinThor) e `baixarTexto` em `lib/csv.ts` → novo / `lib/csv.ts`
+- [x] **T-046** — §8.8 do `page.tsx` (`CardVisao`, `GradeVisoes`, `ChipContagem`, `Disclosure`, `AlternaOpcoes`) e reexport de `ComposedChart`/`LabelList` → `frontend/src/components/page.tsx`
+- [x] **T-047** — `grid.tsx` → `ListaProdutos` com chips, linha selecionável e botão do carrinho
+- [x] **T-048** — `grafico.tsx` → `GraficoComprasVendas` com `LabelList` em toda marca (R-116)
+- [x] **T-049** — `painel-detalhe.tsx` → `PainelDetalhe` (KPIs, gráfico, seis seções)
+- [x] **T-050** — `Carrinho.tsx` → `CarrinhoDialogo` (cabeçalho, busca, mínimo por grupo, colunas do legado, descartar com confirmação, arquivo WinThor, criar N pedidos)
+- [x] **T-051** — `ComprasInteligentesPage.tsx` reescrita (ações do cabeçalho, barra de recorte, aviso de carrinho salvo, cards, duas colunas, cache do SKU, `localStorage`)
+- [x] **T-052** — R-116 nos gráficos existentes: `LabelList` em `pages/analises/blocos.tsx` → `frontend/src/pages/analises/blocos.tsx`
+- [x] **T-099** — Testes: `tests/ressuprimento.test.mjs` (C-026, C-027, RN-020, C-038, C-031, C-037), `tests/ressuprimento-detalhe.test.mjs` (C-032, C-033, C-034, RN-025), `tests/carrinho.test.mjs` (C-028, C-029, C-030, C-039, RN-021..RN-023, RN-027), `smoke/011` (C-035, C-036, C-039)
+- [x] **T-100** — `npm test` verde nos dois lados; `npm run build` e `npm run lint` limpos
+- [x] **T-101** — Verificação manual no simulador (VPS, WinThor real, Coloplast × filial 1): cards de visão, seleção e painel compacto, gráfico com rótulos, carrinho com mínimo, variação e arquivo, retomada do carrinho salvo — nos dois temas
+
 ## Dependências
 
 ```

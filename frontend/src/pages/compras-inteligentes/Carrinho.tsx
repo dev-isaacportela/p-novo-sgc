@@ -1,26 +1,34 @@
-// O carrinho da spec 011 (RF-017, RF-018 / C-018, C-019, RN-015, RN-016).
+// O carrinho em janela do layout legado da 011 (R-117 / C-028..C-030, RF-017,
+// RF-018 / C-018, C-019, RN-015, RN-016, RN-022, RN-023, RN-027).
 //
 // O pedido nasce pelo MESMO caminho de `/pedidos/novo` (R-091/D-007): três
-// execuções por grupo de fornecedor + filial — `api.cardCriar` (o motor da lib,
-// que dá ordem, texto de busca, movimento inicial e automação), `sgcEscPedidoCriar`
-// com `origem: 'compras_inteligentes'` e `sgcItensGravar` em lote. Nenhuma
-// Server Function JavaScript nova.
+// execuções por grupo de fornecedor + filial — `api.cardCriar`,
+// `sgcEscPedidoCriar` com `origem: 'compras_inteligentes'` e `sgcItensGravar`
+// em lote. Nenhuma Server Function JavaScript nova. O "Por que comprar" vai
+// como `observacao` do item.
 //
 // O `valor_total` da capa vai no próprio `cardCriar`, porque a tela já sabe a
 // soma: um `kbCardAtualizar` a mais custaria execução (D-008).
 import * as React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 import { useKanban } from '@benenutri/mitra-kanban';
 
 import {
-  Alert, Button, Code, Dash, EmptyState, IconButton, Panel, PanelHeader, RowMeta, RowTitle,
-  Status, Table, Td, Th, Toolbar, Tr,
+  Alert, BarraConsumo, Button, Code, Dash, Delta, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
+  DialogTitle, EmptyState, IconButton, Input, RowMeta, RowTitle, SearchInput, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { acao, linhas } from '@/lib/mitra-api';
-import { moeda } from '@/lib/formato';
+import { baixarTexto } from '@/lib/csv';
+import { arredondarPorCaixa } from '@/lib/compras';
+import { fmtData, fmtDataHora, moeda } from '@/lib/formato';
 import { instanteIso, tituloDoPedido } from '@/lib/pedido';
-import { agruparCarrinho, coberturaFuturaComCompra, itemDoCarrinho, motivoDaSugestao } from '@/lib/ressuprimento';
-import type { EntradaCarrinho, LinhaRessuprimento } from '@/lib/ressuprimento';
+import { agruparCarrinho, coberturaFuturaComCompra, itemDoCarrinho } from '@/lib/ressuprimento';
+import type { LinhaRessuprimento } from '@/lib/ressuprimento';
+import {
+  economiaNoCusto, faltaParaMinimo, filtrarCarrinho, nomeArquivoWinthor, pedidoMinimoDoGrupo, resumoDoCarrinho,
+  textoImportacaoWinthor, variacaoDePreco,
+} from '@/lib/carrinho';
+import type { ItemCarrinho } from '@/lib/carrinho';
 
 /** Só as fases em que o pedido ainda bloqueia o carrinho (RN-016). */
 const NOME_DA_FASE: Record<string, string> = {
@@ -37,43 +45,83 @@ export interface PedidoAberto {
 }
 
 const quantidade = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+const horaCurta = (iso: string) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
 
-export function Carrinho({
+export function CarrinhoDialogo({
+  aberto,
+  onFechar,
   itens,
+  abertoEm,
+  abertoPor,
+  salvoEm,
   boardId,
   usuarioId,
   periodo,
+  hoje,
   pedidoAberto,
+  grupoAtual,
   podeOperar,
   motivoBloqueio,
   coberturaLimiteDe,
+  onQuantidade,
+  onMotivo,
   onRemover,
-  onLimpar,
+  onDescartar,
   onCriado,
 }: {
-  itens: EntradaCarrinho[];
+  aberto: boolean;
+  onFechar: () => void;
+  itens: ItemCarrinho[];
+  abertoEm: string;
+  abertoPor: string;
+  salvoEm: string;
   boardId: number;
   usuarioId: number;
   periodo: { inicio: string; fim: string };
-  /** O pedido do fornecedor + filial que ainda não foi enviado à indústria, se houver. */
+  hoje: string;
+  /** O pedido do fornecedor + filial da TELA que ainda não foi enviado à indústria, se houver. */
   pedidoAberto: PedidoAberto | null;
+  grupoAtual: { codfornec: number; codfilial: string };
   podeOperar: boolean;
   motivoBloqueio: string;
   /** O limite de cobertura resolvido para a linha — injetado pela página (R-111). */
   coberturaLimiteDe: (linha: LinhaRessuprimento) => number;
+  onQuantidade: (codprod: number, codfilial: string, quantidade: number) => void;
+  onMotivo: (codprod: number, codfilial: string, motivo: string) => void;
   onRemover: (codprod: number, codfilial: string) => void;
-  onLimpar: () => void;
+  onDescartar: () => void;
   onCriado: (cardId: number) => void;
 }) {
   const api = useKanban();
+  const [busca, setBusca] = React.useState('');
   const [erro, setErro] = React.useState('');
   const [criando, setCriando] = React.useState(false);
+  const [confirmandoDescarte, setConfirmandoDescarte] = React.useState(false);
 
   const grupos = React.useMemo(() => agruparCarrinho(itens), [itens]);
-  const total = grupos.reduce((soma, grupo) => soma + grupo.total, 0);
+  const resumo = React.useMemo(() => resumoDoCarrinho(itens), [itens]);
+  const economia = React.useMemo(() => economiaNoCusto(itens.map((i) => ({
+    quantidade: i.quantidade, ultimo: Number(i.linha.medida.CUSTO_ULT_ENTRADA), atual: Number(i.linha.medida.CUSTO_ATUAL ?? 0),
+  }))), [itens]);
+  const visiveis = React.useMemo(() => new Set(filtrarCarrinho(itens, busca).map((i) => `${i.codfilial}|${i.linha.medida.CODPROD}`)), [itens, busca]);
+
+  const bloqueado = (grupo: { codfornec: number; codfilial: string }) => Boolean(pedidoAberto)
+    && grupo.codfornec === grupoAtual.codfornec && grupo.codfilial === grupoAtual.codfilial;
+  const algumBloqueado = grupos.some(bloqueado);
+
+  function baixarArquivos() {
+    for (const grupo of grupos) {
+      const texto = textoImportacaoWinthor(grupo.itens.map(({ linha, quantidade: escolhida }) => ({
+        codprod: Number(linha.medida.CODPROD),
+        preco: Number(linha.medida.CUSTO_ATUAL ?? 0) > 0 ? Number(linha.medida.CUSTO_ATUAL) : Number(linha.medida.CUSTO_ULT_ENTRADA),
+        quantidade: escolhida,
+      })));
+      baixarTexto(nomeArquivoWinthor(grupo.codfornec, grupo.codfilial, hoje), texto);
+    }
+  }
 
   async function criarPedidos() {
-    if (pedidoAberto) return;
+    if (algumBloqueado) return;
     setCriando(true);
     setErro('');
     try {
@@ -106,17 +154,17 @@ export function Carrinho({
           agora: instanteIso(),
         });
 
-        // 3 — os itens, INTEIROS (R-112), num upsert em lote que já recalcula o
-        // total da capa. Campo que nascer vazio fica vazio para sempre, porque a
-        // remontagem da Análise preserva o item existente (RN-017).
-        const itensJson = grupo.itens.map(
-          ({ linha, quantidade: escolhida }) => itemDoCarrinho(linha, escolhida, coberturaLimiteDe(linha)),
-        );
+        // 3 — os itens, INTEIROS (R-112), num upsert em lote; o "por que comprar"
+        // vai na observação do item.
+        const itensJson = grupo.itens.map(({ linha, quantidade: escolhida }) => {
+          const entrada = itens.find((i) => i.codfilial === grupo.codfilial && Number(i.linha.medida.CODPROD) === Number(linha.medida.CODPROD));
+          return { ...itemDoCarrinho(linha, escolhida, coberturaLimiteDe(linha)), observacao: String(entrada?.motivo ?? '').slice(0, 500) };
+        });
         const gravado = await acao('sgcItensGravar', { cardId: criado.id, itensJson: JSON.stringify(itensJson) });
         if (gravado && gravado.ok === false) throw new Error(String(gravado.erro ?? 'Os itens não foram gravados.'));
         ultimo = criado.id;
       }
-      onLimpar();
+      onDescartar();
       if (ultimo) onCriado(ultimo);
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : 'Não foi possível criar o pedido.');
@@ -126,93 +174,188 @@ export function Carrinho({
   }
 
   return (
-    <Panel>
-      <PanelHeader
-        title={`Carrinho — ${moeda(total)}`}
-        hint={itens.length === 0
-          ? 'Escolha os produtos na lista acima; cada fornecedor e filial vira um pedido.'
-          : `${itens.length} produtos em ${grupos.length} ${grupos.length === 1 ? 'pedido' : 'pedidos'}.`}
-      >
-        <Button size="sm" onClick={onLimpar} disabled={criando || itens.length === 0}>Esvaziar</Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => void criarPedidos()}
-          disabled={criando || itens.length === 0 || !podeOperar || Boolean(pedidoAberto)}
-          title={!podeOperar ? motivoBloqueio : pedidoAberto ? 'Já existe um pedido aberto para este fornecedor e filial.' : undefined}
-        >
-          {criando ? 'Criando...' : 'Criar o pedido'}
-        </Button>
-      </PanelHeader>
+    <Dialog open={aberto} onOpenChange={(estaAberto) => !estaAberto && onFechar()}>
+      <DialogContent className="sm:max-w-[min(96vw,1400px)]">
+        <DialogHeader>
+          <DialogTitle>Carrinho</DialogTitle>
+          <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[12px] text-ink-secondary">
+            <div><dt className="inline font-semibold text-ink-muted uppercase">Total </dt><dd className="inline font-title text-[14px] font-bold text-ink">{moeda(resumo.total)}</dd></div>
+            <div><dt className="inline font-semibold text-ink-muted uppercase">Economia no custo </dt><dd className="inline font-title text-[14px] font-bold text-ink">{economia > 0 ? moeda(economia) : '—'}</dd></div>
+            <div><dt className="inline font-semibold text-ink-muted uppercase">Itens · pedidos </dt><dd className="inline font-title text-[14px] font-bold text-ink">{`${resumo.itens} · ${resumo.pedidos}`}</dd></div>
+            {abertoEm ? (
+              <div className="basis-full">
+                {`aberto em ${fmtDataHora(abertoEm)}${abertoPor ? ` por ${abertoPor}` : ''}${salvoEm ? ` · salvo às ${horaCurta(salvoEm)}` : ''}`}
+              </div>
+            ) : null}
+          </dl>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-4">
+            {erro ? <Alert tone="error">{erro}</Alert> : null}
 
-      {erro ? <Toolbar><Alert tone="error">{erro}</Alert></Toolbar> : null}
+            {/* RF-018: a recusa cita o pedido e a fase em que ele está. */}
+            {pedidoAberto && algumBloqueado ? (
+              <Alert tone="warn">
+                {`Já existe um pedido aberto para este fornecedor e filial: ${pedidoAberto.titulo}, em ${NOME_DA_FASE[pedidoAberto.faseChave] ?? pedidoAberto.faseChave}. `}
+                Envie ou cancele esse pedido antes de abrir outro.
+              </Alert>
+            ) : null}
 
-      {/* RF-018: a recusa cita o pedido e a fase em que ele está. */}
-      {pedidoAberto ? (
-        <Toolbar>
-          <Alert tone="warn">
-            {`Já existe um pedido aberto para este fornecedor e filial: ${pedidoAberto.titulo}, em ${NOME_DA_FASE[pedidoAberto.faseChave] ?? pedidoAberto.faseChave}. `}
-            Envie ou cancele esse pedido antes de abrir outro.
-          </Alert>
-        </Toolbar>
-      ) : null}
+            {itens.length === 0 ? (
+              <EmptyState
+                title="O carrinho está vazio"
+                hint="Jogue produtos da lista no carrinho; cada fornecedor e filial vira um pedido na Análise/Montagem."
+              />
+            ) : (
+              <>
+                <SearchInput
+                  placeholder="Buscar no carrinho por produto, código ou código de fábrica"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                />
+                {grupos.map((grupo) => {
+                  const minimo = pedidoMinimoDoGrupo(itens, grupo);
+                  const situacao = faltaParaMinimo(grupo.total, minimo);
+                  const doGrupo = grupo.itens.filter(({ linha }) => visiveis.has(`${grupo.codfilial}|${linha.medida.CODPROD}`));
+                  return (
+                    <div key={`${grupo.codfornec}-${grupo.codfilial}`} className="flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <RowTitle>{tituloDoPedido(grupo.filial, grupo.fornecedor)}</RowTitle>
+                          <RowMeta>
+                            <Status tone={grupo.prioridade === 'alta' ? 'alert' : 'live'}>
+                              {grupo.prioridade === 'alta' ? 'Prioridade alta' : 'Prioridade normal'}
+                            </Status>
+                            {` · ${grupo.itens.length} ${grupo.itens.length === 1 ? 'item' : 'itens'} · ${moeda(grupo.total)}`}
+                          </RowMeta>
+                        </div>
+                        <BarraConsumo
+                          pct={situacao.pct}
+                          tone={situacao.atingido ? 'live' : 'attention'}
+                          rotulo={minimo <= 0
+                            ? 'Sem pedido mínimo parametrizado'
+                            : situacao.atingido
+                              ? `Pedido mínimo atingido (${moeda(minimo)})`
+                              : `Faltam ${moeda(situacao.falta)} para o mínimo de ${moeda(minimo)}`}
+                        />
+                      </div>
+                      {doGrupo.length === 0 ? (
+                        <RowMeta>Nenhum item deste pedido casa com a busca.</RowMeta>
+                      ) : (
+                        <Table>
+                          <thead>
+                            <tr>
+                              <Th className="min-w-72">Produto</Th>
+                              <Th className="w-48">Por que comprar</Th>
+                              <Th numeric>Sugerido</Th>
+                              <Th numeric className="w-28">Quantidade</Th>
+                              <Th numeric>Últ. preço</Th>
+                              <Th numeric>Preço atual</Th>
+                              <Th numeric>Variação</Th>
+                              <Th numeric>Cob. futura</Th>
+                              <Th numeric>Total</Th>
+                              <Th className="w-12 text-right">
+                                <span className="sr-only">Remover</span>
+                              </Th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {doGrupo.map(({ linha, quantidade: escolhida }) => {
+                              const codprod = Number(linha.medida.CODPROD);
+                              const entrada = itens.find((i) => i.codfilial === grupo.codfilial && Number(i.linha.medida.CODPROD) === codprod);
+                              const ultimo = Number(linha.medida.CUSTO_ULT_ENTRADA);
+                              const atual = Number(linha.medida.CUSTO_ATUAL ?? 0);
+                              const variacao = variacaoDePreco(ultimo, atual);
+                              const futura = coberturaFuturaComCompra(linha, escolhida);
+                              return (
+                                <Tr key={codprod}>
+                                  <Td>
+                                    <RowTitle>{String(linha.medida.DESCRICAO)}</RowTitle>
+                                    <RowMeta>
+                                      <Code prefix="cód.">{codprod}</Code>
+                                      {linha.medida.CODFAB ? ` · fab. ${String(linha.medida.CODFAB)}` : ''}
+                                      {linha.medida.DT_ULT_ENTRADA ? ` · últ. compra ${fmtData(String(linha.medida.DT_ULT_ENTRADA))}` : ''}
+                                    </RowMeta>
+                                  </Td>
+                                  <Td>
+                                    <Input
+                                      value={entrada?.motivo ?? ''}
+                                      aria-label={`Por que comprar ${linha.medida.DESCRICAO}`}
+                                      maxLength={500}
+                                      disabled={criando}
+                                      onChange={(e) => onMotivo(codprod, grupo.codfilial, e.target.value)}
+                                    />
+                                  </Td>
+                                  <Td numeric>{linha.sugerida > 0 ? quantidade(linha.sugerida) : <Dash />}</Td>
+                                  <Td numeric>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      className="text-right"
+                                      aria-label={`Quantidade de ${linha.medida.DESCRICAO}`}
+                                      value={String(escolhida)}
+                                      disabled={criando || !podeOperar}
+                                      title={podeOperar ? `Sobe para a caixa cheia de ${linha.unidadesPorCaixa} un.` : motivoBloqueio}
+                                      onChange={(e) => onQuantidade(codprod, grupo.codfilial, Number(e.target.value) || 0)}
+                                      onBlur={(e) => onQuantidade(codprod, grupo.codfilial, arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa))}
+                                    />
+                                  </Td>
+                                  <Td numeric>{moeda(ultimo)}</Td>
+                                  <Td numeric>{atual > 0 ? moeda(atual) : <Dash />}</Td>
+                                  <Td numeric><Delta valor={variacao} inverso /></Td>
+                                  <Td numeric>{futura === null ? <Dash /> : `${Math.round(futura)} d`}</Td>
+                                  <Td numeric>{moeda(escolhida * ultimo)}</Td>
+                                  <Td className="text-right">
+                                    <IconButton
+                                      label="Tirar do carrinho"
+                                      tone="danger"
+                                      disabled={criando}
+                                      onClick={() => onRemover(codprod, grupo.codfilial)}
+                                    >
+                                      <Trash2 aria-hidden />
+                                    </IconButton>
+                                  </Td>
+                                </Tr>
+                              );
+                            })}
+                          </tbody>
+                        </Table>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
 
-      {itens.length === 0 ? (
-        <EmptyState
-          title="O carrinho está vazio"
-          hint="O pedido nasce na Análise/Montagem, com os itens já dentro e a quantidade que você escolheu."
-        />
-      ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>Produto</Th>
-              <Th>Pedido</Th>
-              <Th>Por que comprar</Th>
-              <Th numeric>Quantidade</Th>
-              <Th numeric>Cobertura futura</Th>
-              <Th numeric>Total</Th>
-              <Th className="w-16 text-right">Ações</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {grupos.map((grupo) => grupo.itens.map(({ linha, quantidade: escolhida }) => {
-              const codprod = Number(linha.medida.CODPROD);
-              const futura = coberturaFuturaComCompra(linha, escolhida);
-              return (
-                <Tr key={`${grupo.codfornec}-${grupo.codfilial}-${codprod}`}>
-                  <Td>
-                    <RowTitle>{String(linha.medida.DESCRICAO)}</RowTitle>
-                    <RowMeta><Code prefix="cód.">{codprod}</Code></RowMeta>
-                  </Td>
-                  <Td>
-                    {tituloDoPedido(grupo.filial, grupo.fornecedor)}
-                    <RowMeta>
-                      <Status tone={grupo.prioridade === 'alta' ? 'alert' : 'live'}>
-                        {grupo.prioridade === 'alta' ? 'Prioridade alta' : 'Prioridade normal'}
-                      </Status>
-                    </RowMeta>
-                  </Td>
-                  <Td>{motivoDaSugestao(linha)}</Td>
-                  <Td numeric>{quantidade(escolhida)}</Td>
-                  <Td numeric>{futura === null ? <Dash /> : `${Math.round(futura)} d`}</Td>
-                  <Td numeric>{moeda(escolhida * Number(linha.medida.CUSTO_ULT_ENTRADA))}</Td>
-                  <Td className="text-right">
-                    <IconButton
-                      label="Tirar do carrinho"
-                      tone="danger"
-                      disabled={criando}
-                      onClick={() => onRemover(codprod, grupo.codfilial)}
-                    >
-                      <Trash2 aria-hidden />
-                    </IconButton>
-                  </Td>
-                </Tr>
-              );
-            }))}
-          </tbody>
-        </Table>
-      )}
-    </Panel>
+            {confirmandoDescarte ? (
+              <Alert tone="warn">
+                <span className="flex flex-wrap items-center gap-2">
+                  Descartar o carrinho inteiro? Os itens e as quantidades se perdem.
+                  <Button size="sm" variant="primary" onClick={() => { setConfirmandoDescarte(false); onDescartar(); }}>Descartar</Button>
+                  <Button size="sm" onClick={() => setConfirmandoDescarte(false)}>Manter</Button>
+                </span>
+              </Alert>
+            ) : null}
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button onClick={() => setConfirmandoDescarte(true)} disabled={criando || itens.length === 0 || confirmandoDescarte}>
+            Descartar carrinho
+          </Button>
+          <Button onClick={baixarArquivos} disabled={criando || itens.length === 0} title="Um arquivo CODPROD;PRECO;QTD por fornecedor e filial">
+            <Download aria-hidden />
+            Baixar arquivo de importação do WinThor
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => void criarPedidos()}
+            disabled={criando || itens.length === 0 || !podeOperar || algumBloqueado || boardId <= 0}
+            title={!podeOperar ? motivoBloqueio : algumBloqueado ? 'Já existe um pedido aberto para este fornecedor e filial.' : undefined}
+          >
+            {criando ? 'Criando...' : `Criar ${grupos.length} ${grupos.length === 1 ? 'pedido' : 'pedidos'} no quadro`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -13,7 +13,7 @@
 
 import { assert } from './base.mjs';
 import {
-  CARDS_011, FILIAL_011, FILIAL_ENVIADO_011, FORNECEDOR_011, JANELA, JANELA_CURTA, VENDA_ATIPICA,
+  CARDS_011, FILIAL_011, FILIAL_ENVIADO_011, FORNECEDOR_011, JANELA, JANELA_CURTA, VENDA_ATIPICA, haDias,
 } from '../seed/011-compras-inteligentes.mjs';
 
 const FAIXA = [5401, 5402, 5403, 5404, 5405, 5406, 5407, 5408, 5409, 5410,
@@ -228,6 +228,51 @@ export async function suite(ctx) {
   /* ── T-086 — o carrinho vira pedido ──────────────────────────────────── */
 
   let DO_CARRINHO = 0;
+
+  /* ── layout legado (R-117): resumo por fornecedor, itens em pedido aberto, custo atual ── */
+
+  await teste('C-036 / RN-026: sgcWintResumoFornecedores devolve, para o 1042, os itens ativos do recorte de RN-014 (todos menos o inativo e o do departamento 4) e um valor sugerido ESTIMADO maior que zero numa consulta so, sem depender de filial — o rotulo do seletor antes da escolha', async () => {
+    const rows = await linhas('sgcWintResumoFornecedores', {
+      codfornecs: String(FORNECEDOR_011), dataInicio: haDias(89), diasPeriodo: 90,
+    });
+    assert.ok(rows.length > 0, 'consulta ao WinThor sem linha nao e verde');
+    const resumo = rows.find((r) => Number(r.CODFORNEC) === FORNECEDOR_011);
+    assert.ok(resumo, 'o fornecedor 1042 nao veio');
+    // R-045: outras specs tambem semeiam produtos do 1042 — a contagem e relativa
+    // ao catalogo do fornecedor, e o que se prova e que os dois do recorte
+    // (5419 inativo, 5420 do departamento 4) ficam de fora.
+    const catalogo = Number(db.prepare('SELECT COUNT(*) AS N FROM PCPRODUT WHERE CODFORNEC = ?').get(FORNECEDOR_011).N);
+    assert.ok(catalogo >= 20);
+    assert.equal(Number(resumo.ITENS), catalogo - 2, 'o inativo (5419) e o do departamento 4 (5420) ficam fora');
+    // O 5402 vende 18 na janela com disponivel 0: a estimativa e positiva.
+    assert.ok(Number(resumo.VALOR_SUGERIDO) > 0, 'a estimativa de sugestao do 1042 e positiva');
+  });
+
+  await teste('C-035: sgcItensEmPedidoAberto lista os 5 produtos do pedido do 1042 em analise na filial 1, com o card e a fase pela CHAVE, e nada para a filial 2, cujo pedido ja foi enviado', async () => {
+    const abertos = await linhas('sgcItensEmPedidoAberto', {
+      codfornec: FORNECEDOR_011, codfilial: FILIAL_011, limite: 500, offset: 0,
+    });
+    const doCard = abertos.filter((r) => Number(r.ID_CARD) === CARDS_011.eficiencia);
+    assert.deepEqual(doCard.map((r) => Number(r.CODPROD)).sort(), [5401, 5402, 5403, 5404, 5405]);
+    for (const r of doCard) {
+      assert.equal(String(r.FASE_CHAVE), 'analise');
+      assert.ok(String(r.TITULO).length > 0);
+      assert.ok(Number(r.QT_PEDIDA) > 0);
+    }
+    const filial2 = await linhas('sgcItensEmPedidoAberto', {
+      codfornec: FORNECEDOR_011, codfilial: FILIAL_ENVIADO_011, limite: 500, offset: 0,
+    });
+    assert.equal(filial2.length, 0, 'pedido enviado nao e pedido aberto (RN-016)');
+  });
+
+  await teste('C-039 / RN-027: sgcWintRessuprimento devolve o custo ATUAL do ERP ao lado do custo da ultima entrada, e o codigo de fabrica — o 5401 caiu de 12 para 11, o 5403 subiu de 10 para 10,50 e o 5402 nao mudou', async () => {
+    const rows = await ressuprimento();
+    assert.equal(Number(produto(rows, 5401).CUSTO_ULT_ENTRADA), 12);
+    assert.equal(Number(produto(rows, 5401).CUSTO_ATUAL), 11);
+    assert.equal(Number(produto(rows, 5403).CUSTO_ATUAL), 10.5);
+    assert.equal(Number(produto(rows, 5402).CUSTO_ATUAL), 12);
+    assert.equal(String(produto(rows, 5401).CODFAB), 'FAB-5401');
+  });
 
   await teste('C-018 / RNF-002: o carrinho cria o pedido pelo mesmo caminho de /pedidos/novo — kbCardCriar + sgcEscPedidoCriar (origem compras_inteligentes) + sgcItensGravar, TRES execucoes por grupo depois de UM kbBoardCarregar —, e os 3 itens nascem completos: quantidade, sugerida, custo, curva, DESCRICAO nao vazia e COBERTURA_LIMITE > 0 (R-112)', async () => {
     const medidas = await ressuprimento();
