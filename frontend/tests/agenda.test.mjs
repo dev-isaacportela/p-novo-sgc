@@ -4,8 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  proximaOcorrencia, situacao, periodoPadrao, periodoDaOcorrencia,
-  validarAgendamento, recorte, diaNoFuso, localizarPorCriadoEm,
+  proximaOcorrencia, situacao, periodoPadrao, periodoDaOcorrencia, validarAgendamento, recorte, diaNoFuso, localizarPorCriadoEm, ocorrenciasNoMes, agruparPorDia,
 } from '../src/lib/agenda.ts';
 import { permissoesDe } from '../src/lib/permissoes.ts';
 
@@ -121,4 +120,23 @@ test('A5: localizarPorCriadoEm acha a linha pelo CRIADO_EM exato, não pelo maio
   // NÃO deve devolver o ID 4 (o maior ID) como se fosse o recém-criado.
   assert.equal(localizarPorCriadoEm(candidatos, '2026-09-15T14:31:00'), null);
   assert.equal(localizarPorCriadoEm([], '2026-09-15T14:30:05'), null);
+});
+
+test('C-022 / R-121: ocorrenciasNoMes — base em 05/11 sem recorrência é só o dia 5; semanal a partir de 29/10 cai em 5, 12, 19 e 26/11; quinzenal com limite 10/11 só em 5/11; mensal de 31/10 cai em 30/11 (mês curto); fora do mês nada', () => {
+  assert.deepEqual(ocorrenciasNoMes({ DATA_ANALISE: '2026-11-05', RECORRENCIA: 'nenhuma' }, '2026-11'), ['2026-11-05']);
+  assert.deepEqual(ocorrenciasNoMes({ DATA_ANALISE: '2026-10-29', RECORRENCIA: 'semanal' }, '2026-11'), ['2026-11-05', '2026-11-12', '2026-11-19', '2026-11-26']);
+  assert.deepEqual(ocorrenciasNoMes({ DATA_ANALISE: '2026-10-22', RECORRENCIA: 'quinzenal', DATA_LIMITE_RECORRENCIA: '2026-11-10' }, '2026-11'), ['2026-11-05']);
+  assert.deepEqual(ocorrenciasNoMes({ DATA_ANALISE: '2026-10-31', RECORRENCIA: 'mensal' }, '2026-11'), ['2026-11-30']);
+  assert.deepEqual(ocorrenciasNoMes({ DATA_ANALISE: '2026-12-01', RECORRENCIA: 'semanal' }, '2026-11'), []);
+  assert.deepEqual(ocorrenciasNoMes({ DATA_ANALISE: '', RECORRENCIA: 'semanal' }, '2026-11'), []);
+});
+
+test('C-022: agruparPorDia junta os agendamentos por dia do mês e marca a ocorrência projetada como recorrente', () => {
+  const porDia = agruparPorDia([
+    { ID: 1, DATA_ANALISE: '2026-11-05', RECORRENCIA: 'nenhuma' },
+    { ID: 2, DATA_ANALISE: '2026-10-29', RECORRENCIA: 'semanal' },
+  ], '2026-11');
+  assert.deepEqual([...porDia.keys()].sort(), ['2026-11-05', '2026-11-12', '2026-11-19', '2026-11-26']);
+  assert.deepEqual(porDia.get('2026-11-05').map((o) => `${o.linha.ID}${o.recorrente ? '*' : ''}`), ['1', '2*']);
+  assert.equal(porDia.get('2026-11-12')[0].recorrente, true);
 });

@@ -158,3 +158,42 @@ export function localizarPorCriadoEm(
   const achado = candidatos.find((c) => String(c.CRIADO_EM ?? '') === criadoEm);
   return achado ? Number(achado.ID) : null;
 }
+
+/* ── Visão de calendário (R-121, spec 004 C-022) ── */
+
+/** As datas de um agendamento que caem no mês `AAAA-MM`: a base e as recorrências até o fim do mês (teto de 62 passos). */
+export function ocorrenciasNoMes(
+  linha: { DATA_ANALISE?: unknown; RECORRENCIA?: unknown; DATA_LIMITE_RECORRENCIA?: unknown },
+  anoMes: string,
+): string[] {
+  const base = String(linha.DATA_ANALISE ?? '').slice(0, 10);
+  if (!parseIso(base)) return [];
+  const inicioDoMes = `${anoMes}-01`;
+  const fimDoMes = somarDias(comMesmoDia(inicioDoMes, mesAdjacente(parseIso(inicioDoMes)!, 1)), -1);
+  const recorrencia = String(linha.RECORRENCIA ?? 'nenhuma') as Recorrencia;
+  const limite = linha.DATA_LIMITE_RECORRENCIA ? String(linha.DATA_LIMITE_RECORRENCIA).slice(0, 10) : undefined;
+  const datas: string[] = [];
+  let atual: string | null = base;
+  for (let passo = 0; atual && atual <= fimDoMes && passo < 62; passo += 1) {
+    if (atual >= inicioDoMes) datas.push(atual);
+    atual = proximaOcorrencia(atual, recorrencia, limite);
+  }
+  return datas;
+}
+
+/** Dia (ISO) -> agendamentos daquele dia no mês, na ordem de chegada; cada linha pode aparecer em vários dias. */
+export function agruparPorDia<T extends { DATA_ANALISE?: unknown; RECORRENCIA?: unknown; DATA_LIMITE_RECORRENCIA?: unknown }>(
+  linhas: T[],
+  anoMes: string,
+): Map<string, { linha: T; recorrente: boolean }[]> {
+  const porDia = new Map<string, { linha: T; recorrente: boolean }[]>();
+  for (const linha of linhas ?? []) {
+    const base = String(linha.DATA_ANALISE ?? '').slice(0, 10);
+    for (const dia of ocorrenciasNoMes(linha, anoMes)) {
+      const lista = porDia.get(dia) ?? [];
+      lista.push({ linha, recorrente: dia !== base });
+      porDia.set(dia, lista);
+    }
+  }
+  return porDia;
+}
