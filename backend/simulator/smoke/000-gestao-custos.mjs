@@ -61,7 +61,7 @@ export async function suite(ctx) {
       env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local', GESTAO_CUSTOS_TOKEN: 'segredo' },
       log: silencioso, db,
     });
-    assert.equal(remoto.descricao, 'mitra projeto 60574 via runQuery');
+    assert.equal(remoto.descricao, 'mitra projeto 46967 via runQuery');
     assert.equal(typeof remoto.executar, 'function');
     assert.equal(JSON.stringify(process.env), antes, 'o adaptador nao escreve em process.env');
     // A URL base e so a origem: caminho colado junto (como /interactions/records) e descartado.

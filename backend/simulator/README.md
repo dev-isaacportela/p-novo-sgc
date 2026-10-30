@@ -212,7 +212,7 @@ executa por `gestao-custos.mjs`, irmão do `winthor-oracle.mjs`:
   `CUSTO_PRODUTOS` do seed da 003, no lugar da `PRODUTOS` do Gestão de Custos;
 - **`SIMULATOR_GESTAO_CUSTOS=mitra`** no `backend/.env`, com as variáveis SÓ do
   adaptador: `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`,
-  `GESTAO_CUSTOS_PROJECT_ID` (60574; `runQuery` direto, o caminho preferido) e,
+  `GESTAO_CUSTOS_PROJECT_ID` (46967; `runQuery` direto, o caminho preferido) e,
   só para o fallback pela conexão `gestao-de-custos`, `GESTAO_CUSTOS_INTEGRATIONS_URL`
   e `GESTAO_CUSTOS_CONEXAO_PROJECT_ID`. O SDK é uma instância própria; nada vai
   para `process.env`. Só SELECT/WITH; `event.<param>` só numérico; cache por

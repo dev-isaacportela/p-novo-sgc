@@ -1,5 +1,5 @@
 // Gestão de Custos no simulador — a conexão de integração `gestao-de-custos`
-// (projeto Mitra 60574, banco MySQL do próprio projeto), de onde o SGC lê as
+// (projeto Mitra 46967, banco MySQL do próprio projeto), de onde o SGC lê as
 // unidades por caixa (`PRODUTOS.UNIDADES_POR_CAIXA`). Em produção a Server
 // Function `sgcCustoUnidadesPorCaixa` (add-006, type INTEGRATION) é executada
 // pela plataforma: o `code` é um JSON com `connection`, `method`, `endpoint` e
@@ -13,7 +13,7 @@
 // - `SIMULATOR_GESTAO_CUSTOS=mitra` no backend/.env: a consulta vai à
 //   plataforma, como LEITURA, com variáveis SÓ deste adaptador —
 //   `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`, `GESTAO_CUSTOS_PROJECT_ID`
-//   (60574, `runQuery` direto, o caminho preferido) e, só para o fallback pela
+//   (46967, `runQuery` direto, o caminho preferido) e, só para o fallback pela
 //   conexão `gestao-de-custos`, `GESTAO_CUSTOS_INTEGRATIONS_URL` e
 //   `GESTAO_CUSTOS_CONEXAO_PROJECT_ID` (o projeto que tem a conexão). O SDK é
 //   uma INSTÂNCIA própria (`createMitraSdkInstance`): nada global, nada em
@@ -32,7 +32,7 @@ import 'dotenv/config';
 import { toSqlite } from './mysql-dialect.mjs';
 
 export const CONEXAO_GESTAO_CUSTOS = 'gestao-de-custos';
-export const GESTAO_CUSTOS_PROJECT_ID_PADRAO = 60574;
+export const GESTAO_CUSTOS_PROJECT_ID_PADRAO = 46967;
 const TTL_CACHE_MS = 5 * 60 * 1000;
 
 /** O JSON do `code` de uma definition INTEGRATION, ou `null`. */
