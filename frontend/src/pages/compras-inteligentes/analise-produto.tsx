@@ -209,6 +209,7 @@ export function AnaliseProdutoDialogo({
                         <Input
                           type="number"
                           min={0}
+                          step={rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 1 : linha.unidadesPorCaixa}
                           value={simulada === '' ? String(quantidadeNaReferencia(sugestaoDePartida, linha.unidadesPorCaixa, referencia)) : simulada}
                           onChange={(e) => setSimulada(e.target.value)}
                           onBlur={(e) => setSimulada(String(quantidadeNaReferencia(arredondarPorCaixa(unidadesDaDigitada(Number(e.target.value) || 0, linha.unidadesPorCaixa, referencia), linha.unidadesPorCaixa), linha.unidadesPorCaixa, referencia)))}

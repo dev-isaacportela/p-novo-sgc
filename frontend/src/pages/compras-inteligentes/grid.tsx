@@ -239,6 +239,7 @@ export function ListaProdutos({
                     type="number"
                     min={0}
                     className="text-right"
+                    step={rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 1 : linha.unidadesPorCaixa}
                     aria-label={`Quantidade de ${linha.medida.DESCRICAO} (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia)})`}
                     value={String(quantidadeNaReferencia(escolhida, linha.unidadesPorCaixa, referencia))}
                     disabled={!podeOperar}
