@@ -46,7 +46,7 @@ import { DADOS_VAZIOS, desconsideradasPorMes } from '@/lib/ressuprimento-detalhe
 import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
 import { lotesDeCodigos, oportunidadesDoItem, seloEspecial, sugestaoPorCliente } from '@/lib/custo-especial';
 import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
-import { CHAVE_LARGURA, curvasJuntas, larguraDe, proximaLargura } from '@/lib/largura-painel';
+import { CHAVE_LARGURA, larguraDe, larguraEfetiva, proximaLargura } from '@/lib/largura-painel';
 import type { LarguraPainel } from '@/lib/largura-painel';
 import type { MapaCustoPadrao } from '@/lib/compras';
 import type { CustoEspecial, Oportunidade, SugestaoCliente, TabelaEspecial, VendaCliente } from '@/lib/custo-especial';
@@ -326,11 +326,22 @@ export default function ComprasInteligentesPage() {
     try { guardada = window.localStorage.getItem(CHAVE_LARGURA(usuarioId)); } catch { /* sem armazenamento */ }
     setLargura(larguraDe(guardada));
   }
+  // A largura de fato nunca deixa a lista com menos de 640 px: a grade é medida (iframe e zoom contam).
+  const [larguraGrade, setLarguraGrade] = React.useState(0);
+  const observadorGrade = React.useRef<ResizeObserver | null>(null);
+  const refGrade = React.useCallback((no: HTMLDivElement | null) => {
+    observadorGrade.current?.disconnect();
+    if (!no || typeof ResizeObserver === 'undefined') return;
+    observadorGrade.current = new ResizeObserver(([e]) => setLarguraGrade(Math.round(e.contentRect.width)));
+    observadorGrade.current.observe(no);
+  }, []);
+  const larguraUsada = larguraEfetiva(largura, larguraGrade);
+  const podeAlargar = larguraEfetiva(proximaLargura(larguraUsada, 1), larguraGrade) !== larguraUsada;
   const mudarLargura = React.useCallback((passo: 1 | -1) => setLargura((atual) => {
-    const proxima = proximaLargura(atual, passo);
+    const proxima = proximaLargura(larguraEfetiva(atual, larguraGrade), passo);
     try { window.localStorage.setItem(CHAVE_LARGURA(usuarioId), proxima); } catch { /* conveniência */ }
     return proxima;
-  }), [usuarioId]);
+  }), [usuarioId, larguraGrade]);
   // Alt+← alarga e Alt+→ estreita o painel (que está à direita).
   React.useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
@@ -654,7 +665,7 @@ export default function ComprasInteligentesPage() {
   });
 
   return (
-    <div className="flex flex-col lg:h-full lg:min-h-0">
+    <div className="flex flex-col lg:h-full lg:min-h-0 lg:overflow-hidden">
       {/* Cabeçalho compacto (pedido do usuário em 2026-10-30): uma linha só —
           fornecedor e filial à esquerda, as ações à direita; sem título nem
           descrição. A busca e o seletor de órgãos públicos ficam na lista. */}
@@ -758,7 +769,7 @@ export default function ComprasInteligentesPage() {
         <Panel className="mt-4"><EmptyState title="Nenhum produto ativo deste fornecedor nesta filial" /></Panel>
       ) : (
         // R-129: lista e painel ocupam a altura que sobra, cada um com a sua rolagem; a largura do painel é do usuário.
-        <div className={`mt-4 grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] ${COLUNAS_POR_LARGURA[largura]}`}>
+        <div ref={refGrade} className={`mt-4 grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] ${COLUNAS_POR_LARGURA[larguraUsada]}`}>
           <ListaProdutos
             visao={visao}
             linhas={lista}
@@ -775,7 +786,6 @@ export default function ComprasInteligentesPage() {
             desconsiderarLicitacao={desconsiderarLicitacao}
             onLicitacao={() => setDesconsiderarLicitacao((atual) => !atual)}
             emPedidoAberto={emPedidoAberto}
-            curvasNumaColuna={curvasJuntas(largura)}
             especiais={selosEspeciais}
             sugestaoProjetada={projetadaSelecionada ? { codprod: codprodSelecionado, sugestao: projetadaSelecionada.sugestao } : null}
             sugestaoTotal={sugestaoTotal}
@@ -814,7 +824,8 @@ export default function ComprasInteligentesPage() {
             projetada={projetadaSelecionada}
             sugestoesEspeciais={sugestoesSelecionada}
             onAdicionarEspecial={(tabela, quantidade) => { if (linhaSelecionada) adicionarEspecial(linhaSelecionada, tabela, quantidade); }}
-            largura={largura}
+            largura={larguraUsada}
+            podeAlargar={podeAlargar}
             onLargura={mudarLargura}
           />
         </div>

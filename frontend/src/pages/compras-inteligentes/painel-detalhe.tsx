@@ -16,6 +16,7 @@ import {
   RowTitle, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
+import { cn } from '@/lib/utils';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
   JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
@@ -28,6 +29,7 @@ import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
 import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
 import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import { rolagemDoPainel } from '@/lib/largura-painel';
 import type { LarguraPainel } from '@/lib/largura-painel';
 import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
@@ -108,6 +110,7 @@ export function PainelDetalhe({
   sugestoesEspeciais,
   onAdicionarEspecial,
   largura,
+  podeAlargar,
   onLargura,
 }: {
   linha: LinhaRessuprimento | null;
@@ -136,9 +139,18 @@ export function PainelDetalhe({
   onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
   /** R-129: a largura do painel e o passo −/+ (a tela guarda a preferência). */
   largura: LarguraPainel;
+  /** Falso quando a próxima largura deixaria a lista com menos de 640 px. */
+  podeAlargar: boolean;
   onLargura: (passo: 1 | -1) => void;
 }) {
-  const rolagem = React.useRef<HTMLDivElement>(null);
+  // R-129 (correção): produto e gráfico num bloco fixo e "Mais detalhes" na sua
+  // própria rolagem — nada passa por baixo de nada. Sobrando pouca altura para
+  // os detalhes (medida no painel, não na janela: no Mitra a tela roda em iframe
+  // e com zoom), o painel inteiro rola junto.
+  const raiz = React.useRef<HTMLDivElement>(null);
+  const fixo = React.useRef<HTMLDivElement>(null);
+  const detalhes = React.useRef<HTMLDivElement>(null);
+  const [rolagem, setRolagem] = React.useState<'separada' | 'unica'>('separada');
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
   // C-048: um gráfico por vez — "Compras × vendas" (padrão) ou "Preço especial".
@@ -159,8 +171,22 @@ export function PainelDetalhe({
     setSimulada('');
     setAbaGrafico('vendas');
   }
-  // R-129: escolheu outro produto, o painel volta ao topo.
-  React.useEffect(() => { rolagem.current?.scrollTo({ top: 0 }); }, [codprod]);
+  // R-129: escolheu outro produto, o painel e os detalhes voltam ao topo.
+  React.useEffect(() => {
+    raiz.current?.scrollTo({ top: 0 });
+    detalhes.current?.scrollTo({ top: 0 });
+  }, [codprod]);
+  React.useEffect(() => {
+    const painel = raiz.current;
+    const bloco = fixo.current;
+    if (!painel || !bloco || typeof ResizeObserver === 'undefined') return;
+    const medir = () => setRolagem(rolagemDoPainel(painel.clientHeight, bloco.offsetHeight));
+    const observador = new ResizeObserver(medir);
+    observador.observe(painel);
+    observador.observe(bloco);
+    medir();
+    return () => observador.disconnect();
+  }, [codprod]);
 
   if (!linha) {
     return (
@@ -185,12 +211,10 @@ export function PainelDetalhe({
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
 
   return (
-    // R-129: o painel tem a altura da lista e rola por dentro; produto e gráfico ficam grudados no
-    // topo. Em tela baixa (até 760 px) eles ocupariam o painel inteiro e "Mais detalhes" não teria
-    // onde aparecer: aí o topo rola junto — ao escolher o produto o painel volta ao início, com
-    // nome e gráfico inteiros à vista.
-    <div ref={rolagem} className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
-      <div className="flex flex-col gap-3 bg-ground lg:pb-1 lg:[@media(min-height:761px)]:sticky lg:[@media(min-height:761px)]:top-0 lg:[@media(min-height:761px)]:z-20">
+    // R-129: o painel tem a altura da lista. Bloco fixo (produto e gráfico) + área de detalhes com
+    // rolagem própria; no modo "única" (pouca altura) o painel inteiro rola.
+    <div ref={raiz} className={cn('flex flex-col gap-3 lg:h-full lg:min-h-0', rolagem === 'unica' ? 'lg:overflow-y-auto' : 'lg:overflow-hidden')}>
+      <div ref={fixo} className="flex flex-none flex-col gap-3">
       <Panel>
         <PanelHeader
           title={`${codprod} · ${String(m.DESCRICAO)}`}
@@ -200,7 +224,7 @@ export function PainelDetalhe({
             <IconButton label="Painel mais estreito (Alt+→)" disabled={largura === 'estreito'} onClick={() => onLargura(-1)}>
               <ChevronsRight aria-hidden />
             </IconButton>
-            <IconButton label="Painel mais largo (Alt+←)" disabled={largura === 'metade'} onClick={() => onLargura(1)}>
+            <IconButton label="Painel mais largo (Alt+←)" disabled={!podeAlargar} onClick={() => onLargura(1)}>
               <ChevronsLeft aria-hidden />
             </IconButton>
           </span>
@@ -256,6 +280,7 @@ export function PainelDetalhe({
       )}
       </div>
 
+      <div ref={detalhes} className={cn('flex flex-col gap-3', rolagem === 'separada' && 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto')}>
       <Panel>
         <PanelHeader title="Mais detalhes" hint={dados.erro || 'Abra só o que precisar; nada aqui custa consulta nova.'} />
 
@@ -446,6 +471,7 @@ export function PainelDetalhe({
           </div>
         </Disclosure>
       </Panel>
+      </div>
     </div>
   );
 }
