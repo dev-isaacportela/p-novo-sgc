@@ -22,6 +22,9 @@ import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from
 import { filiaisComExcesso, simularCompra } from '@/lib/ressuprimento-detalhe';
 import type { DadosDoSku } from '@/lib/ressuprimento-detalhe';
 import { GraficoComprasVendas } from './grafico';
+import { AnaliseVendaFutura } from './previsao-ui';
+import { modeloEscolhido } from '@/lib/previsao';
+import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 
 const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = {
   ruptura: 'alert', elevada_exposicao: 'alert', baixa_exposicao: 'attention', excesso: 'attention', adequado: 'live',
@@ -35,7 +38,7 @@ const pct = (valor: number | null) => (valor === null ? '—' : `${Math.round(va
 const ORIGEM_COBERTURA = { sku: 'do produto', fornecedor: 'do fornecedor', curva: 'alvo da curva' } as const;
 const ORIGEM_LEAD = { sku: 'do produto', fornecedor: 'do fornecedor', medido: 'medido no ERP', padrao: 'padrão' } as const;
 
-type Secao = 'simulacao' | 'atributos' | 'compras' | 'vendas' | 'filiais' | 'parametros';
+type Secao = 'previsao' | 'simulacao' | 'atributos' | 'compras' | 'vendas' | 'filiais' | 'parametros';
 
 /**
  * C-012: o bloco do produto silenciado, como no sistema antigo — caixa em tom
@@ -92,6 +95,10 @@ export function PainelDetalhe({
   onAdicionar,
   onParametros,
   onRestaurar,
+  previsao,
+  modelo,
+  onModelo,
+  projetada,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -109,6 +116,11 @@ export function PainelDetalhe({
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onParametros: (linha: LinhaRessuprimento) => void;
   onRestaurar: (linha: LinhaRessuprimento) => void;
+  /** R-124: a previsão por modelo do produto aberto, a escolha e a sugestão projetada. */
+  previsao: Previsao | null;
+  modelo: ModeloPrevisao;
+  onModelo: (modelo: ModeloPrevisao) => void;
+  projetada: SugestaoProjetada | null;
 }) {
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
@@ -138,7 +150,9 @@ export function PainelDetalhe({
   });
 
   const nivel = nivelDeCobertura(linha);
-  const quantidadeSimulada = simulada === '' ? linha.sugerida : Number(simulada) || 0;
+  // R-124: a quantidade de partida é a sugestão projetada pelo modelo, quando há.
+  const sugestaoDePartida = projetada ? projetada.sugestao : linha.sugerida;
+  const quantidadeSimulada = simulada === '' ? sugestaoDePartida : Number(simulada) || 0;
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
   const custoAtual = Number(m.CUSTO_ATUAL ?? 0);
@@ -180,10 +194,19 @@ export function PainelDetalhe({
 
       <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
 
-      <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} />
+      <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} projecaoMes={projetada ? modeloEscolhido(previsao as Previsao, modelo)?.previsao ?? null : null} />
 
       <Panel>
         <PanelHeader title="Mais detalhes" hint={dados.erro || 'Abra só o que precisar; nada aqui custa consulta nova.'} />
+
+        <Disclosure
+          titulo="Análise de venda futura"
+          resumo={!previsao ? '…' : !previsao.suficiente ? 'sem meses fechados suficientes' : `${modeloEscolhido(previsao, modelo)?.rotulo ?? ''} · projeção ${Math.round(modeloEscolhido(previsao, modelo)?.previsao ?? 0).toLocaleString('pt-BR')} un./mês · sug. projetada ${projetada ? textoDaSugestao(projetada.sugestao, linha.unidadesPorCaixa, referencia) : '—'}`}
+          aberta={abertas.has('previsao')}
+          onToggle={() => alterna('previsao')}
+        >
+          <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} compacto />
+        </Disclosure>
 
         <Disclosure
           titulo="Simulação de compra"
@@ -198,7 +221,7 @@ export function PainelDetalhe({
                 <Input
                   type="number"
                   min={0}
-                  value={simulada === '' ? String(linha.sugerida) : simulada}
+                  value={simulada === '' ? String(sugestaoDePartida) : simulada}
                   onChange={(e) => setSimulada(e.target.value)}
                   onBlur={(e) => setSimulada(String(arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa)))}
                   title={`Sobe para a caixa cheia de ${linha.unidadesPorCaixa} un.`}

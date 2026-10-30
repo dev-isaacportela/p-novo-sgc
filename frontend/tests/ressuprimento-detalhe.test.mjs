@@ -137,3 +137,12 @@ test('C-042: com menos de 3 meses com movimento o histórico não sustenta leitu
   assert.equal(necessidade({ estoqueMaximo: 20, estoqueAtual: 30, emTransito: 0 }), 0);
   assert.equal(necessidade(linha()), 20, 'a linha do caso base: máximo 70, 50 disponível');
 });
+
+test('R-124: com a projeção do modelo, a última barra e o rodapé usam ela no lugar de consumo × dias do mês; negativa vira 0; sem ela, nada muda', () => {
+  const historico = [{ MES: '2026-09', SAIDAS: 20, ENTRADAS: 24, SAIDAS_PUBLICAS: 0 }];
+  assert.equal(serieComprasVendas(historico, '2026-09-16', 6, 2, undefined, 123.4)[6].projecao, 123);
+  assert.equal(serieComprasVendas(historico, '2026-09-16', 6, 2, undefined, -5)[6].projecao, 0);
+  assert.equal(serieComprasVendas(historico, '2026-09-16', 6, 2, undefined, null)[6].projecao, 62);
+  assert.equal(totaisDoRodape(historico, '2026-09-16', 2, 123.4).projecaoMes, 123);
+  assert.equal(totaisDoRodape(historico, '2026-09-16', 2).projecaoMes, 62);
+});

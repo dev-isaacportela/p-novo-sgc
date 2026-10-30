@@ -77,6 +77,8 @@ export function serieComprasVendas(
   janela: JanelaGrafico,
   consumoDiario: number,
   desconsideradas?: Map<string, number>,
+  /** R-124: a projeção do modelo escolhido, no lugar de consumo × dias do mês. */
+  projecaoMes?: number | null,
 ): PontoSerie[] {
   const porMes = new Map((historico ?? []).map((h) => [String(h.MES).slice(0, 7), h]));
   const medidos: PontoSerie[] = mesesAte(hoje, janela).map((mes) => {
@@ -96,7 +98,7 @@ export function serieComprasVendas(
     return {
       mes, rotulo: rotuloMes(mes),
       compras: null, vendas: null,
-      projecao: Math.round(consumo * diasDoMes(mes)),
+      projecao: Math.round(typeof projecaoMes === 'number' ? Math.max(0, projecaoMes) : consumo * diasDoMes(mes)),
       desconsideradas: null,
     };
   });
@@ -110,7 +112,7 @@ export interface TotaisRodape {
 }
 
 /** O rodapé "3m / 6m / 12m / Projeção": somas dos últimos meses e a projeção do próximo mês. */
-export function totaisDoRodape(historico: PontoHistorico[], hoje: string, consumoDiario: number): TotaisRodape {
+export function totaisDoRodape(historico: PontoHistorico[], hoje: string, consumoDiario: number, projecaoMes?: number | null): TotaisRodape {
   const porMes = new Map((historico ?? []).map((h) => [String(h.MES).slice(0, 7), h]));
   const soma = (n: number, campo: 'SAIDAS' | 'ENTRADAS') => mesesAte(hoje, n)
     .reduce((acc, mes) => acc + numero(porMes.get(mes)?.[campo]), 0);
@@ -118,7 +120,7 @@ export function totaisDoRodape(historico: PontoHistorico[], hoje: string, consum
   return {
     vendas3m: soma(3, 'SAIDAS'), vendas6m: soma(6, 'SAIDAS'), vendas12m: soma(12, 'SAIDAS'),
     compras3m: soma(3, 'ENTRADAS'), compras6m: soma(6, 'ENTRADAS'), compras12m: soma(12, 'ENTRADAS'),
-    projecaoMes: Math.round(Math.max(0, numero(consumoDiario)) * diasDoMes(proximo)),
+    projecaoMes: Math.round(typeof projecaoMes === 'number' ? Math.max(0, projecaoMes) : Math.max(0, numero(consumoDiario)) * diasDoMes(proximo)),
   };
 }
 
