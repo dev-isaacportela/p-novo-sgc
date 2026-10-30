@@ -87,6 +87,7 @@ export function GraficoComprasVendas({
   expandido = false,
   unidadesPorCaixa = 1,
   desconsideradas,
+  projecaoMes = null,
 }: {
   historico: PontoHistorico[];
   hoje: string;
@@ -98,6 +99,8 @@ export function GraficoComprasVendas({
   unidadesPorCaixa?: number;
   /** As vendas fora da demanda por mês (`AAAA-MM` → un.); só a janela expandida as passa. */
   desconsideradas?: Map<string, number>;
+  /** R-124: a projeção do modelo escolhido para o produto; `null` = consumo × dias do mês. */
+  projecaoMes?: number | null;
 }) {
   const [janela, setJanela] = React.useState<'6' | '13'>('6');
   const [visao, setVisao] = React.useState<'grafico' | 'tabela'>('grafico');
@@ -107,10 +110,10 @@ export function GraficoComprasVendas({
   const comCaixas = expandido && unidadesPorCaixa > 1;
   const emCaixas = comCaixas && referencia === 'caixas';
   const serie = React.useMemo(() => {
-    const base = serieComprasVendas(historico, hoje, Number(janela) as JanelaGrafico, consumoDiario, expandido ? desconsideradas : undefined);
+    const base = serieComprasVendas(historico, hoje, Number(janela) as JanelaGrafico, consumoDiario, expandido ? desconsideradas : undefined, projecaoMes);
     return emCaixas ? serieEmCaixas(base, unidadesPorCaixa) : base;
-  }, [historico, hoje, janela, consumoDiario, expandido, desconsideradas, emCaixas, unidadesPorCaixa]);
-  const totais = React.useMemo(() => totaisDoRodape(historico, hoje, consumoDiario), [historico, hoje, consumoDiario]);
+  }, [historico, hoje, janela, consumoDiario, expandido, desconsideradas, emCaixas, unidadesPorCaixa, projecaoMes]);
+  const totais = React.useMemo(() => totaisDoRodape(historico, hoje, consumoDiario, projecaoMes), [historico, hoje, consumoDiario, projecaoMes]);
   const semMovimento = pronto && historico.length === 0;
   const historicoCurto = expandido && pronto && !semMovimento && !historicoSuficiente(historico);
   const series: Serie[] = expandido && desconsideradas ? ['compras', 'vendas', 'desconsideradas', 'projecao'] : ['compras', 'vendas', 'projecao'];
@@ -138,7 +141,7 @@ export function GraficoComprasVendas({
       ))}
       <div className="flex items-baseline gap-1.5">
         <dt className="font-semibold text-ink-muted uppercase">Projeção</dt>
-        <dd><span className="text-ink">{inteiro(totais.projecaoMes)}</span> un./mês</dd>
+        <dd><span className="text-ink">{inteiro(totais.projecaoMes)}</span> un./mês{typeof projecaoMes === 'number' ? ' (modelo)' : ''}</dd>
       </div>
     </dl>
   );

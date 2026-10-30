@@ -260,6 +260,21 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Então** abre a janela "Análise do Produto": cabeçalho com código, descrição, embalagem, fornecedor e situação; Estoque | Em trânsito | Cobertura | Cobertura futura e Necessidade | Sugestão | Custo; a aba **Análise** com simulação de compra (quantidade, caixas, valor previsto, estoque final, cobertura, Parâmetros e Adicionar ao carrinho), Compras × vendas (6m/13m, Caixas/Unidades quando há caixa, Gráfico/Tabela, legenda que esconde a série, a série Desconsideradas, o aviso "Ainda não há dados suficientes para análise histórica consistente." com menos de 3 meses com movimento), análise de venda futura, o aviso de excesso em até 6 outras filiais, compras do produto (a última em mini-cartões, com a previsão em atenção quando a entrada atrasou; histórico de 5 entradas e "Ver todas as N entradas") e os parâmetros do cálculo; a aba **Vendas (N)** com vendas listadas, quantidade e valor desconsiderados, os meses em pílula ("Outubro de 2026 · N vendas · R$ X"), a tabela com cliente e vendedor e Desconsiderar/Reconsiderar, a linha desconsiderada em fundo de atenção, "Carregando…" e "Nenhuma venda encontrada para o período atual."
 - **E** abrir a janela não custa consulta nova — só a aba Vendas custa 1, ao abrir
 
+**C-043 — A série da previsão** *(R-124)*
+- **Dado que** o produto aberto no painel tem histórico mensal e vendas desconsideradas
+- **Quando** a previsão é montada
+- **Então** entram só os meses **fechados** (anteriores ao mês de hoje), do mais antigo ao mais recente, no máximo 12, cada um com as vendas do mês menos as desconsideradas dele (nunca abaixo de zero); com 4 ou mais pontos, o mês acima de média + 2 desvios vira a média e conta como outlier ajustado; com menos de 3 pontos não há projeção e a sugestão segue o consumo ponderado
+
+**C-044 — Os cinco modelos** *(R-124)*
+- **Dado que** a série ajustada tem 3 ou mais pontos
+- **Quando** cada modelo é calculado
+- **Então** a média móvel simples e a ponderada (3 últimos; pesos 50/30/20), a suavização exponencial (alpha de 0,1 a 0,9), o Holt (alpha e beta em 0,2 a 0,8) e o Holt-Winters aditivo (período 4, ou 6 com 12 pontos; sem dois períodos cai no Holt "sem sazonalidade") devolvem a previsão do próximo mês (nunca negativa) e os erros de um passo, de onde saem MAD, MAPE, erro acumulado e tracking signal; os parâmetros são os de menor MAD
+
+**C-045 — Best Fit e a sugestão projetada** *(R-124)*
+- **Dado que** os cinco modelos foram calculados para o produto aberto
+- **Quando** a compradora deixa o seletor em Best Fit (o padrão) ou escolhe um modelo
+- **Então** o Best Fit é o de menor MAD e o seletor diz qual venceu; a seção "Análise de venda futura" do painel e da Análise do Produto mostra projeção mensal, MAD com o MAPE, tracking signal com o limite ±4 e o estado (sob controle / fora), e a sugestão projetada com as caixas; mostra os pontos usados, os outliers ajustados, alpha/beta/gamma e as médias de 3, 6 e 12 meses da série ajustada; a última barra do gráfico passa a ser a projeção do modelo; a linha selecionada, a quantidade do simulador e o "adicionar ao carrinho" desse produto partem da sugestão projetada — as demais linhas seguem no consumo ponderado; a escolha do modelo é estado da tela e não é gravada
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -296,6 +311,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RF-030 | O carrinho DEVE mostrar, por grupo, o quanto falta para o pedido mínimo do fornecedor | C-029 | must |
 | RF-031 | O carrinho DEVE gerar o arquivo de importação do WinThor, um por fornecedor e filial | C-030 | should |
 | RF-032 | A medida DEVE trazer o custo atual do ERP e o código de fábrica; o carrinho mostra a variação e a economia no custo | C-039 | should |
+| RF-033 | O produto aberto no painel DEVE ter previsão de venda por modelo (MMS, MMP, SE, Holt, Holt-Winters e Best Fit) sobre os meses fechados, com MAD, MAPE e tracking signal, e a sugestão projetada dele; a escolha do modelo é da compradora, Best Fit por padrão | C-043, C-044, C-045 | must |
 
 ## Requisitos não-funcionais
 
@@ -348,6 +364,9 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **RN-026 — Resumo por fornecedor.** É estimativa: venda dos últimos 90 dias sem ponderação, cobertura de 35 dias, estoque disponível e pedido ao ERP somados em todas as filiais, custo da última entrada, nenhum parâmetro de SKU nem curva. Serve ao rótulo do seletor; a sugestão exata é a da lista.
 - **RN-027 — Variação e economia.** Variação = (custo atual − custo da última entrada) ÷ custo da última entrada; vermelho quando subiu, verde quando caiu; sem um dos dois custos não há variação. Economia no custo = soma de (última entrada − atual) × quantidade só nos itens em que o custo caiu.
 - **RN-028 — Unidades por caixa (R-120).** A caixa de cada produto vem do Gestão de Custos quando ele a tem; senão do cadastro do ERP; senão da embalagem; senão é avulso — a mesma cadeia da montagem do pedido (RN-002 da 003). A tela mostra de onde veio, e a sugestão, a referência Unidades/Caixas e a simulação usam a caixa resolvida.
+- **RN-029 — Série da previsão.** Até 12 meses fechados (mês < mês de hoje) de vendas do produto na filial, em ordem crescente, cada mês menos as vendas desconsideradas dele, com piso zero. Com 4 ou mais pontos: média e desvio populacional; ponto acima de média + 2 desvios vira a média (outlier ajustado). Com menos de 3 pontos não há projeção.
+- **RN-030 — Modelos e erros.** MMS: média dos últimos w = min(3, n−1). MMP: pesos 0,5/0,3/0,2 do mais recente ao mais antigo, truncados a w e normalizados. SE: nível = s0, a cada passo prev = nível e nível = α·s + (1−α)·nível, α de 0,1 a 0,9. Holt: L = s0, T = s1−s0; prev = L+T; L' = α·s + (1−α)(L+T); T = β(L'−L) + (1−β)T; α, β em {0,2; 0,4; 0,6; 0,8}. Holt-Winters aditivo: m = 6 com 12 pontos, senão 4; com n < 2m devolve o Holt "sem sazonalidade"; L0 = média(m primeiros), T0 = (média(m seguintes) − L0)/m, S_k = s_k − L0; prev = L+T+S_k, atualizações com α, β, γ em {0,2; 0,4; 0,6}. Cada modelo devolve a previsão do próximo mês (máx(0, 2 casas)) e os erros real − previsto; MAD = Σ|e|/n; MAPE só sobre reais > 0; CE = Σe; TS = CE/MAD (0 sem MAD); sob controle ⇔ |TS| ≤ 4. Os parâmetros são os de menor MAD (empate: o primeiro). Best Fit = o modelo de menor MAD; é o padrão.
+- **RN-031 — Sugestão projetada.** Demanda diária = previsão/30. Sugestão projetada = arredonda à caixa cheia (demanda × cobertura − disponível − trânsito), nunca negativa, com a cobertura que o item já resolve (RN-004). Alvo no lead time = demanda × lead time + estoque de segurança. Vale só para o produto aberto no painel: a linha selecionada, a quantidade do simulador e o "adicionar ao carrinho" dele; as demais linhas e a consulta seguem na RN-001. A projeção manual em % (badge) não altera o cálculo.
 
 ## Testes
 
@@ -412,6 +431,12 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-040 | consulta do ressuprimento: o 5410 (50 un. a 20 com custo financeiro 12) devolve faturamento 1000 e rentabilidade 400; devolução e venda desconsiderada ficam fora dos dois; produto sem venda tem 0 e 0 | regra de negócio |
 | C-041 | `sgcWintProdutoVendas` do 5408 → 4 vendas, todas com `CODUSUR` > 0 e `VENDEDOR`; `sgcWintProdutoUltimasCompras` do 5403 → a entrada do pedido 970001 com `DT_SOLICITACAO`, `DT_PREVISAO` e a entrada depois da previsão | regra de negócio |
 | C-042 | meses de vendas: 2 em outubro (R$ 1.400) e 1 em setembro, do mais recente ao mais antigo, filtro por mês e resumo do que está fora (60 un., R$ 1.200); série Desconsideradas por mês só quando pedida, em caixas dividida por 12 com 1 decimal; 2 meses com movimento → histórico insuficiente, 3 → suficiente; entrada em 04/09 com previsão 02/09 atrasou, sem previsão não; necessidade 70 − 30 − 0 = 40, inteira e nunca negativa | regra de tela |
+| C-043 | histórico com outubro (mês corrente), setembro 20 com 25 desconsideradas, agosto 30 com 10, julho 5, jan/25 1 → série [1, 5, 20, 0]; 14 meses → ficam os 12 mais recentes | regra de tela |
+| RN-029 | 7 meses de 10 e um de 100 → média 21,25, σ 29,76, o 100 vira 21,25 e conta 1; com 3 pontos nada muda | regra de tela |
+| C-044 | 10, 20, 30, 40, 50: MMS prevê 40 (erros 20, 20 → MAD 20, MAPE 45, CE 40, TS 2) e MMP 43 (MAD 17); SE com 10, 20 → alpha 0,1 e previsão 11; Holt na série linear 10, 20, 30 → 40 com MAD 0; Holt-Winters com 5 pontos cai no Holt "sem sazonalidade" e com 8 constantes prevê 10 com MAD 0 | regra de tela |
+| RN-030 | erros 5 ×5 → MAD 5, CE 25, TS 5 fora de controle; MAPE só sobre reais > 0; sem MAD, TS 0 | regra de tela |
+| C-045 | série linear 10..50 → Best Fit = Holt (MAD 0); "bestfit" resolve para ele; com 2 pontos não há modelos; médias 3/6/12 da série ajustada | regra de tela |
+| RN-031 | previsão 300 → 10/dia; cobertura 35, estoque 100, trânsito 50, caixa 12 → 200 → 204; alvo no lead time (9 d, segurança 20) = 110; nunca negativa | regra de tela |
 | C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
 | RN-028 | produto com 6 no Gestão de Custos e "CX 12" na embalagem fica com caixa 6 e origem gestão (sugestão em múltiplos de 6); sem o mapa, 12 pela embalagem; com 24 no ERP, origem ERP; a integração no simulador devolve 12 e 24 para 5001 e 5002 e nada para 5010 | regra de tela + regra de negócio |
 
@@ -424,9 +449,9 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 
 ## Fora de escopo
 
-- [ ] **Previsão de demanda** (modelos estatísticos, corte de outlier, escolha por menor erro) — dívida registrada para a onda 5; aqui a projeção é a tendência ponderada de RN-001.
+- [x] ~~**Previsão de demanda** (modelos estatísticos, corte de outlier, escolha por menor erro)~~ Entrou (R-124): os cinco modelos do legado, o cap de outliers e o Best Fit, só para o produto aberto no painel (C-043..C-045).
 - [ ] **Estoque de segurança estatístico** (fator de serviço sobre a volatilidade) — a volatilidade é medida e mostrada, mas não entra na fórmula; dívida registrada.
-- [ ] **Na Análise do Produto (R-123)**: a oportunidade com preço especial (depende do módulo de custos), o seletor de modelos de previsão (Best Fit, Holt…) e o fator Z do estoque de segurança — o sistema antigo os tinha na janela; aqui ficam para a onda 5, com a venda futura mostrando só o que a RN-006 calcula.
+- [ ] **Na Análise do Produto (R-123)**: a oportunidade com preço especial (depende do módulo de custos) e o fator Z do estoque de segurança ficam para a onda 5. ~~O seletor de modelos de previsão~~ entrou (R-124): C-043..C-045, RN-029..RN-031.
 - [ ] **Oportunidades de custo especial** e políticas de preço por cliente — dependem do módulo de custos.
 - [ ] **Diálogo de bloqueios de lote** — **adiado** (R-117): o layout do sistema antigo o tinha; entra numa rodada futura, com consulta própria aos lotes.
 - [x] ~~**Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.~~ Existia (R-117): entrou como RF-031 / C-030.

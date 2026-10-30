@@ -76,6 +76,7 @@ export function ListaProdutos({
   desconsiderarLicitacao,
   onLicitacao,
   emPedidoAberto,
+  sugestaoProjetada,
   sugestaoTotal,
   carrinho,
   podeOperar,
@@ -101,6 +102,8 @@ export function ListaProdutos({
   onLicitacao: () => void;
   /** Produtos que já estão num pedido aberto do fornecedor nesta filial (C-035). */
   emPedidoAberto: Map<number, PedidoAbertoDoItem>;
+  /** R-124: a sugestão projetada pelo modelo escolhido, só para o produto aberto no painel. */
+  sugestaoProjetada: { codprod: number; sugestao: number } | null;
   /** Soma da sugestão do recorte ao custo da última entrada (R$). */
   sugestaoTotal: number;
   carrinho: { itens: number; pedidos: number };
@@ -127,7 +130,12 @@ export function ListaProdutos({
   const silenciados = todas.filter((l) => l.silenciado).length;
 
   /** A quantidade pré-carregada: a sugestão, ou uma caixa na visão "completar". */
-  const quantidadeInicial = (l: LinhaRessuprimento) => (visao === 'completar' && l.sugerida <= 0 ? quantidadeParaCompletar(l) : l.sugerida);
+  const projetadaDe = (l: LinhaRessuprimento) => (sugestaoProjetada && sugestaoProjetada.codprod === Number(l.medida.CODPROD) ? sugestaoProjetada.sugestao : null);
+  const quantidadeInicial = (l: LinhaRessuprimento) => {
+    const projetada = projetadaDe(l);
+    if (projetada !== null) return projetada;
+    return visao === 'completar' && l.sugerida <= 0 ? quantidadeParaCompletar(l) : l.sugerida;
+  };
 
   return (
     <Panel>
@@ -237,7 +245,10 @@ export function ListaProdutos({
                     onChange={(evento) => onQuantidade(codprod, Number(evento.target.value) || 0)}
                     onBlur={(evento) => onQuantidade(codprod, arredondarPorCaixa(Number(evento.target.value) || 0, linha.unidadesPorCaixa))}
                   />
-                  <RowMeta>{`sug. ${textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)}`}</RowMeta>
+                  <RowMeta>
+                    {`sug. ${textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)}`}
+                    {projetadaDe(linha) !== null ? ` · projetada ${textoDaSugestao(projetadaDe(linha) ?? 0, linha.unidadesPorCaixa, referencia)}` : ''}
+                  </RowMeta>
                 </Td>
                 <Td className="text-right" onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center justify-end gap-1">

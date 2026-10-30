@@ -42,7 +42,9 @@ import type {
 } from '@/lib/ressuprimento';
 import { CHAVE_CARRINHO, carrinhoDeTexto, resumoDoCarrinho, textoDoCarrinho } from '@/lib/carrinho';
 import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
-import { DADOS_VAZIOS } from '@/lib/ressuprimento-detalhe';
+import { DADOS_VAZIOS, desconsideradasPorMes } from '@/lib/ressuprimento-detalhe';
+import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
+import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import type { DadosDoSku, PontoHistorico, PosicaoFilial, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
 import { ListaProdutos } from './grid';
 import type { PedidoAbertoDoItem } from './grid';
@@ -349,6 +351,27 @@ export default function ComprasInteligentesPage() {
   );
   const codprodSelecionado = linhaSelecionada ? Number(linhaSelecionada.medida.CODPROD) : 0;
 
+  /* ── R-124: a previsão por modelo, só para o produto aberto (painel e janela) ── */
+  const [modeloPrevisao, setModeloPrevisao] = React.useState<ModeloPrevisao>('bestfit');
+  const previsaoDe = React.useCallback((codprod: number): Previsao | null => {
+    const dadosSku = cacheSku.get(codprod);
+    if (!codprod || !dadosSku?.pronto) return null;
+    return preverVendas(serieFechada(dadosSku.historico, hoje, desconsideradasPorMes(desconsideradas.filter((v) => v.codprod === codprod))));
+  }, [cacheSku, hoje, desconsideradas]);
+  const projetar = React.useCallback((previsao: Previsao | null, linha: LinhaRessuprimento | null): SugestaoProjetada | null => {
+    const r = previsao ? modeloEscolhido(previsao, modeloPrevisao) : null;
+    return r && linha ? sugestaoProjetada(r.previsao, linha) : null;
+  }, [modeloPrevisao]);
+  const previsaoSelecionada = React.useMemo(() => previsaoDe(codprodSelecionado), [previsaoDe, codprodSelecionado]);
+  const projetadaSelecionada = React.useMemo(() => projetar(previsaoSelecionada, linhaSelecionada), [projetar, previsaoSelecionada, linhaSelecionada]);
+  const codprodDetalhe = detalheCompleto ? Number(detalheCompleto.medida.CODPROD) : 0;
+  const linhaDetalhe = React.useMemo(
+    () => (detalheCompleto ? todas.find((l) => Number(l.medida.CODPROD) === codprodDetalhe) ?? detalheCompleto : null),
+    [detalheCompleto, todas, codprodDetalhe],
+  );
+  const previsaoDetalhe = React.useMemo(() => previsaoDe(codprodDetalhe), [previsaoDe, codprodDetalhe]);
+  const projetadaDetalhe = React.useMemo(() => projetar(previsaoDetalhe, linhaDetalhe), [projetar, previsaoDetalhe, linhaDetalhe]);
+
   /* ── o detalhe do SKU: 3 execuções, uma vez por produto (cache) ── */
   // As cargas em andamento ficam num ref, não no estado: o efeito só dispara a
   // consulta e grava o resultado quando ele volta.
@@ -618,6 +641,7 @@ export default function ComprasInteligentesPage() {
             desconsiderarLicitacao={desconsiderarLicitacao}
             onLicitacao={() => setDesconsiderarLicitacao((atual) => !atual)}
             emPedidoAberto={emPedidoAberto}
+            sugestaoProjetada={projetadaSelecionada ? { codprod: codprodSelecionado, sugestao: projetadaSelecionada.sugestao } : null}
             sugestaoTotal={sugestaoTotal}
             carrinho={{ itens: resumoCarrinho.itens, pedidos: resumoCarrinho.pedidos }}
             podeOperar={podeOperar}
@@ -648,6 +672,10 @@ export default function ComprasInteligentesPage() {
             onAdicionar={adicionar}
             onParametros={abrirParametros}
             onRestaurar={(l) => void restaurar(l)}
+            previsao={previsaoSelecionada}
+            modelo={modeloPrevisao}
+            onModelo={setModeloPrevisao}
+            projetada={projetadaSelecionada}
           />
         </div>
       )}
@@ -679,7 +707,7 @@ export default function ComprasInteligentesPage() {
 
       {/* R-123: a Análise do Produto é a versão expandida do painel, sobre o mesmo cache do SKU. */}
       <AnaliseProdutoDialogo
-        linha={detalheCompleto ? todas.find((l) => Number(l.medida.CODPROD) === Number(detalheCompleto.medida.CODPROD)) ?? detalheCompleto : null}
+        linha={linhaDetalhe}
         codfilial={codfilial}
         fornecedor={nomeFornecedor}
         hoje={hoje}
@@ -697,6 +725,10 @@ export default function ComprasInteligentesPage() {
         onRestaurar={(l) => void restaurar(l)}
         onDesconsiderar={desconsiderarVenda}
         onReconsiderar={reconsiderarVenda}
+        previsao={previsaoDetalhe}
+        modelo={modeloPrevisao}
+        onModelo={setModeloPrevisao}
+        projetada={projetadaDetalhe}
       />
       <ParametrosDialogo alvo={parametroAlvo} onFechar={() => setParametroAlvo(null)} onSalvar={salvarParametro} />
       <SilenciarDialogo linha={silenciando} onFechar={() => setSilenciando(null)} onSilenciar={silenciar} />

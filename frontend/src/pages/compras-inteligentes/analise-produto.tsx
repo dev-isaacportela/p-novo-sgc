@@ -26,6 +26,9 @@ import {
 import type { CompraDoProduto, DadosDoSku, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
 import { GraficoComprasVendas } from './grafico';
 import { BlocoSilenciado } from './painel-detalhe';
+import { AnaliseVendaFutura } from './previsao-ui';
+import { modeloEscolhido } from '@/lib/previsao';
+import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import { VendasDoProduto } from './dialogos';
 import type { VendasDoProdutoProps } from './dialogos';
 
@@ -62,6 +65,10 @@ export function AnaliseProdutoDialogo({
   onRestaurar,
   onDesconsiderar,
   onReconsiderar,
+  previsao,
+  modelo,
+  onModelo,
+  projetada,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -82,6 +89,11 @@ export function AnaliseProdutoDialogo({
   onRestaurar: (linha: LinhaRessuprimento) => void;
   onDesconsiderar: VendasDoProdutoProps['onDesconsiderar'];
   onReconsiderar: VendasDoProdutoProps['onReconsiderar'];
+  /** R-124: a previsão por modelo deste produto, a escolha e a sugestão projetada. */
+  previsao: Previsao | null;
+  modelo: ModeloPrevisao;
+  onModelo: (modelo: ModeloPrevisao) => void;
+  projetada: SugestaoProjetada | null;
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
   const [simulada, setSimulada] = React.useState('');
@@ -104,7 +116,9 @@ export function AnaliseProdutoDialogo({
   const m = linha.medida;
 
   const nivel = nivelDeCobertura(linha);
-  const quantidadeSimulada = simulada === '' ? linha.sugerida : Number(simulada) || 0;
+  const sugestaoDePartida = projetada ? projetada.sugestao : linha.sugerida;
+  const quantidadeSimulada = simulada === '' ? sugestaoDePartida : Number(simulada) || 0;
+  const resultadoModelo = previsao ? modeloEscolhido(previsao, modelo) : null;
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const comSugestao = simularCompra(linha, linha.sugerida);
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
@@ -187,7 +201,7 @@ export function AnaliseProdutoDialogo({
                         <Input
                           type="number"
                           min={0}
-                          value={simulada === '' ? String(linha.sugerida) : simulada}
+                          value={simulada === '' ? String(sugestaoDePartida) : simulada}
                           onChange={(e) => setSimulada(e.target.value)}
                           onBlur={(e) => setSimulada(String(arredondarPorCaixa(Number(e.target.value) || 0, linha.unidadesPorCaixa)))}
                         />
@@ -227,12 +241,14 @@ export function AnaliseProdutoDialogo({
                   expandido
                   unidadesPorCaixa={linha.unidadesPorCaixa}
                   desconsideradas={foraPorMes}
+                  projecaoMes={projetada && resultadoModelo ? resultadoModelo.previsao : null}
                 />
 
                 {/* 4c. Análise de venda futura */}
                 <Panel>
-                  <PanelHeader title="Análise de venda futura" hint="O que a regra de ressuprimento calcula sobre a janela; modelos estatísticos de previsão ficam para a onda 5." />
-                  <div className="p-4">
+                  <PanelHeader title="Análise de venda futura" hint="A projeção pelo modelo escolhido, sobre os meses fechados, e o que a regra de ressuprimento calcula sobre a janela." />
+                  <div className="flex flex-col gap-4 p-4">
+                    <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} />
                     <GradeMini colunas={6}>
                       <MiniCartao rotulo="Consumo diário" valor={linha.consumoDiario.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} hint="Ponderado por recência" />
                       <MiniCartao rotulo="Projeção do mês" valor={`${totais.projecaoMes.toLocaleString('pt-BR')} un.`} hint="Consumo × dias do mês seguinte" />
