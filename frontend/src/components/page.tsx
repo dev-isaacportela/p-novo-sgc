@@ -839,15 +839,23 @@ export function BoardCard({ children }: { children: React.ReactNode }) {
 export function Table({
   children,
   className,
+  cabecalhoFixo = false,
 }: {
   children: React.ReactNode;
   className?: string;
+  /**
+   * R-129: quem rola é o contêiner de fora (lista de altura fixa); o cabeçalho
+   * das colunas fica grudado no topo dele. Sem a rolagem própria do wrapper,
+   * que prenderia o `sticky`.
+   */
+  cabecalhoFixo?: boolean;
 }) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className={cabecalhoFixo ? 'w-full' : 'w-full overflow-x-auto'}>
       <table
         className={cn(
           'w-full border-collapse text-[13px] [&_tr:last-child>td]:border-b-0',
+          cabecalhoFixo && '[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card',
           className
         )}
       >
@@ -1187,8 +1195,11 @@ export function PainelGrafico({
   titulo: string;
   hint?: React.ReactNode;
   acoes?: React.ReactNode;
-  /** `adaptavel`: 220 px em tela baixa, 320 px a partir de 800 px de altura (R-127). */
-  altura?: 'padrao' | 'alta' | 'adaptavel';
+  /**
+   * `adaptavel`: 220 px em tela baixa, 320 px a partir de 800 px de altura (R-127).
+   * `justa`: 150 px em tela baixa (até 760 px), 220 px acima — o painel lateral (R-129).
+   */
+  altura?: 'padrao' | 'alta' | 'adaptavel' | 'justa';
   largura?: 'padrao' | 'total';
   rodape?: React.ReactNode;
   children: React.ReactNode;
@@ -1204,7 +1215,7 @@ export function PainelGrafico({
         </div>
         {acoes ? <div className="flex items-center gap-2">{acoes}</div> : null}
       </div>
-      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : altura === 'adaptavel' ? 'h-[220px] [@media(min-height:800px)]:h-[320px]' : 'h-[220px]')}>
+      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : altura === 'adaptavel' ? 'h-[220px] [@media(min-height:800px)]:h-[320px]' : altura === 'justa' ? 'h-[150px] [@media(min-height:761px)]:h-[220px]' : 'h-[220px]')}>
         {children}
       </div>
       {rodape}
@@ -1236,7 +1247,8 @@ export function CardVisao({
       onClick={onClick}
       aria-pressed={ativo}
       className={cn(
-        'flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors',
+        // Em tela baixa (R-129) o card encolhe para a lista e o painel caberem.
+        'flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors [@media(max-height:760px)]:gap-0 [@media(max-height:760px)]:p-2',
         'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
         ativo ? 'border-primary bg-primary text-primary-foreground' : 'border-rule-row bg-card text-ink hover:bg-accent',
       )}
@@ -1244,7 +1256,7 @@ export function CardVisao({
       <span className={cn('text-[11px] font-semibold tracking-wide uppercase', ativo ? 'text-primary-foreground/80' : 'text-ink-muted')}>
         {rotulo}
       </span>
-      <span className="font-title text-2xl font-bold">
+      <span className="font-title text-2xl font-bold [@media(max-height:760px)]:text-lg">
         {contagem === null ? <Dash /> : contagem.toLocaleString('pt-BR')}
       </span>
     </button>
@@ -1253,7 +1265,7 @@ export function CardVisao({
 
 /** A fileira de cards de visão: dois por linha no mobile, quatro a partir de `xl`. */
 export function GradeVisoes({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{children}</div>;
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>;
 }
 
 /**

@@ -9,7 +9,7 @@
 // selecionado e ficam em cache; este arquivo só desenha o que recebeu. As
 // vendas do período continuam no diálogo de sempre (1 execução, ao abrir).
 import * as React from 'react';
-import { Eye, ShoppingCart, VolumeX } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Eye, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
   Alert, Button, ChipContagem, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
@@ -28,6 +28,7 @@ import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
 import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
 import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import type { LarguraPainel } from '@/lib/largura-painel';
 import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 
@@ -106,6 +107,8 @@ export function PainelDetalhe({
   projetada,
   sugestoesEspeciais,
   onAdicionarEspecial,
+  largura,
+  onLargura,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -131,7 +134,11 @@ export function PainelDetalhe({
   /** R-125: as sugestões por cliente das políticas de preço especial do produto aberto. */
   sugestoesEspeciais: SugestaoCliente[];
   onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
+  /** R-129: a largura do painel e o passo −/+ (a tela guarda a preferência). */
+  largura: LarguraPainel;
+  onLargura: (passo: 1 | -1) => void;
 }) {
+  const rolagem = React.useRef<HTMLDivElement>(null);
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
   // C-048: um gráfico por vez — "Compras × vendas" (padrão) ou "Preço especial".
@@ -152,6 +159,8 @@ export function PainelDetalhe({
     setSimulada('');
     setAbaGrafico('vendas');
   }
+  // R-129: escolheu outro produto, o painel volta ao topo.
+  React.useEffect(() => { rolagem.current?.scrollTo({ top: 0 }); }, [codprod]);
 
   if (!linha) {
     return (
@@ -176,12 +185,25 @@ export function PainelDetalhe({
   const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
 
   return (
-    <div className="flex flex-col gap-3">
+    // R-129: o painel tem a altura da lista e rola por dentro; produto e gráfico ficam grudados no
+    // topo. Em tela baixa (até 760 px) eles ocupariam o painel inteiro e "Mais detalhes" não teria
+    // onde aparecer: aí o topo rola junto — ao escolher o produto o painel volta ao início, com
+    // nome e gráfico inteiros à vista.
+    <div ref={rolagem} className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+      <div className="flex flex-col gap-3 bg-ground lg:pb-1 lg:[@media(min-height:761px)]:sticky lg:[@media(min-height:761px)]:top-0 lg:[@media(min-height:761px)]:z-20">
       <Panel>
         <PanelHeader
           title={`${codprod} · ${String(m.DESCRICAO)}`}
           hint={`${String(m.EMBALAGEM) || '—'} · ${fornecedor || '—'}`}
         >
+          <span className="hidden lg:inline-flex">
+            <IconButton label="Painel mais estreito (Alt+→)" disabled={largura === 'estreito'} onClick={() => onLargura(-1)}>
+              <ChevronsRight aria-hidden />
+            </IconButton>
+            <IconButton label="Painel mais largo (Alt+←)" disabled={largura === 'metade'} onClick={() => onLargura(1)}>
+              <ChevronsLeft aria-hidden />
+            </IconButton>
+          </span>
           <IconButton label="Abrir o detalhe completo do produto" onClick={() => onVerDetalheCompleto(linha)}>
             <Eye aria-hidden />
           </IconButton>
@@ -232,6 +254,7 @@ export function PainelDetalhe({
       ) : (
         <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} projecaoMes={projetada ? modeloEscolhido(previsao as Previsao, modelo)?.previsao ?? null : null} />
       )}
+      </div>
 
       <Panel>
         <PanelHeader title="Mais detalhes" hint={dados.erro || 'Abra só o que precisar; nada aqui custa consulta nova.'} />

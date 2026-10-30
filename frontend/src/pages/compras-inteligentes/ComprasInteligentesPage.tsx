@@ -46,6 +46,8 @@ import { DADOS_VAZIOS, desconsideradasPorMes } from '@/lib/ressuprimento-detalhe
 import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
 import { lotesDeCodigos, oportunidadesDoItem, seloEspecial, sugestaoPorCliente } from '@/lib/custo-especial';
 import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
+import { CHAVE_LARGURA, curvasJuntas, larguraDe, proximaLargura } from '@/lib/largura-painel';
+import type { LarguraPainel } from '@/lib/largura-painel';
 import type { MapaCustoPadrao } from '@/lib/compras';
 import type { CustoEspecial, Oportunidade, SugestaoCliente, TabelaEspecial, VendaCliente } from '@/lib/custo-especial';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
@@ -69,6 +71,14 @@ const REFERENCIAS: { value: ReferenciaSugestao; label: string }[] = [
 const DIAS_RESUMO = 90;
 /** Lote de códigos por chamada ao Gestão de Custos (R-120). */
 const LOTE_CAIXAS = 1000;
+
+/** R-129: as quatro larguras do painel de detalhe — classes fixas, a lista fica com o resto. */
+const COLUNAS_POR_LARGURA: Record<LarguraPainel, string> = {
+  estreito: 'lg:grid-cols-[minmax(0,1fr)_380px]',
+  medio: 'lg:grid-cols-[minmax(0,1fr)_480px]',
+  largo: 'lg:grid-cols-[minmax(0,1fr)_620px]',
+  metade: 'lg:grid-cols-2',
+};
 
 /** A janela da tela: 153 dias terminados hoje, fixa e mostrada (D-016). */
 function janelaDeHoje() {
@@ -307,6 +317,30 @@ export default function ComprasInteligentesPage() {
 
   /* ── o carrinho salvo no navegador (RN-021): lido uma vez por usuário ── */
   const usuarioId = sessao?.usuarioId ?? 0;
+  // R-129: a largura do painel, por usuário no navegador (conveniência: sem ele, Médio).
+  const [largura, setLargura] = React.useState<LarguraPainel>('medio');
+  const [larguraLida, setLarguraLida] = React.useState(0);
+  if (usuarioId && larguraLida !== usuarioId) {
+    setLarguraLida(usuarioId);
+    let guardada: string | null = null;
+    try { guardada = window.localStorage.getItem(CHAVE_LARGURA(usuarioId)); } catch { /* sem armazenamento */ }
+    setLargura(larguraDe(guardada));
+  }
+  const mudarLargura = React.useCallback((passo: 1 | -1) => setLargura((atual) => {
+    const proxima = proximaLargura(atual, passo);
+    try { window.localStorage.setItem(CHAVE_LARGURA(usuarioId), proxima); } catch { /* conveniência */ }
+    return proxima;
+  }), [usuarioId]);
+  // Alt+← alarga e Alt+→ estreita o painel (que está à direita).
+  React.useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+      e.preventDefault();
+      mudarLargura(e.key === 'ArrowLeft' ? 1 : -1);
+    };
+    window.addEventListener('keydown', tecla);
+    return () => window.removeEventListener('keydown', tecla);
+  }, [mudarLargura]);
   // Ajuste de estado durante a renderização, não em efeito: a leitura é
   // síncrona e idempotente, e acontece uma vez por usuário.
   if (usuarioId && armazenamentoLido !== usuarioId) {
@@ -620,7 +654,7 @@ export default function ComprasInteligentesPage() {
   });
 
   return (
-    <>
+    <div className="flex flex-col lg:h-full lg:min-h-0">
       {/* Cabeçalho compacto (pedido do usuário em 2026-10-30): uma linha só —
           fornecedor e filial à esquerda, as ações à direita; sem título nem
           descrição. A busca e o seletor de órgãos públicos ficam na lista. */}
@@ -639,7 +673,7 @@ export default function ComprasInteligentesPage() {
           options={opcoesFornecedor}
           placeholder={fornecedores.length ? 'Escolha o fornecedor' : 'Nenhum fornecedor ativo'}
           disabled={!fornecedores.length}
-          className="w-80"
+          className="w-72 xl:w-80"
         />
         <SelectMenu
           label="Filial"
@@ -648,7 +682,7 @@ export default function ComprasInteligentesPage() {
           options={filiais}
           placeholder={codfornec ? 'Escolha a filial' : 'Escolha o fornecedor primeiro'}
           disabled={!codfornec || !filiais.length}
-          className="w-72"
+          className="w-60 xl:w-72"
         />
         {salvoEm ? <span className="text-[12px] text-ink-secondary">Salvo às {salvoEm}</span> : null}
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -723,7 +757,8 @@ export default function ComprasInteligentesPage() {
       ) : medidas.length === 0 ? (
         <Panel className="mt-4"><EmptyState title="Nenhum produto ativo deste fornecedor nesta filial" /></Panel>
       ) : (
-        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
+        // R-129: lista e painel ocupam a altura que sobra, cada um com a sua rolagem; a largura do painel é do usuário.
+        <div className={`mt-4 grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] ${COLUNAS_POR_LARGURA[largura]}`}>
           <ListaProdutos
             visao={visao}
             linhas={lista}
@@ -740,6 +775,7 @@ export default function ComprasInteligentesPage() {
             desconsiderarLicitacao={desconsiderarLicitacao}
             onLicitacao={() => setDesconsiderarLicitacao((atual) => !atual)}
             emPedidoAberto={emPedidoAberto}
+            curvasNumaColuna={curvasJuntas(largura)}
             especiais={selosEspeciais}
             sugestaoProjetada={projetadaSelecionada ? { codprod: codprodSelecionado, sugestao: projetadaSelecionada.sugestao } : null}
             sugestaoTotal={sugestaoTotal}
@@ -778,6 +814,8 @@ export default function ComprasInteligentesPage() {
             projetada={projetadaSelecionada}
             sugestoesEspeciais={sugestoesSelecionada}
             onAdicionarEspecial={(tabela, quantidade) => { if (linhaSelecionada) adicionarEspecial(linhaSelecionada, tabela, quantidade); }}
+            largura={largura}
+            onLargura={mudarLargura}
           />
         </div>
       )}
@@ -843,6 +881,6 @@ export default function ComprasInteligentesPage() {
         onDesconsiderar={desconsiderarVenda}
         onReconsiderar={reconsiderarVenda}
       />
-    </>
+    </div>
   );
 }
