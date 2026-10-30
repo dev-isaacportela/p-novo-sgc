@@ -289,6 +289,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Dado que** um produto da lista tem política vigente para um cliente que comprou na janela, com custo especial abaixo do custo atual
 - **Quando** a compradora olha a lista e abre o produto
 - **Então** a linha mostra o selo "Especial N un." (ou "Especial N tabelas", em atenção, quando não há quantidade segura); o painel e a Análise do Produto mostram a seção "Oportunidade com preço especial", aberta, com o resumo (tabelas e ganho estimado), Comprar padrão | Tabelas especiais | Especial total, as tabelas em pílula e o card de cada uma (política, clientes, quantidade a comprar com caixas, risco, uso do limite seguro com compra especial e folga, o gráfico da venda do cliente por mês com a projeção segura, os 5 clientes com média, teto e projeção, o rodapé com limite, custo, ganho, "limitado por", ganho restante e validade); "Adicionar especial" põe no carrinho uma linha própria com o custo da política e o selo dela; o saldo fica como compra padrão
+- **E** o card do gráfico tem abas em pílula — "Compras × vendas" (o padrão, com 6m/13m, Gráfico/Tabela e o rodapé) e "Preço especial" (só quando há oportunidade: os KPIs, as tabelas e o card com o gráfico do cliente) — um gráfico por vez; trocar de produto volta para "Compras × vendas"
 
 ## Requisitos funcionais
 
@@ -458,7 +459,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-046 | `sgcCustoEspeciaisProdutos` para 5401..5405 → 5401 e 5403 (9301, tabela 1), 5405 aberta (0, tabela 4); inativa e vencida fora; lista vazia → nada | regra de negócio |
 | C-047 | `sgcWintVendasClientesProdutos` 5408/5409 → 9303 60, 9301 20, 9302 10, 9301 12; com órgão público, também 9304 6 | regra de negócio |
 | RN-032 | tabela A para o 9301 (custo 11 − 8 = 3, projeção 70, qs 48, seguro, ganho 144); política aberta para cada cliente; sem economia nada; venda < 2·qs moderado; sugestão 0 monitorar; cobertura 90 vira 45 | regra de tela |
-| C-048 | selo "Especial 113 un." (positivo) com quantidade segura, "Especial 2 tabelas" (atenção) sem ela, nada sem oportunidade; chave da linha especial `5401-1-especial-7-8`; lotes de 500 | regra de tela |
+| C-048 | selo "Especial 113 un." (positivo) com quantidade segura, "Especial 2 tabelas" (atenção) sem ela, nada sem oportunidade; chave da linha especial `5401-1-especial-7-8`; lotes de 500; a aba "Preço especial" só existe com oportunidade e sem ela a escolha cai em "Compras × vendas" | regra de tela |
 | RN-033 | cliente com 85 % do SKU (306 de 360 em 6 meses de 60): média 51, caps 51, projeção 51, seguro 60 (caixa 12), crescimento 1, seguro, limitado por ambos; previsão 120 não passa do teto; sem série, base 60 e limitado pelo SKU; cap recente 31,25 para 10/20/30/100 | regra de tela |
 | RN-034 | tabelas 1-8 (economia 3, seguro 60) e 2-6 (economia 5, seguro 12 + 12, pior risco arriscado, validade 15/11) com quantidade 100 → 2-6 compra 24, 1-8 compra 60, padrão 16, ganho 300; tabela com seguro 0 fica fora; carrinho: total 24 × 10 + 12 × 8, item especial com preço 8 e tipo especial | regra de tela |
 | RN-031 | previsão 300 → 10/dia; cobertura 35, estoque 100, trânsito 50, caixa 12 → 200 → 204; alvo no lead time (9 d, segurança 20) = 110; nunca negativa | regra de tela |

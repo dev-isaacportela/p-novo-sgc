@@ -12,7 +12,7 @@ import * as React from 'react';
 import { Eye, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
-  Alert, Button, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
+  Alert, Button, ChipContagem, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
   RowTitle, Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
@@ -26,7 +26,8 @@ import type { DadosDoSku } from '@/lib/ressuprimento-detalhe';
 import { GraficoComprasVendas } from './grafico';
 import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
-import type { SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
+import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
 import { modeloEscolhido } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 
@@ -133,6 +134,8 @@ export function PainelDetalhe({
 }) {
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
+  // C-048: um gráfico por vez — "Compras × vendas" (padrão) ou "Preço especial".
+  const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
   // C-037: o campo segue a referência (caixas ou unidades); `simulada` é o texto digitado nela.
   const [referenciaAnterior, setReferenciaAnterior] = React.useState(referencia);
   if (referencia !== referenciaAnterior) {
@@ -147,6 +150,7 @@ export function PainelDetalhe({
   if (codprod !== ultimo) {
     setUltimo(codprod);
     setSimulada('');
+    setAbaGrafico('vendas');
   }
 
   if (!linha) {
@@ -209,9 +213,14 @@ export function PainelDetalhe({
 
       <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
 
-      <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} projecaoMes={projetada ? modeloEscolhido(previsao as Previsao, modelo)?.previsao ?? null : null} />
-
-      {sugestoesEspeciais.length > 0 ? (
+      {/* C-048: abas em pílula no topo do card; a especial só com oportunidade, e nunca os dois gráficos juntos. */}
+      {temAbaEspecial(sugestoesEspeciais) ? (
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Gráfico do produto">
+          <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'vendas'} onClick={() => setAbaGrafico('vendas')}>Compras × vendas</ChipContagem>
+          <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial'} onClick={() => setAbaGrafico('especial')} tone="attention">Preço especial</ChipContagem>
+        </div>
+      ) : null}
+      {abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial' ? (
         <OportunidadeEspecial
           linha={linha}
           sugestoes={sugestoesEspeciais}
@@ -221,7 +230,9 @@ export function PainelDetalhe({
           motivoBloqueio={motivoBloqueio}
           onAdicionarEspecial={onAdicionarEspecial}
         />
-      ) : null}
+      ) : (
+        <GraficoComprasVendas historico={dados.historico} hoje={hoje} consumoDiario={linha.consumoDiario} pronto={dados.pronto} projecaoMes={projetada ? modeloEscolhido(previsao as Previsao, modelo)?.previsao ?? null : null} />
+      )}
 
       <Panel>
         <PanelHeader title="Mais detalhes" hint={dados.erro || 'Abra só o que precisar; nada aqui custa consulta nova.'} />

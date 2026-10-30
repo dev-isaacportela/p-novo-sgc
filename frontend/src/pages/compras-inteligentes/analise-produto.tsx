@@ -30,7 +30,8 @@ import { GraficoComprasVendas } from './grafico';
 import { BlocoSilenciado } from './painel-detalhe';
 import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
-import type { SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
+import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
 import { modeloEscolhido } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import { VendasDoProduto } from './dialogos';
@@ -104,6 +105,7 @@ export function AnaliseProdutoDialogo({
   onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
+  const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
   const [simulada, setSimulada] = React.useState('');
   // C-037: o campo segue a referência (caixas ou unidades); `simulada` é o texto digitado nela.
   const [referenciaAnterior, setReferenciaAnterior] = React.useState(referencia);
@@ -121,6 +123,7 @@ export function AnaliseProdutoDialogo({
   if (codprod !== ultimo) {
     setUltimo(codprod);
     setAba('analise');
+    setAbaGrafico('vendas');
     setSimulada('');
     setTodasEntradas(false);
     setTotalVendas(null);
@@ -205,18 +208,6 @@ export function AnaliseProdutoDialogo({
               />
             ) : (
               <>
-                {sugestoesEspeciais.length > 0 ? (
-                  <OportunidadeEspecial
-                    linha={linha}
-                    sugestoes={sugestoesEspeciais}
-                    quantidade={simulacao.quantidade}
-                    referencia={referencia}
-                    podeOperar={podeOperar}
-                    motivoBloqueio={motivoBloqueio}
-                    onAdicionarEspecial={onAdicionarEspecial}
-                  />
-                ) : null}
-
                 {/* 4a. Simulação de compra */}
                 <Panel>
                   <PanelHeader title="Simulação de compra" hint="A quantidade sobe para a caixa cheia; o valor usa o custo da última entrada." />
@@ -259,17 +250,35 @@ export function AnaliseProdutoDialogo({
                   </div>
                 </Panel>
 
-                {/* 4b. Compras × vendas */}
-                <GraficoComprasVendas
-                  historico={dados.historico}
-                  hoje={hoje}
-                  consumoDiario={linha.consumoDiario}
-                  pronto={dados.pronto}
-                  expandido
-                  unidadesPorCaixa={linha.unidadesPorCaixa}
-                  desconsideradas={foraPorMes}
-                  projecaoMes={projetada && resultadoModelo ? resultadoModelo.previsao : null}
-                />
+                {/* 4b. Compras × vendas | Preço especial — um gráfico por vez (C-048) */}
+                {temAbaEspecial(sugestoesEspeciais) ? (
+                  <div className="flex flex-wrap gap-2" role="tablist" aria-label="Gráfico do produto">
+                    <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'vendas'} onClick={() => setAbaGrafico('vendas')}>Compras × vendas</ChipContagem>
+                    <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial'} onClick={() => setAbaGrafico('especial')} tone="attention">Preço especial</ChipContagem>
+                  </div>
+                ) : null}
+                {abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial' ? (
+                  <OportunidadeEspecial
+                    linha={linha}
+                    sugestoes={sugestoesEspeciais}
+                    quantidade={simulacao.quantidade}
+                    referencia={referencia}
+                    podeOperar={podeOperar}
+                    motivoBloqueio={motivoBloqueio}
+                    onAdicionarEspecial={onAdicionarEspecial}
+                  />
+                ) : (
+                  <GraficoComprasVendas
+                    historico={dados.historico}
+                    hoje={hoje}
+                    consumoDiario={linha.consumoDiario}
+                    pronto={dados.pronto}
+                    expandido
+                    unidadesPorCaixa={linha.unidadesPorCaixa}
+                    desconsideradas={foraPorMes}
+                    projecaoMes={projetada && resultadoModelo ? resultadoModelo.previsao : null}
+                  />
+                )}
 
                 {/* 4c. Análise de venda futura */}
                 <Panel>

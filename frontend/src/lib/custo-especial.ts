@@ -262,3 +262,17 @@ export function lotesDeCodigos(codprods: number[], tamanho = 500): string[] {
   for (let i = 0; i < lista.length; i += tamanho) lotes.push(lista.slice(i, i + tamanho).join(','));
   return lotes;
 }
+
+/* ───────────── as abas do card do gráfico (um gráfico por vez) ───────────── */
+
+export type AbaGrafico = 'vendas' | 'especial';
+
+/** A aba "Preço especial" só existe quando o produto tem oportunidade. */
+export function temAbaEspecial(sugestoes: Pick<SugestaoCliente, 'seguro'>[]): boolean {
+  return (sugestoes ?? []).length > 0;
+}
+
+/** A aba que vale: a escolhida, ou "Compras × vendas" quando a especial não existe. O padrão é "vendas". */
+export function abaDoGrafico(escolhida: AbaGrafico, sugestoes: Pick<SugestaoCliente, 'seguro'>[]): AbaGrafico {
+  return escolhida === 'especial' && temAbaEspecial(sugestoes) ? 'especial' : 'vendas';
+}

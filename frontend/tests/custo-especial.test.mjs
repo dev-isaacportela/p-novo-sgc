@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   capRecenteSku, chaveEspecial, lotesDeCodigos, oportunidadesDoItem, piorRisco, planoEspecial, seloEspecial, sugestaoPorCliente,
+  abaDoGrafico, temAbaEspecial,
 } from '../src/lib/custo-especial.ts';
 
 const custo = (CODCLI, CUSTO_ESPECIAL, POLITICA_ID, POLITICA_NOME, DATA_FIM = '2026-12-31') => ({ CODPROD: 5401, CODCLI, CUSTO_ESPECIAL, VARIACAO_PERCENTUAL: 0, POLITICA_ID, POLITICA_NOME, DATA_FIM });
@@ -95,4 +96,13 @@ test('R-125: a linha especial do carrinho tem chave própria, e os códigos vão
   assert.equal(lotes[0].split(',').length, 500);
   assert.equal(lotes[2], '1001');
   assert.deepEqual(lotesDeCodigos([]), []);
+});
+
+test('C-048 (abas do gráfico): a aba "Preço especial" só existe com oportunidade; sem ela a escolha cai em "Compras × vendas", que é o padrão', () => {
+  const comEspecial = [{ seguro: 24 }];
+  assert.equal(temAbaEspecial(comEspecial), true);
+  assert.equal(temAbaEspecial([]), false);
+  assert.equal(abaDoGrafico('vendas', comEspecial), 'vendas');
+  assert.equal(abaDoGrafico('especial', comEspecial), 'especial');
+  assert.equal(abaDoGrafico('especial', []), 'vendas', 'produto sem oportunidade nunca mostra a aba especial');
 });
