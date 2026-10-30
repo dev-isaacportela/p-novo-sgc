@@ -212,11 +212,16 @@ executa por `gestao-custos.mjs`, irmão do `winthor-oracle.mjs`:
   `CUSTO_PRODUTOS` do seed da 003, no lugar da `PRODUTOS` do Gestão de Custos;
 - **`SIMULATOR_GESTAO_CUSTOS=mitra`** no `backend/.env`, com as variáveis SÓ do
   adaptador: `GESTAO_CUSTOS_BASE_URL`, `GESTAO_CUSTOS_TOKEN`,
-  `GESTAO_CUSTOS_PROJECT_ID` (46967; `runQuery` direto, o caminho preferido) e,
-  só para o fallback pela conexão `gestao-de-custos`, `GESTAO_CUSTOS_INTEGRATIONS_URL`
-  e `GESTAO_CUSTOS_CONEXAO_PROJECT_ID`. O SDK é uma instância própria; nada vai
-  para `process.env`. Só SELECT/WITH; `event.<param>` só numérico; cache por
-  CODPROD de 5 minutos. `GET /health` mostra `gestaoCustos:`.
+  `GESTAO_CUSTOS_PROJECT_ID` (46967) e, opcional, `GESTAO_CUSTOS_CAMINHO`. Dois
+  caminhos, nesta ordem: `runQuery` (SQL direto no projeto; exige token de
+  desenvolvedor) e, se ele é recusado, `records` — o REST
+  `GET /interactions/records/PRODUTOS` com `X-TenantID: <projeto>`, que um token
+  business alcança. O `records` não roda SQL: lê a PRODUTOS inteira (páginas de
+  200, uma vez a cada 5 min) e emula o SELECT da `sgcCustoUnidadesPorCaixa`
+  (CODPROD + COALESCE(UNIDADES_POR_CAIXA, 1)). `GESTAO_CUSTOS_CAMINHO=records`
+  pula o runQuery. O SDK é uma instância própria; nada vai para `process.env`.
+  Só SELECT/WITH e só GET; `event.<param>` só numérico; cache por CODPROD de 5
+  minutos. `GET /health` mostra `gestaoCustos:` com o caminho que valeu.
 
   **Nunca preencha `MITRA_BASE_URL`, `MITRA_TOKEN`, `MITRA_BASE_URL_INTEGRATIONS`
   nem `MITRA_PROJECT_ID` na VPS**: são as variáveis de escrita dos `add-*.mjs` e
@@ -227,7 +232,7 @@ executa por `gestao-custos.mjs`, irmão do `winthor-oracle.mjs`:
 
 Checagem ao vivo (regra 7: vazio não é verde): `npm run sim:gestao-custos` imprime a
 contagem de produtos com `UNIDADES_POR_CAIXA > 1` vinda da plataforma e falha se for 0.
-Testes sem rede: `smoke/000-gestao-custos.mjs` (G-001..G-004).
+Testes sem rede: `smoke/000-gestao-custos.mjs` (G-001..G-006; o REST com fetch falso).
 
 ## Diagnóstico e voltar ao Mitra real
 

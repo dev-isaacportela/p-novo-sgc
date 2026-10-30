@@ -1,11 +1,13 @@
-// G-001..G-004 — a INTEGRATION gestao-de-custos no simulador (gestao-custos.mjs),
+// G-001..G-006 — a INTEGRATION gestao-de-custos no simulador (gestao-custos.mjs),
 // provada SEM rede: só a definition certa é aceita, os `event.<param>` entram
-// por texto e só como número ou lista numérica, só SELECT/WITH passa, e o
-// executor em SQLite devolve as unidades por caixa da CUSTO_PRODUTOS do seed.
+// por texto e só como número ou lista numérica, só SELECT/WITH passa, o
+// executor em SQLite devolve as unidades por caixa da CUSTO_PRODUTOS do seed, e
+// o caminho REST `records` (com fetch falso) emula o SELECT da função, pagina,
+// usa cache e assume quando o runQuery é recusado.
 
 import { createRunner } from '../runtime.mjs';
 import {
-  abrirGestaoCustos, codprodsDe, ehGestaoCustos, executorSqlite, montarSql, origemDe,
+  abrirGestaoCustos, codprodsDe, ehGestaoCustos, executorSqlite, montarSql, origemDe, unidadesDeRegistros,
 } from '../gestao-custos.mjs';
 import { assert } from './base.mjs';
 
@@ -68,5 +70,97 @@ export async function suite(ctx) {
     assert.equal(origemDe('https://newmitra.exemplo.com:8080/interactions/records', silencioso), 'https://newmitra.exemplo.com:8080');
     assert.equal(origemDe('https://api.exemplo.com', silencioso), 'https://api.exemplo.com');
     assert.equal(origemDe('nao-e-url', silencioso), 'nao-e-url');
+  });
+
+  /** Um fetch falso do REST records: PRODUTOS em 2 páginas, com a chamada registrada. */
+  function fetchFalso(paginas, status = 200) {
+    const chamadas = [];
+    const fetch = async (url, opcoes) => {
+      chamadas.push({ url: new URL(url), headers: opcoes.headers, method: opcoes.method });
+      const pagina = Number(new URL(url).searchParams.get('page'));
+      return {
+        ok: status === 200,
+        status,
+        async json() { return { page: pagina, totalPages: paginas.length, content: paginas[pagina] ?? [] }; },
+      };
+    };
+    return { fetch, chamadas };
+  }
+  const PAGINAS = [
+    [{ CODPROD: 5001, UNIDADES_POR_CAIXA: 12, NOME: 'A', $type$: 'PRODUTOS' }, { CODPROD: 5002, NOME: 'sem a coluna', $type$: 'PRODUTOS' }],
+    [{ CODPROD: 5003, UNIDADES_POR_CAIXA: 6, $type$: 'PRODUTOS' }, { CODPROD: 'x', UNIDADES_POR_CAIXA: 9 }],
+  ];
+  const silencioso = { log() {}, warn() {} };
+
+  await teste('G-005: com GESTAO_CUSTOS_CAMINHO=records o adaptador lê GET /interactions/records/PRODUTOS na origem da URL, com Authorization Bearer e X-TenantID do projeto, página a página (size 200); emula o SELECT (COALESCE 1 para quem não tem a coluna, sem o $type$, só o CODPROD pedido), guarda a tabela em cache e repassa HTTP de erro', async () => {
+    assert.deepEqual(unidadesDeRegistros(PAGINAS.flat()), [
+      { CODPROD: 5001, UNIDADES_POR_CAIXA: 12 }, { CODPROD: 5002, UNIDADES_POR_CAIXA: 1 }, { CODPROD: 5003, UNIDADES_POR_CAIXA: 6 },
+    ]);
+    const { fetch, chamadas } = fetchFalso(PAGINAS);
+    const remoto = await abrirGestaoCustos({
+      env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local/interactions/records', GESTAO_CUSTOS_TOKEN: 'segredo', GESTAO_CUSTOS_PROJECT_ID: '46967', GESTAO_CUSTOS_CAMINHO: 'records' },
+      log: silencioso, fetch,
+    });
+    assert.equal(remoto.descricao, 'mitra projeto 46967 via records');
+    const execute = createRunner(db, { externos: [remoto] });
+    const def = byName.get('sgcCustoUnidadesPorCaixa');
+    const { rows } = await execute(def, { codprods: '5001,5002,5010' }, U.ana);
+    assert.deepEqual(rows, [{ CODPROD: 5001, UNIDADES_POR_CAIXA: 12 }, { CODPROD: 5002, UNIDADES_POR_CAIXA: 1 }]);
+    assert.equal(chamadas.length, 2, 'duas páginas, uma chamada cada');
+    assert.equal(chamadas[0].url.origin, 'http://gestao.local');
+    assert.equal(chamadas[0].url.pathname, '/interactions/records/PRODUTOS');
+    assert.deepEqual(chamadas.map((c) => c.url.searchParams.get('page')), ['0', '1']);
+    assert.equal(chamadas[0].url.searchParams.get('size'), '200');
+    assert.equal(chamadas[0].method, 'GET');
+    assert.equal(chamadas[0].headers.Authorization, 'Bearer segredo');
+    assert.equal(chamadas[0].headers['X-TenantID'], '46967');
+    // Cache: o 5003 ainda não pedido sai da tabela guardada, sem nova chamada.
+    const segunda = await execute(def, { codprods: '5003,5001' }, U.ana);
+    assert.deepEqual(segunda.rows, [{ CODPROD: 5001, UNIDADES_POR_CAIXA: 12 }, { CODPROD: 5003, UNIDADES_POR_CAIXA: 6 }]);
+    assert.equal(chamadas.length, 2);
+    assert.deepEqual((await execute(def, { codprods: '' }, U.ana)).rows, []);
+    // produtos(): a tabela crua para a checagem, sem $type$ e sem COALESCE.
+    const produtos = await remoto.produtos();
+    assert.equal(produtos.length, 4);
+    assert.deepEqual(produtos[1], { CODPROD: 5002, NOME: 'sem a coluna' });
+    const negado = await abrirGestaoCustos({
+      env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local', GESTAO_CUSTOS_TOKEN: 'segredo', GESTAO_CUSTOS_CAMINHO: 'records' },
+      log: silencioso, fetch: fetchFalso(PAGINAS, 403).fetch,
+    });
+    await assert.rejects(negado.produtos(), /HTTP 403/);
+  });
+
+  await teste('G-006: sem GESTAO_CUSTOS_CAMINHO o adaptador tenta runQuery primeiro; recusado (ACCESS_DENIED), avisa uma vez, passa a records e responde pelo REST; com runQuery aceito nunca chama o REST', async () => {
+    const avisos = [];
+    const { fetch, chamadas } = fetchFalso(PAGINAS);
+    const sdkNegado = { async runQuery() { throw new Error('ACCESS_DENIED: not a developer'); } };
+    const remoto = await abrirGestaoCustos({
+      env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local', GESTAO_CUSTOS_TOKEN: 'segredo' },
+      log: { log() {}, warn: (m) => avisos.push(m) }, sdk: sdkNegado, fetch,
+    });
+    assert.equal(remoto.caminho, 'runQuery');
+    const def = byName.get('sgcCustoUnidadesPorCaixa');
+    const linhas = await remoto.executar(def, { codprods: '5003' });
+    assert.deepEqual(linhas, [{ CODPROD: 5003, UNIDADES_POR_CAIXA: 6 }]);
+    assert.equal(remoto.caminho, 'records');
+    assert.equal(remoto.descricao, 'mitra projeto 46967 via records');
+    assert.equal(avisos.length, 1);
+    assert.ok(/ACCESS_DENIED/.test(avisos[0]) && /records/.test(avisos[0]), avisos[0]);
+    assert.equal(chamadas.length, 2);
+    await remoto.executar(def, { codprods: '5001' });
+    assert.equal(avisos.length, 1, 'o aviso sai uma vez; depois o caminho ja e records');
+
+    const consultas = [];
+    const sdkAceito = { async runQuery({ projectId, sql }) { consultas.push({ projectId, sql }); return { result: { rows: [{ CODPROD: 5001, UNIDADES_POR_CAIXA: 12 }] } }; } };
+    const direto = await abrirGestaoCustos({
+      env: { SIMULATOR_GESTAO_CUSTOS: 'mitra', GESTAO_CUSTOS_BASE_URL: 'http://gestao.local', GESTAO_CUSTOS_TOKEN: 'segredo' },
+      log: silencioso, sdk: sdkAceito, fetch: fetchFalso(PAGINAS).fetch,
+    });
+    assert.deepEqual(await direto.executar(def, { codprods: '5001' }), [{ CODPROD: 5001, UNIDADES_POR_CAIXA: 12 }]);
+    assert.equal(direto.caminho, 'runQuery');
+    assert.equal(consultas[0].projectId, 46967);
+    assert.ok(/IN \(5001\)/.test(consultas[0].sql), consultas[0].sql);
+    assert.equal((await direto.produtos()).length, 1);
+    assert.equal(consultas.length, 2);
   });
 }
