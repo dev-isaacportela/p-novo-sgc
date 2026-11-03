@@ -30,10 +30,10 @@ import { usePersona } from '@/lib/persona';
 import { QUADRO_COMPRAS } from '@/lib/quadro';
 import { baixarCsv, textoCsv } from '@/lib/csv';
 import { fmtDataHora, hojeIso, moeda } from '@/lib/formato';
-import { coberturaDeLinha, limiteDeCobertura } from '@/lib/cobertura';
+import { limiteDeCobertura } from '@/lib/cobertura';
 import type { Cobertura } from '@/lib/cobertura';
 import {
-  COLUNAS_CSV, FILTROS_INICIAIS, JANELA_DIAS, ROTULO_VISAO, alternarSilenciados, contarVisoes, escolherVisao, filtrarMovimentacao, linhaCsv, linhasDaVisao,
+  COLUNAS_CSV, FILTROS_INICIAIS, ROTULO_VISAO, alternarSilenciados, contarVisoes, escolherVisao, filtrarMovimentacao, linhaCsv, linhasDaVisao,
   montarRessuprimento, motivoDaSugestao, ordenarLinhas, parametroDeLinha, chaveDaEntrada,
 } from '@/lib/ressuprimento';
 import type {
@@ -42,14 +42,14 @@ import type {
 } from '@/lib/ressuprimento';
 import { CHAVE_CARRINHO, carrinhoDeTexto, resumoDoCarrinho, textoDoCarrinho } from '@/lib/carrinho';
 import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
-import { DADOS_VAZIOS, desconsideradasPorMes, historicoSemPublico } from '@/lib/ressuprimento-detalhe';
-import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
-import { lotesDeCodigos, oportunidadesDoItem, seloEspecial, sugestaoPorCliente } from '@/lib/custo-especial';
-import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
-import { carregarPosicoesFiliais } from '@/lib/avisos-carga';
+import { DADOS_VAZIOS, historicoSemPublico } from '@/lib/ressuprimento-detalhe';
+import { oportunidadesDaLinha, previsaoDoSku, projetadaDoSku, sugestoesDaLinha } from '@/lib/analise-sku';
+import { seloEspecial } from '@/lib/custo-especial';
+import { AVISO_ERRO_CUSTO } from '@/lib/custo-padrao-carga';
 import { contarAvisos, excessosPorProduto, filtrarPorAvisos } from '@/lib/avisos-produto';
 import type { PosicaoOutraFilial } from '@/lib/avisos-produto';
 import { useLotesBloqueados } from './use-lotes-bloqueados';
+import { carregarRessuprimento, janelaDeHoje } from './carga-ressuprimento';
 import { CHAVE_LARGURA, larguraDe, larguraEfetiva, proximaLargura } from '@/lib/largura-painel';
 import type { LarguraPainel } from '@/lib/largura-painel';
 import type { MapaCustoPadrao } from '@/lib/compras';
@@ -73,8 +73,6 @@ const REFERENCIAS: { value: ReferenciaSugestao; label: string }[] = [
   { value: 'unidades', label: 'Unidades' }, { value: 'caixas', label: 'Caixas' },
 ];
 const DIAS_RESUMO = 90;
-/** Lote de códigos por chamada ao Gestão de Custos (R-120). */
-const LOTE_CAIXAS = 1000;
 
 /** R-129: as quatro larguras do painel de detalhe — classes fixas, a lista fica com o resto. */
 const COLUNAS_POR_LARGURA: Record<LarguraPainel, string> = {
@@ -84,13 +82,6 @@ const COLUNAS_POR_LARGURA: Record<LarguraPainel, string> = {
   metade: 'lg:grid-cols-2',
 };
 
-/** A janela da tela: 153 dias terminados hoje, fixa e mostrada (D-016). */
-function janelaDeHoje() {
-  const fim = hojeIso();
-  const inicio = new Date(`${fim}T00:00:00Z`);
-  inicio.setUTCDate(inicio.getUTCDate() - (JANELA_DIAS - 1));
-  return { inicio: inicio.toISOString().slice(0, 10), fim };
-}
 
 function haDias(dias: number) {
   const data = new Date(`${hojeIso()}T00:00:00Z`);
@@ -116,7 +107,7 @@ export default function ComprasInteligentesPage() {
   const navigate = useNavigate();
   const api = useKanban();
   const sessao = usePersona();
-  const periodo = React.useMemo(() => janelaDeHoje(), []);
+  const periodo = React.useMemo(() => janelaDeHoje(hojeIso()), []);
   const hoje = periodo.fim;
 
   const [fornecedores, setFornecedores] = React.useState<Opcao[]>([]);
@@ -242,78 +233,24 @@ export default function ComprasInteligentesPage() {
     if (!codfornec || !codfilial) return;
     let vivo = true;
     const recorte = { codfornec: Number(codfornec), codfilial };
-    Promise.all([
-      linhas('sgcParametrosCompraListar', { ...recorte, limite: 600, offset: 0 }),
-      linhas('sgcVendasDesconsideradasListar', { codfilial, codprod: 0, limite: 500, offset: 0 }),
-      linhas('sgcCoberturaListar', { nivel: '', limite: 500, offset: 0 }),
-      linhas('sgcPedidoAbertoDoFornecedor', { ...recorte, limite: 5, offset: 0 }),
-      linhas('sgcItensEmPedidoAberto', { ...recorte, limite: 2000, offset: 0 }),
-    ])
-      .then(async ([linhasParametro, linhasVenda, linhasCobertura, abertos, itensAbertos]) => {
-        // D-03: o `{{excluir}}` é montado do que VOLTOU do banco, nunca do que
-        // a tela achou que gravou — escrita guardada recusada devolve 0 linhas.
-        const vendas = linhasVenda
-          .map((l) => ({ numtransitem: Number(l.NUMTRANSITEM), codprod: Number(l.CODPROD), dtmov: String(l.DTMOV ?? ''), quantidade: Number(l.QUANTIDADE ?? 0) }))
-          .filter((v) => v.numtransitem > 0)
-          .slice(0, 500);
-        if (!vivo) return;
-        setParametros(linhasParametro.map(parametroDeLinha));
-        setCoberturas(linhasCobertura.map(coberturaDeLinha));
-        setDesconsideradas(vendas);
-        setPedidoAberto(abertos.length > 0
-          ? { idCard: Number(abertos[0].ID_CARD), titulo: String(abertos[0].TITULO ?? ''), faseChave: String(abertos[0].FASE_CHAVE ?? '') }
-          : null);
-        setEmPedidoAberto(new Map(itensAbertos.map((i) => [Number(i.CODPROD), { idCard: Number(i.ID_CARD), titulo: String(i.TITULO ?? '') }])));
-
-        const rows = await linhas('sgcWintRessuprimento', {
-          ...recorte,
-          dataInicio: periodo.inicio, dataFim: periodo.fim, diasPeriodo: JANELA_DIAS,
-          excluir: vendas.length > 0 ? vendas.map((v) => v.numtransitem).join(', ') : '0',
-        });
-        if (!vivo) return;
-        setMedidas(rows as unknown as MedidaRessuprimento[]);
+    // R-133: a carga mora em `carga-ressuprimento.ts` (a Análise do Produto do pedido usa a mesma).
+    carregarRessuprimento(recorte, { inicio: periodo.inicio, fim: periodo.fim }, (parte) => {
+      if (parte.parametros) setParametros(parte.parametros);
+      if (parte.coberturas) setCoberturas(parte.coberturas);
+      if (parte.desconsideradas) setDesconsideradas(parte.desconsideradas);
+      if ('pedidoAberto' in parte) setPedidoAberto(parte.pedidoAberto ?? null);
+      if (parte.emPedidoAberto) setEmPedidoAberto(parte.emPedidoAberto);
+      if (parte.medidas) {
+        setMedidas(parte.medidas);
         setQuantidades({});
         setErro('');
-
-        // R-120: as unidades por caixa do Gestão de Custos, UMA execução por lote
-        // de 1000 códigos. A integração pode não existir no ambiente: sem ela,
-        // a caixa cai no cadastro do ERP e na embalagem (RN-002 da 003).
-        const codprods = rows.map((r) => Number(r.CODPROD)).filter((n) => n > 0);
-        const mapa = new Map<number, number>();
-        try {
-          for (let i = 0; i < codprods.length; i += LOTE_CAIXAS) {
-            const lote = codprods.slice(i, i + LOTE_CAIXAS);
-            for (const linha of await linhas('sgcCustoUnidadesPorCaixa', { codprods: lote.join(',') })) {
-              mapa.set(Number(linha.CODPROD), Number(linha.UNIDADES_POR_CAIXA));
-            }
-          }
-        } catch { /* a embalagem resolve */ }
-        const [padrao, posicoes] = await Promise.all([carregarCustoPadrao(codprods), carregarPosicoesFiliais(codprods, codfilial)]);
-        if (!vivo) return;
-        setPorCaixa(mapa);
-        setCustosPadrao(padrao);
-        setPosicoesFiliais(posicoes);
-
-        // R-125: as políticas de preço especial (gestao-de-custos) e, só se
-        // houver alguma, a venda por cliente destes produtos (WinThor) — ambas
-        // em lotes de 500, uma vez por carga. Sem a integração, sem oportunidade.
-        const custos: CustoEspecial[] = [];
-        const porCliente: VendaCliente[] = [];
-        try {
-          for (const lote of lotesDeCodigos(codprods)) {
-            custos.push(...(await linhas('sgcCustoEspeciaisProdutos', { codprods: lote })) as unknown as CustoEspecial[]);
-          }
-          const comPolitica = [...new Set(custos.map((c) => Number(c.CODPROD)))];
-          for (const lote of lotesDeCodigos(comPolitica)) {
-            porCliente.push(...(await linhas('sgcWintVendasClientesProdutos', {
-              codprods: lote, codfilial, dataInicio: periodo.inicio, dataFim: periodo.fim, incluirPublico: 0,
-            })) as unknown as VendaCliente[]);
-          }
-        } catch { /* sem o módulo de custos não há oportunidade; a lista segue */ }
-        if (!vivo) return;
-        setCustosEspeciais(custos);
-        setVendasClientes(porCliente);
-      })
+      }
+      if (parte.porCaixa) setPorCaixa(parte.porCaixa);
+      if ('custosPadrao' in parte) setCustosPadrao(parte.custosPadrao ?? null);
+      if ('posicoesFiliais' in parte) setPosicoesFiliais(parte.posicoesFiliais ?? null);
+      if (parte.custosEspeciais) setCustosEspeciais(parte.custosEspeciais);
+      if (parte.vendasClientes) setVendasClientes(parte.vendasClientes);
+    }, () => vivo)
       .catch(() => {
         if (!vivo) return;
         setErro('Não foi possível carregar a lista deste fornecedor nesta filial.');
@@ -443,11 +380,10 @@ export default function ComprasInteligentesPage() {
 
   /* ── R-124: a previsão por modelo, só para o produto aberto (painel e janela) ── */
   const [modeloPrevisao, setModeloPrevisao] = React.useState<ModeloPrevisao>('bestfit');
-  const previsaoDe = React.useCallback((codprod: number): Previsao | null => {
-    const dadosSku = cacheSku.get(codprod);
-    if (!codprod || !dadosSku?.pronto) return null;
-    return preverVendas(serieFechada(historicoSemPublico(dadosSku.historico, desconsiderarLicitacao), hoje, desconsideradasPorMes(desconsideradas.filter((v) => v.codprod === codprod))));
-  }, [cacheSku, hoje, desconsideradas, desconsiderarLicitacao]);
+  const previsaoDe = React.useCallback(
+    (codprod: number): Previsao | null => previsaoDoSku(cacheSku.get(codprod), codprod, hoje, desconsideradas, desconsiderarLicitacao),
+    [cacheSku, hoje, desconsideradas, desconsiderarLicitacao],
+  );
   // R-131: o gráfico e os totais do painel e da janela contam a mesma venda da lista.
   const dadosDe = React.useCallback((codprod: number): DadosDoSku => {
     const dadosSku = cacheSku.get(codprod) ?? DADOS_VAZIOS;
@@ -455,10 +391,10 @@ export default function ComprasInteligentesPage() {
   }, [cacheSku, desconsiderarLicitacao]);
   const dadosSelecionado = React.useMemo(() => dadosDe(codprodSelecionado), [dadosDe, codprodSelecionado]);
   const dadosDetalhe = React.useMemo(() => (detalheCompleto ? dadosDe(Number(detalheCompleto.medida.CODPROD)) : DADOS_VAZIOS), [dadosDe, detalheCompleto]);
-  const projetar = React.useCallback((previsao: Previsao | null, linha: LinhaRessuprimento | null): SugestaoProjetada | null => {
-    const r = previsao ? modeloEscolhido(previsao, modeloPrevisao) : null;
-    return r && linha ? sugestaoProjetada(r.previsao, linha) : null;
-  }, [modeloPrevisao]);
+  const projetar = React.useCallback(
+    (previsao: Previsao | null, linha: LinhaRessuprimento | null): SugestaoProjetada | null => projetadaDoSku(previsao, linha, modeloPrevisao),
+    [modeloPrevisao],
+  );
   const previsaoSelecionada = React.useMemo(() => previsaoDe(codprodSelecionado), [previsaoDe, codprodSelecionado]);
   const projetadaSelecionada = React.useMemo(() => projetar(previsaoSelecionada, linhaSelecionada), [projetar, previsaoSelecionada, linhaSelecionada]);
   const codprodDetalhe = detalheCompleto ? Number(detalheCompleto.medida.CODPROD) : 0;
@@ -477,11 +413,7 @@ export default function ComprasInteligentesPage() {
     const mapa = new Map<number, Oportunidade[]>();
     if (custosEspeciais.length === 0) return mapa;
     for (const l of todas) {
-      const lista = oportunidadesDoItem({
-        // R-128: a economia é contra o custo padrão do Gestão de Custos, sem fallback para o ERP.
-        codprod: Number(l.medida.CODPROD), custoAtual: Number(l.custo?.valor ?? 0), custoUltimaEntrada: 0,
-        sugerida: l.sugerida, coberturaDias: l.coberturaDias,
-      }, custosEspeciais, vendasClientes, JANELA_DIAS);
+      const lista = oportunidadesDaLinha(l, custosEspeciais, vendasClientes);
       if (lista.length > 0) mapa.set(Number(l.medida.CODPROD), lista);
     }
     return mapa;
@@ -494,17 +426,12 @@ export default function ComprasInteligentesPage() {
     }
     return mapa;
   }, [oportunidadesPorProduto]);
-  const sugestoesDe = React.useCallback((linha: LinhaRessuprimento | null, previsao: Previsao | null): SugestaoCliente[] => {
-    if (!linha) return [];
-    const lista = oportunidadesPorProduto.get(Number(linha.medida.CODPROD)) ?? [];
-    if (lista.length === 0) return [];
-    const r = previsao ? modeloEscolhido(previsao, modeloPrevisao) : null;
-    const sku = {
-      quantidade: linha.sugerida, projecaoMensal: r?.previsao ?? 0, coberturaDias: linha.coberturaDias, consumoDiario: linha.consumoDiario,
-      unidadesPorCaixa: linha.unidadesPorCaixa, serie: previsao?.serie.pontos ?? [],
-    };
-    return lista.map((o) => sugestaoPorCliente(o, sku));
-  }, [oportunidadesPorProduto, modeloPrevisao]);
+  const sugestoesDe = React.useCallback(
+    (linha: LinhaRessuprimento | null, previsao: Previsao | null): SugestaoCliente[] => (
+      linha ? sugestoesDaLinha(linha, oportunidadesPorProduto.get(Number(linha.medida.CODPROD)) ?? [], previsao, modeloPrevisao) : []
+    ),
+    [oportunidadesPorProduto, modeloPrevisao],
+  );
   const sugestoesSelecionada = React.useMemo(() => sugestoesDe(linhaSelecionada, previsaoSelecionada), [sugestoesDe, linhaSelecionada, previsaoSelecionada]);
   const sugestoesDetalhe = React.useMemo(() => sugestoesDe(linhaDetalhe, previsaoDetalhe), [sugestoesDe, linhaDetalhe, previsaoDetalhe]);
 
@@ -835,6 +762,7 @@ export default function ComprasInteligentesPage() {
             hoje={hoje}
             dados={dadosSelecionado}
             referencia={referencia}
+            semPublico={desconsiderarLicitacao}
             desconsideradasDoSku={desconsideradas.filter((v) => v.codprod === codprodSelecionado).length}
             podeOperar={podeOperar}
             podeParametrizar={podeParametrizar}

@@ -305,3 +305,10 @@ tudo → T-095 · T-096 → T-097 · T-098
 | RNF-003, RNF-004 | T-031, T-035 | T-090, T-091 |
 | RNF-005 | T-007, T-033 | T-089 |
 | RNF-006 | T-005, T-006 | T-086, T-087 |
+
+## R-133 — cartões na Análise (branch `feature/003-analise-legado`)
+
+- [x] **T-099** — `sgcSolicitacoesDaMontagem` devolve também a já incluída neste pedido (`VINCULADA = 1`); o smoke passa a contar a fila sem ela → `backend/add-011-solicitacoes.mjs`, `backend/simulator/smoke/008-solicitacoes.mjs`
+- [x] **T-100** — O bloco em cartões, sobre o rascunho compartilhado da fase (Adicionar, Atualizar p/ N, custo, Recusar) → `frontend/src/pages/quadros/abas/Solicitacoes.tsx`, `frontend/src/lib/solicitacoes.ts`
+- [x] **T-101** — `test('C-024 / RN-019 …')` em `frontend/tests/solicitacoes.test.mjs`; `teste('C-008 / C-024 …')` em `backend/simulator/smoke/008-solicitacoes.mjs`
+

@@ -44,6 +44,8 @@ export async function suite(ctx) {
   const listar = async (filtros, quem) => linhas(await chamar('sgcSolicitacoesListar', { ...FILTROS_VAZIOS, ...filtros }, quem));
   const total = async (filtros, quem) => Number(uma(await chamar('sgcSolicitacoesListarTotal', { ...FILTROS_VAZIOS, ...filtros }, quem)).TOTAL);
   const bloco = async (cardId, quem = U.gil) => linhas(await chamar('sgcSolicitacoesDaMontagem', { cardId }, quem));
+  // R-133: a já incluída neste pedido continua no bloco (VINCULADA = 1); a fila é o resto.
+  const fila = async (cardId) => (await bloco(cardId)).filter((l) => Number(l.VINCULADA) !== 1);
   const idsDoSeed = new Set(Object.values(SOLICITACOES_008));
   const soDoSeed = (rows) => rows.filter((l) => idsDoSeed.has(Number(l.ID)));
   const emFase = (cardId, chave) => db.prepare('UPDATE KB_CARD SET FASE_ID = (SELECT FASE_ID FROM SGC_FASE WHERE CHAVE = ?) WHERE ID = ?').run(chave, cardId);
@@ -445,7 +447,7 @@ export async function suite(ctx) {
 
   /* ─────────── T-083 — incluir no pedido ─────────── */
 
-  await teste('C-008 / RNF-002: incluir a pendente cria o item com quantidade 24 e a origem, aprova, grava as duas linhas do histórico e a nota com "Leo"', async () => {
+  await teste('C-008 / C-024 / RNF-002: incluir a pendente cria o item com quantidade 24 e a origem, aprova, grava as duas linhas do histórico e a nota com "Leo", e a incluída fica no bloco do próprio pedido como adicionada (R-133)', async () => {
     const id = SOLICITACOES_008.pendenteAlta;
     const card = CARDS_008.montagem;
     const notasAntes = conta("SELECT COUNT(*) AS N FROM KB_LOG WHERE CARD_ID = ? AND EVENTO = 'nota'", card);
@@ -475,7 +477,10 @@ export async function suite(ctx) {
     assert.equal(notas.length, notasAntes + 1, 'uma nota no histórico do pedido');
     assert.match(notas[notas.length - 1].DETALHE, /Leo/, 'a nota cita o vendedor');
 
-    assert.equal((await bloco(card)).length, 3, 'a solicitação incluída some do bloco');
+    assert.equal((await fila(card)).length, 3, 'a solicitação incluída sai da fila');
+    const incluida = (await bloco(card)).find((l) => Number(l.ID) === id);
+    assert.equal(Number(incluida.VINCULADA), 1, 'e fica no bloco do próprio pedido como incluída (R-133)');
+    assert.equal(Number(incluida.QT_NO_PEDIDO), 24);
   });
 
   await teste('C-013 / RN-009 / RN-010: incluir a mesma de novo é recusado; a segunda do 5301 vincula ao item que já existe, sem sobrescrever a quantidade', async () => {
@@ -496,7 +501,7 @@ export async function suite(ctx) {
     assert.equal(Number(itens[0].ID_SOLICITACAO), segunda, 'a origem passa a ser a última incluída');
     assert.equal(Number(solicitacao(segunda).ID_CARD), card);
     assert.equal(Number(solicitacao(segunda).ID_ITEM), Number(itens[0].ID));
-    assert.equal((await bloco(card)).length, 2);
+    assert.equal((await fila(card)).length, 2);
   });
 
   /* ─────────── T-084 — desvínculo e recusa pelo bloco ─────────── */
@@ -523,7 +528,7 @@ export async function suite(ctx) {
       assert.equal(devolvida.STATUS, 'aprovada');
       assert.equal(historicoDe(id).filter((h) => h.EVENTO === 'desvinculada').length, 1);
     }
-    assert.equal((await bloco(card)).length, 4, 'as duas reaparecem no bloco do próprio pedido');
+    assert.equal((await fila(card)).length, 4, 'as duas reaparecem na fila do próprio pedido');
 
     // 3) o mesmo par depois de ZERAR o item (o caminho do sgcAnaliseSair).
     const voltar = await chamar('sgcSolicitacaoIncluirNoPedido', { cardId: card, id: ligadas[0] }, U.gil);
@@ -538,7 +543,7 @@ export async function suite(ctx) {
   await teste('C-010: recusar pelo bloco usa as mesmas SFs da tela — a solicitação fica recusada e o bloco cai para 3', async () => {
     const card = CARDS_008.montagem;
     const id = SOLICITACOES_008.pendenteNormal;
-    assert.equal((await bloco(card)).length, 4, 'as quatro ativas antes da recusa');
+    assert.equal((await fila(card)).length, 4, 'as quatro ativas antes da recusa');
 
     const motivo = 'Coberto pelo pedido anterior, que chega na proxima semana.';
     await chamar('sgcEscSolicitacaoAvaliar', { id, status: 'recusada', motivo, avaliadoEm: AGORA }, U.gil);
@@ -546,7 +551,7 @@ export async function suite(ctx) {
 
     assert.equal(solicitacao(id).STATUS, 'recusada');
     assert.equal(solicitacao(id).MOTIVO, motivo, 'o vendedor lê o motivo na tela dele');
-    const restantes = await bloco(card);
+    const restantes = await fila(card);
     assert.equal(restantes.length, 3);
     assert.ok(!restantes.some((l) => Number(l.ID) === id));
   });

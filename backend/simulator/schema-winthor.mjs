@@ -116,6 +116,13 @@ export const DDL = [
     NUMTRANSVENDA INT
   )`,
 
+  // Ramo de atividade do cliente: PCCLIENT.CODATV1 -> PCATIVI.RAMO, para a
+  // coluna Ramo de Clientes que compraram (003, R-135).
+  `CREATE TABLE IF NOT EXISTS PCATIVI (
+    CODATIV INT PRIMARY KEY,
+    RAMO VARCHAR(60)
+  )`,
+
   // Vendedor (RCA) da venda: PCMOV.CODUSUR -> PCUSUARI.NOME, para a aba Vendas
   // da Análise do Produto (011, R-123).
   `CREATE TABLE IF NOT EXISTS PCUSUARI (

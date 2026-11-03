@@ -547,6 +547,51 @@ export function CheckRow({
 }
 
 /**
+ * R-133: a caixa de seleção sozinha, para a coluna de seleção em lote de uma
+ * tabela — o mesmo desenho da `CheckRow`, sem o texto (o nome vai no `label`).
+ */
+export function CaixaSelecao({
+  marcado,
+  onToggle,
+  label,
+  disabled,
+  parcial,
+}: {
+  marcado: boolean;
+  onToggle: () => void;
+  label: string;
+  disabled?: boolean;
+  /** Parte da lista marcada (a caixa do cabeçalho). */
+  parcial?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={marcado}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'inline-flex size-6 shrink-0 items-center justify-center rounded-lg transition-colors',
+        'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+        'disabled:pointer-events-none disabled:opacity-60'
+      )}
+    >
+      <span
+        className={cn(
+          'flex size-4 items-center justify-center rounded border transition-colors',
+          marcado || parcial ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card'
+        )}
+        aria-hidden
+      >
+        {marcado ? <Check className="size-3" /> : parcial ? <Minus className="size-3" /> : null}
+      </span>
+    </button>
+  );
+}
+
+/**
  * Ação terciária que se lê como link, não como botão: "Esqueci minha senha",
  * "Criar conta", "Voltar". É `<button>` e não `<a>` porque não navega — troca
  * o passo da mesma tela; o sublinhado no hover é o que sinaliza que clica.
@@ -1375,13 +1420,14 @@ export function MiniCartao({
   valor: React.ReactNode;
   /** Curto, de uma linha; a explicação longa vai em `title`. */
   hint?: React.ReactNode;
-  tone?: 'neutral' | 'attention';
+  /** R-133: `alert` = perigo (alertas não lidos no resumo do pedido). */
+  tone?: 'neutral' | 'attention' | 'alert';
   title?: string;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2" title={title}>
       <span className="truncate text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
-      <span className={cn('truncate text-[13px] font-bold', tone === 'attention' ? 'text-attention' : 'text-ink')}>{valor}</span>
+      <span className={cn('truncate text-[13px] font-bold', tone === 'attention' ? 'text-attention' : tone === 'alert' ? 'text-destructive' : 'text-ink')}>{valor}</span>
       {/* R-126: o subtítulo quebra a linha, nunca corta com reticência. */}
       {hint ? <span className="text-[11px] break-words text-ink-secondary">{hint}</span> : null}
     </div>

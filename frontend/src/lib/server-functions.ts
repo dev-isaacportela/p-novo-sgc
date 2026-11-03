@@ -259,6 +259,7 @@ export const SERVER_FUNCTION_NAMES = {
   sgcWintVendasClientesProdutos: 'sgcWintVendasClientesProdutos',
   sgcWintEstoqueFiliaisProdutos: 'sgcWintEstoqueFiliaisProdutos',
   sgcWintBloqueiosProduto: 'sgcWintBloqueiosProduto',
+  sgcWintProdutoVendasNotas: 'sgcWintProdutoVendasNotas',
   sgcCustoEspeciaisProdutos: 'sgcCustoEspeciaisProdutos',
   // R-128: custo padrão atual do Gestão de Custos (o custo de compra).
   sgcCustoPadraoAtual: 'sgcCustoPadraoAtual',
@@ -546,6 +547,7 @@ export const SERVER_FUNCTIONS = {
   sgcCustoPadraoAtual: '8114',
   sgcWintEstoqueFiliaisProdutos: '8115',
   sgcWintBloqueiosProduto: '8116',
+  sgcWintProdutoVendasNotas: '8117',
   sgcEscParametroCompraSalvar: '8150',
   sgcEscParametroCompraSilenciar: '8151',
   sgcEscParametroCompraRestaurar: '8152',

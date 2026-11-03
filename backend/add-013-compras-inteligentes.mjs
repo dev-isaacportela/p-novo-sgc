@@ -36,9 +36,10 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import { jdbcIdWinthor } from './add-003-jdbc-winthor.mjs';
+import { PUBLICO, VENDA_VALIDA } from './venda-valida.mjs';
 
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
-export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico',
+export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico', 'sgcWintProdutoVendasNotas',
   'sgcWintProdutoUltimasCompras', 'sgcWintProdutoEstoqueFiliais', 'sgcWintProdutoVendas',
   'sgcWintResumoFornecedores', 'sgcWintVendasClientesProdutos', 'sgcWintEstoqueFiliaisProdutos',
   'sgcWintBloqueiosProduto'];
@@ -69,35 +70,9 @@ const PARAMETRIZAR = ['admin', 'gestor'];
 /** Operar (desconsiderar venda): admin, analista e gestor (RN-019). */
 const OPERAR = ['admin', 'analista', 'gestor'];
 
-/**
- * Cliente de órgão público (ramos 11 a 15 do PCATIVI, "ORGAO PUBLICO …"). R-131:
- * fica FORA da demanda por padrão — a tela traz o seletor marcado e quem o
- * desmarca vê com o público; por isso a consulta segue devolvendo a parte
- * pública segregada. O ramo 20 é "FILIAL" (venda para a própria rede): saiu
- * daqui e entrou em ENTRE_FILIAIS, que fica fora sempre.
- */
-const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15)';
+// R-131: PUBLICO e VENDA_VALIDA moram em `venda-valida.mjs` — o mesmo recorte
+// serve à análise de montagem da 003 (R-133).
 
-/**
- * R-131: venda para a própria rede — o ramo 20 (FILIAL) ou o cliente que é uma
- * filial do grupo (PCFILIAL.CODCLI). No WinThor real os dois recortes são o
- * mesmo (64 linhas, 4.827 un. em 153 dias na filial 1); os dois ficam por
- * robustez. `NVL(M.CODCLI, 0)`: venda sem cliente não pode virar NULL no NOT.
- */
-// `NVL(FX.CODCLI, 0) > 0` e não `IS NOT NULL`: o gerador CONNECT BY do dialeto do simulador casa
-// até o próximo `IS NOT NULL` da consulta (o calendário da principal viraria número).
-const ENTRE_FILIAIS = `(NVL(C.CODATV1, 0) = 20 OR NVL(M.CODCLI, 0) IN (SELECT FX.CODCLI FROM PCFILIAL FX WHERE NVL(FX.CODCLI, 0) > 0))`;
-
-/** R-131 (RN-CI-07 e RN-EST-11 do legado): remessa de entrega futura — a venda já contou na nota de venda (CONDVENDA 7). */
-const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA = M.NUMTRANSVENDA AND NF.CONDVENDA = 8)`;
-
-/**
- * RN-001 (R-131): a venda que conta na 011 — UM recorte só, para lista,
- * curvas, gráfico, previsão, aba Vendas, custo especial e o resumo do seletor
- * baterem. Exige PCMOV como `M` e `LEFT JOIN PCCLIENT C`. O público fica de
- * fora à parte (PUBLICO), porque a tela decide.
- */
-const VENDA_VALIDA = `(M.CODOPER = 'S' AND M.QT > 0 AND NOT ${ENTRE_FILIAIS} AND NOT ${REMESSA_FUTURA})`;
 
 /* ─────────────── leituras — WinThor (Oracle) ─────────────── */
 
@@ -345,6 +320,38 @@ const SQL_PRODUTO_VENDAS = `SELECT * FROM (
     AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
   ORDER BY M.QT DESC, M.DTMOV DESC
 ) WHERE ROWNUM <= 50`;
+
+// R-135: "Clientes que compraram" na Análise do Produto aberta do pedido —
+// as vendas válidas do produto na filial, uma linha por nota (cliente, ramo,
+// data, número, quantidade e valor), só ao abrir a janela. O público
+// (ramos 11 a 15) sai quando `incluirPublico` = 0 — é o padrão no kanban. As
+// somas por mês batem com as barras de Vendas do gráfico (SAIDAS −
+// SAIDAS_PUBLICAS do `sgcWintProdutoHistorico`), porque o recorte é o mesmo
+// `VENDA_VALIDA`. Teto de 3000 notas por janela.
+const SQL_PRODUTO_VENDAS_NOTAS = `SELECT * FROM (
+  SELECT
+    TO_CHAR(M.DTMOV, 'YYYY-MM') AS MES,
+    TO_CHAR(MAX(M.DTMOV), 'YYYY-MM-DD') AS DTMOV,
+    NVL(M.NUMNOTA, 0) AS NUMNOTA,
+    NVL(M.NUMTRANSVENDA, 0) AS NUMTRANSVENDA,
+    NVL(M.CODCLI, 0) AS CODCLI,
+    MAX(NVL(C.CLIENTE, '')) AS CLIENTE,
+    MAX(NVL(C.CODATV1, 0)) AS CODATV1,
+    MAX(NVL(A.RAMO, '')) AS RAMO,
+    SUM(NVL(M.QT, 0)) AS QUANTIDADE,
+    SUM(NVL(M.QT, 0) * NVL(M.PUNIT, 0)) AS VALOR_TOTAL,
+    MAX(CASE WHEN ${PUBLICO} THEN 1 ELSE 0 END) AS PUBLICO
+  FROM PCMOV M
+  LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+  LEFT JOIN PCATIVI A ON A.CODATIV = C.CODATV1
+  WHERE M.CODPROD = {{codprod}}
+    AND M.CODFILIAL = '{{codfilial}}'
+    AND ${VENDA_VALIDA}
+    AND (NOT (${PUBLICO}) OR {{incluirPublico}} = 1)
+    AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
+  GROUP BY TO_CHAR(M.DTMOV, 'YYYY-MM'), NVL(M.NUMNOTA, 0), NVL(M.NUMTRANSVENDA, 0), NVL(M.CODCLI, 0)
+  ORDER BY 1, 2
+) WHERE ROWNUM <= 3000`;
 
 // Layout legado (R-117 / RN-026): o rótulo do seletor de fornecedor traz
 // "N itens · sugestão R$ X" ANTES de a compradora escolher. É uma ESTIMATIVA
@@ -698,6 +705,11 @@ const LEITURAS = [
     name: 'sgcWintProdutoEstoqueFiliais',
     code: SQL_PRODUTO_ESTOQUE_FILIAIS,
     resumo: 'RF-020 - a posicao do produto em todas as filiais, com o mesmo estoque liquido de R-085. Params: codprod int',
+  },
+  {
+    name: 'sgcWintProdutoVendasNotas',
+    code: SQL_PRODUTO_VENDAS_NOTAS,
+    resumo: 'R-135 - as vendas válidas do produto na filial, uma linha por nota com cliente, ramo, data, número, quantidade e valor, para Clientes que compraram (por cliente e cliente × mês); público fora com incluirPublico 0. Teto 3000. Params: codprod int, codfilial string, dataInicio string, dataFim string, incluirPublico int',
   },
   {
     name: 'sgcWintProdutoVendas',

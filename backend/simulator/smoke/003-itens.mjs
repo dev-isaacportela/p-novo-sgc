@@ -72,6 +72,23 @@ export async function suite(ctx) {
     assert.equal(Number(p5001.VENDA_LICITACAO), 6);
   });
 
+  await teste('C-026 / RN-016 (R-133): a analise divide a venda valida do 5002 em privado 6, PF 8 e publico 3; a venda para a propria rede (5) e a remessa de entrega futura (4) ficam fora das tres e da venda valida (17, publica 3) — R-134', async () => {
+    const rows = await linhas(ctx, 'sgcWintAnaliseMontagem', ANALISE);
+    const p5002 = rows.find((r) => Number(r.CODPROD) === 5002);
+    assert.equal(Number(p5002.VENDA_PRIVADO), 6);
+    assert.equal(Number(p5002.VENDA_PF), 8);
+    assert.equal(Number(p5002.VENDA_PUBLICO), 3);
+    // R-134: a venda do periodo e a valida (17) e a licitacao e a parte publica dela (3, so o ramo 12).
+    assert.equal(Number(p5002.VENDA_PERIODO), 17, 'propria rede (5) e remessa (4) fora da venda valida');
+    assert.equal(Number(p5002.VENDA_LICITACAO), 3, 'o ramo 20 (filial) deixou de ser licitacao');
+    const p5001 = rows.find((r) => Number(r.CODPROD) === 5001);
+    assert.equal(Number(p5001.VENDA_PRIVADO) + Number(p5001.VENDA_PF) + Number(p5001.VENDA_PUBLICO), 18);
+    // Em toda linha a divisão fecha com a venda do período (a venda válida, R-134).
+    const naoFecham = rows.filter((r) => Number(r.VENDA_PRIVADO) + Number(r.VENDA_PF) + Number(r.VENDA_PUBLICO) !== Number(r.VENDA_PERIODO));
+    assert.deepEqual(naoFecham.map((r) => Number(r.CODPROD)), []);
+    assert.ok(rows.filter((r) => Number(r.VENDA_PERIODO) > 0).length > 0, 'vazio nao e verde');
+  });
+
   await teste('C-009: sgcWintBuscarProduto por nome devolve entre 1 e 20 linhas, nenhuma inativa nem do departamento 4; por codigo devolve exatamente 1', async () => {
     const porNome = await linhas(ctx, 'sgcWintBuscarProduto', { codprod: 0, busca: 'creme', codfilial: FILIAL });
     assert.ok(porNome.length >= 1 && porNome.length <= 20, `busca devolveu ${porNome.length} linhas`);
@@ -170,6 +187,21 @@ export async function suite(ctx) {
     const padroes = db.prepare("SELECT CODPROD FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND TIPO_PRECO = 'padrao'").all(CARDS_003.gravacao);
     assert.deepEqual(especiais.map((r) => Number(r.CODPROD)), [5007]);
     assert.equal(padroes.length, 8);
+  });
+
+  await teste('C-027 (R-133): o tipo de preco manual fica gravado; valor desconhecido cai em padrao', async () => {
+    const saida = await chamar('sgcItensGravar', {
+      cardId: CARDS_003.gravacao,
+      itensJson: JSON.stringify([umItem(5008, 7, 3.25, { tipoPreco: 'manual' }), umItem(5009, 3, 2, { tipoPreco: 'qualquer' })]),
+    }, U.ana);
+    assert.equal(saida.ok, true);
+    const tipo = (codprod) => db.prepare('SELECT TIPO_PRECO FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = ?').get(CARDS_003.gravacao, codprod).TIPO_PRECO;
+    assert.equal(tipo(5008), 'manual');
+    assert.equal(tipo(5009), 'padrao');
+    // Devolve os dois itens ao estado do C-010: os cenários seguintes leem este card.
+    await chamar('sgcItensGravar', {
+      cardId: CARDS_003.gravacao, itensJson: JSON.stringify([umItem(5008, 2, 50.0), umItem(5009, 1, 34.5)]),
+    }, U.ana);
   });
 
   await teste('RNF-004: sgcItensGravar recusa quem nao monta pedido (Leo, comercial) e pedido fora da fase Analise', async () => {

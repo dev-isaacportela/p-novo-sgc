@@ -9,13 +9,15 @@
 // leitura; em Concluído tudo é consulta.
 import type { ChaveFase } from '@/lib/transicoes';
 
-// `solicitacoes` (008, R-054) entra em `analise` ANTES de Itens: a fila do
-// comercial é o que se lê para montar o pedido, e nas outras fases ela não
-// aparece. Ligado na integração da onda 3 (S4).
-export type Bloco = 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes';
+// `solicitacoes` (008, R-054) só entra em `analise`: nas outras fases a fila do
+// comercial não aparece. R-133: a Análise segue a ordem do SGC legado — o
+// `resumo` (banner de reprovação, os números, a aderência à sugestão e as
+// faixas) no topo, a análise de produtos com os itens, as solicitações do
+// comercial em cartões e, por fim, os alertas.
+export type Bloco = 'resumo' | 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes';
 
 export const BLOCOS_POR_FASE: Record<ChaveFase, readonly Bloco[]> = {
-  analise: ['solicitacoes', 'itens', 'alertas'],
+  analise: ['resumo', 'itens', 'solicitacoes', 'alertas'],
   tecnica: ['itens', 'alertas'],
   diretoria: ['itens', 'alertas'],
   envio: ['itens'],

@@ -391,6 +391,23 @@ export async function suite(ctx) {
     assert.deepEqual(porCliente.map((r) => `${r.CODCLI}=${Number(r.VENDA_CLIENTE_PERIODO)}`).sort(), ['9301=12', '9304=6'], 'nem a filial nem a remessa entram na venda por cliente');
   });
 
+  await teste('C-056 / R-135: sgcWintProdutoVendasNotas devolve as vendas validas do 5409 por nota, com cliente e ramo — sem o publico, 12 do 9301 (as 6 do 9304 ficam fora); com o publico, 18; a filial e a remessa nunca entram; a soma por mes bate com SAIDAS - SAIDAS_PUBLICAS do historico', async () => {
+    const semPublico = await linhas('sgcWintProdutoVendasNotas', { codprod: 5409, codfilial: FILIAL_011, ...JANELA, incluirPublico: 0 }, U.ana);
+    assert.ok(semPublico.length > 0, 'vazio nao e verde');
+    assert.equal(semPublico.reduce((t, n) => t + Number(n.QUANTIDADE), 0), 12);
+    assert.deepEqual([...new Set(semPublico.map((n) => Number(n.CODCLI)))], [9301]);
+    assert.ok(semPublico.every((n) => Number(n.PUBLICO) === 0 && n.RAMO === 'HOSPITAL PUBLICO' && n.MES && n.DTMOV));
+    const comPublico = await linhas('sgcWintProdutoVendasNotas', { codprod: 5409, codfilial: FILIAL_011, ...JANELA, incluirPublico: 1 }, U.ana);
+    assert.equal(comPublico.reduce((t, n) => t + Number(n.QUANTIDADE), 0), 18);
+    assert.ok(comPublico.some((n) => Number(n.CODCLI) === 9304 && Number(n.PUBLICO) === 1 && n.RAMO === 'ORGAO PUBLICO SUDESTE'));
+    assert.ok(!comPublico.some((n) => [9306, 9307].includes(Number(n.CODCLI))), 'venda para a propria rede nunca entra');
+    const historico = await linhas('sgcWintProdutoHistorico', { codprod: 5409, codfilial: FILIAL_011, meses: 12 }, U.ana);
+    for (const h of historico) {
+      const doMes = semPublico.filter((n) => n.MES === h.MES).reduce((t, n) => t + Number(n.QUANTIDADE), 0);
+      assert.equal(doMes, Number(h.SAIDAS) - Number(h.SAIDAS_PUBLICAS), `mes ${h.MES}`);
+    }
+  });
+
   await teste('C-054 / R-132: sgcWintRessuprimento traz a previsao de chegada do que esta a caminho — 5404 chega em 8 dias (pedido 970004 pendente; o 970002 ja entregue nao conta), 5403 com o pedido atrasado (previsao ha 3 dias) e o 5405, sem pedido pendente, sem data', async () => {
     const rows = await ressuprimento();
     assert.equal(String(produto(rows, 5404).DT_PREV_CHEGADA), haDias(-8));
