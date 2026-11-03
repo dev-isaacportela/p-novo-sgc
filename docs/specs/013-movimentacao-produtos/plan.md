@@ -6,7 +6,7 @@
 
 | Princípio | Como a feature atende |
 |---|---|
-| I. Spec antes de código | spec 013 commitada antes do primeiro arquivo de código; as perguntas P-01..P-07 têm proposta e troca num ponto só |
+| I. Spec antes de código | spec 013 commitada antes do primeiro arquivo de código; as perguntas P-01..P-08 foram respondidas (propostas aprovadas em 2026-11-03) |
 | II. Requisitos testáveis | cada C-0NN e RN-0NN tem teste com o id no título (smoke `013-movimentacao.mjs` ou `frontend/tests/movimentacao.test.mjs`) |
 | III. Escopo negativo | seção "Fora de escopo" da spec |
 | IV. Migrations append-only | `backend/migrations/` intocado; a tabela nova entra no `setup-backend.mjs` (integrador), sem rodar |

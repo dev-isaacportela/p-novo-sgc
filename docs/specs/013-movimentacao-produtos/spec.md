@@ -1,6 +1,6 @@
 # Spec: Movimentação de produtos — sem venda, excedentes, a vencer, ruptura e perdas
 
-**ID:** 013-movimentacao-produtos · **Status:** rascunho (perguntas P-01..P-08 com proposta adotada até a resposta) · **Data:** 2026-11-03 · **Onda:** 5 (mapa das ondas do 000) · **Origem:** p-60523, tela `/movimentacao-produtos` (regras 14, 15 e 17)
+**ID:** 013-movimentacao-produtos · **Status:** aprovada (P-01..P-08 respondidas pelo usuário em 2026-11-03: propostas aprovadas) · **Data:** 2026-11-03 · **Onda:** 5 (mapa das ondas do 000) · **Origem:** p-60523, tela `/movimentacao-produtos` (regras 14, 15 e 17)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -325,10 +325,12 @@ fica fora **por padrão**, e o filtro do topo "Venda a órgão público" a faz c
 
 ## Perguntas ao usuário (divergências do legado)
 
-Cada pergunta tem uma **proposta**, que é o que esta entrega implementa até a resposta. As
-propostas foram escolhidas para serem trocáveis num ponto só (um fragmento ou uma constante).
+Cada pergunta teve uma **proposta**, implementada e trocável num ponto só (um fragmento ou
+uma constante). **Decisão do usuário em 2026-11-03: "Aprovar propostas"** — as oito valem como
+estão; em P-08 o público continua fora por padrão, com o filtro "Venda a órgão público" para
+contar.
 
-| # | O legado | Proposta adotada | Por quê |
+| # | O legado | Decisão (proposta aprovada) | Por quê |
 |---|---|---|---|
 | P-01 | A vencer usa o saldo `QT` do lote; Perdas (e Promocionais) usam `QTEST` — o mesmo lote vale diferente nas duas abas (div. 44) | **`QT` nas duas** | Foi a coluna que o legado apurou bater com o estoque (294 de 302 produtos); a perda da filial 1 cai de 198 lotes para 11 |
 | P-02 | A linha do tempo do lote mostra a remessa de entrega futura como uma segunda "Venda" (div. 45) | **Mostra, marcada "Remessa de entrega futura", e nunca conta como venda** | O rastro fica completo e a última venda bate com a lista |
@@ -421,8 +423,7 @@ escritório (R-094); diretoria grava plano, como o código do legado (a spec ant
 
 ## Pendências
 
-As perguntas P-01..P-08 não bloqueiam: cada uma tem proposta implementada e troca num
-ponto só. A resposta do usuário confirma ou vira emenda.
+Nenhuma. P-01..P-08 respondidas em 2026-11-03 (propostas aprovadas).
 
 ## Checklist de revisão
 

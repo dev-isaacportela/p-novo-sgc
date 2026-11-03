@@ -39,7 +39,7 @@ com `npm test` verde no lado que ela toca.
 
 - [x] T-050 `npm test` nos dois lados; `npm run build` e `npm run lint` no frontend
 - [x] T-051 simulador com o WinThor real (porta 3112, front 5182): as cinco abas nos dois temas, screenshots
-- [ ] T-052 relatório: arquivos do integrador, perguntas P-01..P-07, commits, testes
+- [x] T-052 relatório: arquivos do integrador, perguntas P-01..P-08 (propostas aprovadas em 2026-11-03), commits, testes
 
 ## Rastreabilidade
 
