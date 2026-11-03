@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   linhasDaAnalise, contagemDeSaida, filtrarAnalise, FILTROS_ANALISE, naUnidade, daUnidade, segundaLinhaComprar,
-  rotuloDias, proximaOrdem, ordenarAnalise, rodapeDaAnalise, diferencaDoItem, rodapeDosItens, textoDoTransito, textoDosDias,
+  rotuloDias, proximaOrdem, ordenarAnalise, rodapeDaAnalise, diferencaDoItem, rodapeDosItens, textoDoTransito, textoDosDias, divisaoDaLinha, divisaoFecha,
 } from '../src/lib/analise-pedido.ts';
 
 const base = (codprod, descricao, venda, sugerida, extra = {}) => ({
@@ -116,3 +116,18 @@ test('C-025 (R-133): o título do Trâns. separa o WinThor dos outros pedidos ab
   assert.equal(textoDosDias({ coberturaAlvo: 35, coberturaLimite: 90, coberturaOrigem: 'padrão do sistema' }), 'Cobertura futura · alvo 35 d · limite 90 d · padrão do sistema');
   assert.equal(textoDosDias({ coberturaLimite: 0 }), 'Cobertura futura');
 });
+
+test('C-026 (R-133/R-134): Privado + PF + Público = Venda na linha da análise; o item fora da análise fica sem divisão (traço), marcado', () => {
+  const linhaSql = { CODPROD: 5002, VENDA_PERIODO: 17, VENDA_PRIVADO: 6, VENDA_PF: 8, VENDA_PUBLICO: 3 };
+  const d = divisaoDaLinha(linhaSql);
+  assert.deepEqual(d, { privado: 6, pf: 8, publico: 3 });
+  const montado = base(5002, 'Bebida', 17, 0);
+  const [daAnalise, fora] = linhasDaAnalise([montado], [base(5004, 'Só no pedido', 45, 0, { qtPedida: 10 })], { divisao: new Map([[5002, d]]) });
+  assert.equal(daAnalise.foraDaAnalise, false);
+  assert.equal(divisaoFecha(daAnalise), true);
+  assert.equal(divisaoFecha({ base: { qtVendaTotal: 18 }, divisao: d }), false, 'divisão que não fecha é detectada');
+  assert.equal(fora.foraDaAnalise, true);
+  assert.equal(fora.divisao, null, 'sem divisão inventada (nada de 0 / 0 / 0)');
+  assert.equal(divisaoFecha(fora), true);
+});
+

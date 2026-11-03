@@ -89,6 +89,8 @@ try {
   if (!(conta('VENDA_PRIVADO') > 0)) { console.error('FALHOU: nenhuma venda privada na análise.'); falhou = true; }
   // R-134: a venda do período é a válida — as três somam exatamente ela.
   if (privado + pf + publico !== total) { console.error('FALHOU: a divisão não soma a venda válida.'); falhou = true; }
+  const linhasQueNaoFecham = analise.filter((l) => Number(l.VENDA_PRIVADO) + Number(l.VENDA_PF) + Number(l.VENDA_PUBLICO) !== Number(l.VENDA_PERIODO));
+  if (linhasQueNaoFecham.length > 0) { console.error(`FALHOU: ${linhasQueNaoFecham.length} produto(s) com Privado + PF + Público ≠ Venda.`); falhou = true; }
 } finally {
   await winthor.fechar();
 }

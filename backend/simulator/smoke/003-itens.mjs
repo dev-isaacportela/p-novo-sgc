@@ -83,6 +83,10 @@ export async function suite(ctx) {
     assert.equal(Number(p5002.VENDA_LICITACAO), 3, 'o ramo 20 (filial) deixou de ser licitacao');
     const p5001 = rows.find((r) => Number(r.CODPROD) === 5001);
     assert.equal(Number(p5001.VENDA_PRIVADO) + Number(p5001.VENDA_PF) + Number(p5001.VENDA_PUBLICO), 18);
+    // Em toda linha a divisão fecha com a venda do período (a venda válida, R-134).
+    const naoFecham = rows.filter((r) => Number(r.VENDA_PRIVADO) + Number(r.VENDA_PF) + Number(r.VENDA_PUBLICO) !== Number(r.VENDA_PERIODO));
+    assert.deepEqual(naoFecham.map((r) => Number(r.CODPROD)), []);
+    assert.ok(rows.filter((r) => Number(r.VENDA_PERIODO) > 0).length > 0, 'vazio nao e verde');
   });
 
   await teste('C-009: sgcWintBuscarProduto por nome devolve entre 1 e 20 linhas, nenhuma inativa nem do departamento 4; por codigo devolve exatamente 1', async () => {

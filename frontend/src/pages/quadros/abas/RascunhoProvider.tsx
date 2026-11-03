@@ -20,7 +20,7 @@ import { coberturaDeLinha, type Cobertura } from '@/lib/cobertura';
 import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
 import { lotesDeCodigos, type CustoEspecial } from '@/lib/custo-especial';
 import { aceitarSugestao as sugestoesAceitas } from '@/lib/resumo-pedido';
-import type { DivisaoVenda, TransitoKanban } from '@/lib/analise-pedido';
+import { divisaoDaLinha, type DivisaoVenda, type TransitoKanban } from '@/lib/analise-pedido';
 import { usePedido } from './pedido-contexto';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 import { devolverSolicitacoes } from './verificar-saida';
@@ -165,7 +165,7 @@ export function RascunhoProvider({
       const divisao = new Map<number, DivisaoVenda>();
       const pedidoErp = new Map<number, number>();
       for (const r of rows as unknown as LinhaAnalise[]) {
-        divisao.set(Number(r.CODPROD), { privado: Number(r.VENDA_PRIVADO) || 0, pf: Number(r.VENDA_PF) || 0, publico: Number(r.VENDA_PUBLICO) || 0 });
+        divisao.set(Number(r.CODPROD), divisaoDaLinha(r));
         pedidoErp.set(Number(r.CODPROD), Number(r.QT_PEDIDA_ERP) || 0);
       }
       const kanban = new Map<number, TransitoKanban[]>();

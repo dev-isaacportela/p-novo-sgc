@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { ArrowDown, ArrowUp, Check, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import {
-  AlternaOpcoes, Button, CaixaSelecao, ChipContagem, Code, EmptyState, IconButton, Input, SearchInput, Status,
+  AlternaOpcoes, Button, CaixaSelecao, ChipContagem, Code, Dash, EmptyState, IconButton, Input, SearchInput, Status,
 } from '@/components/page';
 import { cn } from '@/lib/utils';
 import { moeda, hojeIso } from '@/lib/formato';
@@ -175,7 +175,8 @@ export function AnaliseAmpla({
 
       {/* Uma rolagem só, nos dois sentidos: cabeçalho e rodapé grudam, Produto e Ação ficam fixos dos lados. */}
       <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-rule-table">
-        <table className="w-full border-separate border-spacing-0 text-[13px]">
+        {/* h-full + a linha de preenchimento: com poucas linhas o rodapé desce até a base da área (R-133). */}
+        <table className="h-full w-full border-separate border-spacing-0 text-[13px]">
           <thead>
             <tr>
               <th scope="colgroup" className={cn(grupo, 'left-0 z-30')} />
@@ -237,14 +238,17 @@ export function AnaliseAmpla({
                         <span className="block text-[12px] text-ink-secondary">
                           <Code>{b.codprod}</Code>{` · ${b.embalagem || '—'} · ${b.unidade || '—'}${b.unPorCaixa > 1 ? ` · cx c/ ${b.unPorCaixa}` : ''}`}
                         </span>
+                        {l.foraDaAnalise ? (
+                          <span className="block text-[11px] text-attention">Fora da análise deste fornecedor nesta filial — números gravados no item</span>
+                        ) : null}
                       </span>
                     </span>
                   </td>
                   <td className={cn(celula, 'whitespace-nowrap')}>{b.curvaAbc}</td>
                   <td className={cn(celula, 'border-l text-right whitespace-nowrap')}><Numero valor={naUnidade(b.qtVendaTotal, b.unPorCaixa, unidade)} /></td>
-                  <td className={cn(celula, 'text-right whitespace-nowrap')}><Numero valor={naUnidade(l.divisao?.privado ?? 0, b.unPorCaixa, unidade)} /></td>
-                  <td className={cn(celula, 'text-right whitespace-nowrap')}><Numero valor={naUnidade(l.divisao?.pf ?? 0, b.unPorCaixa, unidade)} /></td>
-                  <td className={cn(celula, 'text-right whitespace-nowrap')}><Numero valor={naUnidade(l.divisao?.publico ?? 0, b.unPorCaixa, unidade)} /></td>
+                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={naUnidade(l.divisao.privado, b.unPorCaixa, unidade)} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
+                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={naUnidade(l.divisao.pf, b.unPorCaixa, unidade)} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
+                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={naUnidade(l.divisao.publico, b.unPorCaixa, unidade)} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
                   <td className={cn(celula, 'border-l text-right whitespace-nowrap')}><Numero valor={naUnidade(b.qtEstoque, b.unPorCaixa, unidade)} /></td>
                   <td className={cn(celula, 'text-right whitespace-nowrap')} title={textoDoTransito(l)}>
                     <Numero valor={naUnidade(b.qtTransito, b.unPorCaixa, unidade)} />
@@ -300,6 +304,7 @@ export function AnaliseAmpla({
                 </tr>
               );
             })}
+            <tr aria-hidden className="h-full"><td colSpan={13} className="p-0" /></tr>
           </tbody>
           <tfoot>
             <tr className="text-[12px] font-semibold text-ink">

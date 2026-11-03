@@ -37,6 +37,12 @@ export interface LinhaDaAnalise {
   comercial: boolean;
   /** Há tabela de preço especial vigente para o produto. */
   especial: boolean;
+  /**
+   * O item está no pedido mas a análise não o trouxe (busca, outro fornecedor
+   * no ERP, ou produto que não existe no ERP desta filial): os números são os
+   * gravados no item e a divisão da venda não existe — a tela mostra traço.
+   */
+  foraDaAnalise: boolean;
 }
 
 export interface ExtrasDaAnalise {
@@ -54,8 +60,10 @@ export interface ExtrasDaAnalise {
  */
 export function linhasDaAnalise(montados: ItemPedido[], itens: ItemPedido[], extras: ExtrasDaAnalise = {}): LinhaDaAnalise[] {
   const noPedido = new Map((itens ?? []).filter((i) => numero(i.qtPedida) > 0).map((i) => [i.codprod, i]));
+  const vistos = new Set((montados ?? []).map((m) => m.codprod));
   const linha = (base: ItemPedido): LinhaDaAnalise => ({
     codprod: base.codprod,
+    foraDaAnalise: !vistos.has(base.codprod),
     base,
     noPedido: noPedido.get(base.codprod) ?? null,
     divisao: extras.divisao?.get(base.codprod) ?? null,
@@ -64,11 +72,24 @@ export function linhasDaAnalise(montados: ItemPedido[], itens: ItemPedido[], ext
     comercial: Boolean(extras.comercial?.has(base.codprod)) || numero(noPedido.get(base.codprod)?.idSolicitacao) > 0,
     especial: Boolean(extras.especial?.has(base.codprod)),
   });
-  const vistos = new Set((montados ?? []).map((m) => m.codprod));
   return [
     ...(montados ?? []).map(linha),
     ...[...noPedido.values()].filter((i) => !vistos.has(i.codprod)).map(linha),
   ];
+}
+
+/**
+ * A divisão de uma linha de `sgcWintAnaliseMontagem` (R-133). A SQL a soma da
+ * mesma venda válida de VENDA_PERIODO (R-134): Privado + PF + Público = Venda.
+ */
+export function divisaoDaLinha(linha: { VENDA_PRIVADO?: unknown; VENDA_PF?: unknown; VENDA_PUBLICO?: unknown }): DivisaoVenda {
+  return { privado: numero(linha.VENDA_PRIVADO), pf: numero(linha.VENDA_PF), publico: numero(linha.VENDA_PUBLICO) };
+}
+
+/** A divisão fecha com a venda da linha? Sem divisão (fora da análise) não há o que fechar. */
+export function divisaoFecha(l: Pick<LinhaDaAnalise, 'base' | 'divisao'>): boolean {
+  if (!l.divisao) return true;
+  return Math.abs(l.divisao.privado + l.divisao.pf + l.divisao.publico - numero(l.base.qtVendaTotal)) < 0.001;
 }
 
 export const temSaida = (l: Pick<LinhaDaAnalise, 'base'>): boolean => numero(l.base.qtVendaTotal) > 0;

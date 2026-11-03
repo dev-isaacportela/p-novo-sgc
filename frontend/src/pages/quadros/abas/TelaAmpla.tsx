@@ -72,10 +72,11 @@ export default function TelaAmpla({ aberta, onFechar, titulo }: { aberta: boolea
         </div>
 
         <DialogFooter className="sm:items-center">
-          <span className="mr-auto text-[12px] text-ink-secondary">
+          {/* O total está no resumo da tabela; aqui, o estado do rascunho (R-133). */}
+          <span className={cn('mr-auto text-[12px]', r.alterados.length > 0 ? 'font-semibold text-attention' : 'text-ink-secondary')}>
             {r.alterados.length > 0
-              ? `${plural(r.alterados.length, 'alteração não salva', 'alterações não salvas')} · total ${moeda(r.total)}`
-              : r.salvoEm ? `Salvo às ${r.salvoEm} · total ${moeda(r.total)}` : `Total ${moeda(r.total)}`}
+              ? `${plural(r.alterados.length, 'item alterado', 'itens alterados')}, não salvo${r.alterados.length === 1 ? '' : 's'}`
+              : r.salvoEm ? `Tudo salvo às ${r.salvoEm}` : 'Nenhuma alteração'}
           </span>
           <Button onClick={onFechar} disabled={r.ocupado}>Fechar</Button>
           <Button variant="primary" onClick={() => void r.salvar()} disabled={r.bloqueado || r.alterados.length === 0}>Salvar</Button>
@@ -98,7 +99,7 @@ function ItensDoPedido() {
   const cabeca = 'sticky top-0 z-10 border-b border-rule-row bg-card px-3 py-2 text-[11px] font-semibold tracking-[0.14em] whitespace-nowrap text-ink-muted uppercase';
   return (
     <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-rule-table">
-      <table className="w-full border-separate border-spacing-0 text-[13px]">
+      <table className="h-full w-full border-separate border-spacing-0 text-[13px]">
         <thead>
           <tr>
             <th scope="col" className={cn(cabeca, 'text-left')}>Produto</th>
@@ -178,6 +179,7 @@ function ItensDoPedido() {
               </tr>
             );
           })}
+          <tr aria-hidden className="h-full"><td colSpan={8} className="p-0" /></tr>
         </tbody>
         <tfoot>
           <tr className="text-[12px] font-semibold text-ink">
