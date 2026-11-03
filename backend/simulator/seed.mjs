@@ -29,6 +29,7 @@ import { seed008 } from './seed/008-solicitacoes.mjs';
 // `/relatorios` (R-114). Os estados de SLA e agenda que os cenários precisam
 // são arranjados dentro do próprio teste, em `smoke/009-indicadores.mjs`.
 import { seed011 } from './seed/011-compras-inteligentes.mjs';
+import { seed013 } from './seed/013-movimentacao.mjs';
 import { seed014 } from './seed/014-galderma.mjs';
 
 const iso = (data) => data.toISOString().slice(0, 19);
@@ -112,6 +113,8 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
   // Onda 4: a 012 não tem seed próprio — ela é dona das linhas de
   // SGC_COBERTURA do seed/003-itens.mjs nesta onda (R-096).
   seed011(db, CENARIO);
+  // Onda 5 (R-140): movimentação de produtos.
+  seed013(db, CENARIO);
   // Onda 5 (R-150): pedido Galderma.
   seed014(db, CENARIO);
 

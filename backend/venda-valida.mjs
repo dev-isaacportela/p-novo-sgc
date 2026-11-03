@@ -23,7 +23,7 @@ export const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15)';
 const ENTRE_FILIAIS = `(NVL(C.CODATV1, 0) = 20 OR NVL(M.CODCLI, 0) IN (SELECT FX.CODCLI FROM PCFILIAL FX WHERE NVL(FX.CODCLI, 0) > 0))`;
 
 /** R-131 (RN-CI-07 e RN-EST-11 do legado): remessa de entrega futura — a venda já contou na nota de venda (CONDVENDA 7). */
-const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA = M.NUMTRANSVENDA AND NF.CONDVENDA = 8)`;
+export const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA = M.NUMTRANSVENDA AND NF.CONDVENDA = 8)`;
 
 /**
  * RN-001 (R-131): a venda que conta na 011 — UM recorte só, para lista,

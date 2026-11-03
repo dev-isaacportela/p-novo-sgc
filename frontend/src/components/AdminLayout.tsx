@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, BarChart3, Bell, CalendarClock, ClipboardList, FileText, Gauge, Handshake, KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Receipt, ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
+  AlertTriangle, ArrowLeftRight, BarChart3, Bell, CalendarClock, ClipboardList, FileText, Gauge, Handshake, KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Receipt, ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -33,6 +33,8 @@ const ICONES: Record<string, LucideIcon> = {
   '/compras-inteligentes': ShoppingCart,
   // Onda 5 (014):
   '/galderma': Handshake,
+  // Onda 5 (013):
+  '/movimentacao': ArrowLeftRight,
 };
 
 function agruparMenu(itens: ItemDeMenu[]) {

@@ -23,6 +23,7 @@ import { suite as indicadores } from './smoke/009-indicadores.mjs';
 import { suite as comprasInteligentes } from './smoke/011-compras-inteligentes.mjs';
 import { suite as coberturas } from './smoke/012-coberturas.mjs';
 import { suite as galderma } from './smoke/014-galderma.mjs';
+import { suite as movimentacao } from './smoke/013-movimentacao.mjs';
 
 const ctx = await abrirContexto();
 
@@ -46,6 +47,8 @@ await indicadores(ctx);
 await comprasInteligentes(ctx);
 // Onda 5 (R-150): pedido Galderma — produtos, clientes e competência próprios.
 await galderma(ctx);
+// Onda 5 (R-140): por último — a suíte cria um usuário somente-leitura próprio.
+await movimentacao(ctx);
 
 console.log(`\n  ${ctx.contagem()} verificacoes passaram.`);
 ctx.fechar();

@@ -200,7 +200,7 @@ especificado na spec 004 e usado por todas as telas; o `design.md` §1.4 e §9.2
 | 2 | NF × pedido, faturamento e cobrança · trânsito e recebimento · produtos em B.O. | 009, 010, 001 (B.O.) |
 | 3 | solicitações do comercial · indicadores e relatórios · extrato PDF | 004, 005, 001 (HU-12) — **formulário público descartado** (C-01, O3-04) |
 | 4 | compras inteligentes · coberturas ABC (refina a `SGC_COBERTURA`) | 002, 006 |
-| 5 | movimentação, perdas, promocionais, ruptura · pedido Galderma | 011, 012, 014, 015, 013 |
+| 5 | movimentação, perdas, promocionais, ruptura · pedido Galderma | 011, 012, 014, 015, 013 — **013-movimentacao-produtos** (sem venda, excedentes, a vencer, ruptura, perdas; promocionais fora, R-140) |
 
 Ordem de implementação da onda 1: 001 → 002 → 003 → 004 (criar pedido precisa de
 fornecedor/filial; as travas de saída da Análise só existem com os itens). Na prática as
@@ -774,7 +774,7 @@ Menu: grupo **Compras** ganha "Compras inteligentes". Nenhum bloco de card novo 
 Aberta em paralelo com a Movimentação de produtos (013). As duas não se tocam: a 014 tem
 faixa **84xx** (`add-016-galderma.mjs`), tabelas `SGC_GALD_*` e telas em `/galderma`.
 Registros de decisão da 014 começam em **R-150** (a `feature/003-analise-legado` usa
-R-133..R-138 e a 013 numera a partir dali; o integrador renumera se preferir).
+R-133..R-139 e a 013 ficou com a R-140).
 
 | Spec | Assunto | Regras (`regras.md`) | Origem no legado |
 |---|---|---|---|
@@ -784,3 +784,9 @@ R-133..R-138 e a 013 numera a partir dali; o integrador renumera se preferir).
 |---|---|
 | R-150 | **Pedido Galderma no SGC 2** (2026-11-03). A negociação **não é card**: vive em sete tabelas `SGC_GALD_*` e gera N pedidos comuns do quadro `compras`, um por filial com pedido gravado > 0, pelo caminho do carrinho da 011 — `kbCardCriar` (regra do CLAUDE.md), vínculo `SGC_GALD_NEGOCIACAO_CARD` (`UNIQUE` por negociação + filial, o que torna a geração retomável), capa em `SGC_PEDIDO` com `ORIGEM = 'galderma'` por escrita própria (`sgcEscGaldPedidoCapaCriar`; a `sgcEscPedidoCriar` tem lista fechada e é do `add-005`) e itens inteiros pelo `sgcItensGravar` da 003, com o preço com desconto negociado como custo (tipo de preço especial). A conversão só acontece no servidor quando nenhuma filial com pedido ficou sem capa, e convertida é terminal também no servidor. Venda = `VENDA_VALIDA AND NOT PUBLICO` de `backend/venda-valida.mjs` (o mesmo arquivo da `feature/003-analise-legado`); trânsito = `QTPEDIDA + QTTRANSITO` (o SQL vivo do legado e a R-085); estoque disponível sem `QTINDENIZ` (o legado). Custo padrão do Gestão de Custos (R-128) no estoque de agora da composição. Variação de sell-out e "dentro do mês" ficam fora. | `docs/specs/014-pedido-galderma/`, `backend/add-016-galderma.mjs`, `backend/venda-valida.mjs`, `frontend/src/lib/galderma.ts`, `frontend/src/pages/galderma/` |
 | R-151 | **Respostas às perguntas da 014** (2026-11-03). O usuário confirmou os padrões propostos: custo do item = preço com desconto negociado, como preço especial (P-01); venda de entrega futura conta na nota de venda, recorte da R-131 (P-02); planilha e modelo em CSV, sem `xlsx` (P-03); as seis correções do legado ficam — sugestão em caixa fechada, reimportar preserva o digitado, fechada mantém o cabeçalho editável, convertida trava no servidor, uma origem por complementar, meta do acompanhamento só da origem (P-04..P-09); diretoria só lê (P-10); sem observação por filial e histórico só do pedido por filial (P-12, P-13); capa por escrita própria, sem tocar no `add-005` (P-14). Na P-11 não houve preferência: a variação de sell-out e o "dentro do mês" ficam para depois. | `docs/specs/014-pedido-galderma/spec.md` |
+
+## Onda 5 — movimentação de produtos (2026-11-03)
+
+| # | Decisão | Onde |
+|---|---|---|
+| R-140 | **Spec 013 — Movimentação de produtos** (onda 5, legado p-60523 regras 14, 15 e 17). Tela `/movimentacao`, grupo Compras, cinco abas: Sem venda, Excedentes, A vencer, Alerta de ruptura e Perdas; Promocionais fora (outra sessão). Script `add-015-movimentacao.mjs`, faixa **83xx** (leituras 8301–8311, escritas 8350–8351), `sgcWint*` na lista WINTHOR; tabela nova `SGC_MOV_PLANO` (plano de ação por aba + produto + filial) no `setup-backend.mjs`. Toda venda pelo recorte da R-131 importado do `add-013` (que passa a exportar `VENDA_VALIDA`, `PUBLICO` e `REMESSA_FUTURA`), com o público fora por padrão e o filtro "Venda a órgão público" no topo (P-08). Personas: admin, analista, gestor e diretoria veem e gravam plano (`verMovimentacao`, `registrarPlanoAcao`); comercial fora do menu e da rota (no legado só via Promocionais). Oito divergências viraram perguntas ao usuário (P-01..P-08 da spec); o usuário aprovou as oito propostas em 2026-11-03: saldo do lote por `QT` em A vencer e Perdas, remessa marcada no rastro e fora da venda, excedente com a cobertura e a régua da 011 (padrão 35 dias), curva pelo faturamento, transferência recebida na entrada da janela da ruptura, perda = vencido antes de hoje, valor do estoque pelo custo da última entrada do ERP (perda pelo custo da entrada do lote) e público fora por padrão com o filtro "Venda a órgão público". | `docs/specs/013-movimentacao-produtos/`, `backend/add-015-movimentacao.mjs`, `frontend/src/pages/movimentacao/` |
