@@ -22,7 +22,7 @@ import type { ChaveFase } from '@/lib/transicoes';
 // cancelado (o bloco Itens da Análise abriria editável).
 export type Bloco =
   | 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes'
-  | 'resumo' | 'aprovacao' | 'envio' | 'enviado';
+  | 'resumo' | 'aprovacao' | 'envio' | 'enviado' | 'acompanhamento';
 
 export const BLOCOS_POR_FASE: Record<ChaveFase, readonly Bloco[]> = {
   analise: ['solicitacoes', 'itens', 'alertas'],
@@ -30,7 +30,7 @@ export const BLOCOS_POR_FASE: Record<ChaveFase, readonly Bloco[]> = {
   diretoria: ['resumo', 'aprovacao', 'itens', 'alertas'],
   envio: ['resumo', 'envio'],
   enviado: ['resumo', 'enviado', 'notas-fiscais', 'recebimento'],
-  transito: ['resumo', 'recebimento', 'notas-fiscais'],
+  transito: ['resumo', 'acompanhamento', 'recebimento', 'notas-fiscais'],
   faturamento: ['resumo', 'notas-fiscais', 'bo'],
   bo: ['resumo', 'bo', 'notas-fiscais'],
   concluido: ['resumo', 'itens', 'notas-fiscais', 'bo'],
