@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   linhasDaAnalise, contagemDeSaida, filtrarAnalise, FILTROS_ANALISE, naUnidade, daUnidade, segundaLinhaComprar,
-  rotuloDias, proximaOrdem, ordenarAnalise, rodapeDaAnalise, diferencaDoItem, rodapeDosItens, textoDoTransito, textoDosDias, divisaoDaLinha, divisaoFecha,
+  rotuloDias, proximaOrdem, ordenarAnalise, rodapeDaAnalise, diferencaDoItem, rodapeDosItens, textoDoTransito, textoDosDias, divisaoDaLinha, divisaoFecha, quantidadeNoModo, rotuloDoComprar, naoFechaACaixa, textoDoComprarRodape, sugestaoNaUnidade,
 } from '../src/lib/analise-pedido.ts';
 
 const base = (codprod, descricao, venda, sugerida, extra = {}) => ({
@@ -129,5 +129,30 @@ test('C-026 (R-133/R-134): Privado + PF + Público = Venda na linha da análise;
   assert.equal(fora.foraDaAnalise, true);
   assert.equal(fora.divisao, null, 'sem divisão inventada (nada de 0 / 0 / 0)');
   assert.equal(divisaoFecha(fora), true);
+});
+
+test('RN-018 / C-030 (R-136): Embalagem mínima × Caixa cheia — DIBEN 1000 EB (cx c/ 8) com sugestão de 37: 37 un. num modo, 5 cx (40 un.) no outro; o avulso não muda', () => {
+  assert.deepEqual(quantidadeNoModo(undefined, 37, 8, 'embalagem'), { unidades: 37, arredondada: false });
+  assert.deepEqual(quantidadeNoModo(undefined, 37, 8, 'caixa'), { unidades: 40, arredondada: false }, 'sem edição, segue a sugestão do modo');
+  assert.equal(naUnidade(40, 8, 'caixa'), 5);
+  assert.equal(rotuloDoComprar(8, 'caixa'), 'cx');
+  assert.equal(rotuloDoComprar(8, 'embalagem'), 'un.');
+  assert.equal(rotuloDoComprar(1, 'caixa'), 'un.', 'avulso fica em unidades');
+  assert.equal(naoFechaACaixa(306, 15, 'caixa'), true, 'no pedido sem fechar a caixa: avisa, não arredonda o pedido');
+  assert.equal(naoFechaACaixa(300, 15, 'caixa'), false);
+  assert.equal(naoFechaACaixa(306, 15, 'embalagem'), false);
+  assert.deepEqual(quantidadeNoModo(undefined, 64, 1, 'caixa'), { unidades: 64, arredondada: false });
+  assert.equal(sugestaoNaUnidade(64, 1, 'caixa'), sugestaoNaUnidade(64, 1, 'embalagem'));
+});
+
+test('C-030 (R-136): a quantidade editada fica a mesma em unidades; em Caixa cheia sobe à caixa e avisa; o rodapé mostra un. e cx', () => {
+  assert.deepEqual(quantidadeNoModo(37, 0, 8, 'embalagem'), { unidades: 37, arredondada: false });
+  assert.deepEqual(quantidadeNoModo(37, 0, 8, 'caixa'), { unidades: 40, arredondada: true });
+  assert.deepEqual(quantidadeNoModo(40, 0, 8, 'caixa'), { unidades: 40, arredondada: false });
+  assert.deepEqual(quantidadeNoModo(0, 37, 8, 'caixa'), { unidades: 0, arredondada: false }, 'zerada de propósito continua zerada');
+  const linhas = [{ unidades: 40, unPorCaixa: 8 }, { unidades: 64, unPorCaixa: 1 }, { unidades: 30, unPorCaixa: 15 }];
+  assert.equal(textoDoComprarRodape(linhas, 'embalagem'), '134 un.');
+  assert.equal(textoDoComprarRodape(linhas, 'caixa'), '134 un. · 7 cx');
+  assert.equal(segundaLinhaComprar(64, 60, 1, 'caixa'), 'sug. 60', 'avulso em Caixa cheia não fala de caixa');
 });
 

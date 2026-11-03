@@ -16,7 +16,7 @@ import { moeda, hojeIso } from '@/lib/formato';
 import { custoPadraoDe, type TipoPreco } from '@/lib/compras';
 import {
   FILTROS_ANALISE, contagemDeSaida, daUnidade, diasComCompra, filtrarAnalise, linhasDaAnalise, naUnidade, ordenarAnalise,
-  proximaOrdem, rodapeDaAnalise, rotuloDias, segundaLinhaComprar, sugestaoNaUnidade, textoDosDias, textoDoTransito,
+  naoFechaACaixa, proximaOrdem, quantidadeNoModo, rodapeDaAnalise, rotuloDias, rotuloDoComprar, segundaLinhaComprar, sugestaoNaUnidade, textoDoComprarRodape, textoDosDias, textoDoTransito,
   type ColunaAnalise, type FiltrosAnalise, type LinhaDaAnalise, type OrdemAnalise, type UnidadeExibida,
 } from '@/lib/analise-pedido';
 import { tabelasVigentes } from '@/lib/custo-do-item';
@@ -48,7 +48,8 @@ export function AnaliseAmpla({
   const hoje = hojeIso();
   const [filtros, setFiltros] = React.useState<FiltrosAnalise>(FILTROS_ANALISE);
   const [ordem, setOrdem] = React.useState<OrdemAnalise | null>(null);
-  const [unidade, setUnidade] = React.useState<UnidadeExibida>('embalagem');
+  // R-136: abre em Caixa cheia, como o legado.
+  const [unidade, setUnidade] = React.useState<UnidadeExibida>('caixa');
   const [densidade, setDensidade] = React.useState<Densidade>('compacta');
   const [qtRascunho, setQtRascunho] = React.useState<Record<number, number>>({});
   const [custoRascunho, setCustoRascunho] = React.useState<Record<number, Custo>>({});
@@ -66,7 +67,8 @@ export function AnaliseAmpla({
   }), [analise, r.itens, comercial, especial]);
 
   const quantidadeDe = React.useCallback(
-    (l: LinhaDaAnalise) => (l.noPedido ? l.noPedido.qtPedida : qtRascunho[l.codprod] ?? sugestaoNaUnidade(l.base.qtSugerida, l.base.unPorCaixa, unidade)),
+    // R-136: sem edição, a sugestão do modo; editada, a mesma em unidades (Caixa cheia sobe à caixa).
+    (l: LinhaDaAnalise) => (l.noPedido ? l.noPedido.qtPedida : quantidadeNoModo(qtRascunho[l.codprod], l.base.qtSugerida, l.base.unPorCaixa, unidade).unidades),
     [qtRascunho, unidade],
   );
   const custoDe = (l: LinhaDaAnalise): Custo => l.noPedido ?? custoRascunho[l.codprod] ?? l.base;
@@ -117,7 +119,6 @@ export function AnaliseAmpla({
   }
 
   const grupo = 'sticky top-0 z-20 h-7 bg-card px-3 text-[10px] font-semibold tracking-[0.14em] whitespace-nowrap text-ink-muted uppercase';
-  const unidadeRotulo = unidade === 'caixa' ? 'cx' : 'un';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -205,7 +206,7 @@ export function AnaliseAmpla({
               <ThOrdenavel ordem={ordem} onOrdem={setOrdem} coluna="publico" numeric>Público</ThOrdenavel>
               <ThOrdenavel ordem={ordem} onOrdem={setOrdem} coluna="estoque" numeric className="border-l border-rule-row">Est.</ThOrdenavel>
               <ThOrdenavel ordem={ordem} onOrdem={setOrdem} coluna="transito" numeric>Trâns.</ThOrdenavel>
-              <ThOrdenavel ordem={ordem} onOrdem={setOrdem} coluna="comprar" numeric className="border-l border-rule-row">{`Comprar (${unidadeRotulo})`}</ThOrdenavel>
+              <ThOrdenavel ordem={ordem} onOrdem={setOrdem} coluna="comprar" numeric className="border-l border-rule-row">Comprar</ThOrdenavel>
               <ThOrdenavel ordem={ordem} onOrdem={setOrdem} coluna="dias" numeric>Dias</ThOrdenavel>
               <ThOrdenavel ordem={ordem} onOrdem={setOrdem} coluna="custo">Custo</ThOrdenavel>
               <th scope="col" className="sticky top-7 right-0 z-30 border-b border-l border-rule-row bg-card px-3 py-2 text-right text-[11px] font-semibold tracking-[0.14em] text-ink-muted uppercase">Ação</th>
@@ -218,6 +219,9 @@ export function AnaliseAmpla({
               const b = l.base;
               const qt = quantidadeDe(l);
               const segunda = segundaLinhaComprar(qt, sugestaoNaUnidade(b.qtSugerida, b.unPorCaixa, unidade), b.unPorCaixa, unidade);
+              const arredondada = !l.noPedido && quantidadeNoModo(qtRascunho[l.codprod], b.qtSugerida, b.unPorCaixa, unidade).arredondada;
+              const noCampo = rotuloDoComprar(b.unPorCaixa, unidade);
+              const naoFecha = Boolean(l.noPedido) && naoFechaACaixa(qt, b.unPorCaixa, unidade);
               const dias = rotuloDias(diasComCompra(b, qt, r.meses), b.coberturaLimite);
               const custo = custoDe(l);
               const celula = cn('border-b border-rule-row px-3 align-top', densa);
@@ -245,26 +249,31 @@ export function AnaliseAmpla({
                     </span>
                   </td>
                   <td className={cn(celula, 'whitespace-nowrap')}>{b.curvaAbc}</td>
-                  <td className={cn(celula, 'border-l text-right whitespace-nowrap')}><Numero valor={naUnidade(b.qtVendaTotal, b.unPorCaixa, unidade)} /></td>
-                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={naUnidade(l.divisao.privado, b.unPorCaixa, unidade)} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
-                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={naUnidade(l.divisao.pf, b.unPorCaixa, unidade)} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
-                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={naUnidade(l.divisao.publico, b.unPorCaixa, unidade)} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
-                  <td className={cn(celula, 'border-l text-right whitespace-nowrap')}><Numero valor={naUnidade(b.qtEstoque, b.unPorCaixa, unidade)} /></td>
+                  <td className={cn(celula, 'border-l text-right whitespace-nowrap')}><Numero valor={b.qtVendaTotal} /></td>
+                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={l.divisao.privado} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
+                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={l.divisao.pf} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
+                  <td className={cn(celula, 'text-right whitespace-nowrap')}>{l.divisao ? <Numero valor={l.divisao.publico} /> : <span title="Sem divisão: o produto não veio na análise"><Dash /></span>}</td>
+                  <td className={cn(celula, 'border-l text-right whitespace-nowrap')}><Numero valor={b.qtEstoque} /></td>
                   <td className={cn(celula, 'text-right whitespace-nowrap')} title={textoDoTransito(l)}>
-                    <Numero valor={naUnidade(b.qtTransito, b.unPorCaixa, unidade)} />
-                    {l.kanban.length > 0 ? <span className="block text-[11px] text-ink-secondary">{`+${fmt(naUnidade(l.kanban.reduce((t, k) => t + k.quantidade, 0), b.unPorCaixa, unidade))} kanban`}</span> : null}
+                    <Numero valor={b.qtTransito} />
+                    {l.kanban.length > 0 ? <span className="block text-[11px] text-ink-secondary">{`+${fmt(l.kanban.reduce((t, k) => t + k.quantidade, 0))} kanban`}</span> : null}
                   </td>
                   <td className={cn(celula, 'border-l text-right whitespace-nowrap')}>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="ml-auto h-8 w-24 text-right"
-                      aria-label={`Comprar de ${b.descricao}`}
-                      value={String(naUnidade(qt, b.unPorCaixa, unidade))}
-                      disabled={r.bloqueado}
-                      onChange={(evento) => definirQuantidade(l, daUnidade(Number(evento.target.value) || 0, b.unPorCaixa, unidade))}
-                    />
-                    {segunda ? <span className="block text-[11px] text-ink-secondary">{segunda}</span> : null}
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-8 w-20 text-right"
+                        aria-label={`Comprar de ${b.descricao} (${noCampo})`}
+                        value={String(naUnidade(qt, b.unPorCaixa, noCampo === 'cx' ? 'caixa' : 'embalagem'))}
+                        disabled={r.bloqueado}
+                        onChange={(evento) => definirQuantidade(l, daUnidade(Number(evento.target.value) || 0, b.unPorCaixa, noCampo === 'cx' ? 'caixa' : 'embalagem'))}
+                      />
+                      <span className="w-6 text-left text-[11px] text-ink-secondary">{noCampo}</span>
+                    </span>
+                    {arredondada ? <span className="block text-[11px] text-attention">arredondado à caixa</span>
+                      : naoFecha ? <span className="block text-[11px] text-attention">{`não fecha a caixa (${fmt(qt / b.unPorCaixa)} cx)`}</span>
+                      : segunda ? <span className="block text-[11px] text-ink-secondary">{segunda}</span> : null}
                   </td>
                   <td className={cn(celula, 'text-right whitespace-nowrap')} title={textoDosDias(b)}>
                     {dias.tom === 'neutral' ? dias.texto : <Status tone={TOM_DIAS[dias.tom]}>{dias.texto}</Status>}
@@ -283,7 +292,7 @@ export function AnaliseAmpla({
                   <td className={cn(celula, fixa, 'sticky right-0 z-10 border-l text-right whitespace-nowrap')}>
                     {l.noPedido ? (
                       <span className="inline-flex items-center gap-1">
-                        <Status tone="live"><Check className="size-3" aria-hidden />{fmt(naUnidade(l.noPedido.qtPedida, b.unPorCaixa, unidade))}</Status>
+                        <Status tone="live"><Check className="size-3" aria-hidden />{`${fmt(naUnidade(l.noPedido.qtPedida, b.unPorCaixa, noCampo === 'cx' ? 'caixa' : 'embalagem'))} ${noCampo}`}</Status>
                         <IconButton
                           label={`Tirar ${b.descricao} do pedido`}
                           tone="danger"
@@ -317,7 +326,7 @@ export function AnaliseAmpla({
               <td className="sticky bottom-0 z-20 border-t border-rule-table bg-card" colSpan={3} />
               <td className="sticky bottom-0 z-20 border-t border-l border-rule-table bg-card px-3 py-2 text-right">{fmt(rodape.estoque)}</td>
               <td className="sticky bottom-0 z-20 border-t border-rule-table bg-card px-3 py-2 text-right">{fmt(rodape.transito)}</td>
-              <td className="sticky bottom-0 z-20 border-t border-l border-rule-table bg-card px-3 py-2 text-right">{`${fmt(rodape.comprar)} un.`}</td>
+              <td className="sticky bottom-0 z-20 border-t border-l border-rule-table bg-card px-3 py-2 text-right">{textoDoComprarRodape(visiveis.map((l) => ({ unidades: quantidadeDe(l), unPorCaixa: l.base.unPorCaixa })), unidade)}</td>
               <td className="sticky bottom-0 z-20 border-t border-rule-table bg-card" />
               <td className="sticky bottom-0 z-20 border-t border-rule-table bg-card px-3 py-2">{moeda(rodape.valor)}</td>
               <td className="sticky right-0 bottom-0 z-30 border-t border-l border-rule-table bg-card" />

@@ -150,7 +150,7 @@ const fmt = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDi
 export function segundaLinhaComprar(unidades: number, sugerida: number, unPorCaixa: number, unidade: UnidadeExibida): string | null {
   if (numero(unidades) === numero(sugerida)) return null;
   const caixa = numero(unPorCaixa) > 1 ? numero(unPorCaixa) : 1;
-  if (unidade === 'caixa') return `${fmt(numero(unidades))} un · sug. ${fmt(numero(sugerida) / caixa)} cx`;
+  if (unidade === 'caixa' && caixa > 1) return `${fmt(numero(unidades))} un · sug. ${fmt(numero(sugerida) / caixa)} cx`;
   return caixa > 1
     ? `${fmt(numero(unidades) / caixa)} cx · sug. ${fmt(numero(sugerida))}`
     : `sug. ${fmt(numero(sugerida))}`;
@@ -172,6 +172,41 @@ export function rotuloDias(dias: number | null, limite: number): { texto: string
 /** A cobertura futura com a quantidade da coluna Comprar (RN-004, a mesma conta e a mesma base da sugestão). */
 export function diasComCompra(base: ItemPedido, quantidade: number, meses: number): number | null {
   return coberturaFuturaDias(vendaBaseDoItem(base), base.qtEstoque, base.qtTransito, quantidade, meses);
+}
+
+/**
+ * A quantidade de Comprar no modo (R-136, o `calcSugestaoCompraProduto` do
+ * legado, MINIMA | CAIXA_CHEIA): sem edição, segue a sugestão do modo; com
+ * edição, a mesma quantidade em unidades — e, em Caixa cheia, arredondada
+ * para cima à caixa (`arredondada` avisa). Produto avulso é igual nos dois.
+ */
+export function quantidadeNoModo(
+  editada: number | undefined,
+  sugerida: number,
+  unPorCaixa: number,
+  unidade: UnidadeExibida,
+): { unidades: number; arredondada: boolean } {
+  if (editada === undefined) return { unidades: sugestaoNaUnidade(sugerida, unPorCaixa, unidade), arredondada: false };
+  const unidades = sugestaoNaUnidade(Math.max(0, numero(editada)), unPorCaixa, unidade);
+  return { unidades, arredondada: unidades !== Math.max(0, numero(editada)) };
+}
+
+/** O Comprar do campo: caixas em Caixa cheia quando o produto tem caixa > 1; senão, unidades. */
+export function rotuloDoComprar(unPorCaixa: number, unidade: UnidadeExibida): 'cx' | 'un.' {
+  return unidade === 'caixa' && numero(unPorCaixa) > 1 ? 'cx' : 'un.';
+}
+
+/** O item já no pedido que não fecha a caixa, em Caixa cheia: mostra a fração e avisa — o modo não muda o pedido sozinho. */
+export function naoFechaACaixa(quantidade: number, unPorCaixa: number, unidade: UnidadeExibida): boolean {
+  return unidade === 'caixa' && numero(unPorCaixa) > 1 && numero(quantidade) % numero(unPorCaixa) !== 0;
+}
+
+/** O rodapé de Comprar: "6.163 un." e, em Caixa cheia, "· 770 cx" (as caixas dos produtos com caixa > 1). */
+export function textoDoComprarRodape(linhas: { unidades: number; unPorCaixa: number }[], unidade: UnidadeExibida): string {
+  const un = (linhas ?? []).reduce((t, l) => t + numero(l.unidades), 0);
+  if (unidade !== 'caixa') return `${fmt(un)} un.`;
+  const cx = (linhas ?? []).reduce((t, l) => t + (numero(l.unPorCaixa) > 1 ? numero(l.unidades) / numero(l.unPorCaixa) : 0), 0);
+  return `${fmt(un)} un. · ${fmt(cx)} cx`;
 }
 
 /** R-134: em Caixa cheia a sugestão sobe ao múltiplo da caixa; em Embalagem mínima, não. */
