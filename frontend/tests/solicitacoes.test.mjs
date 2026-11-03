@@ -325,3 +325,18 @@ test('C-021 / RN-018: o menu do comercial tem exatamente dois itens — Solicita
     );
   }
 });
+
+test('R-133: o cartão da solicitação — fora, completa ou menor no pedido, e o texto "No pedido: X — comercial pediu Y"', async () => {
+  const { estadoNoPedido, textoNoPedido, metaDaSolicitacao, TOM_PRIORIDADE_CARTAO } = await import('../src/lib/solicitacoes.ts');
+  assert.equal(estadoNoPedido(10, 0), 'fora');
+  assert.equal(estadoNoPedido(10, 10), 'completa');
+  assert.equal(estadoNoPedido(10, 12), 'completa');
+  assert.equal(estadoNoPedido(10, 4), 'menor');
+  assert.equal(textoNoPedido(10, 0), null);
+  assert.equal(textoNoPedido(10, 4), 'No pedido: 4 — comercial pediu 10');
+  assert.deepEqual(metaDaSolicitacao({ CODPROD: 54, QUANTIDADE: 1200, CODCLI: 9301, CLIENTE: 'Farmácia Central', CRIADO_EM: '2026-10-28T09:10:00', CRIADO_POR_NOME: 'Leo' }), {
+    codigo: 'Cód. 54', quantidade: '1.200 un.', cliente: 'Farmácia Central', abertura: '28/10/2026', solicitante: 'Leo',
+  });
+  assert.equal(metaDaSolicitacao({ CODPROD: 54, QUANTIDADE: 1, CODCLI: 0, CLIENTE: '', CRIADO_EM: '', CRIADO_POR_NOME: '' }).cliente, 'Sem cliente informado');
+  assert.deepEqual(TOM_PRIORIDADE_CARTAO, { urgente: 'alert', alta: 'attention', normal: 'neutral' });
+});
