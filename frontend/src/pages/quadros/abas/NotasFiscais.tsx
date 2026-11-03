@@ -216,9 +216,9 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
             // R-152 (P-5): a faixa de validade do resumo do legado (PW:11349-11365).
             <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-secondary">
               <span>Validade dos itens faturados:</span>
-              <Status tone="live">{validade.conforme} conformes</Status>
+              <Status tone="live">{validade.conforme} {validade.conforme === 1 ? 'conforme' : 'conformes'}</Status>
               <Status tone="attention">{validade.atencao} em atenção (até 120 d)</Status>
-              <Status tone="alert">{validade.critica} críticas (abaixo de 90 d)</Status>
+              <Status tone="alert">{validade.critica} {validade.critica === 1 ? 'crítica' : 'críticas'} (abaixo de 90 d)</Status>
               {validade.semData > 0 ? <Status tone="off">{validade.semData} sem data</Status> : null}
             </p>
           ) : null}
