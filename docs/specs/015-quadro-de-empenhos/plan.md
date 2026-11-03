@@ -16,7 +16,7 @@
 
 ## Como se liga ao kanban
 
-- **Quadro `empenhos`** da lib, criado pelo `add-017` no entrypoint (idempotente por slug, como o `add-005`), dez fases com chave em `SGC_FASE` (a mesma tabela do quadro de compras, que já tem `BOARD_ID`). Chaves com prefixo `emp_` (`emp_analise`, `emp_tecnica`, `emp_diretoria`, `emp_pedidos`, `emp_envio`, `emp_aguardando`, `emp_transito`, `emp_pendencia`, `emp_concluido`, `emp_cancelado`) porque o tradutor `sgcFasesListar({ boardId: 0 })` do quadro de compras indexa **por chave**: chave repetida trocaria o id da fase `analise` dele.
+- **Quadro `empenhos`** da lib, criado pelo `add-017` no entrypoint (idempotente por slug, como o `add-005`), dez fases com chave em `SGC_EMP_FASE` (`BOARD_ID`, `CHAVE`, `FASE_ID`, `ORDEM`), lida pela `sgcEmpFasesListar`, e não na `SGC_FASE` do quadro de compras: as SFs de compras leem a `SGC_FASE` sem filtrar quadro e contariam vinte fases. Chaves com prefixo `emp_` (`emp_analise`, `emp_tecnica`, `emp_diretoria`, `emp_pedidos`, `emp_envio`, `emp_aguardando`, `emp_transito`, `emp_pendencia`, `emp_concluido`, `emp_cancelado`) para a chave ser inconfundível no gancho, que é um só para os dois quadros.
 - **Campos** (nenhum obrigatório, nenhum de fase, RN-017 da 002): `orgao`, `filial`, `fornecedor`, `valor_contrato` (moeda), `cmv`, `situacao` — todos na capa; campo vazio não ocupa linha. A tela os escreve por `api.cardAtualizar` (uma chamada) depois de salvar a análise, de desmembrar e quando um pedido termina (RNF-003: a capa não custa SF por cartão).
 - **Card nasce por `kbCardCriar`**: o empenho na janela Novo empenho; cada pedido desmembrado na aprovação da diretoria. `kbCardCriar` não recebe fase: o pedido nasce na primeira (Análise) e a tela o move para a fase de entrada (o gancho só libera esse par para pedido registrado).
 - **`KB_BOARD.CONFIG_JSON`** não guarda nada.
@@ -33,6 +33,7 @@
 
 | Tabela | Conteúdo |
 |---|---|
+| `SGC_EMP_FASE` | `BOARD_ID`, `CHAVE`, `FASE_ID`, `ORDEM`; único (`BOARD_ID`, `CHAVE`) |
 | `SGC_EMP_PREGAO` | `ID`, `CODIGO_EDITAL` (único), `ORGAO`, `CODCLI`, `DT_VIGENCIA_FIM`, `ATIVO`, `CRIADO_POR`, `CRIADO_EM` |
 | `SGC_EMP_EMPENHO` (1:1 card) | `ID`, `ID_CARD` (único), `ID_PREGAO`, `NUM_EMPENHO`, `CODFILIAL`, `FILIAL`, `CODFILIAL_PEDIDO`, `DT_RECEBIMENTO`, `PRAZO_DIAS`, `PRAZO_UNIDADE` (`CORRIDOS`/`UTEIS`), `DT_LIMITE`, `ACEITA_PARCIAL`, `OBSERVACAO`, `VL_TOTAL`, `VL_CUSTO`, `CMV_PERC` (fração), `CONGELADO_EM`, `TEC_POR`/`TEC_EM`, `DIR_POR`/`DIR_EM`, `REPROV_FASE`/`REPROV_MOTIVO`/`REPROV_POR`/`REPROV_EM`, `DESMEMBRADO_EM`, `CANC_MOTIVO`/`CANC_POR`/`CANC_EM`, `CRIADO_POR`, `CRIADO_EM`, `ATUALIZADO_EM` |
 | `SGC_EMP_ITEM` (`UNIQUE (ID_EMPENHO, CODPROD)`) | `CODPROD`, `DESCRICAO`, `EMBALAGEM`, `UNIDADE`, `CODFAB`, `CODFORNEC`, `FORNECEDOR`, `QT_EMPENHO`, `PRECO_VENDA`, `CUSTO_NEGOCIADO`, `CUSTO_ESPECIAL`, `CUSTO_PADRAO`, `TIPO_CUSTO_PEDIDO` (`''`/`PADRAO`), `QT_COMPRA`, `QT_TRANSFERENCIA`, `QT_ESTOQUE`, `CODFILIAL_ORIGEM`, `OBSERVACAO`, `ATUALIZADO_POR`, `ATUALIZADO_EM` |
@@ -56,6 +57,7 @@ Guarda de persona: o texto único da R-013, copiado (como no `add-016`). `OPERAR
 | 8607 | `sgcWintEmpClientes` | SQL Oracle | busca de cliente (órgão) por código ou nome, 20 linhas, com o ramo |
 | 8608 | `sgcWintEmpEstoqueFiliais` | SQL Oracle | por produto × filial: físico, retido, disponível, venda 45 d e última venda (venda válida com público, P-02) |
 | 8609 | `sgcWintEmpVendaMensal` | SQL Oracle | mês a mês: venda pública, privada (venda válida, rede fora) e compras |
+| 8610 | `sgcEmpFasesListar` | SQL | `CHAVE`, `FASE_ID`, `ORDEM` do quadro de empenhos (`SGC_EMP_FASE`); a tela traduz chave → id por ela |
 | 8650 | `sgcEscEmpPregaoCriar` | SQL | `INSERT … SELECT … WHERE guarda AND NOT EXISTS edital` |
 | 8651 | `sgcEscEmpEmpenhoCriar` | SQL | capa sobre um card do quadro `empenhos` criado por quem chama, sem empenho ainda |
 | 8652 | `sgcEscEmpCabecalhoSalvar` | SQL | cabeçalho na Análise (C-019) |
@@ -85,7 +87,7 @@ Venda (R-131): `VENDA_VALIDA` e `PUBLICO` importados de `backend/venda-valida.mj
 
 ## O gancho do quadro `empenhos` (RN-008/RN-009)
 
-Uma subconsulta traduz o card em chaves: persona efetiva, acesso, criador, `ORIGEM`/`DESTINO` (`SGC_FASE`), `PAPEL` (`EMPENHO`/`FORNECEDOR`/`TRANSFERENCIA`/`''`), o estado do empenho (aprovações, reprovação, desmembrado, cancelamento), do pedido (nº, datas) e as contagens (itens não prontos, itens a pedir, pendências abertas do pedido, pedidos e pedidos finais/cancelados do empenho). O `CASE` recusa na ordem: comercial, somente-leitura, restrito alheio, diretoria fora da fase, par fora da lista do papel, e então a condição do par. `MOTIVO` vazio quando pode (R-020). O mesmo texto existe em TS em `motivoDeDestinoEmpenho` (`lib/empenhos.ts`), alimentado pelo `sgcEmpCarregar` — a tela desabilita, o servidor recusa.
+Uma subconsulta traduz o card em chaves: persona efetiva, acesso, criador, `ORIGEM`/`DESTINO` (`SGC_EMP_FASE`), `PAPEL` (`EMPENHO`/`FORNECEDOR`/`TRANSFERENCIA`/`''`), o estado do empenho (aprovações, reprovação, desmembrado, cancelamento), do pedido (nº, datas) e as contagens (itens não prontos, itens a pedir, pendências abertas do pedido, pedidos e pedidos finais/cancelados do empenho). O `CASE` recusa na ordem: comercial, somente-leitura, restrito alheio, diretoria fora da fase, par fora da lista do papel, e então a condição do par. `MOTIVO` vazio quando pode (R-020). O mesmo texto existe em TS em `motivoDeDestinoEmpenho` (`lib/empenhos.ts`), alimentado pelo `sgcEmpCarregar` — a tela desabilita, o servidor recusa.
 
 Excluir (C-034): empenho na Análise sem pedido, por admin/gestor/diretoria; card sem empenho (criação que falhou no meio) também por quem o criou.
 
@@ -106,7 +108,7 @@ Chaves e transições (`FASES_EMPENHO`, `motivoDeDestinoEmpenho`, `motivoDeExclu
 
 ## Simulador
 
-- `seed/015-empenhos.mjs`: o quadro `empenhos` (fases, `SGC_FASE`, campos), um pregão, um empenho na Análise com dois itens de duas indústrias e as linhas `PC*` próprias (produtos 5801–5803, cliente órgão público 9801, movimentos de venda e entrada) para as `sgcWintEmp*` no SQLite. Ligado ao `seed.mjs` (integrador) depois do 014.
+- `seed/015-empenhos.mjs`: o quadro `empenhos` (fases, `SGC_EMP_FASE`, campos), um pregão, um empenho na Análise com dois itens de duas indústrias e as linhas `PC*` próprias (produtos 6601–6603, cliente órgão público 9661 e privado 9662, indústrias 1661 e 1662, movimentos de venda e entrada) para as `sgcWintEmp*` no SQLite. Ligado ao `seed.mjs` (integrador) depois do 014.
 - `smoke/015-empenhos.mjs`: o fluxo inteiro com as SFs reais (criar → análise → técnica → diretoria → desmembrar → envio → trânsito → pendência → concluído → reagrupamento; reprovação; cancelamento; excluir) e o gancho de compras intacto.
 - `smoke/015-empenhos-winthor.mjs`: as quatro `sgcWintEmp*` no WinThor real, contagem > 0 (fora do `npm test`, como o da 014).
 - `config.mjs`: `add-017-empenhos.mjs` no `PUBLISH_ORDER`; parâmetros novos no `CHECK_INPUT`.
