@@ -1,6 +1,6 @@
 # Spec: Pedido Galderma — mesa de negociação, acompanhamento e composição
 
-**ID:** 014-pedido-galderma · **Status:** implementada com padrões provisórios (perguntas P-01..P-14 abertas) · **Data:** 2026-11-03
+**ID:** 014-pedido-galderma · **Status:** implementada; perguntas P-01..P-14 respondidas pelo usuário em 2026-11-03 · **Data:** 2026-11-03
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -106,7 +106,7 @@ exemplo são os casos verificados do sistema antigo.
 - **E quando** ela confirma de novo o mesmo 144
 - **Então** nada é gravado e nenhuma linha nova aparece no histórico
 
-**C-008 — Usar a sugestão respeita a caixa** *(provisório — pergunta P-04)*
+**C-008 — Usar a sugestão respeita a caixa** *(P-04)*
 - **Dado que** a sugestão da filial é 218 e o produto vem em caixas de 12
 - **Quando** a compradora clica em "usar sugestão"
 - **Então** o pedido gravado é **228** (a caixa fechada logo acima), nunca 218
@@ -116,7 +116,7 @@ exemplo são os casos verificados do sistema antigo.
 - **Quando** a compradora importa
 - **Então** o resumo diz "3 linhas lidas · 1 gravada · 1 sem produto" (a linha sem EAN não conta), o EAN desconhecido aparece com o SKU da planilha, e o item gravado tem preço 1184,02 e quantidade 8857
 
-**C-010 — Reimportar não apaga o que foi digitado à mão** *(provisório — pergunta P-05)*
+**C-010 — Reimportar não apaga o que foi digitado à mão** *(P-05)*
 - **Dado que** um item tem preço de lista, meta de sell-in e observação digitados à mão
 - **Quando** a planilha é importada de novo
 - **Então** os números que a planilha traz são atualizados e o preço de lista, a meta de sell-in e a observação continuam como estavam
@@ -134,14 +134,14 @@ exemplo são os casos verificados do sistema antigo.
 **C-013 — Fechar, reabrir, excluir**
 - **Dado que** a negociação está aberta
 - **Quando** a compradora fecha
-- **Então** itens e pedidos por filial ficam somente-leitura, e o cabeçalho (inclusive o trânsito como compra) continua editável *(provisório — pergunta P-06)*; reabrir devolve tudo a editável
+- **Então** itens e pedidos por filial ficam somente-leitura, e o cabeçalho (inclusive o trânsito como compra) continua editável *(P-06)*; reabrir devolve tudo a editável
 - **E quando** ela exclui uma negociação que nunca gerou pedido
 - **Então** a negociação, os itens e os pedidos por filial somem; o histórico de decisões fica
 
 **C-014 — Gerar os pedidos no quadro de compras**
 - **Dado que** a negociação tem pedido gravado maior que zero nas filiais 1 e 2 e nada na filial 6
 - **Quando** a compradora clica em "Gerar pedidos", confere a janela (filial, produtos, unidades, valor) e confirma
-- **Então** nascem **dois** pedidos no quadro, um da filial 1 e um da filial 2, na fase de Análise, fornecedor Galderma, com os itens e as quantidades gravadas, o preço com desconto da proposta como custo *(provisório — pergunta P-01)* e o valor total na capa
+- **Então** nascem **dois** pedidos no quadro, um da filial 1 e um da filial 2, na fase de Análise, fornecedor Galderma, com os itens e as quantidades gravadas, o preço com desconto da proposta como custo *(P-01)* e o valor total na capa
 - **E** a negociação fica **convertida**: nenhum botão de escrita, nenhum campo editável, e uma faixa "Convertida em pedido" com o número de cada pedido
 
 **C-015 — Só o que foi gravado vai para o pedido**
@@ -157,13 +157,13 @@ exemplo são os casos verificados do sistema antigo.
 **C-017 — Convertida não volta**
 - **Dado que** a negociação está convertida
 - **Quando** alguém tenta reabrir, editar o cabeçalho, mudar um item ou um pedido por filial, por qualquer caminho
-- **Então** nada muda: a recusa vale também no servidor *(provisório — pergunta P-07)*
+- **Então** nada muda: a recusa vale também no servidor *(P-07)*
 
 **C-018 — Negociação complementar herda o que já foi pedido**
 - **Dado que** a negociação de agosto foi convertida com 150 unidades de um produto na filial 1
 - **Quando** a compradora cria uma negociação nova de agosto "a partir de" ela
 - **Então** a sugestão da filial 1 cai 150 unidades e o saldo a comprar do produto cai 150 (C-005)
-- **E quando** ela tenta criar uma segunda negociação a partir da mesma *(provisório — pergunta P-08)*
+- **E quando** ela tenta criar uma segunda negociação a partir da mesma *(P-08)*
 - **Então** a negociação de origem não aparece mais como opção: uma de origem serve a uma complementar só
 
 **C-019 — Valores da negociação em reais**
@@ -210,7 +210,7 @@ exemplo são os casos verificados do sistema antigo.
 - **Quando** a compradora passa o mouse na célula
 - **Então** vê "−8 em relação ao que a Galderma informou (210)"; igual, "Bate com o que a Galderma informou."
 
-**C-027 — Negociação complementar não duplica a meta** *(provisório — pergunta P-09)*
+**C-027 — Negociação complementar não duplica a meta** *(P-09)*
 - **Dado que** agosto tem a negociação de origem com proposta 300 e uma complementar com proposta 100 para o mesmo produto
 - **Quando** o acompanhamento de agosto soma as propostas
 - **Então** a meta de sell-in e de sell-out é a da negociação de origem (300) e o pedido enviado soma as duas
@@ -237,7 +237,7 @@ exemplo são os casos verificados do sistema antigo.
 **C-031 — Quem opera, quem lê, quem não entra**
 - **Dado que** um comercial abre o endereço do módulo, uma diretora abre a negociação e um analista com acesso somente-leitura também
 - **Quando** cada um tenta operar
-- **Então** o comercial recebe recusa de acesso e não vê nada; a diretora e o analista somente-leitura veem tudo, com todos os controles de escrita desabilitados *(diretoria: provisório — pergunta P-10)*; e o servidor recusa qualquer escrita dos três
+- **Então** o comercial recebe recusa de acesso e não vê nada; a diretora e o analista somente-leitura veem tudo, com todos os controles de escrita desabilitados *(diretoria: P-10)*; e o servidor recusa qualquer escrita dos três
 
 ## Requisitos funcionais
 
@@ -370,12 +370,12 @@ exemplo são os casos verificados do sistema antigo.
 - [ ] **Gráfico de pizza ou rosca** na composição — o sistema visual não tem pizza em tela operacional; a participação é mostrada em barras com o percentual.
 - [ ] **Planilha de escritório nativa** (importar e baixar o modelo no formato do Excel) — a entrada e o modelo são o arquivo simples de planilha (separado por ponto e vírgula), que o Excel abre e salva *(pergunta P-03)*.
 
-## Perguntas ao usuário
+## Perguntas ao usuário (respondidas em 2026-11-03)
 
-Regras do sistema antigo que parecem erro ou que divergem do SGC 2. Cada uma tem um
-**padrão provisório** (o que esta entrega faz até a resposta) e é barata de trocar.
+Regras do sistema antigo que parecem erro ou que divergem do SGC 2. O usuário confirmou
+todos os padrões abaixo; na P-11 não marcou preferência e o padrão (fica para depois) vale.
 
-| # | Pergunta | Padrão provisório |
+| # | Pergunta | Decisão |
 |---|---|---|
 | P-01 | O custo do item no pedido gerado é o **preço com desconto negociado** com a Galderma naquele mês (como no sistema antigo) ou o **custo padrão do Gestão de Custos** (R-128)? | preço com desconto negociado, marcado como preço especial no item |
 | P-02 | A venda de **entrega futura**: o sistema antigo conta a quantidade na **remessa** (quando sai do estoque); o recorte de venda válida do SGC 2 (R-131) conta na **nota de venda** e tira a remessa. Muda o mês em que a venda aparece. Qual vale para a Galderma? | o da R-131 (nota de venda) |
@@ -396,7 +396,7 @@ Regras do sistema antigo que parecem erro ou que divergem do SGC 2. Cada uma tem
 
 Cada item aqui **bloqueia** o `plan.md`.
 
-- Nenhuma bloqueante: as perguntas acima têm padrão provisório reversível, aplicado nesta entrega e listado no relatório.
+- Nenhuma: as perguntas P-01..P-14 foram respondidas (R-150 do 000).
 
 ## Checklist de revisão
 
@@ -405,4 +405,4 @@ Cada item aqui **bloqueia** o `plan.md`.
 - [x] Seção "Fora de escopo" preenchida
 - [x] Cenários cobrem caminhos de erro (C-001, C-006, C-012, C-016, C-017, C-031)
 - [x] Seção "Testes" preenchida: todo C-0NN e toda RN-0NN com evidência concreta
-- [x] Zero `[NEEDS CLARIFICATION]` em aberto (as perguntas têm padrão provisório)
+- [x] Zero `[NEEDS CLARIFICATION]` em aberto

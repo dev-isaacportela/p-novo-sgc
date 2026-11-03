@@ -5,8 +5,8 @@
 > Ordem de execução. Nenhuma decisão de design se resolve aqui — se apareceu
 > uma, volta pro `plan.md`. `[P]` = paralelizável.
 >
-> As perguntas P-01..P-14 da spec têm padrão provisório; trocar qualquer uma é uma
-> task nova aqui, não uma mudança silenciosa.
+> As perguntas P-01..P-14 da spec foram respondidas em 2026-11-03 (todas no padrão
+> proposto); mudar alguma depois é uma task nova aqui, não uma mudança silenciosa.
 
 ## Backend
 

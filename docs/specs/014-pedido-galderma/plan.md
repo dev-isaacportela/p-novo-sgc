@@ -6,7 +6,7 @@
 
 | Princípio | Como a feature atende |
 |---|---|
-| I. Spec antes de código | `spec.md` com 31 cenários e 15 regras; as divergências do legado viraram as perguntas P-01..P-14 com padrão provisório reversível (nenhuma bloqueia o plan) |
+| I. Spec antes de código | `spec.md` com 31 cenários e 15 regras; as divergências do legado viraram as perguntas P-01..P-14, respondidas pelo usuário em 2026-11-03 |
 | II. Requisito testável | cada C-0NN e RN-0NN tem linha na tabela **Testes** abaixo, com arquivo e camada |
 | III. Escopo negativo | *Fora de escopo* da spec: variação/dentro do mês, NF, observação por filial, outros fornecedores, pizza, xlsx |
 | IV. Migrations | nenhuma: o DDL entra no `setup-backend.mjs` (arquivo do integrador, só escrito); `backend/migrations/` intocado |
