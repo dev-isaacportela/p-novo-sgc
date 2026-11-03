@@ -28,6 +28,7 @@ import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { idsDoMapa } from './ids-do-mapa.mjs';
 import { jdbcIdWinthor } from './add-003-jdbc-winthor.mjs';
+import { PUBLICO, VENDA_VALIDA } from './venda-valida.mjs';
 
 const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', import.meta.url));
 const MARCADOR_IDS = '__SGC_IDS__';
@@ -81,6 +82,12 @@ const RECORTE_PRODUTO = `NVL(LENGTH(TRIM(P.OBS2)), 0) = 0
 // D-002: no p-45547 o filtro de cliente público morava no WHERE da subconsulta
 // de venda, o que zerava QT_LICIT sempre. Aqui QT_TOTAL soma toda saída
 // positiva e QT_LICIT é a parte pública dela (AN-03, AN-04 A, RF-004).
+// R-133: a divisão da venda do legado — Privado (pessoa jurídica fora dos
+// ramos públicos), PF (TIPOFJ 'F') e Público (ramos 11 a 15) — sai no recorte
+// de venda válida da R-131 (`venda-valida.mjs`): venda para a própria rede e
+// remessa de entrega futura ficam fora das três. VENDA_PERIODO e
+// VENDA_LICITACAO seguem como estão: são a base da sugestão (RN-001) e da
+// cobertura (RN-004), e mudar a base é decisão do usuário, não desta tela.
 const SQL_ANALISE_MONTAGEM = `SELECT
   P.CODPROD, P.DESCRICAO, P.EMBALAGEM, P.UNIDADE, P.CODEPTO, P.CODSEC,
   NVL(P.QTUNITCX, 0)        AS UN_POR_CAIXA_ERP,
@@ -94,7 +101,10 @@ const SQL_ANALISE_MONTAGEM = `SELECT
   NVL(E.QTPEDIDA, 0)        AS QT_PEDIDA_ERP,
   NVL(T.QTTRANSITO, 0)      AS TRANSITO,
   NVL(V.QT_TOTAL, 0)        AS VENDA_PERIODO,
-  NVL(V.QT_LICIT, 0)        AS VENDA_LICITACAO
+  NVL(V.QT_LICIT, 0)        AS VENDA_LICITACAO,
+  NVL(V.QT_PRIVADO, 0)      AS VENDA_PRIVADO,
+  NVL(V.QT_PF, 0)           AS VENDA_PF,
+  NVL(V.QT_PUBLICO, 0)      AS VENDA_PUBLICO
 FROM PCPRODUT P
 LEFT JOIN PCEST E ON E.CODPROD = P.CODPROD AND E.CODFILIAL = '{{codfilial}}'
 LEFT JOIN (
@@ -102,14 +112,22 @@ LEFT JOIN (
   FROM PCESTTRANSITO GROUP BY CODPROD, CODFILIAL
 ) T ON T.CODPROD = P.CODPROD AND T.CODFILIAL = '{{codfilial}}'
 LEFT JOIN (
-  SELECT M.CODPROD,
-    SUM(M.QT) AS QT_TOTAL,
-    SUM(CASE WHEN NVL(C.CODATV1, 0) IN (11,12,13,14,15,20) THEN M.QT ELSE 0 END) AS QT_LICIT
-  FROM PCMOV M
-  LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
-  WHERE M.CODOPER = 'S' AND M.QT > 0 AND M.CODFILIAL = '{{codfilial}}'
-    AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
-  GROUP BY M.CODPROD
+  SELECT X.CODPROD,
+    SUM(X.QT) AS QT_TOTAL,
+    SUM(CASE WHEN X.RAMO IN (11,12,13,14,15,20) THEN X.QT ELSE 0 END) AS QT_LICIT,
+    SUM(CASE WHEN X.VALIDA = 1 AND X.EH_PUBLICO = 0 AND X.TIPOFJ <> 'F' THEN X.QT ELSE 0 END) AS QT_PRIVADO,
+    SUM(CASE WHEN X.VALIDA = 1 AND X.EH_PUBLICO = 0 AND X.TIPOFJ = 'F' THEN X.QT ELSE 0 END) AS QT_PF,
+    SUM(CASE WHEN X.VALIDA = 1 AND X.EH_PUBLICO = 1 THEN X.QT ELSE 0 END) AS QT_PUBLICO
+  FROM (
+    SELECT M.CODPROD, M.QT, NVL(C.CODATV1, 0) AS RAMO, NVL(C.TIPOFJ, 'J') AS TIPOFJ,
+      CASE WHEN ${VENDA_VALIDA} THEN 1 ELSE 0 END AS VALIDA,
+      CASE WHEN ${PUBLICO} THEN 1 ELSE 0 END AS EH_PUBLICO
+    FROM PCMOV M
+    LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+    WHERE M.CODOPER = 'S' AND M.QT > 0 AND M.CODFILIAL = '{{codfilial}}'
+      AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
+  ) X
+  GROUP BY X.CODPROD
 ) V ON V.CODPROD = P.CODPROD
 WHERE P.CODFORNEC = {{codfornec}}
   AND ${RECORTE_PRODUTO}
@@ -512,7 +530,8 @@ if (itens.length === 0) return { ok: true, itens: 0, total: 0 };
 const COLUNAS = ${JSON.stringify(emLista(COLUNAS_ITEM))};
 const quando = agora();
 const tuplas = itens.map(function (item) {
-  const tipoPreco = String(item.tipoPreco || 'padrao') === 'especial' ? 'especial' : 'padrao';
+  // R-133: o custo do item é o padrão (Gestão de Custos), o de uma tabela especial ou digitado (manual).
+  const tipoPreco = ['especial', 'manual'].indexOf(String(item.tipoPreco || '')) !== -1 ? String(item.tipoPreco) : 'padrao';
   const curva = ['A', 'B', 'C'].indexOf(String(item.curvaAbc || '')) !== -1 ? String(item.curvaAbc) : 'C';
   return [
     cardId, inteiro(item.codprod),
@@ -647,7 +666,7 @@ return { ok: true, itens: restantes, removidos: removidos, total: total };`;
 /* ─────────────── a lista publicada ─────────────── */
 
 const LEITURAS = [
-  { name: 'sgcWintAnaliseMontagem', code: SQL_ANALISE_MONTAGEM, resumo: 'RF-001/RF-002/RF-003/RF-004 - a análise do pedido numa consulta: venda do período (licitação à parte e dentro dela), estoque, trânsito, custo e datas. Params: codfornec int, codfilial string, dataInicio string, dataFim string' },
+  { name: 'sgcWintAnaliseMontagem', code: SQL_ANALISE_MONTAGEM, resumo: 'RF-001/RF-002/RF-003/RF-004 - a análise do pedido numa consulta: venda do período (licitação à parte e dentro dela), a venda válida dividida em privado, PF e público (R-133), estoque, trânsito, custo e datas. Params: codfornec int, codfilial string, dataInicio string, dataFim string' },
   { name: 'sgcWintBuscarProduto', code: SQL_BUSCAR_PRODUTO, resumo: 'RF-011 - busca por código ou parte do nome, no máximo 20, só produto ativo e fora dos departamentos 4 e 7. Params: codprod int, busca string, codfilial string' },
   { name: 'sgcWintLotesAVencer', code: SQL_LOTES_A_VENCER, resumo: 'RF-014/RN-009 - lotes com saldo e validade dentro do teto de dias, em qualquer filial. Params: codprods lista, codfilial string, diasValidade int' },
   { name: 'sgcWintExcessoOutrasFiliais', code: SQL_EXCESSO_OUTRAS_FILIAIS, resumo: 'RF-015/RN-010 - produto com dias de estoque acima do teto numa filial diferente da do pedido. Params: codprods lista, codfilial string, diasEstoque int' },

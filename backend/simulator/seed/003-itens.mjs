@@ -162,6 +162,7 @@ export function seed003(db, cenario) {
   inserirCliente.run(9001, 'Clinica Privada Ltda', 'J', 1);
   inserirCliente.run(9002, 'Hospital Municipal', 'J', 12);
   inserirCliente.run(9003, 'Secretaria Estadual de Saude', 'J', 20);
+  inserirCliente.run(9004, 'Maria Consumidora', 'F', 1);
 
   const inserirMov = db.prepare(`INSERT INTO PCMOV
     (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED)
@@ -171,6 +172,18 @@ export function seed003(db, cenario) {
     inserirMov.run(transitem, codprod, FILIAL_PEDIDO, codcli, 'S', '2026-08-15', qt);
     transitem += 1;
   }
+  // R-133: a divisão da venda do 5002 — 6 privado (9001), 8 PF (9004), 3 público
+  // (9002, ramo 12); 5 para a própria rede (9003, ramo 20) e 4 de remessa de
+  // entrega futura (CONDVENDA 8) ficam fora das três, e dentro da venda total.
+  const inserirMovNota = db.prepare(`INSERT INTO PCMOV
+    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED, NUMTRANSVENDA)
+    VALUES (?, 5002, ?, ?, 'S', '2026-08-16', ?, 0, 0, ?)`);
+  inserirMovNota.run(transitem, FILIAL_PEDIDO, 9004, 8, 0);
+  inserirMovNota.run(transitem + 1, FILIAL_PEDIDO, 9003, 5, 0);
+  inserirMovNota.run(transitem + 2, FILIAL_PEDIDO, 9001, 4, 830001);
+  inserirMovNota.run(transitem + 3, FILIAL_PEDIDO, 9002, 3, 0);
+  db.prepare('INSERT OR IGNORE INTO PCNFSAID (NUMTRANSVENDA, CONDVENDA) VALUES (830001, 8)').run();
+  transitem += 4;
   // Provas do recorte de RN-011: entrada e venda fora do período não contam.
   inserirMov.run(transitem, 5001, FILIAL_PEDIDO, 9001, 'E', '2026-08-20', 500);
   inserirMov.run(transitem + 1, 5001, FILIAL_PEDIDO, 9001, 'S', '2026-06-01', 500);

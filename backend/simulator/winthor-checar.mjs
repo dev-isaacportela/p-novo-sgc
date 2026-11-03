@@ -7,18 +7,22 @@
 //     de produtos com estoque em mais de uma filial.
 // R-131: e prova que a venda válida tira linhas (público, entre filiais, remessa
 // CONDVENDA 8) e que o consumo do produto 54 na filial 1 cai.
+// R-133: e que a análise de montagem da 003 (sgcWintAnaliseMontagem) divide a
+// venda do fornecedor 119 na filial 1 em privado, PF e público com contagem > 0.
 // Só SELECT: o adaptador recusa qualquer outra coisa.
 //
 // Uso: cd backend && npm run sim:winthor
 import { abrirWinthor } from './winthor-oracle.mjs';
 import { bindParams } from './runtime.mjs';
-import { definitions } from '../add-013-compras-inteligentes.mjs';
+import { definitions as definicoes013 } from '../add-013-compras-inteligentes.mjs';
+import { definitions as definicoes006 } from '../add-006-itens.mjs';
 
 const winthor = await abrirWinthor({ log: { log() {}, warn: console.warn } });
 if (!winthor) {
   console.error('SIMULATOR_WINTHOR=oracle não está ligado no backend/.env — nada a checar.');
   process.exit(2);
 }
+const definitions = [...definicoes013, ...definicoes006];
 const def = (nome) => definitions.find((d) => d.name === nome);
 const rodar = (nome, input) => winthor.query(bindParams(def(nome).code, input, 0));
 let falhou = false;
@@ -74,6 +78,16 @@ try {
   const comTransito = linhas54.filter((l) => Number(l.ESTOQUE_EM_TRANSITO) > 0);
   console.log(`Previsão de chegada (fornecedor ${p54.CODFORNEC}, filial 1): ${comPrevisao.length} de ${comTransito.length} itens com trânsito/pedido · ex.: ${JSON.stringify(comPrevisao.slice(0, 3).map((l) => [l.CODPROD, l.ESTOQUE_EM_TRANSITO, l.DT_PREV_CHEGADA]))}`);
   if (!(comPrevisao.length > 0)) { console.error('FALHOU: nenhuma previsão de chegada.'); falhou = true; }
+
+  // R-133: a divisão da venda na análise de montagem (Fresenius 119, filial 1, mesma janela).
+  const analise = await rodar('sgcWintAnaliseMontagem', { codfornec: 119, codfilial: '1', dataInicio: inicio, dataFim: fim });
+  const soma = (col) => analise.reduce((t, l) => t + Number(l[col] || 0), 0);
+  const [privado, pf, publico, total] = ['VENDA_PRIVADO', 'VENDA_PF', 'VENDA_PUBLICO', 'VENDA_PERIODO'].map(soma);
+  const conta = (col) => analise.filter((l) => Number(l[col]) > 0).length;
+  console.log(`Análise de montagem (119, filial 1): ${analise.length} produtos · privado ${privado} un. em ${conta('VENDA_PRIVADO')} · PF ${pf} em ${conta('VENDA_PF')} · público ${publico} em ${conta('VENDA_PUBLICO')} · venda total (base da sugestão) ${total}`);
+  if (!(analise.length > 0)) { console.error('FALHOU: sgcWintAnaliseMontagem com contagem zero.'); falhou = true; }
+  if (!(conta('VENDA_PRIVADO') > 0)) { console.error('FALHOU: nenhuma venda privada na análise.'); falhou = true; }
+  if (privado + pf + publico > total) { console.error('FALHOU: a divisão passou da venda total.'); falhou = true; }
 } finally {
   await winthor.fechar();
 }
