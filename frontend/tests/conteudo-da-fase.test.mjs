@@ -31,3 +31,20 @@ test('R-050/R-054: a montagem abre com as solicitações do comercial, depois it
   }
   assert.ok(!blocosDaFase('analise').includes('bo'), 'B.O. antes do envio não existe');
 });
+
+test('R-150: depois da Análise toda fase abre com o resumo e traz o bloco de assunto do legado antes do trabalho', () => {
+  for (const fase of FASES.filter((f) => f !== 'analise')) {
+    assert.equal(blocosDaFase(fase)[0], 'resumo', fase);
+  }
+  assert.ok(!blocosDaFase('analise').includes('resumo'), 'a Análise é de outra sessão e não muda');
+  assert.deepEqual(blocosDaFase('tecnica'), ['resumo', 'aprovacao', 'itens', 'alertas']);
+  assert.deepEqual(blocosDaFase('diretoria'), ['resumo', 'aprovacao', 'itens', 'alertas']);
+  assert.deepEqual(blocosDaFase('envio'), ['resumo', 'envio'], 'envio: o que vai ao fornecedor, sem as colunas da análise');
+  assert.deepEqual(blocosDaFase('enviado'), ['resumo', 'enviado', 'notas-fiscais', 'recebimento']);
+  assert.deepEqual(blocosDaFase('transito'), ['resumo', 'acompanhamento', 'recebimento', 'notas-fiscais']);
+  assert.deepEqual(blocosDaFase('faturamento'), ['resumo', 'notas-fiscais', 'conclusao', 'bo']);
+  assert.equal(blocosDaFase('bo')[1], 'bo', 'na fase B.O. o B.O. vem logo depois do resumo');
+  assert.ok(blocosDaFase('bo').includes('conclusao'));
+  assert.deepEqual(blocosDaFase('concluido'), ['resumo', 'concluido', 'bo']);
+  assert.deepEqual(blocosDaFase('cancelado'), ['resumo', 'itens-pedido'], 'cancelado: itens só de consulta');
+});
