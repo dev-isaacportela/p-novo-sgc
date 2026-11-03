@@ -24,7 +24,7 @@ pedido no quadro `compras` pelo **mesmo caminho do carrinho da 011** (R-091):
 
 1. `api.cardCriar` (`kbCardCriar` — ordem, texto de busca, movimento, automação; regra do
    CLAUDE.md) com `titulo = "Galderma · <filial> · <competência>"` e os valores da capa do
-   quadro (`fornecedor`, `filial`, `prioridade: 'media'`, `valor_total`).
+   quadro (`fornecedor`, `filial`, `prioridade: 'normal'`, `valor_total`).
 2. `sgcEscGaldCardRegistrar` (8462) — o vínculo `SGC_GALD_NEGOCIACAO_CARD`
    (`UNIQUE (ID_NEGOCIACAO, CODFILIAL)`), gravado **logo depois** do card: é ele que torna
    a geração retomável (RN-009/C-016).
