@@ -4,16 +4,19 @@
 // os produtos que o compõem (o drill-in). Fica ANTES do bloco Itens, que é da
 // Análise e segue em leitura nas aprovações.
 //
-// Só o que os itens dão (`lib/aprovacao.ts`): compras do mês, saldo da meta e
-// compras × vendas esperam a pergunta P-1. Sem execução nova.
+// Os números vêm dos itens (`lib/aprovacao.ts`), sem execução nova. O compras
+// × vendas do fornecedor (R-156, P-1: sem meta de compras) é a única leitura a
+// mais, e só quando a seção abre: `sgcWintComprasVsVendas` da 009, no período
+// de vendas do pedido.
 import * as React from 'react';
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import {
   CartaoLinha, Disclosure, GradeMini, ListaCartoes, MetaDot, MiniCartao, Panel, PanelHeader, SecaoRecolhivel,
 } from '@/components/page';
-import { moeda, numeroPt } from '@/lib/formato';
+import { fmtData, moeda, numeroPt } from '@/lib/formato';
+import { linhas } from '@/lib/mitra-api';
 import { mesesDoPeriodo } from '@/lib/compras';
-import { analiseParaAprovacao, type Indicador } from '@/lib/aprovacao';
+import { analiseParaAprovacao, comprasVsVendasDoFornecedor, type ComprasVsVendas, type Indicador } from '@/lib/aprovacao';
 import { rotuloPercentual } from '@/lib/resumo-do-pedido';
 import { usePedido } from './pedido-contexto';
 
@@ -23,6 +26,8 @@ export default function BlocoAprovacao(ctx: ExtensaoContexto) {
   const pedido = usePedido(ctx.card.id, ctx.card.criadoPor);
   const [indicadoresAbertos, setIndicadoresAbertos] = React.useState(false);
   const [detalhe, setDetalhe] = React.useState('');
+  const [cvAberto, setCvAberto] = React.useState(false);
+  const [cv, setCv] = React.useState<{ estado: 'nada' | 'lendo' | 'pronto' | 'erro'; dados: ComprasVsVendas | null; erro: string }>({ estado: 'nada', dados: null, erro: '' });
 
   const capa = pedido.capa && pedido.capa.idCard === ctx.card.id ? pedido.capa : null;
   const analise = React.useMemo(
@@ -30,6 +35,21 @@ export default function BlocoAprovacao(ctx: ExtensaoContexto) {
     [pedido.itens, capa?.periodoInicio, capa?.periodoFim],
   );
   if (!capa) return null;
+
+  async function abrirComprasVsVendas() {
+    setCvAberto((atual) => !atual);
+    if (cv.estado !== 'nada' || !capa) return;
+    setCv({ estado: 'lendo', dados: null, erro: '' });
+    try {
+      const ranking = await linhas('sgcWintComprasVsVendas', {
+        codfilial: capa.codfilial, dataInicio: capa.periodoInicio, dataFim: capa.periodoFim, limite: 1000,
+      });
+      setCv({ estado: 'pronto', dados: comprasVsVendasDoFornecedor(ranking, capa.codfornec, analise.total), erro: '' });
+    } catch (falha) {
+      setCv({ estado: 'erro', dados: null, erro: falha instanceof Error ? falha.message : 'Não foi possível ler o WinThor.' });
+    }
+  }
+  const pct = (valor: number | null) => (valor === null ? '—' : rotuloPercentual(valor));
 
   const porChave = Object.fromEntries(analise.indicadores.map((ind) => [ind.chave, ind]));
   const acima = porChave.cobertura as Indicador;
@@ -58,6 +78,33 @@ export default function BlocoAprovacao(ctx: ExtensaoContexto) {
           </GradeMini>
         </div>
       </Panel>
+
+      <SecaoRecolhivel
+        titulo="Compras × vendas do fornecedor"
+        resumo={`Na filial, de ${fmtData(capa.periodoInicio)} a ${fmtData(capa.periodoFim)} — consulta o WinThor ao abrir`}
+        aberta={cvAberto}
+        onToggle={() => void abrirComprasVsVendas()}
+      >
+        {cv.estado === 'lendo' || cv.estado === 'nada' ? (
+          <p className="text-[12px] text-ink-secondary">Consultando o WinThor...</p>
+        ) : cv.estado === 'erro' ? (
+          <p className="text-[12px] text-destructive">{cv.erro}</p>
+        ) : !cv.dados ? (
+          <p className="text-[12px] text-ink-secondary">O fornecedor não teve compra nem venda nesta filial no período.</p>
+        ) : (
+          <GradeMini colunas={4}>
+            <MiniCartao rotulo="Comprado" valor={moeda(cv.dados.comprado)} hint="no período" />
+            <MiniCartao rotulo="Vendido" valor={moeda(cv.dados.vendido)} hint="no período" />
+            <MiniCartao rotulo="Compras × vendas" valor={pct(cv.dados.pctAtual)} hint="hoje" />
+            <MiniCartao
+              rotulo="Depois deste pedido"
+              valor={pct(cv.dados.pctApos)}
+              tone={(cv.dados.pctApos ?? 0) > 100 ? 'attention' : 'neutral'}
+              hint={`+${moeda(analise.total)}`}
+            />
+          </GradeMini>
+        )}
+      </SecaoRecolhivel>
 
       <SecaoRecolhivel
         titulo="Indicadores do pedido"

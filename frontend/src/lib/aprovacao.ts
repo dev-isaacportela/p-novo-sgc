@@ -96,3 +96,31 @@ export function analiseParaAprovacao(itens: readonly ItemPedido[], meses: number
     indicadores,
   };
 }
+
+/* ── R-156 (P-1, C-050 da 002): compras × vendas do fornecedor, sob demanda ──
+ * Sem meta de compras (decisão do usuário): a faixa do legado fica só com o
+ * comprado × vendido do fornecedor na filial, no MESMO período de vendas que
+ * o pedido analisou, hoje e depois deste pedido. A leitura é a
+ * `sgcWintComprasVsVendas` da 009 (WinThor), que devolve o ranking da filial
+ * — aqui se acha a linha do fornecedor. */
+
+export interface ComprasVsVendas {
+  comprado: number;
+  vendido: number;
+  /** comprado ÷ vendido × 100; null sem venda no período. */
+  pctAtual: number | null;
+  pctApos: number | null;
+}
+
+export function comprasVsVendasDoFornecedor(
+  linhas: readonly Record<string, unknown>[],
+  codfornec: number,
+  totalPedido: number,
+): ComprasVsVendas | null {
+  const linha = (linhas ?? []).find((l) => Number(l.CODFORNEC) === Number(codfornec));
+  if (!linha) return null;
+  const comprado = numero(linha.VL_COMPRADO);
+  const vendido = numero(linha.VL_VENDIDO);
+  const pct = (valor: number) => (vendido > 0 ? (valor / vendido) * 100 : null);
+  return { comprado, vendido, pctAtual: pct(comprado), pctApos: pct(comprado + numero(totalPedido)) };
+}

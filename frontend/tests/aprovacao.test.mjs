@@ -38,3 +38,15 @@ test('C-047: os indicadores do pedido contam os produtos e guardam a lista para 
   assert.equal(ind['cobertura-valor'].emValor, true);
   assert.deepEqual(ind['sem-venda'].produtos.map((p) => p.codprod), [3]);
 });
+
+import { comprasVsVendasDoFornecedor } from '../src/lib/aprovacao.ts';
+
+test('C-050 (P-1): compras × vendas do fornecedor no período do pedido, hoje e depois deste pedido — sem meta, achado no ranking da filial', () => {
+  const ranking = [
+    { CODFORNEC: 42, VL_COMPRADO: 900, VL_VENDIDO: 1000 },
+    { CODFORNEC: 119, VL_COMPRADO: 300000, VL_VENDIDO: 400000 },
+  ];
+  assert.deepEqual(comprasVsVendasDoFornecedor(ranking, 119, 100000), { comprado: 300000, vendido: 400000, pctAtual: 75, pctApos: 100 });
+  assert.equal(comprasVsVendasDoFornecedor(ranking, 7, 1), null, 'fornecedor sem movimento no período');
+  assert.deepEqual(comprasVsVendasDoFornecedor([{ CODFORNEC: 5, VL_COMPRADO: 10, VL_VENDIDO: 0 }], 5, 1), { comprado: 10, vendido: 0, pctAtual: null, pctApos: null });
+});
