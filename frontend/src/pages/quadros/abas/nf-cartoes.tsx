@@ -1,4 +1,4 @@
-// As listas do bloco Notas fiscais em cartões (R-150): no card estreito, a
+// As listas do bloco Notas fiscais em cartões (R-141): no card estreito, a
 // nota, as sugestões e os contatos deixam de ser tabelas de cinco ou seis
 // colunas. O conteúdo é o mesmo de antes (spec 005, RF-005 a RF-013 e RF-022);
 // só a forma muda. Quem carrega e grava continua sendo `NotasFiscais.tsx`.
@@ -85,7 +85,7 @@ const SELO: Record<SeloValidade, { tom: 'alert' | 'attention' | 'live'; rotulo: 
   conforme: { tom: 'live', rotulo: 'Validade conforme' },
 };
 
-/** R-152 (P-5): o selo 90/120 do legado, com os dias até vencer. Sem data, nada. */
+/** R-143 (P-5): o selo 90/120 do legado, com os dias até vencer. Sem data, nada. */
 export function SeloDeValidade({ dtValidade }: { dtValidade: string | null | undefined }) {
   const selo = seloDeValidade(dtValidade, hojeIso());
   if (!selo) return null;
@@ -99,7 +99,7 @@ type AoDecidir = (ocorrencia: OcorrenciaDaAba, decisao: 'aceito' | 'recusado') =
  * Uma nota: cabeçalho, itens e as conferências agrupadas POR ITEM — as de
  * pedido (prazo, valor total, percentual) vêm por último, com CODPROD 0.
  *
- * R-150 / R-126: a nota nasce recolhida, com o resumo das conferências no
+ * R-141 / R-126: a nota nasce recolhida, com o resumo das conferências no
  * cabeçalho; aberta, mostra primeiro só o que precisa de olho (divergência ou
  * atenção) — o "Ocultar conformes" do legado (NfAutomacaoPanels.tsx:295-302).
  * Uma nota de 28 itens tem mais de cem conferências conformes.

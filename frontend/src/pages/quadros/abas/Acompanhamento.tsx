@@ -1,10 +1,10 @@
-// Em Trânsito para BN no card (R-150, C-024 da 006), no molde do legado
+// Em Trânsito para BN no card (R-141, C-024 da 006), no molde do legado
 // (PipeWorkspace.tsx:10935-11212): o acompanhamento do faturamento — enviado
 // em, dias úteis desde o envio e o selo do escalonamento — e os itens do
 // pedido com a situação, recolhidos. Regra em `lib/acompanhamento.ts`; capa e
 // itens do `PedidoProvider`, sem execução nova.
 //
-// R-154 (P-4): o botão do legado "Produto faturado — ir para Faturamento"
+// R-145 (P-4): o botão do legado "Produto faturado — ir para Faturamento"
 // (PW:11214-11226). O movimento automático do recebimento continua; este é
 // o mesmo `ctx.mover` da coluna da direita, e quem recusa de verdade é o
 // `sgcPodeMover` (o par transito>faturamento não tem pendência).

@@ -88,7 +88,7 @@ export function resumoBo(itens: { STATUS: string }[]): { abertos: number; libera
 }
 
 /**
- * O topo da fase B.O. no card (R-150, C-018), no molde do `BoFasePanel` do
+ * O topo da fase B.O. no card (R-141, C-018), no molde do `BoFasePanel` do
  * legado: o total pendente dos itens em aberto, a carta de falta (a mais
  * recente, ou "pendente" quando não há) e o aviso de previsão vencida, que
  * fica até registrarem previsão nova — o mesmo critério de `situacaoDaPrevisao`.

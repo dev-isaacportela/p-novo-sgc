@@ -1,4 +1,4 @@
-// R-150 / C-024 (006): o acompanhamento do faturamento no topo do Trânsito (src/lib/acompanhamento.ts).
+// R-141 / C-024 (006): o acompanhamento do faturamento no topo do Trânsito (src/lib/acompanhamento.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { acompanhamentoDoFaturamento, rotuloDiasUteis } from '../src/lib/acompanhamento.ts';

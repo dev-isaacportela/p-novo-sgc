@@ -191,7 +191,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** a rotina diária de faturamento roda
 - **Então** nenhum aviso de faturamento é criado para ele — mas ele **continua** na lista de faturamentos pendentes, mostrando a previsão de liberação registrada no B.O. e quantos itens ainda estão em aberto
 
-### O card no Faturamento e no Concluído (R-150)
+### O card no Faturamento e no Concluído (R-141)
 
 **C-029 — Saldo por item que a indústria ainda não faturou**
 - **Dado que** o pedido 8372 tem 28 produtos e a nota 1954868 faturou menos do que o pedido em 4 deles
@@ -208,17 +208,17 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém abre o card em Compras Concluídas
 - **Então** vê valor faturado, itens faturados e recusados, e cada item com a nota, lote, validade, quantidade × preço, subtotal e a decisão das conferências daquele item naquela nota
 
-**C-032 — Selos de validade 90/120 do legado** *(R-152, P-5)*
+**C-032 — Selos de validade 90/120 do legado** *(R-143, P-5)*
 - **Dado que** a nota tem um lote que vence em 85 dias, um em 110 e um em 300
 - **Quando** o comprador abre o card
 - **Então** cada item mostra o selo "Validade crítica" (abaixo de 90 dias), "Validade em atenção" (até 120) ou "Validade conforme", com os dias até vencer, e o resumo de faturamento conta quantos itens há em cada selo; a conferência de validade contra o mínimo do fornecedor (RN-005) continua igual
 
-**C-033 — Só conclui com 99,5 % do valor coberto** *(R-153, P-6)*
+**C-033 — Só conclui com 99,5 % do valor coberto** *(R-144, P-6)*
 - **Dado que** o pedido de R$ 120.000,00 tem R$ 72.000,00 faturados, nenhuma conferência pendente e nenhum item em B.O. em aberto
 - **Quando** alguém tenta mover para Compras Concluídas, de Faturamento ou de Produtos em B.O.
 - **Então** o servidor recusa com "Falta faturar R$ 48.000,00 (60,0 % coberto; o mínimo para concluir é 99,5 %). Registre a nota complementar ou marque o saldo em B.O. como \"não vem mais\"."; com 99,5 % libera; e o saldo marcado em B.O. como "não vem mais" conta como coberto
 
-**C-034 — Notificar gestor a partir de 5 dias úteis** *(R-155, P-3)*
+**C-034 — Notificar gestor a partir de 5 dias úteis** *(R-146, P-3)*
 - **Dado que** o pedido está há 9 dias úteis sem faturamento completo
 - **Quando** a Ana abre o card em Trânsito, clica "Notificar gestor" e escolhe o Gil
 - **Então** o Gil recebe o aviso nas notificações, entra nos responsáveis do card e o histórico registra quem notificou; de novo no mesmo dia não duplica; abaixo de 5 dias úteis, com 100 % faturado, para quem não é gestor ou por quem não opera a nota, nada é gravado
@@ -291,8 +291,8 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-013 — Linha do faturamento no cartão.** Sem nota vinculada e com menos de 3 dias úteis de atraso, o cartão não mostra linha de faturamento. Com nota: `R$ <faturado> (<percentual> %) · saldo R$ <saldo>`. Sem nota e com 3 dias úteis ou mais: `Faturamento pendente · <n> dias úteis`.
 - **RN-014 — Cobrança.** O sistema nunca envia e-mail ao fornecedor por conta própria. A cobrança é um clique, sai com cópia para compras@benenutri.com e vira comunicação e contato do pedido.
 - **RN-015 — Nota cancelada.** Nota cancelada no ERP não é sugerida, não é vinculada e não conta no faturamento.
-- **RN-016 — Conclusão coberta (R-153, P-6).** Faturamento → Concluídas e B.O. → Concluídas exigem `(faturado nas notas + saldo em B.O. cancelado × custo do item) ≥ 99,5 % do valor do pedido` (RN-NF-34 do legado: 99,5 % conta como 100 %). A trava é do servidor (`pendencias-conclusao-faturado.sql` no `sgcPodeMover`), depois das de conferência e de B.O. em aberto, e a recusa diz quanto falta em reais e o % coberto. Pedido de valor zero não trava aqui. B.O. liberado não cobre: volta a esperar nota.
-- **RN-017 — Notificar gestor (R-155, P-3).** A partir do nível 5 (5 dias úteis desde o envio, contados como na RN-001) e abaixo de 100 % faturado, nas fases Enviado, Trânsito e Faturamento, quem opera a nota (admin, analista, gestor) grava um aviso para UM usuário com a persona gestor, no máximo um por gestor por pedido por dia (`sgcEscGestorNotificar`, guarda `:VAR_USER`). A tela põe o gestor nos responsáveis do card. A escalada automática do cron (RF-019/RF-020) continua igual.
+- **RN-016 — Conclusão coberta (R-144, P-6).** Faturamento → Concluídas e B.O. → Concluídas exigem `(faturado nas notas + saldo em B.O. cancelado × custo do item) ≥ 99,5 % do valor do pedido` (RN-NF-34 do legado: 99,5 % conta como 100 %). A trava é do servidor (`pendencias-conclusao-faturado.sql` no `sgcPodeMover`), depois das de conferência e de B.O. em aberto, e a recusa diz quanto falta em reais e o % coberto. Pedido de valor zero não trava aqui. B.O. liberado não cobre: volta a esperar nota.
+- **RN-017 — Notificar gestor (R-146, P-3).** A partir do nível 5 (5 dias úteis desde o envio, contados como na RN-001) e abaixo de 100 % faturado, nas fases Enviado, Trânsito e Faturamento, quem opera a nota (admin, analista, gestor) grava um aviso para UM usuário com a persona gestor, no máximo um por gestor por pedido por dia (`sgcEscGestorNotificar`, guarda `:VAR_USER`). A tela põe o gestor nos responsáveis do card. A escalada automática do cron (RF-019/RF-020) continua igual.
 
 ## Testes
 

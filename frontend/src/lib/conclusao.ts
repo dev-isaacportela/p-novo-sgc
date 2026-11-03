@@ -1,11 +1,11 @@
-// Faturamento em Andamento e Compras Concluídas no card (R-150, C-029 a C-031
+// Faturamento em Andamento e Compras Concluídas no card (R-141, C-029 a C-031
 // da 005), no molde do legado (PipeWorkspace.tsx:12262-12443 e 12490-12643):
 // o saldo por item que a indústria ainda não faturou, o que falta para
 // concluir e os itens faturados do pedido concluído.
 //
 // A trava da conclusão é a do SERVIDOR (`pendencias-conclusao-nf.sql`,
 // `pendencias-conclusao-bo.sql` e `pendencias-conclusao-faturado.sql`):
-// conferência de nota sem decisão, item em B.O. em aberto e, desde a R-153
+// conferência de nota sem decisão, item em B.O. em aberto e, desde a R-144
 // (P-6, como o legado), menos de 99,5 % do valor coberto — faturado mais o
 // saldo marcado em B.O. como "não vem mais". A frase é a MESMA da SQL.
 // Puro, testado em tests/conclusao.test.mjs.

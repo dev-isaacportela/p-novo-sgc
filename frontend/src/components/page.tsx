@@ -1486,7 +1486,7 @@ export function AlternaOpcoes<T extends string>({
   );
 }
 
-/* ── O card do pedido em coluna estreita (R-150) ──────────────────────────
+/* ── O card do pedido em coluna estreita (R-141) ──────────────────────────
  * A aba "Nesta fase" mede ~590 px: tabela de cinco colunas ou mais rola na
  * horizontal ou espreme o produto. No card, a linha vira cartão — produto à
  * esquerda, o número principal à direita, o resto em linhas de apoio. */

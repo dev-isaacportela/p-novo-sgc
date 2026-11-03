@@ -191,7 +191,7 @@ test("A-5 (revisão onda 2): todo canal do diálogo de contato está no IN de sg
     'R-026: a lista é fechada nos dois lados — a tela não pode esconder um canal que a escrita aceita');
 });
 
-// R-152 / P-5: os selos 90/120 do legado, ao lado da conferência da RN-005.
+// R-143 / P-5: os selos 90/120 do legado, ao lado da conferência da RN-005.
 import { seloDeValidade, contagemDeValidade } from '../src/lib/nf.ts';
 
 test('C-032: validade contada de hoje — abaixo de 90 é crítica, até 120 é atenção, acima é conforme; sem data não tem selo', () => {

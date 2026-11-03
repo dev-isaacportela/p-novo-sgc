@@ -1,4 +1,4 @@
-// R-150 / C-029, C-030 e C-031 (005): saldo por item, o que falta para
+// R-141 / C-029, C-030 e C-031 (005): saldo por item, o que falta para
 // concluir e os itens faturados do card (src/lib/conclusao.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';

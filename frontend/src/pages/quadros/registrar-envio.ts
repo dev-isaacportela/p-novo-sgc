@@ -1,6 +1,6 @@
 // O registro do envio à indústria (EN-01 a EN-04 da 002), num lugar só: a
 // coluna da direita (`AcoesDoPedido`) e o bloco do Envio dentro do card
-// (R-150, `abas/Envio.tsx`) chamam a MESMA função — o legado tinha o botão no
+// (R-141, `abas/Envio.tsx`) chamam a MESMA função — o legado tinha o botão no
 // fim do painel, o SGC 2 já o tinha à direita, e as duas portas ficam.
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import { acao } from '@/lib/mitra-api';

@@ -1,4 +1,4 @@
-// Os itens que foram (ou vão) ao fornecedor, em cartões (R-150): Envio,
+// Os itens que foram (ou vão) ao fornecedor, em cartões (R-141): Envio,
 // Enviado e Trânsito do legado mostram a mesma tabela — produto, embalagem,
 // quantidade, custo e total, com o rodapé dos totais (PW:10813-10886 e
 // 11155-11212). Sem a marca "Comercial": é o que a indústria vê. Só leitura;

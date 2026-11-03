@@ -47,7 +47,7 @@ const VAZIO: BoCarregado = { itens: [], previsoes: [], documentos: [], resumo: {
 const horaCurta = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const agora = () => new Date().toISOString().slice(0, 19);
 const hojeIso = () => new Date().toISOString().slice(0, 10);
-// R-150: o mês do `Date.UTC` começa em 0 — sem o `- 1` a conta errava quando
+// R-141: o mês do `Date.UTC` começa em 0 — sem o `- 1` a conta errava quando
 // a previsão e hoje caem em meses de tamanhos diferentes (30/10 → 03/11 dava 3).
 const diasEntre = (aIso: string, bIso: string) => {
   const [a, b] = [aIso, bIso].map((iso) => iso.split('-').map(Number));
@@ -75,7 +75,7 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
   const dados = resposta && resposta.cardId === ctx.card.id ? resposta.dados : VAZIO;
   const carregando = !resposta || resposta.cardId !== ctx.card.id;
 
-  // R-150: a mesma execução serve a conclusão do Faturamento (`carga-do-card.ts`).
+  // R-141: a mesma execução serve a conclusão do Faturamento (`carga-do-card.ts`).
   const buscar = React.useCallback(async (forcar = false): Promise<BoCarregado> => {
     const r = await lerCarga('sgcBoCarregar', ctx.card.id, forcar);
     if (r.ok === false) throw new Error(String(r.erro ?? 'Não foi possível carregar os produtos em B.O.'));
@@ -140,7 +140,7 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
   }
 
   /**
-   * R-153 (P-6): "não vem mais" — a indústria não vai entregar o saldo. O
+   * R-144 (P-6): "não vem mais" — a indústria não vai entregar o saldo. O
    * item sai do aberto como `cancelado` (o `sgcBoMarcar` já aceitava) e o
    * valor dele passa a contar como coberto na trava de conclusão.
    */

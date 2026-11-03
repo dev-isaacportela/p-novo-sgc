@@ -21,7 +21,7 @@ export interface CapaPedido {
   prazoPadrao: string;
   prazoAcordado: string;
   prazoJustificativa: string;
-  /** R-150: o que o resumo do card mostra depois da Análise — vem no mesmo `P.*`. */
+  /** R-141: o que o resumo do card mostra depois da Análise — vem no mesmo `P.*`. */
   tecEm: string;
   tecNome: string;
   tecMotivo: string;

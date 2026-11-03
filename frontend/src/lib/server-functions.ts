@@ -185,7 +185,7 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscSugestaoInserir: 'sgcEscSugestaoInserir',
   sgcEscSugestaoDecidir: 'sgcEscSugestaoDecidir',
   sgcEscContatoInserir: 'sgcEscContatoInserir',
-  // R-155 (P-3): o botão "Notificar gestor" do acompanhamento do faturamento.
+  // R-146 (P-3): o botão "Notificar gestor" do acompanhamento do faturamento.
   sgcEscGestorNotificar: 'sgcEscGestorNotificar',
   sgcEscPedidoFaturamento: 'sgcEscPedidoFaturamento',
   sgcEscPedidoAlertaFaturamento: 'sgcEscPedidoAlertaFaturamento',

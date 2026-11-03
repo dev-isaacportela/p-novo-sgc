@@ -1,4 +1,4 @@
-// O resumo que abre o card em toda fase depois da Análise (R-150, C-046 da
+// O resumo que abre o card em toda fase depois da Análise (R-141, C-046 da
 // 002): fornecedor, filial, valor, % faturado com barra, período e prazo, e os
 // selos do que já aconteceu — aprovação técnica, diretoria, envio,
 // cancelamento —, como a coluna da esquerda do SGC legado

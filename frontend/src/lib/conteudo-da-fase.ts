@@ -13,7 +13,7 @@ import type { ChaveFase } from '@/lib/transicoes';
 // comercial é o que se lê para montar o pedido, e nas outras fases ela não
 // aparece. Ligado na integração da onda 3 (S4).
 //
-// Depois da Análise (R-150) o card segue o molde do legado
+// Depois da Análise (R-141) o card segue o molde do legado
 // (docs/specs/000-visao-geral/legado-fases-do-card.md): `resumo` abre toda
 // fase (fornecedor, valor, % faturado, selos de aprovação, envio e
 // cancelamento); cada fase tem o seu bloco de assunto — `aprovacao`, `envio`,

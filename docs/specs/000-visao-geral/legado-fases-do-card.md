@@ -1,6 +1,6 @@
 # O card do pedido depois da Análise — legado × SGC 2
 
-Levantamento feito antes de codar (R-150). Para cada fase depois da
+Levantamento feito antes de codar (R-141). Para cada fase depois da
 Análise: o que o SGC legado (`/opt/p-60523-ref`, só leitura) mostra **de cima
 para baixo** dentro do card, o que o SGC 2 mostra hoje e as lacunas.
 
@@ -140,7 +140,7 @@ resto vem das SFs que os blocos já chamam (`sgcNfListar`,
 
 ## Perguntas de regra — respondidas em 2026-11-03
 
-As respostas do usuário (R-151 a R-156 do README) estão no fim de cada item.
+As respostas do usuário (R-142 a R-147 do README) estão no fim de cada item.
 
 - **P-1 — Meta de compras e venda projetada por fornecedor.** A faixa de
   decisão do legado (compras do mês, saldo sobre a meta, compras × vendas, e o
@@ -150,25 +150,25 @@ As respostas do usuário (R-151 a R-156 do README) estão no fim de cada item.
   WinThor), que daria a faixa "compras × vendas" sob demanda. Criar a meta
   (parâmetro por fornecedor/filial) e ligar os dois, só o compras × vendas, ou
   deixar a aprovação com o que os itens dão (o que está entregue)?
-  **Resposta: "Só compras × vendas"** — R-156, entregue.
+  **Resposta: "Só compras × vendas"** — R-147, entregue.
 - **P-2 — B.O. como card filho.** No legado, item recusado na validade gera um
   card novo em Produtos em B.O. e o pedido segue para a conclusão com o que foi
   aceito (RN-BO-03/04). No SGC 2 o B.O. é a fase do próprio pedido (spec 007).
   Manter o modelo do SGC 2?
-  **Resposta: "Manter o do SGC 2"** — R-151.
+  **Resposta: "Manter o do SGC 2"** — R-142.
 - **P-3 — Notificar gestor a partir de 5 dias úteis.** O legado tem o botão
   que escolhe um gestor, o põe como responsável e grava o alerta. No SGC 2 o
   cron já escala pelo nível; a ação manual entra?
-  **Resposta: "Cron + botão manual"** — R-155, entregue.
+  **Resposta: "Cron + botão manual"** — R-146, entregue.
 - **P-4 — "Produto faturado — ir para Faturamento".** O legado deixa o
   comprador mover à mão do Trânsito para o Faturamento; no SGC 2 o servidor
   move quando todas as NFs dão entrada (spec 006). Entra o atalho manual?
-  **Resposta: "Automático + botão"** — R-154, entregue.
+  **Resposta: "Automático + botão"** — R-145, entregue.
 - **P-5 — Régua de validade 90/120 dias.** O legado decide à mão só validade
   ≤ 120 dias e chama de crítica abaixo de 90; o SGC 2 confere contra a
   validade mínima da spec 005. Os selos "atenção" e "crítica" entram com essa
   régua?
-  **Resposta: "Selos 90/120"** — R-152, entregue.
+  **Resposta: "Selos 90/120"** — R-143, entregue.
 - **P-6 — Concluir exige 100 % faturado?** O legado só conclui com o pedido
   100 % faturado (e conta 99,5 % como 100 %, RN-NF-34); o saldo vai para NF
   complementar ou para o B.O. No SGC 2 o servidor só barra a conclusão por
@@ -176,4 +176,4 @@ As respostas do usuário (R-151 a R-156 do README) estão no fim de cada item.
   (`pendencias-conclusao-nf.sql`, `pendencias-conclusao-bo.sql`): o saldo não
   faturado não bloqueia. O bloco de conclusão mostra o saldo como aviso, sem
   travar. Passa a travar?
-  **Resposta: "Travar como o legado"** — R-153, entregue (trava no servidor; o saldo em B.O. que não vem mais conta como coberto).
+  **Resposta: "Travar como o legado"** — R-144, entregue (trava no servidor; o saldo em B.O. que não vem mais conta como coberto).

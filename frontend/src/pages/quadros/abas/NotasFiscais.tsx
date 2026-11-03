@@ -62,7 +62,7 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
 
   /**
    * A aba inteira em UMA execução (RNF-001), dividida com os blocos de
-   * conclusão e de concluído (R-150, `carga-do-card.ts`). Só lê: quem guarda
+   * conclusão e de concluído (R-141, `carga-do-card.ts`). Só lê: quem guarda
    * é quem chama; depois de gravar, `forcar` avisa os outros blocos.
    */
   const buscar = React.useCallback(async (forcar = false): Promise<Dados> => {
@@ -213,7 +213,7 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
             <MiniCartao rotulo="Notas" valor={dados.nfs.length} hint={pendentes.length > 0 ? `${pendentes.length} conferência(s) pendente(s)` : undefined} />
           </GradeMini>
           {validade ? (
-            // R-152 (P-5): a faixa de validade do resumo do legado (PW:11349-11365).
+            // R-143 (P-5): a faixa de validade do resumo do legado (PW:11349-11365).
             <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-secondary">
               <span>Validade dos itens faturados:</span>
               <Status tone="live">{validade.conforme} {validade.conforme === 1 ? 'conforme' : 'conformes'}</Status>

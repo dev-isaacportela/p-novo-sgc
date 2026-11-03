@@ -32,7 +32,7 @@ test('R-050/R-054: a montagem abre com as solicitações do comercial, depois it
   assert.ok(!blocosDaFase('analise').includes('bo'), 'B.O. antes do envio não existe');
 });
 
-test('R-150: depois da Análise toda fase abre com o resumo e traz o bloco de assunto do legado antes do trabalho', () => {
+test('R-141: depois da Análise toda fase abre com o resumo e traz o bloco de assunto do legado antes do trabalho', () => {
   for (const fase of FASES.filter((f) => f !== 'analise')) {
     assert.equal(blocosDaFase(fase)[0], 'resumo', fase);
   }

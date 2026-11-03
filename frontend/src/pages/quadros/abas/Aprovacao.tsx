@@ -1,11 +1,11 @@
-// "Análise para aprovação" nas fases Aprovação Técnica e Diretoria (R-150,
+// "Análise para aprovação" nas fases Aprovação Técnica e Diretoria (R-141,
 // C-047 da 002), no molde do legado (PipeWorkspace.tsx:10215-10316): a faixa
 // de decisão em cima e os indicadores do pedido recolhidos, cada um abrindo
 // os produtos que o compõem (o drill-in). Fica ANTES do bloco Itens, que é da
 // Análise e segue em leitura nas aprovações.
 //
 // Os números vêm dos itens (`lib/aprovacao.ts`), sem execução nova. O compras
-// × vendas do fornecedor (R-156, P-1: sem meta de compras) é a única leitura a
+// × vendas do fornecedor (R-147, P-1: sem meta de compras) é a única leitura a
 // mais, e só quando a seção abre: `sgcWintComprasVsVendas` da 009, no período
 // de vendas do pedido.
 import * as React from 'react';

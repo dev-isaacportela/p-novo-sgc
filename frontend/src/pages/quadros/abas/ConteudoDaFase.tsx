@@ -4,7 +4,7 @@
 // (puro, testado); aqui só se desenha, na ordem, com os blocos das specs 003
 // (Itens, Alertas), 005 (Notas fiscais), 006 (Recebimento), 007 (B.O.) e 008
 // (Solicitações, só na Análise e antes de Itens — R-054) e, depois da
-// Análise, os blocos do molde do legado (R-150): resumo, aprovação, envio,
+// Análise, os blocos do molde do legado (R-141): resumo, aprovação, envio,
 // enviado, acompanhamento, conclusão e concluído.
 // Cada bloco continua decidindo sozinho o que é editável (persona, fase,
 // RESTRICTED), espelhando o servidor; a lib empilha os blocos com o mesmo

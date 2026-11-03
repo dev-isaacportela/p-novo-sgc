@@ -45,8 +45,8 @@
 - [x] **T-035** — `NfsAtrasoPage`: "Sincronizar com o WinThor" (`operarNf`) e "Exportar" (`baixarCsv(nome, textoCsv(COLUNAS_CSV_ATRASO, linhasCsv(notas)))` sobre as linhas do filtro atual, sem execução nova) → `frontend/src/pages/nfs-atraso/NfsAtrasoPage.tsx`
 - [x] **T-036** — **Pedir à base**: `verNfsAtraso` (admin, analista, gestor, diretoria) na matriz de `lib/permissoes.ts` **e** o item `{ grupo: 'Fiscal', to: '/nfs-em-atraso', label: 'NFs em atraso', exige: 'verNfsAtraso' }` na constante `MENU` do mesmo arquivo — é lá que o menu vive; o `AdminLayout` só resolve o ícone por rota. `operarNf` (005) governa "Verificar entrada" e "Sincronizar" e zera com `READ_ONLY` (R-038) → `frontend/src/lib/permissoes.ts`
 - [x] **T-037** — **Pedir ao integrador**: ligar a aba Recebimento em `abasExtras` do `/quadro` (R-029, sem `contagem`) e a rota `/nfs-em-atraso` → `frontend/src/pages/quadros/QuadroPage.tsx`, `frontend/src/App.tsx`
-- [x] **T-094** — R-150: bloco Acompanhamento no topo do Trânsito (`lib/acompanhamento.ts`, `abas/Acompanhamento.tsx`) e Recebimento em cartões, sem tabela de 7 colunas → `frontend/src/pages/quadros/abas/`
-- [x] **T-095** — R-154 (P-4): botão "Produto faturado — ir para Faturamento" no acompanhamento (`ctx.mover`, desabilitado com o motivo de `motivoDeDestino`) e o painel "Notificar gestor" da 005 (R-155) → `frontend/src/pages/quadros/abas/Acompanhamento.tsx`
+- [x] **T-094** — R-141: bloco Acompanhamento no topo do Trânsito (`lib/acompanhamento.ts`, `abas/Acompanhamento.tsx`) e Recebimento em cartões, sem tabela de 7 colunas → `frontend/src/pages/quadros/abas/`
+- [x] **T-095** — R-145 (P-4): botão "Produto faturado — ir para Faturamento" no acompanhamento (`ctx.mover`, desabilitado com o motivo de `motivoDeDestino`) e o painel "Notificar gestor" da 005 (R-146) → `frontend/src/pages/quadros/abas/Acompanhamento.tsx`
 
 ## Testes
 

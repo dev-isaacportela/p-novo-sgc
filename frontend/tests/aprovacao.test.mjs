@@ -1,4 +1,4 @@
-// R-150 / C-047 (002): a análise para aprovação das fases Técnica e Diretoria (src/lib/aprovacao.ts).
+// R-141 / C-047 (002): a análise para aprovação das fases Técnica e Diretoria (src/lib/aprovacao.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analiseParaAprovacao } from '../src/lib/aprovacao.ts';

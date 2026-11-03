@@ -238,7 +238,7 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
 
   def('CONCAT', null, (...args) => (args.some((a) => a == null) ? null : args.map(String).join('')));
 
-  // R-153 (spec 005): FORMAT(x, casas[, 'pt_BR']) do MySQL — com o locale
+  // R-144 (spec 005): FORMAT(x, casas[, 'pt_BR']) do MySQL — com o locale
   // pt_BR, ponto no milhar e vírgula decimal (`1.234,56`); sem locale, o padrão
   // en_US do MySQL (`1,234.56`). É o que a frase da trava de conclusão usa para
   // dizer quanto falta faturar.

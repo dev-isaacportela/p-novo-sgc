@@ -280,7 +280,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém abre o histórico do pedido
 - **Então** encontra as 4 decisões em ordem, cada uma com quem decidiu, quando e o motivo quando houver, além das passagens por etapa
 
-### O card depois da Análise (R-150)
+### O card depois da Análise (R-141)
 
 **C-046 — O card abre com o resumo do pedido e os selos do que aconteceu**
 - **Dado que** o pedido foi aprovado tecnicamente pelo Gil, aprovado pela diretoria e enviado por e-mail com o número 8372
@@ -302,7 +302,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** o comprador abre o card
 - **Então** vê data, método, contato e número do pedido do envio, a observação, e "Próximo movimento: Em Trânsito para BN — Vincule a nota fiscal para liberar"; com 1 nota, "1 nota vinculada"
 
-**C-050 — Compras × vendas do fornecedor na aprovação** *(R-156, P-1)*
+**C-050 — Compras × vendas do fornecedor na aprovação** *(R-147, P-1)*
 - **Dado que** o pedido da Fresenius na filial 1 analisou as vendas de 19/09 a 02/11 e soma R$ 328.859,14
 - **Quando** quem aprova abre "Compras × vendas do fornecedor" no card
 - **Então** o card consulta o WinThor só nesse momento e mostra o comprado e o vendido do fornecedor na filial no período, o % compras × vendas de hoje e o de depois deste pedido; sem meta de compras (decisão do usuário), e com "sem compra nem venda no período" quando o fornecedor não aparece

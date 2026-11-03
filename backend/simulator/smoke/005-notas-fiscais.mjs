@@ -569,7 +569,7 @@ export async function suite(ctx) {
       }, U.ana);
       assert.equal(decidida.ok, true, decidida.erro);
     }
-    // R-153 (P-6): decididas as conferencias, o que ainda trava e o saldo nao
+    // R-144 (P-6): decididas as conferencias, o que ainda trava e o saldo nao
     // faturado — a frase passa a ser a do faturado. Daqui em diante o teste e
     // so das conferencias: o saldo fica coberto (a trava do faturado tem o
     // C-033 proprio, logo abaixo) e volta ao fim.
@@ -598,7 +598,7 @@ export async function suite(ctx) {
     db.prepare('UPDATE SGC_PEDIDO SET VL_FATURADO = ? WHERE ID_CARD = ?').run(faturadoAntes, card);
   });
 
-  await teste('C-033 / RN-016 (R-153, P-6): so conclui com 99,5 % do valor coberto — a recusa diz quanto falta, 99,5 % ja libera, e o saldo marcado em B.O. como "nao vem mais" conta como coberto', async () => {
+  await teste('C-033 / RN-016 (R-144, P-6): so conclui com 99,5 % do valor coberto — a recusa diz quanto falta, 99,5 % ja libera, e o saldo marcado em B.O. como "nao vem mais" conta como coberto', async () => {
     const card = CARDS_005.enviadoComPedido;
     emFase(card, faseIdDe('faturamento'));
     assert.equal(ocorrenciasDe(card).filter((o) => o.DECISAO === 'pendente').length, 0, 'C-018 decidiu tudo');
@@ -644,7 +644,7 @@ export async function suite(ctx) {
     }
   });
 
-  await teste('C-034 / RN-017 (R-155, P-3): "Notificar gestor" a partir de 5 dias uteis — quem opera a nota avisa UM gestor escolhido, uma vez por dia, e ele recebe no feed; abaixo de 5 dias, 100 % faturado, alvo que nao e gestor ou quem nao opera a nota nao gravam nada', async () => {
+  await teste('C-034 / RN-017 (R-146, P-3): "Notificar gestor" a partir de 5 dias uteis — quem opera a nota avisa UM gestor escolhido, uma vez por dia, e ele recebe no feed; abaixo de 5 dias, 100 % faturado, alvo que nao e gestor ou quem nao opera a nota nao gravam nada', async () => {
     const card = CARDS_005.atrasadoNove;
     const avisosDe = (c) => todos("SELECT * FROM SGC_AVISO WHERE ID_CARD = ? AND TIPO = 'faturamento_gestor'", c);
     const notificar = (c, gestorId, usuarioId, texto = 'Pedido sem faturamento completo ha 9 dias uteis.') =>

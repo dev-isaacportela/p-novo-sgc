@@ -58,7 +58,7 @@ const SQL_PENDENCIAS_NF = colunasDePendencia('pendencias-transito.sql')
 // vêm depois dos da NF (R-044).
 const SQL_PENDENCIAS_BO = colunasDePendencia('pendencias-bo-entrada.sql')
   + '\n' + colunasDePendencia('pendencias-conclusao-bo.sql');
-// R-153 (P-6, spec 005 RN-016): a conclusão exige 99,5 % do valor coberto
+// R-144 (P-6, spec 005 RN-016): a conclusão exige 99,5 % do valor coberto
 // (faturado + B.O. que não vem mais), como o legado; o ramo vem depois do B.O.
 const SQL_PENDENCIAS_FATURADO = colunasDePendencia('pendencias-conclusao-faturado.sql');
 // Onda 2, R-023: o quarto ramo do feed de notificações (avisos de processo),

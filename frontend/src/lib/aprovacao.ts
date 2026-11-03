@@ -1,4 +1,4 @@
-// "Análise para aprovação" das fases Aprovação Técnica e Diretoria (R-150,
+// "Análise para aprovação" das fases Aprovação Técnica e Diretoria (R-141,
 // C-047 da 002), no molde do legado (PipeWorkspace.tsx:7007-7249 e
 // 10215-10316): a faixa de decisão e os indicadores do pedido, cada um com os
 // produtos que o compõem.
@@ -97,7 +97,7 @@ export function analiseParaAprovacao(itens: readonly ItemPedido[], meses: number
   };
 }
 
-/* ── R-156 (P-1, C-050 da 002): compras × vendas do fornecedor, sob demanda ──
+/* ── R-147 (P-1, C-050 da 002): compras × vendas do fornecedor, sob demanda ──
  * Sem meta de compras (decisão do usuário): a faixa do legado fica só com o
  * comprado × vendido do fornecedor na filial, no MESMO período de vendas que
  * o pedido analisou, hoje e depois deste pedido. A leitura é a

@@ -527,7 +527,7 @@ return { rows: ((resposta && resposta.result) || resposta).rows || [] };
     db.prepare("UPDATE SGC_NF_OCORRENCIA SET DECISAO = 'pendente' WHERE ID_CARD = ?").run(F6);
   });
 
-  await teste('C-025 / RN-014 (R-154, P-4): "Produto faturado — ir para Faturamento" é o movimento manual Trânsito → Faturamento — o gancho libera para o analista sem pendência nenhuma, o motor move e registra a passagem; a diretoria fora da fase dela continua recusada', async () => {
+  await teste('C-025 / RN-014 (R-145, P-4): "Produto faturado — ir para Faturamento" é o movimento manual Trânsito → Faturamento — o gancho libera para o analista sem pendência nenhuma, o motor move e registra a passagem; a diretoria fora da fase dela continua recusada', async () => {
     const card = TODOS.find((id) => faseDoCard(id) === fases.transito);
     assert.ok(card, 'algum pedido do recorte ainda em Em Trânsito para BN');
     const pode = (usuarioId) => chamar('sgcPodeMover', {

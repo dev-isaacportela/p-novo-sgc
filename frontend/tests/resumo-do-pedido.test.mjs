@@ -1,4 +1,4 @@
-// R-150 / C-046 (002): o resumo que abre o card depois da Análise — selos de
+// R-141 / C-046 (002): o resumo que abre o card depois da Análise — selos de
 // aprovação, envio e cancelamento e o faturado do topo (src/lib/resumo-do-pedido.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';

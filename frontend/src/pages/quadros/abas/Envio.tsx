@@ -1,4 +1,4 @@
-// Envio para Indústria no card (R-150, C-048 da 002), no molde do
+// Envio para Indústria no card (R-141, C-048 da 002), no molde do
 // `EnvioIndustriaPanel` do legado: o resumo do que vai ao fornecedor com
 // "Copiar itens" e "Arquivo WinThor", os itens em cartões e, no fim, o mesmo
 // "Registrar envio" da coluna da direita (`registrar-envio.ts`).

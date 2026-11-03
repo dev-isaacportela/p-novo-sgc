@@ -1,4 +1,4 @@
-// "Notificar gestor" do legado (R-155, P-3, C-034 da 005; PW:11003-11116),
+// "Notificar gestor" do legado (R-146, P-3, C-034 da 005; PW:11003-11116),
 // dentro do acompanhamento do Trânsito: a partir de 5 dias úteis sem
 // faturamento completo, quem opera a nota escolhe UM gestor, que recebe o
 // aviso e entra nos responsáveis do card. A escalada automática do cron

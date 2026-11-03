@@ -49,7 +49,7 @@
       próprio sem `recarregarPedido()` (D-006); dois itens em `acoes` com
       `permitido: permissoes.verQuadro`; `Alert` de pop-up bloqueado abaixo da lista de
       botões → `frontend/src/pages/quadros/AcoesDoPedido.tsx`
-- [x] **T-094** — R-153: `falta` em `FaturamentoExtrato` e a linha do saldo no HTML → `frontend/src/lib/extrato.ts`, `frontend/src/pages/quadros/extrato-html.ts`
+- [x] **T-094** — R-144: `falta` em `FaturamentoExtrato` e a linha do saldo no HTML → `frontend/src/lib/extrato.ts`, `frontend/src/pages/quadros/extrato-html.ts`
 
 ## Testes
 

@@ -1,4 +1,4 @@
-// R-150 / C-048 e C-049 (002): Envio e Enviado para Indústria no card (src/lib/envio-industria.ts).
+// R-141 / C-048 e C-049 (002): Envio e Enviado para Indústria no card (src/lib/envio-industria.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { itensDoEnvio, totaisDoEnvio, textoCopiarItens, proximoDoEnviado } from '../src/lib/envio-industria.ts';

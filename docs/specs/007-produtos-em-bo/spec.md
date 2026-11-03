@@ -133,12 +133,12 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém tenta marcar itens dele em B.O.
 - **Então** a marcação é recusada informando que o pedido não está em Faturamento nem em Produtos em B.O., e nada é gravado
 
-**C-018 — A fase B.O. abre com as datas e o que está pendente** *(R-150)*
+**C-018 — A fase B.O. abre com as datas e o que está pendente** *(R-141)*
 - **Dado que** o pedido tem 2 itens em aberto, a previsão da indústria era 30/10 e hoje é 03/11, sem carta de falta
 - **Quando** o comprador abre o card
 - **Então** vê o aviso "Previsão de liberação vencida há 4 dias", as datas da fase (envio, previsão, carta de falta "Pendente"), os itens em cartões e o total pendente dos itens em aberto; no Concluído sem item em B.O., o bloco não aparece
 
-**C-019 — "Não vem mais" encerra o saldo em B.O.** *(R-153, P-6; P-2 do levantamento: o B.O. continua sendo fase do próprio pedido)*
+**C-019 — "Não vem mais" encerra o saldo em B.O.** *(R-144, P-6; P-2 do levantamento: o B.O. continua sendo fase do próprio pedido)*
 - **Dado que** a indústria avisou que um item em B.O. não será entregue
 - **Quando** o comprador clica "Não vem mais" e confirma
 - **Então** o item sai do aberto como "Não vem mais", deixa de travar a conclusão como B.O. em aberto e o valor dele conta como coberto na trava de 99,5 % da 005 (RN-016); "Liberar" continua sendo o caminho de quando o produto volta
@@ -203,7 +203,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-010 — Painel.** Uma linha por produto em B.O., de todos os pedidos, sem recorte por quem está olhando. Ordem: primeiro os pedidos **sem previsão**, depois por previsão crescente (a mais antiga antes), e dentro do mesmo pedido por descrição do produto.
 - **RN-011 — Documentos.** O arquivo é enviado para um endereço público e o pedido guarda o nome, o endereço, o tipo (carta de falta ou outro), quem enviou e quando. Tipo diferente de "carta de falta" é registrado como "outro".
 - **RN-012 — Cancelamento.** Nenhuma exigência de B.O. se aplica ao cancelamento do pedido, em qualquer fase.
-- **RN-013 — Não vem mais (R-153).** Item em B.O. encerrado como `cancelado` ("não vem mais") não é esperado: não trava a conclusão (RN-008) e o seu valor (quantidade pendente × custo do item) entra na cobertura da RN-016 da 005. O `sgcBoMarcar` já aceitava `cancelado`; a tela ganhou o botão, com confirmação.
+- **RN-013 — Não vem mais (R-144).** Item em B.O. encerrado como `cancelado` ("não vem mais") não é esperado: não trava a conclusão (RN-008) e o seu valor (quantidade pendente × custo do item) entra na cobertura da RN-016 da 005. O `sgcBoMarcar` já aceitava `cancelado`; a tela ganhou o botão, com confirmação.
 
 ## Testes
 

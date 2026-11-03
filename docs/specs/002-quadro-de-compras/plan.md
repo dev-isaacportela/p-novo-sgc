@@ -481,7 +481,7 @@ Os diálogos seguem §9.5: `max-h-[90vh]`, `flex-col`, só o miolo rola, rodapé
 `flex-col-reverse sm:flex-row sm:justify-end`. Sem toast (UI-02 A): o
 resultado aparece pelo `ctx.avisar()` da lib, na faixa de aviso do card.
 
-### O card depois da Análise (R-150)
+### O card depois da Análise (R-141)
 
 `lib/conteudo-da-fase.ts` monta cada fase depois da Análise como o legado:
 `resumo` primeiro, depois o bloco de assunto da fase e os blocos de trabalho.

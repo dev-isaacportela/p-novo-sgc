@@ -1,4 +1,4 @@
-// Uma execução por card aberto, dividida entre os blocos da fase (R-150,
+// Uma execução por card aberto, dividida entre os blocos da fase (R-141,
 // RNF-001 e o teto de 300 execuções/min). Notas fiscais, a conclusão e o
 // concluído leem o MESMO `sgcNfListar`; B.O. e a conclusão, o MESMO
 // `sgcBoCarregar`. O primeiro bloco que monta busca; os outros esperam a mesma

@@ -1,5 +1,5 @@
 // O que o card mostra no Envio para Indústria e no Enviado para Indústria
-// (R-150, C-048/C-049 da 002), no molde do `EnvioIndustriaPanel` do legado:
+// (R-141, C-048/C-049 da 002), no molde do `EnvioIndustriaPanel` do legado:
 // o resumo do que vai ao fornecedor, o texto do "Copiar itens" e o próximo
 // movimento. Puro, testado em tests/envio-industria.test.mjs.
 //

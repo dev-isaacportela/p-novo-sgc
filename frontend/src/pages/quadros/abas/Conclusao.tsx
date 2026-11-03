@@ -1,9 +1,9 @@
-// Faturamento em Andamento e Produtos em B.O. no card (R-150, C-029 e C-030
+// Faturamento em Andamento e Produtos em B.O. no card (R-141, C-029 e C-030
 // da 005), no molde do legado (PipeWorkspace.tsx:12262-12443): o saldo que a
 // indústria ainda não faturou, item a item, e o que falta para concluir.
 //
 // As travas são as do servidor (conferência sem decisão, B.O. em aberto e,
-// desde a R-153, menos de 99,5 % do valor coberto). Lê as MESMAS execuções dos
+// desde a R-144, menos de 99,5 % do valor coberto). Lê as MESMAS execuções dos
 // blocos Notas fiscais e B.O. (`carga-do-card.ts`): nada a mais por abertura.
 import * as React from 'react';
 import { ArrowRight, CircleCheck, Clock3 } from 'lucide-react';
@@ -39,7 +39,7 @@ export default function BlocoConclusao(ctx: ExtensaoContexto) {
     boAbertos: Number(resumoBo.abertos) || 0,
     vlTotal: Number(pedido.VL_TOTAL) || 0,
     vlFaturado: Number(pedido.VL_FATURADO) || 0,
-    // R-153: o saldo que foi para o B.O. e não vem mais conta como coberto.
+    // R-144: o saldo que foi para o B.O. e não vem mais conta como coberto.
     vlBoCancelado: itensBo.filter((i) => i.STATUS === 'cancelado').reduce((soma, i) => soma + (Number(i.VL_PENDENTE) || 0), 0),
   });
 

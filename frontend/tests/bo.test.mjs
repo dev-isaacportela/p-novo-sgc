@@ -100,7 +100,7 @@ test('A-15 (revisão onda 2): linhasCsvBo — as colunas do painel de /bo, valor
   assert.deepEqual(linhasCsvBo([]), []);
 });
 
-// R-150 / C-018: o topo da fase B.O. no card.
+// R-141 / C-018: o topo da fase B.O. no card.
 import { topoDoBo } from '../src/lib/bo.ts';
 
 test('C-018: total pendente só dos itens em aberto, a carta de falta mais recente e o aviso de previsão vencida', () => {

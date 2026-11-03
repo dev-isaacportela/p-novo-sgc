@@ -77,7 +77,7 @@ export interface FaturamentoExtrato {
   notas: NotaDoFaturamento[];
   /** Percentual faturado em valor (soma das notas ÷ total do pedido). 0 sem nota ou com total zero. */
   percentual: number;
-  /** R-153 (RN-014 da 010): o saldo em reais ainda não faturado (nunca negativo). */
+  /** R-144 (RN-014 da 010): o saldo em reais ainda não faturado (nunca negativo). */
   falta: number;
 }
 

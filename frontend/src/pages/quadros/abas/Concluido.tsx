@@ -1,4 +1,4 @@
-// Compras Concluídas no card (R-150, C-031 da 005), no molde do legado
+// Compras Concluídas no card (R-141, C-031 da 005), no molde do legado
 // (PipeWorkspace.tsx:12490-12643): o resumo do que chegou e os itens
 // faturados, nota a nota, com lote, validade e a decisão das conferências.
 // Lê o `sgcNfListar` pela carga compartilhada (uma execução por abertura).

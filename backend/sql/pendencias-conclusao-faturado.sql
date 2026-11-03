@@ -1,4 +1,4 @@
--- spec 005 (notas fiscais) — R-153 (P-6), RN-016: concluir só com 99,5 % do
+-- spec 005 (notas fiscais) — R-144 (P-6), RN-016: concluir só com 99,5 % do
 -- valor do pedido coberto, como o legado (RN-NF-34: 99,5 % conta como 100 %).
 -- Coberto = faturado nas notas + o saldo que foi para o B.O. e NÃO VEM MAIS
 -- (SGC_BO_ITEM cancelado, pelo custo do item do pedido). Item de B.O. em

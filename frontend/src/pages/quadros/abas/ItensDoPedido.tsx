@@ -1,4 +1,4 @@
-// Os itens do pedido só para consulta (R-150): em Compras Canceladas o legado
+// Os itens do pedido só para consulta (R-141): em Compras Canceladas o legado
 // mostra a lista, sem nada editável. O bloco Itens da Análise abriria com
 // "Montar a análise" e "Salvar" ativos num pedido que não anda mais.
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';

@@ -180,7 +180,7 @@ export function resultadoDeValidade(dias: number | null, minimo: number): Result
 }
 
 /**
- * R-152 (P-5, C-032) — o selo de validade do legado (RN-KAN-53/RN-BO-16):
+ * R-143 (P-5, C-032) — o selo de validade do legado (RN-KAN-53/RN-BO-16):
  * dias até vencer contados de HOJE, crítica abaixo de 90, atenção até 120,
  * conforme acima. É leitura de olho, ao lado da conferência da RN-005 (que
  * mede contra a validade mínima do fornecedor, a partir da emissão) — não a

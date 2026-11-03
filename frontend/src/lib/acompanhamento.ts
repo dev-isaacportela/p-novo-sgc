@@ -1,4 +1,4 @@
-// O "Acompanhamento de faturamento" que abre o card em Trânsito (R-150, C-024
+// O "Acompanhamento de faturamento" que abre o card em Trânsito (R-141, C-024
 // da 006), no molde do legado (PipeWorkspace.tsx:10935-10982): dias úteis
 // desde o envio e o selo do escalonamento. A régua é a do SGC 2 — `nivelDeAlerta`
 // (RN-009 da 005: 3 avisa, 5 escala) e `diasUteisEntre` —, e não muda aqui.
@@ -41,7 +41,7 @@ export function acompanhamentoDoFaturamento(entrada: { dtEnvio: string; hoje: st
   return { diasUteis, nivel, selo: 'Aguardando faturamento', tom: 'off' };
 }
 
-/* ── R-155 (P-3, C-034 da 005): "Notificar gestor" do legado (PW:11003-11116) ──
+/* ── R-146 (P-3, C-034 da 005): "Notificar gestor" do legado (PW:11003-11116) ──
  * A escalada automática do cron continua; o botão aparece no mesmo limiar
  * (nível 5: 5 dias úteis sem faturamento completo) e quem opera a nota
  * escolhe UM gestor, que vira responsável do card e recebe o aviso. A guarda

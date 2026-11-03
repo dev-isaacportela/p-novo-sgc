@@ -1,4 +1,4 @@
-// Enviado para Indústria no card (R-150, C-049 da 002), no molde do legado
+// Enviado para Indústria no card (R-141, C-049 da 002), no molde do legado
 // (PipeWorkspace.tsx:10758-10905): o envio registrado (data, canal, contato,
 // número do pedido, observação), o próximo movimento — Em Trânsito para BN só
 // com nota vinculada — e os itens enviados, recolhidos.
