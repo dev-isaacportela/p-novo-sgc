@@ -1,6 +1,6 @@
 # Spec: Quadro de empenhos — do empenho do órgão público ao pedido por fornecedor
 
-**ID:** 015-quadro-de-empenhos · **Status:** rascunho para aprovação (perguntas P-01..P-14 com proposta, abaixo) · **Data:** 2026-11-03 · **Onda:** 5 (mapa das ondas do 000) · **Origem:** p-60523, Kanban de Empenhos (`docs/regras-de-negocio/20-kanban-empenhos.md`, RN-EMP-01..119), telas `/empenhos`, `/empenhos/novo`, `/empenhos/pregoes`, `/empenhos/indicadores`
+**ID:** 015-quadro-de-empenhos · **Status:** aprovada; perguntas P-01..P-14 aprovadas pelo usuário em 2026-11-03 (R-162) · **Data:** 2026-11-03 · **Onda:** 5 (mapa das ondas do 000) · **Origem:** p-60523, Kanban de Empenhos (`docs/regras-de-negocio/20-kanban-empenhos.md`, RN-EMP-01..119), telas `/empenhos`, `/empenhos/novo`, `/empenhos/pregoes`, `/empenhos/indicadores`
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -309,10 +309,10 @@ da R-131 (sem venda para a própria rede e sem remessa de entrega futura).
 - **RN-013 — Alertas de prazo.** Dias restantes: < 0 vencido, ≤ 3 crítico, ≤ 7 atenção (vigência ≤ 30), senão sem alerta; o pior dos dois vale, empate da vigência. Contado no fuso de Brasília.
 - **RN-014 — Indicadores.** Período pela data de recebimento do empenho. Em aberto = empenho fora das fases finais. Valor, custo e CMV pela RN-003, CMV pela razão. Prazos: abertos, mais atrasado primeiro. Por órgão: a mesma razão. Venda pública = venda válida a órgão público (ramos 11 a 15); privada = venda válida aos demais; a rede fica fora dos dois lados *(P-03)*; compras = entradas por compra. Tudo pelo mesmo período *(P-14)*.
 
-## Perguntas ao usuário (divergências do legado)
+## Perguntas ao usuário (divergências do legado) — aprovadas pelo usuário em 2026-11-03
 
-Cada pergunta tem uma **proposta**, que é o que está implementado; trocar é mexer num ponto
-só. Fonte: `20-kanban-empenhos.md` e `99-divergencias-spec-codigo.md` do legado.
+O usuário aprovou as 14 propostas em 2026-11-03 ("Aprovar todas", R-162); cada proposta é o que
+está implementado, e trocar uma é mexer num ponto só. Fonte: `20-kanban-empenhos.md` e `99-divergencias-spec-codigo.md` do legado.
 
 | # | O legado | Proposta (implementada) | Por quê |
 |---|---|---|---|
@@ -387,7 +387,7 @@ Fora do SGC 2: escrever no WinThor; importar planilha do empenho; migrar os empe
 
 ## Pendências
 
-P-01..P-14 aguardam a resposta do usuário; a proposta de cada uma está implementada.
+Nenhuma: P-01..P-14 aprovadas pelo usuário em 2026-11-03 (R-162), como implementadas.
 
 ## Checklist de revisão
 

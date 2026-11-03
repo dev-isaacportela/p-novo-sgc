@@ -6,7 +6,7 @@
 
 | Princípio | Como a 015 atende |
 |---|---|
-| I. Spec antes de código | spec commitada antes do código; P-01..P-14 com proposta, implementadas e trocáveis num ponto |
+| I. Spec antes de código | spec commitada antes do código; P-01..P-14 com proposta implementada, aprovadas pelo usuário em 2026-11-03 (R-162) |
 | II. Requisito testável | cada C-0NN e RN-0NN tem teste com o id no título (`frontend/tests/empenhos.test.mjs`, `backend/simulator/smoke/015-empenhos.mjs`) |
 | III. Fora de escopo | seção da spec, com a próxima onda do quadro listada |
 | IV. Migrations | nenhuma tocada; DDL em `setup-backend.mjs` (`DDL_015`), executado só no sandbox |
