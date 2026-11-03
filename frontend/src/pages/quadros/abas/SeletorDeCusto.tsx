@@ -13,6 +13,7 @@ export function SeletorDeCusto({
   padrao,
   tabelas,
   disabled,
+  compacto,
   onEscolher,
 }: {
   rotulo: string;
@@ -21,18 +22,21 @@ export function SeletorDeCusto({
   padrao: CustoPadrao;
   tabelas: TabelaVigente[];
   disabled?: boolean;
+  /** R-137: a altura da linha compacta da tela ampla (28 px). */
+  compacto?: boolean;
   onEscolher: (custo: { precoCusto: number; tipoPreco: TipoPreco }) => void;
 }) {
   const atual = { tipoPreco, precoCusto };
   const opcoes = opcoesDeCusto(padrao, tabelas, atual);
   return (
-    <span className="flex min-w-0 flex-col gap-1">
+    // Manual põe o valor AO LADO do menu: a linha da tabela não cresce (R-137).
+    <span className="flex w-full min-w-0 items-center gap-1">
       <SelectMenu
         label={`Custo de ${rotulo}`}
         value={escolhaDoItem(atual, tabelas)}
         options={opcoes}
         disabled={disabled}
-        className="h-8"
+        className={compacto ? 'h-7 min-w-0 flex-1' : 'h-8 min-w-0 flex-1'}
         onChange={(escolha) => onEscolher(custoDaEscolha(escolha, padrao, precoCusto))}
       />
       {tipoPreco === 'manual' ? (
@@ -40,7 +44,7 @@ export function SeletorDeCusto({
           type="number"
           min={0}
           step="0.0001"
-          className="h-8 text-right"
+          className={compacto ? 'h-7 w-24 shrink-0 text-right' : 'h-8 w-24 shrink-0 text-right'}
           aria-label={`Custo manual de ${rotulo}`}
           value={String(precoCusto)}
           disabled={disabled}

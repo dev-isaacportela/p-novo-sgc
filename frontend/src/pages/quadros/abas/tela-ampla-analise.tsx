@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { ArrowDown, ArrowUp, Check, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import {
-  AlternaOpcoes, Button, CaixaSelecao, ChipContagem, Code, Dash, EmptyState, IconButton, Input, SearchInput, Status,
+  AlternaOpcoes, Button, CaixaSelecao, ChipContagem, Dash, EmptyState, IconButton, Input, SearchInput, Status,
 } from '@/components/page';
 import { cn } from '@/lib/utils';
 import { moeda, hojeIso } from '@/lib/formato';
@@ -80,7 +80,9 @@ export function AnaliseAmpla({
   const saida = contagemDeSaida(linhas);
   const contaSugestao = linhas.filter((l) => l.base.qtSugerida > 0).length;
   const contaPedido = linhas.filter((l) => l.noPedido).length;
-  const densa = densidade === 'compacta' ? 'py-1.5' : 'py-3';
+  // R-137: toda linha com a mesma altura — 44 px na compacta, 56 px na confortável —, com ou sem selo e com qualquer nome.
+  const densa = densidade === 'compacta' ? 'h-11 py-0.5' : 'h-14 py-1.5';
+  const campo = densidade === 'compacta' ? 'h-7' : 'h-8';
 
   function definirQuantidade(l: LinhaDaAnalise, unidades: number) {
     if (l.noPedido) {
@@ -224,27 +226,26 @@ export function AnaliseAmpla({
               const naoFecha = Boolean(l.noPedido) && naoFechaACaixa(qt, b.unPorCaixa, unidade);
               const dias = rotuloDias(diasComCompra(b, qt, r.meses), b.coberturaLimite);
               const custo = custoDe(l);
-              const celula = cn('border-b border-rule-row px-3 align-top', densa);
+              const celula = cn('border-b border-rule-row px-3 align-middle', densa);
               const fixa = 'bg-card group-hover:bg-accent';
               return (
                 <tr key={l.codprod} className="group transition-colors hover:bg-accent">
                   <td className={cn(celula, fixa, 'sticky left-0 z-10 w-80 min-w-80 max-w-80')}>
-                    <span className="flex items-start gap-2">
+                    <span className="flex items-center gap-2">
                       <CaixaSelecao marcado={selecionados.has(l.codprod)} label={`Selecionar ${b.descricao}`} onToggle={() => alternarSelecao(l.codprod)} />
-                      <span className="min-w-0">
-                        <NomeDoProduto codprod={l.codprod} descricao={b.descricao} />
-                        {l.comercial || l.especial ? (
-                          <span className="flex flex-wrap gap-x-3 text-[11px]">
-                            {l.comercial ? <Status tone="live">COMERCIAL</Status> : null}
-                            {l.especial ? <Status tone="attention">ESPECIAL</Status> : null}
+                      {/* Nome numa linha (o completo no title e no drill-in); selos e meta na mesma linha de baixo. */}
+                      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                        <NomeDoProduto codprod={l.codprod} descricao={b.descricao} truncar />
+                        <span className="flex min-w-0 items-center gap-2 text-[11px] text-ink-secondary">
+                          {l.comercial ? <span className="shrink-0 text-[10px]"><Status tone="live">COMERCIAL</Status></span> : null}
+                          {l.especial ? <span className="shrink-0 text-[10px]"><Status tone="attention">ESPECIAL</Status></span> : null}
+                          {l.foraDaAnalise ? (
+                            <span className="shrink-0 text-[10px]" title="Fora da análise deste fornecedor nesta filial — números gravados no item"><Status tone="attention">FORA DA ANÁLISE</Status></span>
+                          ) : null}
+                          <span className="min-w-0 truncate" title={`${b.codprod} · ${b.embalagem || '—'} · ${b.unidade || '—'}${b.unPorCaixa > 1 ? ` · cx c/ ${b.unPorCaixa}` : ''}`}>
+                            {`${b.codprod} · ${b.embalagem || '—'} · ${b.unidade || '—'}${b.unPorCaixa > 1 ? ` · cx c/ ${b.unPorCaixa}` : ''}`}
                           </span>
-                        ) : null}
-                        <span className="block text-[12px] text-ink-secondary">
-                          <Code>{b.codprod}</Code>{` · ${b.embalagem || '—'} · ${b.unidade || '—'}${b.unPorCaixa > 1 ? ` · cx c/ ${b.unPorCaixa}` : ''}`}
                         </span>
-                        {l.foraDaAnalise ? (
-                          <span className="block text-[11px] text-attention">Fora da análise deste fornecedor nesta filial — números gravados no item</span>
-                        ) : null}
                       </span>
                     </span>
                   </td>
@@ -256,14 +257,14 @@ export function AnaliseAmpla({
                   <td className={cn(celula, 'border-l text-right whitespace-nowrap')}><Numero valor={b.qtEstoque} /></td>
                   <td className={cn(celula, 'text-right whitespace-nowrap')} title={textoDoTransito(l)}>
                     <Numero valor={b.qtTransito} />
-                    {l.kanban.length > 0 ? <span className="block text-[11px] text-ink-secondary">{`+${fmt(l.kanban.reduce((t, k) => t + k.quantidade, 0))} kanban`}</span> : null}
+                    {l.kanban.length > 0 ? <span className="block text-[11px] leading-none text-ink-secondary">{`+${fmt(l.kanban.reduce((t, k) => t + k.quantidade, 0))} kanban`}</span> : null}
                   </td>
                   <td className={cn(celula, 'border-l text-right whitespace-nowrap')}>
                     <span className="inline-flex items-center justify-end gap-1">
                       <Input
                         type="number"
                         min={0}
-                        className="h-8 w-20 text-right"
+                        className={cn(campo, 'w-20 text-right')}
                         aria-label={`Comprar de ${b.descricao} (${noCampo})`}
                         value={String(naUnidade(qt, b.unPorCaixa, noCampo === 'cx' ? 'caixa' : 'embalagem'))}
                         disabled={r.bloqueado}
@@ -271,14 +272,14 @@ export function AnaliseAmpla({
                       />
                       <span className="w-6 text-left text-[11px] text-ink-secondary">{noCampo}</span>
                     </span>
-                    {arredondada ? <span className="block text-[11px] text-attention">arredondado à caixa</span>
-                      : naoFecha ? <span className="block text-[11px] text-attention">{`não fecha a caixa (${fmt(qt / b.unPorCaixa)} cx)`}</span>
-                      : segunda ? <span className="block text-[11px] text-ink-secondary">{segunda}</span> : null}
+                    {arredondada ? <span className="block text-[11px] leading-none text-attention">arredondado à caixa</span>
+                      : naoFecha ? <span className="block text-[11px] leading-none text-attention">{`não fecha a caixa (${fmt(qt / b.unPorCaixa)} cx)`}</span>
+                      : segunda ? <span className="block text-[11px] leading-none text-ink-secondary">{segunda}</span> : null}
                   </td>
                   <td className={cn(celula, 'text-right whitespace-nowrap')} title={textoDosDias(b)}>
                     {dias.tom === 'neutral' ? dias.texto : <Status tone={TOM_DIAS[dias.tom]}>{dias.texto}</Status>}
                   </td>
-                  <td className={cn(celula, 'w-48 min-w-48')}>
+                  <td className={cn(celula, 'w-56 min-w-56 max-w-56')}>
                     <SeletorDeCusto
                       rotulo={b.descricao}
                       tipoPreco={custo.tipoPreco}
@@ -286,6 +287,7 @@ export function AnaliseAmpla({
                       padrao={custoPadraoDe(analise.custos, l.codprod)}
                       tabelas={tabelasDe(l.codprod)}
                       disabled={r.bloqueado}
+                      compacto={densidade === 'compacta'}
                       onEscolher={(c) => definirCusto(l, c)}
                     />
                   </td>
@@ -304,7 +306,7 @@ export function AnaliseAmpla({
                         </IconButton>
                       </span>
                     ) : (
-                      <Button size="sm" variant="primary" disabled={r.bloqueado || qt <= 0} onClick={() => adicionar(l)}>
+                      <Button size="sm" variant="primary" className={campo} disabled={r.bloqueado || qt <= 0} onClick={() => adicionar(l)}>
                         <Plus aria-hidden />
                         Adicionar
                       </Button>

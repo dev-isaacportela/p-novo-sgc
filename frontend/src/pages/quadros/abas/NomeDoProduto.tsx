@@ -11,10 +11,11 @@ export function NomeDoProduto({ codprod, descricao, truncar }: { codprod: number
       type="button"
       onClick={() => r.abrirProduto(codprod)}
       title={`Abrir a análise de ${descricao}`}
+      aria-label={`Abrir a análise de ${descricao}`}
       className={cn(
         'max-w-full rounded-sm text-left font-semibold text-ink hover:text-primary hover:underline',
         'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
-        truncar ? 'truncate' : 'break-words',
+        truncar ? 'block w-full truncate' : 'break-words',
       )}
     >
       {descricao}

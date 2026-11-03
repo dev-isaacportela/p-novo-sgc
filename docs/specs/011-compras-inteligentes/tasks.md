@@ -201,3 +201,4 @@ tudo → T-095 · T-096 → T-097 · T-098
 | RNF-002 | T-036 | T-086 |
 | RNF-004, RNF-006 | T-003, T-023 | T-080, T-095 |
 - [x] **T-116** — *(R-135)* `sgcWintProdutoVendasNotas` (8117), as vendas válidas do produto na filial por nota com cliente e ramo (`PCATIVI`), para Clientes que compraram no drill-in do pedido; `teste('C-056 …')` → `backend/add-013-compras-inteligentes.mjs`, `simulator/schema-winthor.mjs`, `seed/011-compras-inteligentes.mjs`, `smoke/011-compras-inteligentes.mjs`
+- [x] **T-117** — *(R-137)* a lista com linhas de 80 px: nome, meta e avisos numa linha cada (o completo no `title`); no Em trânsito, chegada e cobertura ao chegar numa linha → `pages/compras-inteligentes/grid.tsx`

@@ -8,7 +8,7 @@
 import * as React from 'react';
 import { PencilLine, Trash2 } from 'lucide-react';
 import {
-  Alert, Button, ChipContagem, Code, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState,
+  Alert, Button, ChipContagem, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState,
   IconButton, Input, Status, TextLink,
 } from '@/components/page';
 import { cn } from '@/lib/utils';
@@ -95,7 +95,8 @@ function ItensDoPedido() {
   if (itens.length === 0) {
     return <EmptyState title="Nenhum item no pedido" hint="Adicione produtos na aba Análise." />;
   }
-  const celula = 'border-b border-rule-row px-3 py-2 align-top';
+  // R-137: linhas de altura fixa (56 px), nome em uma linha, tudo centrado na vertical.
+  const celula = 'h-14 border-b border-rule-row px-3 py-1.5 align-middle';
   const cabeca = 'sticky top-0 z-10 border-b border-rule-row bg-card px-3 py-2 text-[11px] font-semibold tracking-[0.14em] whitespace-nowrap text-ink-muted uppercase';
   return (
     <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-rule-table">
@@ -121,13 +122,15 @@ function ItensDoPedido() {
             return (
               <tr key={item.codprod} className={cn('transition-colors hover:bg-accent', item.tipoPreco === 'especial' && 'bg-attention-bg')}>
                 <td className={celula}>
-                  <NomeDoProduto codprod={item.codprod} descricao={item.descricao} />
-                  <span className="block text-[12px] text-ink-secondary">
-                    <Code>{item.codprod}</Code>{` · ${item.embalagem || '—'}${item.solicitacaoDe ? ` · solicitação de ${item.solicitacaoDe}` : ''}`}
+                  <span className="flex min-w-0 max-w-[28rem] flex-col leading-tight">
+                    <NomeDoProduto codprod={item.codprod} descricao={item.descricao} truncar />
+                    <span className="flex min-w-0 items-center gap-2 text-[11px] text-ink-secondary">
+                      <span className="shrink-0">{`${item.codprod} · ${item.embalagem || '—'}${item.solicitacaoDe ? ` · solicitação de ${item.solicitacaoDe}` : ''}`}</span>
+                      <TextLink className="min-w-0 truncate text-[11px]" title={item.observacao || undefined} disabled={r.bloqueado} onClick={() => r.abrirTexto(item.codprod, 'observacao')}>
+                        {item.observacao ? `Obs.: ${item.observacao}` : 'Adicionar observação'}
+                      </TextLink>
+                    </span>
                   </span>
-                  <TextLink className="text-[12px]" disabled={r.bloqueado} onClick={() => r.abrirTexto(item.codprod, 'observacao')}>
-                    {item.observacao ? `Observação: ${item.observacao}` : 'Adicionar observação'}
-                  </TextLink>
                 </td>
                 <td className={cn(celula, 'text-right whitespace-nowrap')}>{fmt(item.qtSugerida)}</td>
                 <td className={cn(celula, 'text-right')}>
@@ -156,19 +159,23 @@ function ItensDoPedido() {
                       <PencilLine aria-hidden />
                     </IconButton>
                   </span>
-                  {pendente ? <span className="block text-[11px] text-attention">justifique</span> : null}
+                  {pendente ? <span className="block text-[11px] leading-none text-attention">justifique</span> : null}
                 </td>
-                <td className={cn(celula, 'w-56 min-w-56')}>
-                  <SeletorDeCusto
-                    rotulo={item.descricao}
-                    tipoPreco={item.tipoPreco}
-                    precoCusto={item.precoCusto}
-                    padrao={custoPadraoDe(r.analise?.custos, item.codprod)}
-                    tabelas={tabelasVigentes(r.analise?.especiais ?? [], item.codprod, hoje)}
-                    disabled={r.bloqueado}
-                    onEscolher={(custo) => r.alterar(item.codprod, custo)}
-                  />
-                  {selo ? <span className="mt-0.5 block text-[11px] font-semibold text-attention">{selo}</span> : null}
+                <td className={cn(celula, 'w-72 min-w-72')}>
+                  <span className="flex items-center gap-1.5">
+                    <span className="min-w-0 flex-1">
+                      <SeletorDeCusto
+                        rotulo={item.descricao}
+                        tipoPreco={item.tipoPreco}
+                        precoCusto={item.precoCusto}
+                        padrao={custoPadraoDe(r.analise?.custos, item.codprod)}
+                        tabelas={tabelasVigentes(r.analise?.especiais ?? [], item.codprod, hoje)}
+                        disabled={r.bloqueado}
+                        onEscolher={(custo) => r.alterar(item.codprod, custo)}
+                      />
+                    </span>
+                    {selo ? <span className="w-7 shrink-0 text-[11px] font-semibold text-attention">{selo}</span> : null}
+                  </span>
                 </td>
                 <td className={cn(celula, 'text-right whitespace-nowrap')}>{moeda(item.qtPedida * item.precoCusto)}</td>
                 <td className={cn(celula, 'text-right')}>

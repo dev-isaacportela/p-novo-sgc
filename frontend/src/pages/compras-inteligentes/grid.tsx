@@ -10,7 +10,7 @@ import * as React from 'react';
 import { Download, RotateCcw, ShoppingCart, VolumeX } from 'lucide-react';
 
 import {
-  Badge,  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
+  Button, CheckRow, ChipContagem, Code, Dash, IconButton, Input, Pagination, Panel, PanelHeader, RowMeta, RowTitle,
   SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
 } from '@/components/page';
 import { arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
@@ -286,48 +286,43 @@ export function ListaProdutos({
                 key={codprod}
                 aria-selected={ativa}
                 onClick={() => onSelecionar(linha)}
-                className={ativa ? 'cursor-pointer border-l-4 border-l-primary bg-accent' : 'cursor-pointer border-l-4 border-l-transparent'}
+                className={cn('h-20 cursor-pointer border-l-4', ativa ? 'border-l-primary bg-accent' : 'border-l-transparent')}
               >
-                <Td>
-                  <RowTitle>{String(linha.medida.DESCRICAO)}</RowTitle>
-                  <RowMeta>
-                    <Code prefix="cód.">{codprod}</Code>
-                    {` · ${String(linha.medida.EMBALAGEM) || '—'} · `}
-                    {rotuloSemCusto(linha.custo) ? <Status tone="alert">{rotuloSemCusto(linha.custo)}</Status> : <span title={`Custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`}>{moeda(linha.custo?.valor ?? 0)}</span>}
-                  </RowMeta>
-                  {compacta ? <RowMeta><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></RowMeta> : null}
+                {/* R-137: altura fixa — nome numa linha, meta noutra e os avisos todos numa terceira (o completo no title). */}
+                <Td className="py-2">
+                  <span className="block max-w-[22rem] truncate font-semibold text-ink" title={String(linha.medida.DESCRICAO)}>{String(linha.medida.DESCRICAO)}</span>
                   {minima ? (
-                    <RowMeta>
+                    <span className="block max-w-[22rem] truncate text-[12px] leading-tight text-ink-secondary">
                       {visao === 'transito'
                         ? `est. ${quantidade(linha.estoqueAtual)} · sug. ${linha.sugerida > 0 ? textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia) : '—'}`
                         : `cob. ${linha.coberturaAtualDias === null ? 'sem giro' : rotuloCobertura(linha.coberturaAtualDias)} · gatilho ${linha.diasDeGatilho ?? '—'} d · F/R ${linha.curvaFaturamento ?? '—'}/${linha.curvaRentabilidade ?? '—'}`}
-                    </RowMeta>
-                  ) : null}
-                  {seloBloqueado(linha.medida.QT_BLOQUEADA) ? <RowMeta><Status tone="attention">{seloBloqueado(linha.medida.QT_BLOQUEADA)}</Status></RowMeta> : null}
-                  {excessos.has(codprod) ? (
-                    <RowMeta>
-                      <Status tone="attention">
-                        <span title={resumoExcesso(excessos.get(codprod) ?? []) ?? ''}>{seloExcesso(excessos.get(codprod)?.length ?? 0)}</span>
-                      </Status>
-                    </RowMeta>
-                  ) : null}
-                  {selo ? <RowMeta><Badge tone={selo.tone}>{selo.texto}</Badge></RowMeta> : null}
-                  {linha.silenciado ? (
-                    <RowMeta>
-                      <Status tone="attention">
-                        <span title={linha.motivoSilencio || 'Silenciado'}>
-                          {`Silenciado até ${fmtData(linha.silenciadoAte)}${linha.motivoSilencio ? ` · ${linha.motivoSilencio}` : ''}`}
-                        </span>
-                      </Status>
-                    </RowMeta>
-                  ) : null}
-                  {aberto && linha.emTransito <= 0 ? (
-                    <RowMeta>
-                      <Status tone="alert">
-                        <span title={aberto.titulo}>{`Pedido #${aberto.idCard} aberto, ainda sem trânsito`}</span>
-                      </Status>
-                    </RowMeta>
-                  ) : null}
+                    </span>
+                  ) : (
+                    <span className="flex max-w-[22rem] min-w-0 items-center gap-1 overflow-hidden text-[12px] leading-tight whitespace-nowrap text-ink-secondary">
+                      <Code prefix="cód.">{codprod}</Code>
+                      <span className="min-w-0 truncate">{` · ${String(linha.medida.EMBALAGEM) || '—'} · `}</span>
+                      {rotuloSemCusto(linha.custo) ? <Status tone="alert">{rotuloSemCusto(linha.custo)}</Status> : <span className="shrink-0" title={`Custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`}>{moeda(linha.custo?.valor ?? 0)}</span>}
+                    </span>
+                  )}
+                  {(() => {
+                    const avisos: { chave: string; tom: 'live' | 'off' | 'attention' | 'alert'; texto: string; titulo?: string }[] = [];
+                    if (compacta) avisos.push({ chave: 'status', tom: TOM_STATUS[linha.status], texto: ROTULO_STATUS[linha.status] });
+                    const bloqueado = seloBloqueado(linha.medida.QT_BLOQUEADA);
+                    if (bloqueado) avisos.push({ chave: 'bloq', tom: 'attention', texto: bloqueado });
+                    if (excessos.has(codprod)) avisos.push({ chave: 'exc', tom: 'attention', texto: seloExcesso(excessos.get(codprod)?.length ?? 0) ?? '', titulo: resumoExcesso(excessos.get(codprod) ?? []) ?? '' });
+                    if (selo) avisos.push({ chave: 'esp', tom: selo.tone === 'accent' ? 'live' : 'attention', texto: selo.texto });
+                    if (linha.silenciado) avisos.push({ chave: 'sil', tom: 'attention', texto: `Silenciado até ${fmtData(linha.silenciadoAte)}${linha.motivoSilencio ? ` · ${linha.motivoSilencio}` : ''}`, titulo: linha.motivoSilencio || 'Silenciado' });
+                    if (aberto && linha.emTransito <= 0) avisos.push({ chave: 'ped', tom: 'alert', texto: `Pedido #${aberto.idCard} aberto, ainda sem trânsito`, titulo: aberto.titulo });
+                    if (avisos.length === 0) return null;
+                    return (
+                      <span
+                        className="flex max-w-[22rem] min-w-0 items-center gap-3 overflow-hidden text-[12px] leading-tight whitespace-nowrap"
+                        title={avisos.map((a) => a.titulo ? `${a.texto} (${a.titulo})` : a.texto).join(' · ')}
+                      >
+                        {avisos.map((a) => <span key={a.chave} className="shrink-0"><Status tone={a.tom}>{a.texto}</Status></span>)}
+                      </span>
+                    );
+                  })()}
                 </Td>
                 {compacta ? null : <Td><Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status></Td>}
                 {visao === 'transito' ? (
@@ -335,16 +330,16 @@ export function ListaProdutos({
                     {minima ? null : <Td numeric>{quantidade(linha.estoqueAtual)}</Td>}
                     <Td numeric>
                       <RowTitle>{textoDaSugestao(linha.emTransito, linha.unidadesPorCaixa, referencia)}</RowTitle>
-                      {/* R-132: quando chega e quanto cobre ao chegar (o estoque segue vendendo até lá). */}
-                      {linha.chegada ? (
-                        <>
-                          <RowMeta>{textoChegada(linha.chegada)}</RowMeta>
-                          <RowMeta>{`cobre ${rotuloCobertura(linha.chegada.coberturaAoChegarDias, 'Sem consumo')} ao chegar`}</RowMeta>
-                          {linha.chegada.diasSemEstoque > 0 ? (
-                            <RowMeta><Status tone="alert">{`ruptura antes de chegar (${linha.chegada.diasSemEstoque} d sem estoque)`}</Status></RowMeta>
-                          ) : null}
-                        </>
-                      ) : <RowMeta>Sem consumo</RowMeta>}
+                      {/* R-132: quando chega e quanto cobre ao chegar (o estoque segue vendendo até lá) — numa linha (R-137). */}
+                      {linha.chegada ? (() => {
+                        const chegada = `${textoChegada(linha.chegada)} · cobre ${rotuloCobertura(linha.chegada.coberturaAoChegarDias, 'Sem consumo')} ao chegar`;
+                        const ruptura = linha.chegada.diasSemEstoque > 0 ? `ruptura antes de chegar (${linha.chegada.diasSemEstoque} d sem estoque)` : '';
+                        return (
+                          <span className="ml-auto block max-w-[16rem] truncate text-[12px] leading-tight text-ink-secondary" title={ruptura ? `${chegada} · ${ruptura}` : chegada}>
+                            {ruptura ? <Status tone="alert">{ruptura}</Status> : chegada}
+                          </span>
+                        );
+                      })() : <RowMeta>Sem consumo</RowMeta>}
                     </Td>
                     {minima ? null : <Td numeric>
                       {(() => {
@@ -374,11 +369,11 @@ export function ListaProdutos({
                   {linha.coberturaAtualDias === null
                     ? <span title="Sem giro: não há consumo para dividir"><Dash /></span>
                     : rotuloCobertura(linha.coberturaAtualDias)}
-                  <RowMeta>
+                  <span className="block text-[12px] whitespace-nowrap text-ink-secondary">
                     {linha.diasDeGatilho === null ? 'sem gatilho' : linha.diasDeGatilho < 0
                       ? <Status tone="alert">{`gatilho ${linha.diasDeGatilho} d`}</Status>
                       : `gatilho ${linha.diasDeGatilho} d${linha.urgente ? ' · urgente' : ''}`}
-                  </RowMeta>
+                  </span>
                 </Td>}
                 <Td numeric onClick={(e) => e.stopPropagation()}>
                   <Input
