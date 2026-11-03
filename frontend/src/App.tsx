@@ -27,6 +27,10 @@ import PedidoGaldermaPage from '@/pages/galderma/PedidoGaldermaPage';
 import AcompanhamentoGaldermaPage from '@/pages/galderma/AcompanhamentoGaldermaPage';
 import ComposicaoGaldermaPage from '@/pages/galderma/ComposicaoGaldermaPage';
 import MovimentacaoPage from '@/pages/movimentacao/MovimentacaoPage';
+import EmpenhosPage from '@/pages/empenhos/EmpenhosPage';
+import EmpenhosAdminPage from '@/pages/empenhos/EmpenhosAdminPage';
+import PregoesPage from '@/pages/empenhos/PregoesPage';
+import IndicadoresEmpenhosPage from '@/pages/empenhos/IndicadoresEmpenhosPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -106,6 +110,10 @@ function Autenticado() {
         <Route path="galderma/composicao" element={<ComposicaoGaldermaPage />} />
         {/* Onda 5 (R-140): movimentação de produtos (013). */}
         <Route path="movimentacao" element={<MovimentacaoPage />} />
+        <Route path="empenhos" element={<EmpenhosPage />} />
+        <Route path="empenhos/admin" element={<EmpenhosAdminPage />} />
+        <Route path="empenhos/pregoes" element={<PregoesPage />} />
+        <Route path="empenhos/indicadores" element={<IndicadoresEmpenhosPage />} />
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="fornecedores/:codfornec" element={<FornecedorPage />} />
         <Route path="coberturas" element={<CoberturasPage />} />

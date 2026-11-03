@@ -364,10 +364,10 @@ só. Fonte: `20-kanban-empenhos.md` e `99-divergencias-spec-codigo.md` do legado
 | RN-004 | casos de C-010 | regra de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
-  - [ ] O quadro, o novo empenho, a análise, a aba Pregão, os pregões e os indicadores no simulador com o WinThor real, nos dois temas
-  - [ ] Gráfico dos indicadores com o valor escrito em cada barra (R-116)
-  - [ ] Seções em card recolhidas com resumo (R-126)
-  - [ ] Botões sem permissão desabilitados com o motivo, nunca escondidos
+  - [x] O quadro, o novo empenho, a análise, a aba Pregão, os pregões e os indicadores no simulador com o WinThor real, nos dois temas
+  - [x] Gráfico dos indicadores com o valor escrito em cada barra (R-116)
+  - [x] Seções em card recolhidas com resumo (R-126)
+  - [x] Botões sem permissão desabilitados com o motivo, nunca escondidos
 
 ## Fora de escopo
 

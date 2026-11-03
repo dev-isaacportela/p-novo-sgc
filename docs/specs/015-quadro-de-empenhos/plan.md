@@ -95,16 +95,18 @@ Excluir (C-034): empenho na Análise sem pedido, por admin/gestor/diretoria; car
 
 | Rota | Arquivo | O quê |
 |---|---|---|
-| `/empenhos` | `pages/empenhos/EmpenhosPage.tsx` | `KanbanBoard slug="empenhos"` com `novoCard` "Novo empenho" (`?novo=1`, janela `NovoEmpenhoDialogo`), `conteudoDaFase` (`ConteudoEmpenho`: análise, aprovação, pedidos do empenho, pedido), `acoesExtras` (`AcoesEmpenho`), `abasExtras` Pregão (`AbaPregao`), `podeMover`/`antesDeMover`/`podeExcluir`, 60 s; o `EmpenhoProvider` faz a única carga por card aberto |
+| `/empenhos` | `pages/empenhos/EmpenhosPage.tsx` | `KanbanBoard slug="empenhos"` com `novoCard` "Novo empenho" (`?novo=1`, janela `NovoEmpenhoDialogo`), `conteudoDaFase` (`ConteudoEmpenho`: análise, aprovação, pedidos do empenho, pedido), `acoesExtras` (`AcoesEmpenho`), `abasExtras` Pregão (`AbaPregao`), `podeMover`/`antesDeMover`/`podeExcluir`, 60 s; a página faz a única carga por card aberto (`sgcEmpCarregar`) e a entrega por `EmpenhoContexto` (`pages/empenhos/contexto.ts`) |
 | `/empenhos/admin` | `pages/empenhos/EmpenhosAdminPage.tsx` | `BoardAdmin slug="empenhos"` (só admin) |
 | `/empenhos/pregoes` | `pages/empenhos/PregoesPage.tsx` | lista paginada com busca, o pregão escolhido com os empenhos e o consolidado |
 | `/empenhos/indicadores` | `pages/empenhos/IndicadoresEmpenhosPage.tsx` | período + filial, KPIs, gráfico mês a mês (barras lado a lado, `LabelList`, R-116), prazos e por órgão paginados; seções em `SecaoRecolhivel` com resumo (R-126) |
+
+Peças: `operacoes.ts` (desmembrar, cancelar levando os pedidos, reagrupar, capa por `kbCardAtualizar`), `analise.tsx` (um bloco por item com os campos em grade — doze colunas não cabem no painel do card), `itens.tsx` (busca no ERP, campo numérico, resumo do CMV), `dialogos.tsx` (formulário com texto ≥ 10, data e escolha), `DialogoPregao.tsx`. O gráfico dos indicadores reusa `GraficoBarras` de `pages/galderma/grafico.tsx` sem mudá-lo. O mesmo `sgcEmpCarregar` alimenta `estadoDaCarga`, e o smoke prova que tela e gancho dão a mesma frase em cada card × persona × destino.
 
 Menu: grupo novo **Empenhos** (Quadro de empenhos, Pregões, Indicadores), `verEmpenhos`. Permissões novas em `lib/permissoes.ts`: `verEmpenhos` (todos menos comercial; atravessa somente-leitura), `operarEmpenhos` (admin, analista, gestor; zera em somente-leitura); as aprovações usam `aprovarTecnica`/`aprovarDiretoria` de sempre.
 
 ## Regra pura (`frontend/src/lib/empenhos.ts`)
 
-Chaves e transições (`FASES_EMPENHO`, `motivoDeDestinoEmpenho`, `motivoDeExcluirEmpenho`), `custoEfetivo`, `cmvItem`, `totaisEmpenho`, `cmvAcimaDaReferencia`, `dataLimite`/`prazoEmDias` (sobre `lib/dias-uteis.ts` se servir, senão local), `validarDecisao`, `origemPrincipal`, `prontidaoDaAnalise`, `resumoDaFilial`, `planoDeDesmembramento`, `destinoDoReagrupamento`, `destinoAoAbrirPendencia`/`destinoAoFecharPendencia`, `nivelDoPrazo`/`nivelDaVigencia`/`alertaDoEmpenho`, `validarNovoEmpenho`, `tituloDoEmpenho`/`tituloDoPedido`, `outrosEmpenhos`, `textoSituacao`. Testes em `frontend/tests/empenhos.test.mjs`.
+Chaves e transições (`FASES_EMPENHO`, `motivoDeDestinoEmpenho`, `motivoDeExcluirEmpenho`), `custoEfetivo`, `cmvItem`, `totaisEmpenho`, `cmvAcimaDaReferencia`, `dataLimite`/`prazoEmDias` (sobre `lib/dias-uteis.ts` se servir, senão local), `validarDecisao`, `origemPrincipal`, `prontidaoDaAnalise`, `resumoDaFilial`, `planoDeDesmembramento`, `destinoDoReagrupamento`, `destinoAoAbrirPendencia`/`destinoAoFecharPendencia`, `nivelDoPrazo` (entrega e vigência)/`alertaDoEmpenho`/`diasAte`/`hojeEmBrasilia`, `validarNovoEmpenho`, `tituloDoEmpenho`/`tituloDoPedido`, `outrosEmpenhos`, `textoSituacao`, `estadoDaCarga`, `custoEspecialDoOrgao`, `filiaisDoItem`. Testes em `frontend/tests/empenhos.test.mjs`.
 
 ## Simulador
 
