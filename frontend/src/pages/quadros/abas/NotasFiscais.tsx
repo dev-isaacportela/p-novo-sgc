@@ -9,17 +9,16 @@
 // (R-049). O número aparece no cabeçalho do painel, que já tem os dados.
 
 import * as React from 'react';
-import { CheckCheck, FilePlus2, Mail, PhoneCall, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { CheckCheck, FilePlus2, Mail, PhoneCall } from 'lucide-react';
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import {
-  Alert, Button, Dash, EmptyState, Panel, PanelHeader, Stat, Status,
-  Table, Td, Th, Tr,
+  Alert, Button, EmptyState, GradeMini, MiniCartao, Panel, PanelHeader,
 } from '@/components/page';
 import { acao } from '@/lib/mitra-api';
-import { fmtData, fmtDataHora, hojeIso, moeda } from '@/lib/formato';
+import { fmtData, hojeIso, moeda } from '@/lib/formato';
 import { diasUteisEntre } from '@/lib/dias-uteis';
-import { ROTULO_OCORRENCIA, textoDaOcorrencia } from '@/lib/nf';
 import { percentuaisFaturados, temNfNaCapa, textoDaCapaFaturamento } from '@/lib/faturamento';
+import { rotuloPercentual } from '@/lib/resumo-do-pedido';
 import { usePersona } from '@/lib/persona';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 import {
@@ -27,6 +26,9 @@ import {
   type ContatoDaAba, type ItemDaAba, type NfDaAba, type OcorrenciaDaAba,
   type PedidoDaAba, type SugestaoDaAba,
 } from './nf-dialogos';
+import { BlocoDaNota, CartoesDeContato, CartoesDeSugestao } from './nf-cartoes';
+import { textoDaOcorrencia } from '@/lib/nf';
+import { lerCarga } from './carga-do-card';
 
 interface ItemDoPedido { CODPROD: number; DESCRICAO: string; QT_PEDIDA: number; PRECO_CUSTO: number }
 
@@ -44,24 +46,6 @@ const VAZIO: Dados = { pedido: null, sugestoes: [], nfs: [], itens: [], ocorrenc
 
 const agora = () => new Date().toISOString().slice(0, 19);
 
-const TOM_RESULTADO = { conforme: 'live', atencao: 'attention', divergente: 'alert' } as const;
-const TOM_DECISAO = { aceito: 'live', pendente: 'attention', recusado: 'alert' } as const;
-
-const ROTULO_CASAMENTO: Record<string, string> = {
-  codprod: 'Código do produto',
-  codfab: 'Código de fábrica',
-  ean: 'Código de barras',
-  nenhum: 'Não casou',
-};
-
-const ROTULO_CANAL: Record<string, string> = {
-  email: 'E-mail', telefone: 'Telefone', whatsapp: 'WhatsApp', portal: 'Portal', outro: 'Outro',
-};
-
-function tom<T extends Record<string, string>>(mapa: T, chave: string, padrao: 'off' = 'off') {
-  return (mapa[chave] ?? padrao) as 'live' | 'attention' | 'alert' | 'off';
-}
-
 export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
   const sessao = usePersona();
   const [dados, setDados] = React.useState<Dados>(VAZIO);
@@ -76,9 +60,13 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
 
   const cardId = ctx.card.id;
 
-  /** A aba inteira em UMA execução (RNF-001). Só lê: quem guarda é quem chama. */
-  const buscar = React.useCallback(async (): Promise<Dados> => {
-    const resposta = await acao('sgcNfListar', { cardId });
+  /**
+   * A aba inteira em UMA execução (RNF-001), dividida com os blocos de
+   * conclusão e de concluído (R-150, `carga-do-card.ts`). Só lê: quem guarda
+   * é quem chama; depois de gravar, `forcar` avisa os outros blocos.
+   */
+  const buscar = React.useCallback(async (forcar = false): Promise<Dados> => {
+    const resposta = await lerCarga('sgcNfListar', cardId, forcar);
     if (!resposta.ok) throw new Error(String(resposta.erro ?? 'Não foi possível carregar as notas fiscais.'));
     return {
       pedido: (resposta.pedido as PedidoDaAba) ?? null,
@@ -101,7 +89,7 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
   }, [buscar]);
 
   const carregar = React.useCallback(async (): Promise<Dados> => {
-    const novos = await buscar();
+    const novos = await buscar(true);
     setDados(novos);
     return novos;
   }, [buscar]);
@@ -210,31 +198,33 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
       {erro ? <Alert tone="error">{erro}</Alert> : null}
       {motivoSemPermissao ? <Alert tone="info">{motivoSemPermissao}</Alert> : null}
 
-      {/* ── resumo do faturamento (RF-016) ── */}
+      {/* ── resumo do faturamento (RF-016), no molde do legado: números em cima, ações embaixo ── */}
       <Panel>
         <PanelHeader
           title="Faturamento do pedido"
-          hint={`Enviado em ${fmtData(pedido.DT_ENVIO)} · ${diasUteis} dias úteis`}
-        >
-          <Button size="sm" onClick={() => setContatando(true)} disabled={ctx.travado || ocupado || !podeContatar}>
-            <PhoneCall aria-hidden />
-            Registrar contato
-          </Button>
-          <Button size="sm" onClick={() => setCobrando(true)} disabled={ctx.travado || ocupado || !podeContatar}>
-            <Mail aria-hidden />
-            Enviar cobrança
-          </Button>
-          <Button size="sm" variant="primary" onClick={() => setRegistrando(true)} disabled={bloqueado}>
-            <FilePlus2 aria-hidden />
-            Registrar NF
-          </Button>
-        </PanelHeader>
-        <div className="flex flex-wrap gap-6 px-4 py-3 text-[13px]">
-          <Stat>Pedido <strong>{moeda(pedido.VL_TOTAL)}</strong></Stat>
-          <Stat>Faturado <strong>{moeda(pedido.VL_FATURADO)}</strong></Stat>
-          <Stat>Saldo <strong>{moeda(saldo)}</strong></Stat>
-          <Stat>Em valor <strong>{Number(pedido.PERC_FATURADO_VALOR ?? 0).toFixed(2).replace('.', ',')} %</strong></Stat>
-          <Stat>Em quantidade <strong>{Number(pedido.PERC_FATURADO_QTD ?? 0).toFixed(2).replace('.', ',')} %</strong></Stat>
+          hint={`Enviado em ${fmtData(pedido.DT_ENVIO)} · ${diasUteis} ${diasUteis === 1 ? 'dia útil' : 'dias úteis'}`}
+        />
+        <div className="flex flex-col gap-3 p-4">
+          <GradeMini colunas={4}>
+            <MiniCartao rotulo="Em valor" valor={rotuloPercentual(Number(pedido.PERC_FATURADO_VALOR ?? 0))} hint={moeda(pedido.VL_FATURADO)} />
+            <MiniCartao rotulo="Em quantidade" valor={rotuloPercentual(Number(pedido.PERC_FATURADO_QTD ?? 0))} />
+            <MiniCartao rotulo="Saldo" valor={moeda(Math.max(0, saldo))} hint={`de ${moeda(pedido.VL_TOTAL)}`} />
+            <MiniCartao rotulo="Notas" valor={dados.nfs.length} hint={pendentes.length > 0 ? `${pendentes.length} conferência(s) pendente(s)` : undefined} />
+          </GradeMini>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="primary" onClick={() => setRegistrando(true)} disabled={bloqueado}>
+              <FilePlus2 aria-hidden />
+              Registrar NF
+            </Button>
+            <Button size="sm" onClick={() => setContatando(true)} disabled={ctx.travado || ocupado || !podeContatar}>
+              <PhoneCall aria-hidden />
+              Registrar contato
+            </Button>
+            <Button size="sm" onClick={() => setCobrando(true)} disabled={ctx.travado || ocupado || !podeContatar}>
+              <Mail aria-hidden />
+              Enviar cobrança
+            </Button>
+          </div>
         </div>
       </Panel>
 
@@ -242,45 +232,15 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
       {dados.sugestoes.length > 0 ? (
         <Panel>
           <PanelHeader
-            title="Notas sugeridas"
-            hint="Encontradas no WinThor pela rotina diária; nada é vinculado sem alguém validar."
+            title="Notas identificadas no WinThor"
+            hint="Encontradas pela rotina diária; nada é vinculado sem alguém validar."
           />
-          <Table>
-            <thead>
-              <tr>
-                <Th>Nota</Th>
-                <Th>Emissão</Th>
-                <Th numeric>Valor</Th>
-                <Th numeric>Pontuação</Th>
-                <Th>Por quê</Th>
-                <Th className="w-44 text-right">Ações</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {dados.sugestoes.map((sugestao) => (
-                <Tr key={sugestao.ID}>
-                  <Td>
-                    <span className="font-semibold text-ink">{sugestao.NUMNOTA}{sugestao.SERIE ? ` / ${sugestao.SERIE}` : ''}</span>
-                    <span className="block text-[12px] text-ink-secondary">
-                      {sugestao.ORIGEM === 'pedido' ? 'Casada pelo número do pedido' : 'Semelhança de itens'}
-                    </span>
-                  </Td>
-                  <Td>{fmtData(sugestao.DT_EMISSAO)}</Td>
-                  <Td numeric>{moeda(sugestao.VL_TOTAL)}</Td>
-                  <Td numeric>
-                    <Status tone={sugestao.SCORE >= 80 ? 'live' : 'attention'}>{sugestao.SCORE}</Status>
-                  </Td>
-                  <Td>{sugestao.MOTIVO || <Dash />}</Td>
-                  <Td className="text-right">
-                    <span className="inline-flex items-center justify-end gap-2">
-                      <Button size="sm" onClick={() => void recusarSugestao(sugestao)} disabled={bloqueado}>Recusar</Button>
-                      <Button size="sm" variant="primary" onClick={() => void validarSugestao(sugestao)} disabled={bloqueado}>Validar</Button>
-                    </span>
-                  </Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
+          <CartoesDeSugestao
+            sugestoes={dados.sugestoes}
+            bloqueado={bloqueado}
+            aoValidar={(sugestao) => void validarSugestao(sugestao)}
+            aoRecusar={(sugestao) => void recusarSugestao(sugestao)}
+          />
         </Panel>
       ) : null}
 
@@ -290,23 +250,20 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
           title="Notas vinculadas"
           hint={pendentes.length > 0
             ? `${pendentes.length} ${pendentes.length === 1 ? 'conferência pendente' : 'conferências pendentes'} — o pedido não conclui assim.`
-            : 'Todas as conferências foram decididas.'}
+            : dados.nfs.length > 0 ? 'Todas as conferências foram decididas.' : undefined}
         >
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => void aceitarConformes()}
-            disabled={bloqueado || conformesPendentes.length === 0}
-          >
-            <CheckCheck aria-hidden />
-            Aceitar os {conformesPendentes.length} conformes
-          </Button>
+          {conformesPendentes.length > 0 ? (
+            <Button size="sm" variant="primary" onClick={() => void aceitarConformes()} disabled={bloqueado}>
+              <CheckCheck aria-hidden />
+              Aceitar os {conformesPendentes.length} conformes
+            </Button>
+          ) : null}
         </PanelHeader>
 
         {dados.nfs.length === 0 ? (
           <EmptyState
             title="Nenhuma nota vinculada"
-            hint="Valide uma sugestão ou registre a nota pelo número — o pedido não entra em Em Trânsito para BN sem nota."
+            hint="Valide uma nota identificada ou registre a nota pelo número — o pedido não entra em Em Trânsito para BN sem nota."
           />
         ) : (
           dados.nfs.map((nf) => (
@@ -324,32 +281,16 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
 
       {/* ── contatos de faturamento (RF-022) ── */}
       <Panel>
-        <PanelHeader title="Contatos com a indústria" hint="Cada cobrança e cada retorno ficam registrados aqui." />
+        <PanelHeader
+          title="Contatos com a indústria"
+          hint={dados.contatos.length > 0
+            ? `Último contato em ${fmtData(dados.contatos[0].DT_CONTATO)} · cada cobrança e cada retorno ficam aqui.`
+            : 'Cada cobrança e cada retorno ficam registrados aqui.'}
+        />
         {dados.contatos.length === 0 ? (
           <EmptyState title="Nenhum contato registrado" hint="Registre o que a indústria respondeu sobre o faturamento." />
         ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Quando</Th>
-                <Th>Canal</Th>
-                <Th>Resumo</Th>
-                <Th>Previsão</Th>
-                <Th>Quem registrou</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {dados.contatos.map((contato) => (
-                <Tr key={contato.ID}>
-                  <Td>{fmtDataHora(contato.DT_CONTATO)}</Td>
-                  <Td>{ROTULO_CANAL[contato.CANAL] ?? contato.CANAL}</Td>
-                  <Td>{contato.RESUMO || <Dash />}</Td>
-                  <Td>{contato.PREVISAO_FATURAMENTO ? fmtData(contato.PREVISAO_FATURAMENTO) : <Dash />}</Td>
-                  <Td>{contato.REGISTRADO_NOME || <Dash />}</Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
+          <CartoesDeContato contatos={dados.contatos} />
         )}
       </Panel>
 
@@ -387,138 +328,4 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
 function textoDaConferencia(ocorrencia: OcorrenciaDaAba, itens: ItemDaAba[]): string {
   const item = itens.find((linha) => linha.CODPROD === ocorrencia.CODPROD);
   return textoDaOcorrencia(ocorrencia, item?.DESCRICAO ?? '');
-}
-
-/**
- * Uma nota: cabeçalho, itens e as conferências agrupadas POR ITEM — as de
- * pedido (prazo, valor total, percentual) vêm por último, com CODPROD 0.
- */
-function BlocoDaNota({
-  nf, itens, ocorrencias, bloqueado, aoDecidir,
-}: {
-  nf: NfDaAba;
-  itens: ItemDaAba[];
-  ocorrencias: OcorrenciaDaAba[];
-  bloqueado: boolean;
-  aoDecidir: (ocorrencia: OcorrenciaDaAba, decisao: 'aceito' | 'recusado') => void;
-}) {
-  const doPedido = ocorrencias.filter((o) => !o.CODPROD);
-
-  return (
-    <div className="border-t border-line px-4 py-3 first:border-t-0">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <span className="text-[13px] font-semibold text-ink">
-          NF {nf.NUMNOTA}{nf.SERIE ? ` / ${nf.SERIE}` : ''}
-        </span>
-        <span className="text-[12px] text-ink-secondary">Emissão {fmtData(nf.DT_EMISSAO)}</span>
-        <span className="text-[12px] text-ink-secondary">
-          {nf.DT_ENTRADA ? `Entrada ${fmtData(nf.DT_ENTRADA)}` : 'Ainda sem entrada no armazém'}
-        </span>
-        <span className="text-[12px] text-ink-secondary">{moeda(nf.VL_TOTAL)}</span>
-        {nf.PRAZO_PARCELAS ? <span className="text-[12px] text-ink-secondary">Prazo {nf.PRAZO_PARCELAS}</span> : null}
-      </div>
-
-      <Table>
-        <thead>
-          <tr>
-            <Th>Item</Th>
-            <Th numeric>Faturado</Th>
-            <Th>Lote</Th>
-            <Th>Casamento</Th>
-            <Th>Conferências</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {itens.map((item) => (
-            <Tr key={item.ID}>
-              <Td>
-                <span className="font-semibold text-ink">{item.DESCRICAO || `Produto ${item.CODPROD}`}</span>
-                <span className="block text-[12px] text-ink-secondary">Código {item.CODPROD}</span>
-              </Td>
-              <Td numeric>
-                {Number(item.QT_FATURADA ?? 0).toLocaleString('pt-BR')}
-                <span className="block text-[12px] text-ink-secondary">{moeda(item.PRECO_FATURADO)}</span>
-              </Td>
-              <Td>
-                {item.NUMLOTE || <Dash />}
-                {item.DT_VALIDADE ? <span className="block text-[12px] text-ink-secondary">vence {fmtData(item.DT_VALIDADE)}</span> : null}
-              </Td>
-              <Td>
-                <Status tone={item.CASADO_POR === 'codprod' ? 'live' : item.CASADO_POR === 'nenhum' ? 'alert' : 'attention'}>
-                  {ROTULO_CASAMENTO[item.CASADO_POR] ?? item.CASADO_POR}
-                </Status>
-              </Td>
-              <Td>
-                <ListaDeConferencias
-                  ocorrencias={ocorrencias.filter((o) => o.CODPROD === item.CODPROD)}
-                  descricao={item.DESCRICAO}
-                  bloqueado={bloqueado}
-                  aoDecidir={aoDecidir}
-                />
-              </Td>
-            </Tr>
-          ))}
-          {doPedido.length > 0 ? (
-            <Tr>
-              <Td colSpan={4}>
-                <span className="font-semibold text-ink">Conferências do pedido</span>
-                <span className="block text-[12px] text-ink-secondary">Prazo, valor total e percentual faturado</span>
-              </Td>
-              <Td>
-                <ListaDeConferencias
-                  ocorrencias={doPedido}
-                  descricao=""
-                  bloqueado={bloqueado}
-                  aoDecidir={aoDecidir}
-                />
-              </Td>
-            </Tr>
-          ) : null}
-        </tbody>
-      </Table>
-    </div>
-  );
-}
-
-function ListaDeConferencias({
-  ocorrencias, descricao, bloqueado, aoDecidir,
-}: {
-  ocorrencias: OcorrenciaDaAba[];
-  descricao: string;
-  bloqueado: boolean;
-  aoDecidir: (ocorrencia: OcorrenciaDaAba, decisao: 'aceito' | 'recusado') => void;
-}) {
-  if (ocorrencias.length === 0) return <Dash />;
-  return (
-    <ul className="flex flex-col gap-2">
-      {ocorrencias.map((ocorrencia) => (
-        <li key={ocorrencia.ID} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Status tone={tom(TOM_RESULTADO, ocorrencia.RESULTADO)}>
-            {ROTULO_OCORRENCIA[ocorrencia.TIPO] ?? ocorrencia.TIPO}
-          </Status>
-          <span className="text-[12px] text-ink-secondary">{textoDaOcorrencia(ocorrencia, descricao)}</span>
-          <Status tone={tom(TOM_DECISAO, ocorrencia.DECISAO)}>
-            {ocorrencia.DECISAO === 'pendente'
-              ? 'Pendente'
-              : `${ocorrencia.DECISAO === 'aceito' ? 'Aceita' : 'Recusada'}${ocorrencia.DECIDIDO_NOME ? ` por ${ocorrencia.DECIDIDO_NOME}` : ''}`}
-          </Status>
-          {ocorrencia.DECISAO === 'pendente' ? (
-            <span className="inline-flex items-center gap-1">
-              <Button size="sm" onClick={() => aoDecidir(ocorrencia, 'aceito')} disabled={bloqueado}>
-                <ThumbsUp aria-hidden />
-                Aceitar
-              </Button>
-              <Button size="sm" onClick={() => aoDecidir(ocorrencia, 'recusado')} disabled={bloqueado}>
-                <ThumbsDown aria-hidden />
-                Recusar
-              </Button>
-            </span>
-          ) : null}
-          {ocorrencia.JUSTIFICATIVA ? (
-            <span className="block w-full text-[12px] text-ink-secondary">{ocorrencia.JUSTIFICATIVA}</span>
-          ) : null}
-        </li>
-      ))}
-    </ul>
-  );
 }

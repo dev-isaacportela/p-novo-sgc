@@ -25,6 +25,7 @@ import BlocoAprovacao from './Aprovacao';
 import BlocoEnvio from './Envio';
 import BlocoEnviado from './Enviado';
 import BlocoAcompanhamento from './Acompanhamento';
+import BlocoConclusao from './Conclusao';
 
 type Props = ExtensaoContexto & {
   fases: MapaDeFases;
@@ -50,6 +51,7 @@ export default function ConteudoDaFase({ fases, sessao, recarregarPedido, ...ctx
       case 'envio': return <BlocoEnvio {...ctx} sessao={sessao} recarregarPedido={recarregarPedido} />;
       case 'enviado': return <BlocoEnviado {...ctx} />;
       case 'acompanhamento': return <BlocoAcompanhamento {...ctx} />;
+      case 'conclusao': return <BlocoConclusao {...ctx} />;
     }
   };
 
