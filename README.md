@@ -52,9 +52,11 @@ Commits `tipo: descrição`, em português, **sem trailer de agente**.
 2. `git fetch origin && git merge origin/main --no-edit`; leia o diff.
 3. Merge da release em `main` e `git push origin main` (sem `--force`, sem `--rebase`).
 4. No chat do projeto no Mitra: *"sincronize com a main e rode
-   `cd backend && npm install && node setup-backend.mjs && node add-001-kanban.mjs && node add-003-jdbc-winthor.mjs && node add-004-fornecedores.mjs && node add-005-quadro-compras.mjs && node add-006-itens.mjs && node add-007-agenda.mjs && node add-008-notas-fiscais.mjs && node add-009-transito.mjs && node add-010-bo.mjs && node add-011-solicitacoes.mjs && node add-012-indicadores.mjs && node add-013-compras-inteligentes.mjs && node add-014-coberturas-abc.mjs && node add-001-kanban.mjs && node add-002-perfil-acesso.mjs && node sync-server-function-map.mjs`,
+   `cd backend && npm install && node setup-backend.mjs && node add-001-kanban.mjs && node add-003-jdbc-winthor.mjs && node add-004-fornecedores.mjs && node add-005-quadro-compras.mjs && node add-006-itens.mjs && node add-007-agenda.mjs && node add-008-notas-fiscais.mjs && node add-009-transito.mjs && node add-010-bo.mjs && node add-011-solicitacoes.mjs && node add-012-indicadores.mjs && node add-013-compras-inteligentes.mjs && node add-014-coberturas-abc.mjs && node add-015-movimentacao.mjs && node add-016-galderma.mjs && node add-017-empenhos.mjs && node add-018-fila-email-conclusao.mjs && node add-005-quadro-compras.mjs && node add-008-notas-fiscais.mjs && node add-019-solicitacoes-apoio.mjs && node add-020-fornecedores-exportar-excluir.mjs && node add-021-projecao-manual.mjs && node add-001-kanban.mjs && node add-002-perfil-acesso.mjs && node sync-server-function-map.mjs`,
    depois build e share"*. O `add-001` roda duas vezes de propósito: a segunda liga os ganchos
    `podeMover`/`podeExcluir`, cujas SFs (`sgcPodeMover`/`sgcPodeExcluir`) só existem depois do `add-005`.
+   O `add-005` e o `add-008` rodam de novo depois do `add-018`: o `add-005` republica o gancho com o ramo
+   dos empenhos (R-161) e os dois recebem o id real da fila de e-mail (R-172).
    O `add-002` (perfil) fica por último. A plataforma materializa as migrations.
 5. `git pull` para receber migrations e o mapa de ids reais.
 
