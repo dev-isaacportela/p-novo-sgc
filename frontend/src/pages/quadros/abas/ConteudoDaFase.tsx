@@ -22,10 +22,17 @@ import AbaBo from './Bo';
 import BlocoSolicitacoes from './Solicitacoes';
 import ResumoDoPedido from './ResumoDoPedido';
 import BlocoAprovacao from './Aprovacao';
+import BlocoEnvio from './Envio';
+import BlocoEnviado from './Enviado';
 
-type Props = ExtensaoContexto & { fases: MapaDeFases; sessao: SessaoPersona };
+type Props = ExtensaoContexto & {
+  fases: MapaDeFases;
+  sessao: SessaoPersona;
+  /** A capa do `QuadroPage` (a que o `podeMover` lê) depois de o bloco Envio registrar o envio. */
+  recarregarPedido: () => Promise<void>;
+};
 
-export default function ConteudoDaFase({ fases, sessao, ...ctx }: Props) {
+export default function ConteudoDaFase({ fases, sessao, recarregarPedido, ...ctx }: Props) {
   const blocos = blocosDaFase(fases.chaveDe(ctx.card.faseId));
 
   const desenhar = (bloco: Bloco): React.ReactNode => {
@@ -39,6 +46,8 @@ export default function ConteudoDaFase({ fases, sessao, ...ctx }: Props) {
       // No Enviado o painel "Pedido enviado" já conta o envio: o selo sairia repetido.
       case 'resumo': return <ResumoDoPedido {...ctx} semEnvio={fases.chaveDe(ctx.card.faseId) === 'enviado'} />;
       case 'aprovacao': return <BlocoAprovacao {...ctx} />;
+      case 'envio': return <BlocoEnvio {...ctx} sessao={sessao} recarregarPedido={recarregarPedido} />;
+      case 'enviado': return <BlocoEnviado {...ctx} />;
     }
   };
 

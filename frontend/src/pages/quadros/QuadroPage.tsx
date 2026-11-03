@@ -157,8 +157,8 @@ export default function QuadroPage() {
   // 3 execuções por card aberto em vez das 2 do RNF-001; unificar quando o
   // provider expuser a capa crua para o AcoesDoPedido.
   const conteudoDaFase = React.useCallback(
-    (ctx: ExtensaoContexto) => (sessao ? <ConteudoDaFase {...ctx} fases={fases} sessao={sessao} /> : null),
-    [fases, sessao],
+    (ctx: ExtensaoContexto) => (sessao ? <ConteudoDaFase {...ctx} fases={fases} sessao={sessao} recarregarPedido={recarregarPedido} /> : null),
+    [fases, sessao, recarregarPedido],
   );
 
   if (!sessao) return <EmptyState title="Carregando o quadro..." />;
