@@ -9,7 +9,7 @@ import { useKanban } from '@benenutri/mitra-kanban';
 import { Download, FileSpreadsheet, FileText, History, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import {
   Alert, Badge, Button, Code, EmptyState, GradeKpi, GradeMini, Kpi, MenuAcoes, MiniCartao, PageHeader, Panel, PanelHeader,
-  RowMeta, SelectMenu, TextLink, Toolbar,
+  RowMeta, SecaoRecolhivel, SelectMenu, TextLink, Toolbar,
 } from '@/components/page';
 import { acao, linhas } from '@/lib/mitra-api';
 import { baixarCsv, baixarTexto, textoCsv } from '@/lib/csv';
@@ -31,6 +31,7 @@ import { DialogoExtrato, DialogoGerar, DialogoHistorico, DialogoImportar, Dialog
 
 const POR_PAGINA = 50;
 const LOG_POR_PAGINA = 50;
+const CHAVE_VALORES = 'sgc-galderma-valores-abertos';
 const TODAS = { limite: 2000, offset: 0 };
 const un = (v: number) => numeroPt(v, 0);
 const agora = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19);
@@ -75,6 +76,15 @@ export default function PedidoGaldermaPage() {
   const [geracao, setGeracao] = React.useState<{ gerando: boolean; erro: string; gerados: { filial: string; cardId: number }[] } | null>(null);
   const [salvando, setSalvando] = React.useState(false);
   const [erroDialogo, setErroDialogo] = React.useState('');
+  // Recolhida por padrão (R-126); preferência de quem vê, não crítica — falhar o localStorage só a esquece.
+  const [valoresAbertos, setValoresAbertos] = React.useState(() => {
+    try { return localStorage.getItem(CHAVE_VALORES) === '1'; } catch { return false; }
+  });
+  function alternarValores() {
+    const aberta = !valoresAbertos;
+    setValoresAbertos(aberta);
+    try { localStorage.setItem(CHAVE_VALORES, aberta ? '1' : '0'); } catch { /* preferência não crítica */ }
+  }
 
   const negociacao = negociacoes.find((n) => n.id === selecionada) ?? null;
   const nomesFiliais = React.useMemo(() => new Map(filiaisErp.map((f) => [f.codfilial, f.filial])), [filiaisErp]);
@@ -413,6 +423,16 @@ export default function PedidoGaldermaPage() {
                 <Kpi rotulo="Valor do pedido" valor={moeda(v.pedidoListaDesc)} hint={`com desconto · ${moeda(v.pedidoNet)} net`} />
               </GradeKpi>
               <BarraDaProposta proposta={resumo.propostaSellin} comprado={resumo.compraMes} pedido={resumo.pedido} saldo={resumo.saldoAComprarSimulado} />
+            </div>
+          </Panel>
+
+          {/* R-126 / R-153: os oito valores em R$ numa seção recolhível, com o essencial no resumo; a escolha fica no navegador. */}
+          <SecaoRecolhivel
+            titulo="Valores da negociação em R$"
+            resumo={`Meta sell-in ${moeda(v.metaSellin)} · falta comprar ${moeda(v.faltaComprar)} · pedido ${moeda(v.pedidoListaDesc)} com desconto · vendido no mês ${moeda(v.vendidoNoMes)}`}
+            aberta={valoresAbertos}
+            onToggle={alternarValores}
+          >
               <GradeMini colunas={4}>
                 <MiniCartao rotulo="Meta sell-in" valor={moeda(v.metaSellin)} />
                 <MiniCartao rotulo="Meta sell-out" valor={moeda(negociacao.metaSelloutValor)} hint="informada" />
@@ -423,8 +443,7 @@ export default function PedidoGaldermaPage() {
                 <MiniCartao rotulo="Pedido com desconto" valor={moeda(v.pedidoListaDesc)} />
                 <MiniCartao rotulo="Vendido no mês" valor={moeda(v.vendidoNoMes)} hint="a preço de sell-out" />
               </GradeMini>
-            </div>
-          </Panel>
+          </SecaoRecolhivel>
 
           <Panel>
             <PanelHeader title="Itens da proposta" hint="Clique no produto para abrir o pedido por filial. Digitar simula; sair do campo ou Enter grava.">
