@@ -1485,3 +1485,98 @@ export function AlternaOpcoes<T extends string>({
     </div>
   );
 }
+
+/* ── O card do pedido em coluna estreita (R-150) ──────────────────────────
+ * A aba "Nesta fase" mede ~590 px: tabela de cinco colunas ou mais rola na
+ * horizontal ou espreme o produto. No card, a linha vira cartão — produto à
+ * esquerda, o número principal à direita, o resto em linhas de apoio. */
+
+/** A lista de cartões que substitui a tabela larga dentro do card. */
+export function ListaCartoes({ children, rotulo }: { children: React.ReactNode; rotulo?: string }) {
+  return <ul className="divide-y divide-rule-row" aria-label={rotulo}>{children}</ul>;
+}
+
+/**
+ * Uma linha da lista: `titulo` e `meta` à esquerda, `valor` (o número que se
+ * lê de relance) à direita, `children` para as linhas de apoio e `acoes`
+ * para os botões, que quebram para baixo quando não cabem.
+ */
+export function CartaoLinha({
+  titulo,
+  meta,
+  valor,
+  valorMeta,
+  acoes,
+  children,
+}: {
+  titulo: React.ReactNode;
+  meta?: React.ReactNode;
+  valor?: React.ReactNode;
+  valorMeta?: React.ReactNode;
+  acoes?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <li className="flex flex-col gap-1.5 px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold break-words text-ink">{titulo}</p>
+          {meta ? <p className="text-[12px] text-ink-secondary">{meta}</p> : null}
+        </div>
+        {valor !== undefined ? (
+          <div className="shrink-0 text-right">
+            <p className="text-[13px] font-bold whitespace-nowrap text-ink tabular-nums">{valor}</p>
+            {valorMeta ? <p className="text-[11px] whitespace-nowrap text-ink-secondary">{valorMeta}</p> : null}
+          </div>
+        ) : null}
+      </div>
+      {children ? <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-secondary">{children}</div> : null}
+      {acoes ? <div className="flex flex-wrap items-center gap-2">{acoes}</div> : null}
+    </li>
+  );
+}
+
+/** O rodapé de totais da lista (o `tfoot` do legado): rótulo à esquerda, total à direita. */
+export function RodapeTotal({ rotulo, valor }: { rotulo: React.ReactNode; valor: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-t border-rule-table px-4 py-2.5 text-[12px] text-ink-secondary">
+      <span>{rotulo}</span>
+      <span className="text-[13px] font-bold whitespace-nowrap text-ink tabular-nums">{valor}</span>
+    </div>
+  );
+}
+
+const CARIMBO_TONE = {
+  live: 'border-primary/25 bg-accent',
+  neutral: 'border-rule-row bg-muted',
+  attention: 'border-attention/30 bg-attention-bg',
+  alert: 'border-destructive/30 bg-alert-bg',
+} as const;
+
+const CARIMBO_TITULO = {
+  live: 'text-primary',
+  neutral: 'text-ink',
+  attention: 'text-attention',
+  alert: 'text-destructive',
+} as const;
+
+/**
+ * Selo de um fato do pedido (aprovado por, enviado em, cancelado por): o
+ * título no tom, o texto em tinta normal. Não é `Alert` — não pede ação.
+ */
+export function Carimbo({
+  tone = 'neutral',
+  titulo,
+  children,
+}: {
+  tone?: keyof typeof CARIMBO_TONE;
+  titulo: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={cn('rounded-xl border px-3 py-2 text-[12px] leading-5', CARIMBO_TONE[tone])}>
+      <p className={cn('font-semibold', CARIMBO_TITULO[tone])}>{titulo}</p>
+      {children ? <p className="break-words text-ink-secondary">{children}</p> : null}
+    </div>
+  );
+}

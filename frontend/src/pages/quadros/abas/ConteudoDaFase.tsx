@@ -3,7 +3,9 @@
 // SGC legado. Quem diz o que cada fase mostra é `lib/conteudo-da-fase.ts`
 // (puro, testado); aqui só se desenha, na ordem, com os blocos das specs 003
 // (Itens, Alertas), 005 (Notas fiscais), 006 (Recebimento), 007 (B.O.) e 008
-// (Solicitações, só na Análise e antes de Itens — R-054).
+// (Solicitações, só na Análise e antes de Itens — R-054) e, depois da
+// Análise, os blocos do molde do legado (R-150): resumo, aprovação, envio,
+// enviado, acompanhamento, conclusão e concluído.
 // Cada bloco continua decidindo sozinho o que é editável (persona, fase,
 // RESTRICTED), espelhando o servidor; a lib empilha os blocos com o mesmo
 // espaçamento dos campos da fase.
@@ -18,6 +20,7 @@ import AbaNotasFiscais from './NotasFiscais';
 import AbaRecebimento from './Recebimento';
 import AbaBo from './Bo';
 import BlocoSolicitacoes from './Solicitacoes';
+import ResumoDoPedido from './ResumoDoPedido';
 
 type Props = ExtensaoContexto & { fases: MapaDeFases; sessao: SessaoPersona };
 
@@ -32,6 +35,8 @@ export default function ConteudoDaFase({ fases, sessao, ...ctx }: Props) {
       case 'notas-fiscais': return <AbaNotasFiscais {...ctx} />;
       case 'recebimento': return <AbaRecebimento {...ctx} />;
       case 'bo': return <AbaBo {...ctx} fases={fases} sessao={sessao} />;
+      // No Enviado o painel "Pedido enviado" já conta o envio: o selo sairia repetido.
+      case 'resumo': return <ResumoDoPedido {...ctx} semEnvio={fases.chaveDe(ctx.card.faseId) === 'enviado'} />;
     }
   };
 
