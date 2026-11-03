@@ -211,8 +211,9 @@ teto prático de ~2.000 linhas; acima disso a posição teria de ir por lote de 
 | `/galderma/acompanhamento` | `pages/galderma/AcompanhamentoGaldermaPage.tsx` | filtros, KPIs do mês, dois gráficos do período (sell-out meta × realizado, sell-in proposta × enviado), tabela de uma competência com blocos de colunas (`ChipContagem` para esconder), lançamento de sell-out e histórico |
 | `/galderma/composicao` | `pages/galderma/ComposicaoGaldermaPage.tsx` | filtros, barras de sell-in e de vendas por filial (valor e participação em cada barra), painel de estoque de agora a custo padrão |
 
-As três páginas compartilham `pages/galderma/abas.tsx` (o par de navegação entre as três
-telas e o porteiro de persona). Teto de 800 linhas por arquivo: a mesa se divide em
+As três páginas compartilham `pages/galderma/abas.tsx` (navegação entre as três telas e a
+recusa de acesso), `acesso.ts` (o hook de persona), `grafico.tsx` (barras com o valor em cada
+marca, R-116) e `formato.ts` (rótulos curtos). Teto de 800 linhas por arquivo: a mesa se divide em
 `PedidoGaldermaPage.tsx` (estado e carga), `mesa.tsx` (tabela do grupo e da filial) e
 `dialogos.tsx` (os diálogos).
 
@@ -221,7 +222,9 @@ inteligentes" — `permissoes.ts` (`verGalderma`, `operarGalderma`) e o ícone e
 `AdminLayout.tsx`. Rotas no `App.tsx`. Os três arquivos são do integrador: a mudança é a
 mínima e fica listada no relatório.
 
-## Regra pura (`frontend/src/lib/galderma.ts`)
+## Regra pura (`frontend/src/lib/galderma.ts` e `galderma-acompanhamento.ts`)
+
+Dois arquivos pelo teto de 800 linhas: a mesa em `galderma.ts`, o acompanhamento e a composição em `galderma-acompanhamento.ts`.
 
 Porte de `galderma-calculos.ts`, `galderma-importar.ts` (parser), `galderma-modelo-
 planilha.ts`, `galderma-kanban.ts` (`montarPedidosPorFilial`) e dos cálculos do
@@ -249,8 +252,8 @@ gestor, diretoria; `operarGalderma`: admin, analista, gestor; READ_ONLY zera ope
 
 | Momento | Chamadas |
 |---|---|
-| abrir a mesa | 3 (`sgcGaldNegociacoesListar`, `sgcWintFiliais`, `sgcPersonaAtual` em cache) |
-| escolher negociação | até 7 (itens, pedidos por filial, posição, caixas, custo padrão, herdado se complementar, cards) |
+| abrir a mesa | 4 (`sgcGaldNegociacoesListar`, `sgcWintFiliais`, `sgcWintGaldProdutos`, `sgcPersonaAtual` em cache) |
+| escolher negociação | até 6 (itens, pedidos por filial, cards, herdado se complementar, posição, caixas) |
 | digitar pedido | 0; confirmar 2; mesmo valor 0 |
 | gerar pedidos | `boardCarregar` + `cardsListar` + 4 por filial + converter |
 | acompanhamento | 5; trocar a competência da tabela: 1 (estoque inicial) |

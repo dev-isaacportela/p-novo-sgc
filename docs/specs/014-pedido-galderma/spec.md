@@ -1,6 +1,6 @@
 # Spec: Pedido Galderma — mesa de negociação, acompanhamento e composição
 
-**ID:** 014-pedido-galderma · **Status:** rascunho (perguntas abertas na seção *Perguntas ao usuário*) · **Data:** 2026-11-03
+**ID:** 014-pedido-galderma · **Status:** implementada com padrões provisórios (perguntas P-01..P-14 abertas) · **Data:** 2026-11-03
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -64,7 +64,7 @@ exemplo são os casos verificados do sistema antigo.
 **C-001 — Abrir a negociação do mês**
 - **Dado que** a compradora abre uma negociação nova sem mexer em nada
 - **Quando** ela confere o formulário
-- **Então** a competência é o mês corrente, a data do pedido é hoje, a descrição é "Pedido Galderma AAAA-MM", a cobertura alvo é 35 dias, "considerar o trânsito como compra do mês" vem desmarcado e as filiais com estoque ou venda Galderma vêm marcadas
+- **Então** a competência é o mês corrente, a data do pedido é hoje, a descrição é "Pedido Galderma AAAA-MM", a cobertura alvo é 35 dias, "considerar o trânsito como compra do mês" vem desmarcado e vêm marcadas as filiais da negociação mais recente (sem nenhuma, as três primeiras do ERP)
 - **E quando** ela desmarca todas as filiais e salva
 - **Então** a negociação não é criada e a tela diz "Selecione ao menos uma filial — o pedido é digitado por filial."
 
@@ -271,7 +271,7 @@ exemplo são os casos verificados do sistema antigo.
 
 | ID | Requisito | Como se mede |
 |---|---|---|
-| RNF-001 | Abrir a mesa custa **3** chamadas (negociações, filiais, identidade); escolher uma negociação custa no máximo **7** (itens, pedidos por filial, posição do ERP, caixas, custo padrão, herdado, pedidos gerados) | Contador de chamadas ao abrir e ao trocar de negociação |
+| RNF-001 | Abrir a mesa custa **4** chamadas (negociações, filiais, catálogo Galderma, identidade); escolher uma negociação custa no máximo **6** (itens, pedidos por filial, pedidos gerados, herdado, posição do ERP, caixas) | Contador de chamadas ao abrir e ao trocar de negociação |
 | RNF-002 | Digitar o pedido não custa chamada nenhuma; confirmar custa **2** (gravação e histórico); confirmar o mesmo valor custa **0** | Contador ao digitar e confirmar |
 | RNF-003 | Gerar os pedidos custa **4 por filial** (criar o pedido, o vínculo, a capa, os itens) mais **3** (a leitura do quadro, os pedidos já gerados e a conversão) | Contador numa geração de 3 filiais: 15 |
 | RNF-004 | Abrir o acompanhamento custa **5** chamadas (histórico da mesa, realizado do ERP, metas lançadas, filiais, estoque inicial); a composição **3** (composição, estoque, custo padrão) | Contador ao abrir cada tela |
