@@ -6,30 +6,30 @@
 // ERP e caixas; digitar = 0; confirmar = 2; gerar = 4 por filial + 3.
 import * as React from 'react';
 import { useKanban } from '@benenutri/mitra-kanban';
-import { Download, FileSpreadsheet, History, Plus, RefreshCw, Upload } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, History, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import {
-  Alert, Badge, Button, Code, EmptyState, GradeKpi, GradeMini, Kpi, MiniCartao, PageHeader, Pagination, Panel, PanelHeader,
-  RowMeta, RowTitle, Status, Table, Td, Th, Toolbar, Tr,
+  Alert, Badge, Button, Code, EmptyState, GradeKpi, GradeMini, Kpi, MenuAcoes, MiniCartao, PageHeader, Panel, PanelHeader,
+  RowMeta, SelectMenu, TextLink, Toolbar,
 } from '@/components/page';
 import { acao, linhas } from '@/lib/mitra-api';
 import { baixarCsv, baixarTexto, textoCsv } from '@/lib/csv';
-import { fmtData, fmtDataHora, hojeIso, moeda, numeroPt } from '@/lib/formato';
+import { hojeIso, moeda, numeroPt } from '@/lib/formato';
 import { unidadesPorCaixa } from '@/lib/compras';
 import { QUADRO_COMPRAS } from '@/lib/quadro';
 import {
   cabecalhoDe, cabecalhoPadrao, casarPlanilha, chave, COLUNAS_CSV_MESA, entradaDaImportacao, entradaDoCabecalho, entradaDoItem,
   FORNECEDOR_GALDERMA, itemDeLinha, itemDoPedidoGalderma, linhasCsvMesa, listaDeCodigos, listaDeFiliais, montarMesa,
-  montarPedidosPorFilial, negociacaoDeLinha, nomeArquivoMesa, parsearPlanilha, periodoDaPosicao, periodoDoPedido,
+  montarPedidosPorFilial, negociacaoDeLinha, nomeCurtoDaFilial, nomeArquivoMesa, parsearPlanilha, periodoDaPosicao, periodoDoPedido,
   planoDeGeracao, podeEditar, produtoDeLinha, produtosDisponiveis, resumoDaMesa, rotuloCompetencia, ROTULO_SITUACAO,
   textoDoModelo, tituloDoPedidoGalderma, type Cabecalho, type ItemProposta, type LinhaMesa, type Negociacao,
   type PedidoDaFilial, type PosicaoWinthor, type ProdutoGalderma,
 } from '@/lib/galderma';
 import { NavegacaoGalderma, SemAcessoGalderma } from './abas';
 import { useAcessoGalderma } from './acesso';
-import { TabelaMesa } from './mesa';
+import { BarraDaProposta, TabelaMesa } from './mesa';
 import { DialogoExtrato, DialogoGerar, DialogoHistorico, DialogoImportar, DialogoItem, DialogoNegociacao, type ResultadoImportacao } from './dialogos';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = 50;
 const LOG_POR_PAGINA = 50;
 const TODAS = { limite: 2000, offset: 0 };
 const un = (v: number) => numeroPt(v, 0);
@@ -40,8 +40,6 @@ const ITEM_VAZIO: ItemProposta = {
   id: 0, codprod: 0, ean: '', descricao: '', precoSellout: 0, precoNet: 0, precoLista: 0, precoListaDesc: 0, estoqueInicial: 0,
   mediaSellout: 0, previsaoSellout: 0, propostaSellin: 0, metaSellinValor: 0, observacao: '',
 };
-
-const TOM_SITUACAO = { aberta: 'live', fechada: 'off', convertida: 'attention' } as const;
 
 interface Carga {
   chave: string;
@@ -346,10 +344,22 @@ export default function PedidoGaldermaPage() {
       <PageHeader
         module="Compras"
         title="Pedido Galderma"
-        description="Mesa de negociação mensal: a proposta da indústria, a posição de cada filial no ERP e o pedido por filial."
         actions={(
           <>
             <NavegacaoGalderma />
+            {/* A lista de negociações virou seletor (topo da proposta de layout); as mais antigas, por página. */}
+            <div className="flex flex-col gap-1">
+              <SelectMenu label="Negociação" className="min-w-[20rem]" placeholder="Nenhuma negociação ainda" value={selecionada ? String(selecionada) : ''}
+                options={negociacoes.map((n) => ({ value: String(n.id), label: n.descricao, hint: `${rotuloCompetencia(n.competencia)} · ${ROTULO_SITUACAO[n.status]}` }))}
+                onChange={(v) => selecionar(Number(v))} />
+              {pagina > 1 || negociacoes.length === POR_PAGINA ? (
+                <RowMeta>
+                  {pagina > 1 ? <TextLink onClick={() => setPagina((p) => p - 1)}>Mais recentes</TextLink> : null}
+                  {pagina > 1 && negociacoes.length === POR_PAGINA ? ' · ' : null}
+                  {negociacoes.length === POR_PAGINA ? <TextLink onClick={() => setPagina((p) => p + 1)}>Mais antigas</TextLink> : null}
+                </RowMeta>
+              ) : null}
+            </div>
             <Button variant="primary" disabled={!acesso.operar} title={acesso.motivo || undefined}
               onClick={() => setCabecalho({ id: 0, inicial: cabecalhoPadrao(hojeIso(), negociacoes[0] ?? null, filiaisErp.map((f) => f.codfilial)) })}>
               <Plus /> Nova negociação
@@ -359,50 +369,31 @@ export default function PedidoGaldermaPage() {
       />
       {erro ? <Alert tone="error">{erro}</Alert> : null}
       {acesso.motivo ? <Alert tone="info">{`${acesso.motivo} Os controles de escrita ficam desabilitados.`}</Alert> : null}
-
-      <Panel>
-        <PanelHeader title="Negociações" hint="A mais recente primeiro. Clique para abrir." />
-        {negociacoes.length === 0 ? <EmptyState title="Nenhuma negociação ainda." hint="Abra a negociação do mês em “Nova negociação”." /> : (
-          <Table>
-            <thead><Tr><Th>Negociação</Th><Th>Competência</Th><Th>Data</Th><Th>Filiais</Th><Th>Situação</Th><Th>Criada por</Th></Tr></thead>
-            <tbody>
-              {negociacoes.map((n) => (
-                <Tr key={n.id} aria-selected={n.id === selecionada} onClick={() => selecionar(n.id)}
-                  className={n.id === selecionada ? 'cursor-pointer border-l-4 border-l-primary bg-accent' : 'cursor-pointer border-l-4 border-l-transparent'}>
-                  <Td><RowTitle>{n.descricao}</RowTitle>{n.idPai ? <RowMeta>{`complementar da ${n.idPai}`}</RowMeta> : null}</Td>
-                  <Td>{rotuloCompetencia(n.competencia)}</Td>
-                  <Td>{fmtData(n.dataPedido)}</Td>
-                  <Td>{n.filiais.join(', ')}</Td>
-                  <Td><Status tone={TOM_SITUACAO[n.status]}>{ROTULO_SITUACAO[n.status]}</Status></Td>
-                  <Td><RowMeta>{`${n.criadoPorNome || '—'} · ${fmtDataHora(n.criadoEm)}`}</RowMeta></Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-        <Pagination page={pagina} lastPage={negociacoes.length < POR_PAGINA ? pagina : pagina + 1} total={negociacoes.length}
-          unit="negociações nesta página" onPrevious={() => setPagina((p) => Math.max(1, p - 1))} onNext={() => setPagina((p) => p + 1)} />
-      </Panel>
+      {negociacoes.length === 0 ? <Panel><EmptyState title="Nenhuma negociação ainda." hint="Abra a negociação do mês em “Nova negociação”." /></Panel> : null}
 
       {negociacao ? (
         <>
           <Panel>
             <PanelHeader
-              title={negociacao.descricao}
-              hint={`${rotuloCompetencia(negociacao.competencia)} · filiais ${negociacao.filiais.join(', ')} · cobertura alvo ${negociacao.coberturaAlvoDias} d · trânsito como compra: ${negociacao.transitoComoCompra ? 'sim' : 'não'}`}
+              title={rotuloCompetencia(negociacao.competencia)}
+              hint={`${negociacao.descricao} · filiais ${negociacao.filiais.map((f) => nomeCurtoDaFilial(f, nomesFiliais)).join(' · ')} · cobertura alvo ${negociacao.coberturaAlvoDias} d · trânsito como compra: ${negociacao.transitoComoCompra ? 'sim' : 'não'}${negociacao.idPai ? ` · complementar da ${negociacao.idPai}` : ''}`}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={negociacao.status === 'convertida' ? 'accent' : 'neutral'}>{ROTULO_SITUACAO[negociacao.status]}</Badge>
-                <Button size="sm" disabled={!pode.cabecalho} onClick={() => setCabecalho({ id: negociacao.id, inicial: cabecalhoDe(negociacao) })}>Editar</Button>
+                <Badge tone={negociacao.status === 'fechada' ? 'neutral' : 'accent'}>{ROTULO_SITUACAO[negociacao.status]}</Badge>
                 {negociacao.status === 'fechada'
                   ? <Button size="sm" disabled={!pode.situacao} onClick={() => mudarSituacao('aberta')}>Reabrir</Button>
                   : <Button size="sm" disabled={!pode.situacao} onClick={() => mudarSituacao('fechada')}>Fechar</Button>}
-                <Button size="sm" variant="danger" disabled={!pode.excluir || cardsGerados.length > 0} onClick={excluir}>Excluir</Button>
-                <Button size="sm" onClick={() => abrirHistorico(1)}><History /> Histórico</Button>
-                <Button size="sm" onClick={() => setExtrato(true)}>Extrato</Button>
-                <Button size="sm" onClick={exportar}><Download /> Exportar</Button>
-                <Button size="sm" onClick={() => setRecargaMesa((n) => n + 1)}><RefreshCw /> Atualizar ERP</Button>
-                <Button size="sm" variant="primary" disabled={!pode.gerar || pedidosPorFilial.length === 0} onClick={() => setGeracao({ gerando: false, erro: '', gerados: [] })}>Gerar pedidos</Button>
+                <MenuAcoes itens={[
+                  { label: 'Editar', icon: <Pencil />, disabled: !pode.cabecalho, onClick: () => setCabecalho({ id: negociacao.id, inicial: cabecalhoDe(negociacao) }) },
+                  { label: 'Histórico', icon: <History />, onClick: () => abrirHistorico(1) },
+                  { label: 'Extrato', icon: <FileText />, onClick: () => setExtrato(true) },
+                  { label: 'Exportar', icon: <Download />, onClick: exportar },
+                  { label: 'Atualizar ERP', icon: <RefreshCw />, onClick: () => setRecargaMesa((n) => n + 1) },
+                  { label: 'Excluir', icon: <Trash2 />, tone: 'danger', disabled: !pode.excluir || cardsGerados.length > 0, onClick: excluir },
+                ]} />
+                <Button size="sm" variant="primary" disabled={!pode.gerar || pedidosPorFilial.length === 0} onClick={() => setGeracao({ gerando: false, erro: '', gerados: [] })}>
+                  {pedidosPorFilial.length ? `Gerar pedidos · ${pedidosPorFilial.length} ${pedidosPorFilial.length === 1 ? 'filial' : 'filiais'}` : 'Gerar pedidos'}
+                </Button>
               </div>
             </PanelHeader>
             {negociacao.status === 'convertida' ? (
@@ -416,11 +407,12 @@ export default function PedidoGaldermaPage() {
             {carga?.erroErp ? <div className="px-4 pt-3"><Alert tone="warn">{carga.erroErp}</Alert></div> : null}
             <div className="grid gap-3 p-4">
               <GradeKpi>
-                <Kpi rotulo="Proposta sell-in" valor={un(resumo.propostaSellin)} hint="unidades" />
+                <Kpi rotulo="Proposta sell-in" valor={un(resumo.propostaSellin)} hint={`unidades, ${resumo.produtos} ${resumo.produtos === 1 ? 'produto' : 'produtos'}`} />
                 <Kpi rotulo="Saldo a comprar" valor={un(resumo.saldoAComprarSimulado)} hint={`sem o pedido: ${un(resumo.saldoAComprar)}`} />
-                <Kpi rotulo="Sugestão por cobertura" valor={un(resumo.sugestao)} hint={`alvo ${negociacao.coberturaAlvoDias} dias`} />
-                <Kpi rotulo="Pedido consolidado" valor={un(resumo.pedido)} hint={`${moeda(v.pedidoNet)} a preço net, com a simulação`} />
+                <Kpi rotulo="Sugestão por cobertura" valor={un(resumo.sugestao)} hint={`em caixa fechada: ${un(resumo.sugestaoEmCaixa)} · alvo ${negociacao.coberturaAlvoDias} d`} />
+                <Kpi rotulo="Valor do pedido" valor={moeda(v.pedidoListaDesc)} hint={`com desconto · ${moeda(v.pedidoNet)} net`} />
               </GradeKpi>
+              <BarraDaProposta proposta={resumo.propostaSellin} comprado={resumo.compraMes} pedido={resumo.pedido} saldo={resumo.saldoAComprarSimulado} />
               <GradeMini colunas={4}>
                 <MiniCartao rotulo="Meta sell-in" valor={moeda(v.metaSellin)} />
                 <MiniCartao rotulo="Meta sell-out" valor={moeda(negociacao.metaSelloutValor)} hint="informada" />

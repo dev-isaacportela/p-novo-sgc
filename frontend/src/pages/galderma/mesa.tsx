@@ -114,6 +114,35 @@ function BlocoFiliais({
   );
 }
 
+/**
+ * O topo da mesa: a proposta de sell-in como uma barra — o comprado no mês e o
+ * pedido em cima dela, o resto é o saldo. SVG com as cores por token (`fill-*`),
+ * nunca `style`; o texto ao lado diz os números (a barra não é a única leitura).
+ */
+export function BarraDaProposta({ proposta, comprado, pedido, saldo }: { proposta: number; comprado: number; pedido: number; saldo: number }) {
+  const total = Math.max(proposta, comprado + pedido, 1);
+  const pctComprado = (Math.max(0, comprado) / total) * 100;
+  const pctPedido = (Math.max(0, pedido) / total) * 100;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <svg viewBox="0 0 100 4" preserveAspectRatio="none" className="h-2.5 w-full overflow-hidden rounded-full" role="img"
+        aria-label={`Proposta de ${un(proposta)} unidades: comprado no mês ${un(comprado)}, pedido ${un(pedido)}, saldo ${un(saldo)}`}>
+        <rect x="0" y="0" width="100" height="4" className="fill-muted" />
+        <rect x="0" y="0" width={pctComprado} height="4" className="fill-ink-muted" />
+        <rect x={pctComprado} y="0" width={pctPedido} height="4" className="fill-primary" />
+      </svg>
+      <RowMeta>
+        <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+          <strong className="text-ink">{`Proposta ${un(proposta)} un.`}</strong>
+          <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-primary" aria-hidden />{`Pedido ${un(pedido)}`}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-ink-muted" aria-hidden />{`Comprado no mês ${un(comprado)}`}</span>
+          <span>{`Saldo depois do pedido ${un(saldo)}`}</span>
+        </span>
+      </RowMeta>
+    </div>
+  );
+}
+
 export function TabelaMesa({
   linhas, alvo, editavel, onSimular, onConfirmar, onEditarItem, onRemoverItem,
 }: {

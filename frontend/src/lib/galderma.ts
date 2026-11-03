@@ -189,6 +189,12 @@ export function entradaDoCabecalho(c: Cabecalho, agora: string) {
   };
 }
 
+/** O nome curto da filial no topo da mesa: a UF do fim da razão social ("… LTDA - DF" → DF), senão "filial N". */
+export function nomeCurtoDaFilial(codfilial: string, nomes: Map<string, string>): string {
+  const uf = /\s-\s*([A-Z]{2})\s*$/.exec(nomes.get(codfilial) ?? '')?.[1];
+  return uf ?? `filial ${codfilial}`;
+}
+
 /** C-018 / P-08: a origem possível é convertida, da mesma competência e sem complementar. */
 export function origensPossiveis(negociacoes: Negociacao[], competencia: string): Negociacao[] {
   return negociacoes.filter((n) => n.status === 'convertida' && n.competencia === competencia && n.complementares === 0);
@@ -484,7 +490,11 @@ export function montarMesa(p: {
 export function resumoDaMesa(linhas: LinhaMesa[]) {
   const soma = (f: (l: LinhaMesa) => number) => linhas.reduce((t, l) => t + f(l), 0);
   return {
+    produtos: linhas.length,
     propostaSellin: soma((l) => l.item.propostaSellin),
+    compraMes: soma((l) => l.grupo.compraMes),
+    // O topo da mesa mostra também a sugestão em caixa fechada (P-04: é o que a varinha grava).
+    sugestaoEmCaixa: soma((l) => l.filiais.reduce((t, f) => t + sugestaoEmCaixa(f.sugestaoCobertura, l.unidadesPorCaixa), 0)),
     saldoAComprar: soma((l) => l.grupo.saldoAComprar),
     saldoAComprarSimulado: soma((l) => l.grupo.saldoAComprarSimulado),
     sugestao: soma((l) => l.grupo.sugestaoCobertura),
