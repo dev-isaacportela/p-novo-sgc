@@ -52,7 +52,7 @@ export default function ConteudoDaFase({ fases, sessao, recarregarPedido, ...ctx
       case 'aprovacao': return <BlocoAprovacao {...ctx} />;
       case 'envio': return <BlocoEnvio {...ctx} sessao={sessao} recarregarPedido={recarregarPedido} />;
       case 'enviado': return <BlocoEnviado {...ctx} />;
-      case 'acompanhamento': return <BlocoAcompanhamento {...ctx} />;
+      case 'acompanhamento': return <BlocoAcompanhamento {...ctx} fases={fases} sessao={sessao} />;
       case 'conclusao': return <BlocoConclusao {...ctx} />;
       case 'concluido': return <BlocoConcluido {...ctx} />;
       case 'itens-pedido': return <BlocoItensDoPedido {...ctx} />;

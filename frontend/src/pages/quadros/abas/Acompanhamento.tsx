@@ -3,25 +3,48 @@
 // em, dias úteis desde o envio e o selo do escalonamento — e os itens do
 // pedido com a situação, recolhidos. Regra em `lib/acompanhamento.ts`; capa e
 // itens do `PedidoProvider`, sem execução nova.
+//
+// R-154 (P-4): o botão do legado "Produto faturado — ir para Faturamento"
+// (PW:11214-11226). O movimento automático do recebimento continua; este é
+// o mesmo `ctx.mover` da coluna da direita, e quem recusa de verdade é o
+// `sgcPodeMover` (o par transito>faturamento não tem pendência).
 import * as React from 'react';
-import { Truck } from 'lucide-react';
+import { CircleCheck, Truck } from 'lucide-react';
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
-import { Panel, SecaoRecolhivel, Status } from '@/components/page';
+import { Button, Panel, SecaoRecolhivel, Status } from '@/components/page';
+import { estadoDoPedido } from '@/lib/pedido';
+import { motivoDeDestino } from '@/lib/transicoes';
+import type { SessaoPersona } from '@/lib/persona';
+import type { MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
 import { acompanhamentoDoFaturamento } from '@/lib/acompanhamento';
 import { totaisDoEnvio } from '@/lib/envio-industria';
 import { usePedido } from './pedido-contexto';
 import ItensEnviados from './ItensEnviados';
 
-export default function BlocoAcompanhamento(ctx: ExtensaoContexto) {
+type Props = ExtensaoContexto & { fases: MapaDeFases; sessao: SessaoPersona };
+
+export default function BlocoAcompanhamento({ fases, sessao, ...ctx }: Props) {
   const pedido = usePedido(ctx.card.id, ctx.card.criadoPor);
   const [itensAbertos, setItensAbertos] = React.useState(false);
+  const [movendo, setMovendo] = React.useState(false);
 
   const capa = pedido.capa && pedido.capa.idCard === ctx.card.id ? pedido.capa : null;
   if (!capa) return null;
 
   const acompanhamento = acompanhamentoDoFaturamento({ dtEnvio: capa.dtEnvio, hoje: hojeIso(), percFaturado: capa.percFaturadoValor });
   const totais = totaisDoEnvio(pedido.itens);
+  const meu = Number(ctx.card.criadoPor ?? 0) === sessao.usuarioId;
+  const motivo = motivoDeDestino(sessao.persona, sessao.acesso, 'transito', 'faturamento', estadoDoPedido(null, meu));
+
+  async function irParaFaturamento() {
+    setMovendo(true);
+    try {
+      await ctx.mover(fases.faseIdDe('faturamento'));
+    } finally {
+      setMovendo(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -44,8 +67,18 @@ export default function BlocoAcompanhamento(ctx: ExtensaoContexto) {
             <p className="text-[11px] text-ink-secondary">{acompanhamento.diasUteis === 1 ? 'dia útil' : 'dias úteis'} desde o envio</p>
           </div>
         </div>
-        <div className="border-t border-rule-row px-4 py-2.5 text-[12px]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-rule-row px-4 py-2.5 text-[12px]">
           <Status tone={acompanhamento.tom}>{acompanhamento.selo}</Status>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => void irParaFaturamento()}
+            disabled={movendo || ctx.travado || motivo !== null}
+            title={motivo ?? 'O pedido também segue sozinho quando todas as notas dão entrada no WinThor.'}
+          >
+            <CircleCheck aria-hidden />
+            Produto faturado — ir para Faturamento
+          </Button>
         </div>
       </Panel>
 
