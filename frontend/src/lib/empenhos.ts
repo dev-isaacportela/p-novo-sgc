@@ -423,11 +423,11 @@ export const tituloDoPedido = (edital: string, fornecedor: string) => `${edital}
 export const FORNECEDOR_TRANSFERENCIA = 'Transferência entre filiais';
 
 /** C-007: os outros empenhos do pregão (o deste card fora). */
-export const outrosEmpenhos = <T extends { ID_CARD: unknown }>(lista: T[], cardId: number): T[] =>
+export const outrosEmpenhos = <T extends Record<string, unknown>>(lista: T[], cardId: number): T[] =>
   lista.filter((l) => n(l.ID_CARD) !== cardId);
 
 /** C-032: "faltam N de M" no empenho; "pedido K de M" no pedido. */
-export function textoSituacao(papel: Papel, pedidos: { ID_CARD: unknown; FASE: unknown }[], cardId: number): string {
+export function textoSituacao(papel: Papel, pedidos: Record<string, unknown>[], cardId: number): string {
   if (!pedidos.length) return '';
   if (papel === 'EMPENHO') {
     const faltam = pedidos.filter((p) => !(FINAIS_EMPENHO as readonly string[]).includes(String(p.FASE))).length;
