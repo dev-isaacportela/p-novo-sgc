@@ -5,7 +5,11 @@
 // indicadores. O que é regra pura (CMV, decisão, prontidão, prazos) está em
 // frontend/tests/empenhos.test.mjs; aqui se prova o SQL.
 import { assert, CENARIO } from './base.mjs';
-import { MENSAGENS_EMPENHO as M } from '../../add-017-empenhos.mjs';
+import { MENSAGENS_EMPENHO as M, PARES_EMPENHO } from '../../add-017-empenhos.mjs';
+// A regra da tela, módulo puro: a paridade com o gancho é provada aqui (como a RNF-005 da 002).
+import {
+  estadoDaCarga, FASES_EMPENHO, MENSAGENS_EMPENHO as MENSAGENS_TELA, motivoDeDestinoEmpenho, PARES_EMPENHO as PARES_TELA,
+} from '../../../frontend/src/lib/empenhos.ts';
 
 const AGORA = '2026-11-03T12:00:00';
 
@@ -412,5 +416,30 @@ export async function suite(ctx) {
     const privado = meses.reduce((s, m) => s + Number(m.VENDA_PRIVADO), 0);
     assert.ok(publico >= 30 * 50, 'a venda ao órgão (ramo 12) é pública');
     assert.ok(privado >= 15 * 60);
+  });
+
+  await teste('RN-008 / RN-009 / D-001: tela e gancho concordam — mesmas frases, mesmos pares e a mesma resposta em cada card × persona × destino', async () => {
+    assert.deepEqual(MENSAGENS_TELA, M);
+    assert.deepEqual(PARES_TELA, PARES_EMPENHO);
+    const personas = [['admin', U.admin], ['analista', U.ana], ['gestor', U.gil], ['diretoria', U.dora], ['comercial', U.leo]];
+    const acessoDe = (id) => String(db.prepare('SELECT ACCESS_LEVEL FROM INT_USER WHERE ID = ?').get(id)?.ACCESS_LEVEL || 'MEMBER');
+    const porId = Object.fromEntries(Object.entries(fases).map(([chave, id]) => [id, chave]));
+    const cards = db.prepare('SELECT ID, FASE_ID, CRIADO_POR FROM KB_CARD WHERE BOARD_ID = ? AND EXCLUIDO_EM IS NULL').all(boardId);
+    assert.ok(cards.length >= 6, 'empenhos e pedidos em várias fases');
+    let comparados = 0;
+    for (const card of cards) {
+      const carga = await chamar('sgcEmpCarregar', { cardId: card.ID }, U.admin);
+      for (const [persona, usuarioId] of personas) {
+        const estado = estadoDaCarga(carga, card.ID, Number(card.CRIADO_POR) === usuarioId);
+        for (const destino of FASES_EMPENHO) {
+          const servidor = await podeMover(usuarioId, card.ID, destino);
+          const tela = motivoDeDestinoEmpenho(persona, acessoDe(usuarioId), porId[card.FASE_ID], destino, estado);
+          assert.equal(servidor.MOTIVO, tela ?? '', `card ${card.ID} ${porId[card.FASE_ID]}>${destino} como ${persona}`);
+          assert.equal(Number(servidor.PODE), tela === null ? 1 : 0);
+          comparados += 1;
+        }
+      }
+    }
+    assert.ok(comparados >= 300, `${comparados} combinações`);
   });
 }
