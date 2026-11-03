@@ -165,7 +165,7 @@ GROUP BY P.CODPROD, P.CODFILIAL, P.DT_REF, P.CODCLI`;
 
 // RF-019/D-010: o único recorte por autoria de uma listagem do projeto, e ele
 // mora NO SERVIDOR — esconder na tela não é recorte (A8 da onda 2).
-const RECORTE_COMERCIAL = `( S.CRIADO_POR = :VAR_USER
+export const RECORTE_COMERCIAL = `( S.CRIADO_POR = :VAR_USER
     OR EXISTS ( SELECT 1 FROM INT_USER IU
                 LEFT JOIN SGC_USUARIO_PERSONA UP ON UP.USUARIO_ID = IU.ID
                 WHERE IU.ID = :VAR_USER
@@ -186,13 +186,13 @@ const COLUNAS_SOLICITACAO = `S.ID, S.CODPROD, S.DESCRICAO, S.EMBALAGEM, S.UNIDAD
 // Os três primeiros LEFT JOIN são o CONTRATO DE COMPOSIÇÃO de R-075, não
 // escolha desta consulta: C, SF e I com estas junções são o que a régua de
 // situacao-solicitacao.sql pressupõe, e o add-012 da 009 repete os mesmos.
-const JUNCOES_SOLICITACAO = `LEFT JOIN KB_CARD C         ON C.ID = S.ID_CARD AND C.EXCLUIDO_EM IS NULL
+export const JUNCOES_SOLICITACAO = `LEFT JOIN KB_CARD C         ON C.ID = S.ID_CARD AND C.EXCLUIDO_EM IS NULL
 LEFT JOIN SGC_FASE SF       ON SF.BOARD_ID = C.BOARD_ID AND SF.FASE_ID = C.FASE_ID
 LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = S.ID_CARD AND I.CODPROD = S.CODPROD AND I.STATUS <> 'removido'
 LEFT JOIN INT_USER UC       ON UC.ID = S.CRIADO_POR
 LEFT JOIN INT_USER UA       ON UA.ID = S.AVALIADO_POR`;
 
-const FILTROS_PUBLICADOS = `  AND ('{{status}}'    = '' OR S.STATUS = '{{status}}')
+export const FILTROS_PUBLICADOS = `  AND ('{{status}}'    = '' OR S.STATUS = '{{status}}')
   AND ('{{situacao}}'  = '' OR '{{situacao}}' = ${SITUACAO})
   AND ({{codfornec}}   = 0  OR S.CODFORNEC = {{codfornec}})
   AND ('{{codfilial}}' = '' OR S.CODFILIAL = '{{codfilial}}')

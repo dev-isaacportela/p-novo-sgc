@@ -355,6 +355,9 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscEmpCancelar: 'sgcEscEmpCancelar',
   sgcEmpCarregar: 'sgcEmpCarregar',
   sgcEmpItensGravar: 'sgcEmpItensGravar',
+  // Spec 017 (R-180): visões agrupadas das solicitações (add-019).
+  sgcSolicitacoesAgrupar: 'sgcSolicitacoesAgrupar',
+  sgcSolicitacoesAgruparTotal: 'sgcSolicitacoesAgruparTotal',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -685,4 +688,7 @@ export const SERVER_FUNCTIONS = {
   sgcEscEmpCancelar: '8668',
   sgcEmpCarregar: '8680',
   sgcEmpItensGravar: '8681',
+  // Spec 017 (R-180): visões agrupadas das solicitações — faixa 88xx até o sync trazer os reais.
+  sgcSolicitacoesAgrupar: '8801',
+  sgcSolicitacoesAgruparTotal: '8802',
 };

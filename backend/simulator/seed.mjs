@@ -32,6 +32,7 @@ import { seed011 } from './seed/011-compras-inteligentes.mjs';
 import { seed013 } from './seed/013-movimentacao.mjs';
 import { seed014 } from './seed/014-galderma.mjs';
 import { seed015 } from './seed/015-empenhos.mjs';
+import { seed017 } from './seed/017-solicitacoes-apoio.mjs';
 
 const iso = (data) => data.toISOString().slice(0, 19);
 
@@ -120,6 +121,8 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
   seed014(db, CENARIO);
   // Onda 5 (R-160): quadro de empenhos — o segundo quadro, com fases e campos próprios.
   seed015(db, CENARIO);
+  // Onda 5 (R-180): apoio à avaliação das solicitações — só WinThor (produto 5311).
+  seed017(db, CENARIO);
 
   db.close();
   return counts;

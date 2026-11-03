@@ -38,6 +38,7 @@ export function VendasNaFilial({
   semPublico,
   unidadesPorCaixa = 1,
   referencia = 'unidades',
+  semEstoque = 'estoque na filial: ver o alerta',
 }: {
   codprod: number;
   codfilial: string;
@@ -48,6 +49,8 @@ export function VendasNaFilial({
   semPublico: boolean;
   unidadesPorCaixa?: number;
   referencia?: ReferenciaSugestao;
+  /** O texto no lugar do estoque quando ele é `null` (017: o apoio da avaliação diz por quê). */
+  semEstoque?: string;
 }) {
   const [estado, setEstado] = React.useState<{ chave: string; historico: PontoHistorico[] | null; erro: string } | null>(null);
   const chave = `${codprod}|${codfilial}`;
@@ -91,7 +94,7 @@ export function VendasNaFilial({
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-secondary">
             <span><span className="font-semibold text-ink">{`${decimal(resumo.total / caixa)} ${unidade}`}</span> nos 6 meses</span>
             <span><span className="font-semibold text-ink">{`${decimal(resumo.mediaMensal / caixa)} ${unidade}`}</span> por mês</span>
-            <span>{estoque === null ? 'estoque na filial: ver o alerta' : <>estoque <span className="font-semibold text-ink">{`${decimal(resumo.estoque / caixa)} ${unidade}`}</span></>}</span>
+            <span>{estoque === null ? semEstoque : <>estoque <span className="font-semibold text-ink">{`${decimal(resumo.estoque / caixa)} ${unidade}`}</span></>}</span>
             {estoque === null ? null : (
               <span>{resumo.coberturaDias === null ? 'sem giro' : <>cobre <span className="font-semibold text-ink">{`${resumo.coberturaDias} d`}</span></>}</span>
             )}
