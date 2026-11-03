@@ -247,17 +247,22 @@ ORDER BY H.EM, H.ID`;
 // O bloco NÃO filtra por fase: quem decide que ele só aparece na montagem é
 // BLOCOS_POR_FASE.analise (R-050/R-054), e as escritas conferem a fase no
 // servidor — assim a mesma SF serve ao teste da regra sem depender da tela.
+// R-133: a já incluída NESTE pedido continua no bloco, com VINCULADA = 1 — o
+// cartão mostra "✓ Adicionado" e, com menos no pedido do que o comercial
+// pediu, "Atualizar p/ N" (o desenho do SGC legado). A de outro pedido segue
+// fora.
 const SQL_SOLICITACOES_DA_MONTAGEM = `SELECT S.ID, S.CODPROD, S.DESCRICAO, S.EMBALAGEM, S.UNIDADE, S.QUANTIDADE,
   COALESCE(S.JUSTIFICATIVA, '') AS JUSTIFICATIVA,
   S.CODCLI, COALESCE(S.CLIENTE, '') AS CLIENTE, S.PRIORIDADE, S.STATUS,
   S.CRIADO_POR, COALESCE(U.NOME, '') AS CRIADO_POR_NOME, COALESCE(S.CRIADO_EM, '') AS CRIADO_EM,
-  COALESCE(I.QT_PEDIDA, 0) AS QT_NO_PEDIDO
+  COALESCE(I.QT_PEDIDA, 0) AS QT_NO_PEDIDO,
+  CASE WHEN S.ID_CARD = P.ID_CARD THEN 1 ELSE 0 END AS VINCULADA
 FROM SGC_PEDIDO P
 JOIN SGC_SOLICITACAO S      ON S.CODFORNEC = P.CODFORNEC AND S.CODFILIAL = P.CODFILIAL
 LEFT JOIN INT_USER U        ON U.ID = S.CRIADO_POR
 LEFT JOIN SGC_PEDIDO_ITEM I ON I.ID_CARD = P.ID_CARD AND I.CODPROD = S.CODPROD AND I.STATUS <> 'removido'
 WHERE P.ID_CARD = {{cardId}}
-  AND ( S.STATUS = 'pendente' OR (S.STATUS = 'aprovada' AND S.ID_CARD = 0) )
+  AND ( S.STATUS = 'pendente' OR (S.STATUS = 'aprovada' AND S.ID_CARD IN (0, P.ID_CARD)) )
 ORDER BY FIELD(S.PRIORIDADE, 'urgente', 'alta', 'normal'), S.CRIADO_EM, S.ID
 LIMIT 100`;
 

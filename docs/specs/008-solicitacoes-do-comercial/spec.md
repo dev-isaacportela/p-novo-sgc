@@ -90,7 +90,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 **C-008 — "Incluir no pedido" cria o item e vincula**
 - **Dado que** a solicitação pendente do produto 5301 com quantidade 24 aparece no pedido em montagem
 - **Quando** a compradora clica em "Incluir no pedido"
-- **Então** o pedido ganha o item 5301 com **quantidade pedida 24** (que ela ajusta como qualquer outro item), a solicitação passa a **aprovada e vinculada àquele pedido**, some do bloco, o histórico dela ganha "aprovada" e "vinculada", e o histórico do pedido registra a inclusão com o nome do vendedor
+- **Então** o pedido ganha o item 5301 com **quantidade pedida 24** (que ela ajusta como qualquer outro item), a solicitação passa a **aprovada e vinculada àquele pedido**, some do bloco, o histórico dela ganha "aprovada" e "vinculada", e o histórico do pedido registra a inclusão com o nome do vendedor. *Emendado pela R-133: ela sai da fila mas continua no bloco do próprio pedido, como "Adicionado" (C-024).*
 
 **C-009 — Item removido desfaz o vínculo**
 - **Dado que** a solicitação do C-008 está vinculada ao item 5301 do pedido em montagem
@@ -167,6 +167,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** o gestor exporta
 - **Então** o arquivo traz exatamente as linhas mostradas, com produto, cliente (código e nome), filial, data de aprovação, situação do cliente, situação do estoque, quantidade vendida ao cliente, estoque atual e dias de cobertura
 
+**C-024 — As solicitações em cartões no card estreito (R-133)**
+- **Dado que** o pedido em montagem da Fresenius na filial 1 tem 3 solicitações — uma urgente pendente (23, 120 un.), uma alta já incluída neste pedido com 48 pedidas e 24 no pedido (34) e uma normal pendente sem cliente (24, 30 un.)
+- **Quando** a compradora abre o card, estreito
+- **Então** cada solicitação é um cartão, sem tabela nem rolagem horizontal: o nome (cortado com reticências, completo ao passar o mouse), o selo da prioridade (urgente em perigo, alta em atenção, normal neutro), "Cód · Qtd · Cliente · Abertura · Solicitante", o status, a justificativa numa linha que expande, o seletor de custo e as ações; a pendente tem "+ Adicionar", que inclui com a quantidade solicitada e a origem na solicitação; a do 34 mostra "No pedido: 24 — comercial pediu 48", borda de atenção, "✓ Adicionado" e "Atualizar p/ 48", que muda a quantidade no rascunho e só grava no Salvar dos itens; quando o pedido tem o que o comercial pediu, a borda é verde; "Recusar" segue como antes
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -178,7 +183,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-005 | Compras DEVE poder aprovar (pondo na fila) ou recusar (com motivo de pelo menos 10 caracteres) uma solicitação pendente | C-004, C-005 | must |
 | RF-006 | Aprovar NÃO DEVE criar pedido nem item: a solicitação aprovada espera a montagem | C-004 | must |
 | RF-007 | O vendedor DEVE poder cancelar a própria solicitação enquanto ela estiver pendente, e só ela | C-006 | must |
-| RF-008 | O pedido em montagem DEVE mostrar as solicitações ativas do mesmo fornecedor e da mesma filial, ordenadas por prioridade | C-007, C-012 | must |
+| RF-008 | O pedido em montagem DEVE mostrar as solicitações ativas do mesmo fornecedor e da mesma filial, ordenadas por prioridade | C-007, C-012. *Emendado pela R-133: e as já incluídas neste pedido, marcadas (C-024).* | must |
 | RF-009 | "Incluir no pedido" DEVE aprovar a solicitação pendente, criar o item com a quantidade solicitada e vincular os dois, em uma operação | C-008 | must |
 | RF-010 | Uma solicitação DEVE estar vinculada a no máximo um item de um pedido | C-013 | must |
 | RF-011 | Remover ou zerar o item DEVE desfazer o vínculo e devolver a solicitação à fila | C-009 | must |
@@ -193,6 +198,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-020 | As personas DEVEM obedecer à matriz de C-019, com controles desabilitados (nunca escondidos) para quem não opera | C-019 | must |
 | RF-021 | O rastreio DEVE ser exportável com as mesmas linhas mostradas | C-023 | should |
 | RF-022 | O item criado a partir de uma solicitação DEVE mostrar, na lista de itens do pedido, de quem veio a solicitação | C-008 | should |
+| RF-023 | O bloco da montagem DEVE mostrar cada solicitação num cartão que cabe em qualquer largura de card, com a já incluída neste pedido marcada como adicionada e a opção de atualizar a quantidade do pedido para a solicitada (R-133) | C-024 | must |
 
 ## Requisitos não-funcionais
 
@@ -297,6 +303,8 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
   comercial (que lê só as suas) e a diretoria (que só lê). Acesso somente leitura não opera
   nada; acesso restrito só inclui solicitação em pedido que criou.
 
+- **RN-019 — O cartão da montagem (R-133).** No pedido = o item do pedido tem quantidade maior que zero; "completa" quando a quantidade do pedido é a solicitada ou mais, "menor" quando é menos — só "menor" oferece "Atualizar p/ N". A linha de dados é código, quantidade solicitada, cliente (ou "Sem cliente informado"), data de abertura e quem solicitou. A já incluída neste pedido não tem "Adicionar" nem "Recusar".
+
 ## Testes
 
 | Cenário / regra | Evidência automática exigida | Camada |
@@ -342,10 +350,13 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-016 | 120 solicitações produzem 1 lote e 121 produzem 2; nenhum texto de lote passa de 4000 caracteres; lote ausente vira "sem dado"; os padrões são 30, 60 e 90 | regra de tela |
 | RN-017 | a ordenação por prioridade devolve urgente, alta, normal; prioridade desconhecida vira normal | regra de tela |
 | RN-018 | a matriz por persona e por nível de acesso, com as três chaves novas, e o menu do comercial com exatamente dois itens | regra de tela |
+| C-024 | incluir a pendente do 5301 tira-a da fila (3 na fila) e ela continua no bloco com a marca de incluída neste pedido e 24 no pedido; no cartão, 10 pedidas e 0 no pedido = fora, 10 e 10 = completa, 10 e 4 = menor com "No pedido: 4 — comercial pediu 10"; a linha de dados de 1.200 un. para a Farmácia Central aberta em 28/10/2026 por Leo | regra de negócio + regra de tela |
+| RN-019 | ver C-024; urgente → perigo, alta → atenção, normal → neutro | regra de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-001 — o formulário de nova solicitação com as buscas de produto e de cliente, nos dois temas
-  - [ ] C-007 — o bloco de solicitações acima dos itens no pedido em montagem, nos dois temas
+  - [ ] C-007 — o bloco de solicitações acima dos itens no pedido em montagem, nos dois temas. *R-133: o bloco vai depois dos itens.*
+  - [x] C-024 — os cartões no card estreito (1600, 1280 e 1024 px), sem rolagem horizontal, nos dois temas (R-133)
   - [ ] C-014/C-015 — o painel de rastreio com os dois eixos lado a lado, sem que um pareça sobrepor o outro
   - [ ] C-019 — os botões desabilitados (nunca escondidos) para a diretoria, para o comercial e para o acesso somente leitura
   - [ ] C-021 — o menu do comercial com Solicitações e Produtos em B.O., e nada mais

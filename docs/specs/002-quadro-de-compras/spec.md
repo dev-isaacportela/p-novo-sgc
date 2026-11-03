@@ -458,7 +458,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-018 | prioridade aceita normal/alta/urgente e nasce normal | regra de negócio |
 | RN-019 | as 7 ações da lista geram 7 linhas de histórico, cada uma com autor e instante | regra de negócio |
 | RN-020 | nas etapas 5, 6, 7 e 8 a única recusa possível é de persona | regra de negócio |
-| C-046 | `resumo-do-pedido.test.mjs`: selos na ordem (técnica, diretoria, envio), reprovação como alerta com a da diretoria primeiro, cancelamento com motivo/quem/quando, faturado satura em 100 e diz quanto falta | regra de tela |
+| C-046 | `capa-do-pedido.test.mjs`: selos na ordem (técnica, diretoria, envio), reprovação como alerta com a da diretoria primeiro, cancelamento com motivo/quem/quando, faturado satura em 100 e diz quanto falta | regra de tela |
 | C-047 | `aprovacao.test.mjs`: total, cobertura média atual → após, preço especial e os 9 indicadores com a lista de produtos (limite de cobertura do item, não 60 fixo) | regra de tela |
 | C-048 | `envio-industria.test.mjs`: só vai o que tem quantidade, totais, texto do "Copiar itens" com cabeçalho e número pt-BR | regra de tela |
 | C-049 | `envio-industria.test.mjs`: próximo movimento travado sem nota e liberado com 1 ou mais | regra de tela |

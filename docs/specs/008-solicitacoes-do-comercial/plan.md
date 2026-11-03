@@ -994,6 +994,7 @@ C-019.
 | RN-016 | `tests/solicitacoes.test.mjs` | `lotesDePares` de 120 pares devolve 1 lote e de 121 devolve 2; nenhum lote passa de 4000 caracteres; `LIMITES_PADRAO` é `{ 30, 60, 90 }`; `montarPares` ignora alvo sem `AVALIADO_EM`, sem produto ou sem filial, e não repete par idêntico |
 | RNF-001 | `smoke/008-solicitacoes.mjs` | o bloco da montagem é **uma** SF: `sgcSolicitacoesDaMontagem` devolve as 3 linhas com cliente, vendedor e justificativa em uma chamada — nenhuma outra SF é necessária para desenhá-lo |
 | RNF-003 | `tests/solicitacoes.test.mjs` | coberto por RN-016 (120 por lote, teto de 4000) |
+| C-024 · RN-019 · RF-023 | `smoke/008-solicitacoes.mjs` + `tests/solicitacoes.test.mjs` | R-133: depois de incluir a `pendenteAlta`, a fila (`VINCULADA <> 1`) tem 3 e a incluída volta com `VINCULADA = 1` e `QT_NO_PEDIDO = 24`; `estadoNoPedido`/`textoNoPedido`/`metaDaSolicitacao` e `TOM_PRIORIDADE_CARTAO` com os números da spec |
 
 - **Backend:** `backend/simulator/smoke/008-solicitacoes.mjs`, um `teste()` por linha, título
   começando pelo id do cenário/regra. As **duas** consultas ao WinThor asserem **contagem >

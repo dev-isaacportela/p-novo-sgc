@@ -1,8 +1,8 @@
 // R-141 / C-046 (002): o resumo que abre o card depois da Análise — selos de
-// aprovação, envio e cancelamento e o faturado do topo (src/lib/resumo-do-pedido.ts).
+// aprovação, envio e cancelamento e o faturado do topo (src/lib/capa-do-pedido.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selosDoPedido, faturadoDoPedido, textoDoEnvio, rotuloPercentual } from '../src/lib/resumo-do-pedido.ts';
+import { selosDoPedido, faturadoDoPedido, textoDoEnvio, rotuloPercentual } from '../src/lib/capa-do-pedido.ts';
 
 const CAPA = {
   vlTotal: 1000, vlFaturado: 0, percFaturadoValor: 0,

@@ -18,7 +18,7 @@ import { acao } from '@/lib/mitra-api';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
 import { diasUteisEntre } from '@/lib/dias-uteis';
 import { percentuaisFaturados, temNfNaCapa, textoDaCapaFaturamento } from '@/lib/faturamento';
-import { rotuloPercentual } from '@/lib/resumo-do-pedido';
+import { rotuloPercentual } from '@/lib/capa-do-pedido';
 import { usePersona } from '@/lib/persona';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 import {

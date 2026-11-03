@@ -16,7 +16,7 @@ test('R-050: toda fase do quadro tem ao menos um bloco, sem repetição, e nenhu
 
 test('R-050/R-054: a montagem abre com as solicitações do comercial, depois itens e alertas; expedição mostra notas fiscais e recebimento; faturamento e B.O. mostram B.O. e notas', () => {
   // R-054: só a Análise mostra a fila do comercial, e antes de Itens.
-  assert.deepEqual(blocosDaFase('analise'), ['solicitacoes', 'itens', 'alertas']);
+  assert.deepEqual(blocosDaFase('analise'), ['resumo', 'itens', 'solicitacoes', 'alertas'], 'R-133: a ordem do SGC legado');
   for (const fase of ['tecnica', 'diretoria']) {
     assert.ok(blocosDaFase(fase).includes('itens') && blocosDaFase(fase).includes('alertas'), fase);
   }
@@ -32,19 +32,19 @@ test('R-050/R-054: a montagem abre com as solicitações do comercial, depois it
   assert.ok(!blocosDaFase('analise').includes('bo'), 'B.O. antes do envio não existe');
 });
 
-test('R-141: depois da Análise toda fase abre com o resumo e traz o bloco de assunto do legado antes do trabalho', () => {
+test('R-141: depois da Análise toda fase abre com a capa e traz o bloco de assunto do legado antes do trabalho', () => {
   for (const fase of FASES.filter((f) => f !== 'analise')) {
-    assert.equal(blocosDaFase(fase)[0], 'resumo', fase);
+    assert.equal(blocosDaFase(fase)[0], 'capa', fase);
   }
-  assert.ok(!blocosDaFase('analise').includes('resumo'), 'a Análise é de outra sessão e não muda');
-  assert.deepEqual(blocosDaFase('tecnica'), ['resumo', 'aprovacao', 'itens', 'alertas']);
-  assert.deepEqual(blocosDaFase('diretoria'), ['resumo', 'aprovacao', 'itens', 'alertas']);
-  assert.deepEqual(blocosDaFase('envio'), ['resumo', 'envio'], 'envio: o que vai ao fornecedor, sem as colunas da análise');
-  assert.deepEqual(blocosDaFase('enviado'), ['resumo', 'enviado', 'notas-fiscais', 'recebimento']);
-  assert.deepEqual(blocosDaFase('transito'), ['resumo', 'acompanhamento', 'recebimento', 'notas-fiscais']);
-  assert.deepEqual(blocosDaFase('faturamento'), ['resumo', 'notas-fiscais', 'conclusao', 'bo']);
-  assert.equal(blocosDaFase('bo')[1], 'bo', 'na fase B.O. o B.O. vem logo depois do resumo');
+  assert.ok(!blocosDaFase('analise').includes('capa'), 'a Análise tem o resumo dela (R-133), não a capa');
+  assert.deepEqual(blocosDaFase('tecnica'), ['capa', 'aprovacao', 'itens', 'alertas']);
+  assert.deepEqual(blocosDaFase('diretoria'), ['capa', 'aprovacao', 'itens', 'alertas']);
+  assert.deepEqual(blocosDaFase('envio'), ['capa', 'envio'], 'envio: o que vai ao fornecedor, sem as colunas da análise');
+  assert.deepEqual(blocosDaFase('enviado'), ['capa', 'enviado', 'notas-fiscais', 'recebimento']);
+  assert.deepEqual(blocosDaFase('transito'), ['capa', 'acompanhamento', 'recebimento', 'notas-fiscais']);
+  assert.deepEqual(blocosDaFase('faturamento'), ['capa', 'notas-fiscais', 'conclusao', 'bo']);
+  assert.equal(blocosDaFase('bo')[1], 'bo', 'na fase B.O. o B.O. vem logo depois da capa');
   assert.ok(blocosDaFase('bo').includes('conclusao'));
-  assert.deepEqual(blocosDaFase('concluido'), ['resumo', 'concluido', 'bo']);
-  assert.deepEqual(blocosDaFase('cancelado'), ['resumo', 'itens-pedido'], 'cancelado: itens só de consulta');
+  assert.deepEqual(blocosDaFase('concluido'), ['capa', 'concluido', 'bo']);
+  assert.deepEqual(blocosDaFase('cancelado'), ['capa', 'itens-pedido'], 'cancelado: itens só de consulta');
 });

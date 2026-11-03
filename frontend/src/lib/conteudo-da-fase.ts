@@ -9,32 +9,34 @@
 // leitura; em Concluído tudo é consulta.
 import type { ChaveFase } from '@/lib/transicoes';
 
-// `solicitacoes` (008, R-054) entra em `analise` ANTES de Itens: a fila do
-// comercial é o que se lê para montar o pedido, e nas outras fases ela não
-// aparece. Ligado na integração da onda 3 (S4).
+// `solicitacoes` (008, R-054) só entra em `analise`: nas outras fases a fila do
+// comercial não aparece. R-133: a Análise segue a ordem do SGC legado — o
+// `resumo` (banner de reprovação, os números, a aderência à sugestão e as
+// faixas) no topo, a análise de produtos com os itens, as solicitações do
+// comercial em cartões e, por fim, os alertas.
 //
 // Depois da Análise (R-141) o card segue o molde do legado
-// (docs/specs/000-visao-geral/legado-fases-do-card.md): `resumo` abre toda
+// (docs/specs/000-visao-geral/legado-fases-do-card.md): a `capa` abre toda
 // fase (fornecedor, valor, % faturado, selos de aprovação, envio e
 // cancelamento); cada fase tem o seu bloco de assunto — `aprovacao`, `envio`,
 // `enviado`, `acompanhamento`, `conclusao`, `concluido` — antes dos blocos de
 // trabalho que já existiam. `itens-pedido` é a lista só de consulta do
 // cancelado (o bloco Itens da Análise abriria editável).
 export type Bloco =
-  | 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes'
-  | 'resumo' | 'aprovacao' | 'envio' | 'enviado' | 'acompanhamento' | 'conclusao' | 'concluido' | 'itens-pedido';
+  | 'resumo' | 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes'
+  | 'capa' | 'aprovacao' | 'envio' | 'enviado' | 'acompanhamento' | 'conclusao' | 'concluido' | 'itens-pedido';
 
 export const BLOCOS_POR_FASE: Record<ChaveFase, readonly Bloco[]> = {
-  analise: ['solicitacoes', 'itens', 'alertas'],
-  tecnica: ['resumo', 'aprovacao', 'itens', 'alertas'],
-  diretoria: ['resumo', 'aprovacao', 'itens', 'alertas'],
-  envio: ['resumo', 'envio'],
-  enviado: ['resumo', 'enviado', 'notas-fiscais', 'recebimento'],
-  transito: ['resumo', 'acompanhamento', 'recebimento', 'notas-fiscais'],
-  faturamento: ['resumo', 'notas-fiscais', 'conclusao', 'bo'],
-  bo: ['resumo', 'bo', 'conclusao', 'notas-fiscais'],
-  concluido: ['resumo', 'concluido', 'bo'],
-  cancelado: ['resumo', 'itens-pedido'],
+  analise: ['resumo', 'itens', 'solicitacoes', 'alertas'],
+  tecnica: ['capa', 'aprovacao', 'itens', 'alertas'],
+  diretoria: ['capa', 'aprovacao', 'itens', 'alertas'],
+  envio: ['capa', 'envio'],
+  enviado: ['capa', 'enviado', 'notas-fiscais', 'recebimento'],
+  transito: ['capa', 'acompanhamento', 'recebimento', 'notas-fiscais'],
+  faturamento: ['capa', 'notas-fiscais', 'conclusao', 'bo'],
+  bo: ['capa', 'bo', 'conclusao', 'notas-fiscais'],
+  concluido: ['capa', 'concluido', 'bo'],
+  cancelado: ['capa', 'itens-pedido'],
 };
 
 /** Fase desconhecida (mapa ainda carregando) = nada além dos campos do motor. */

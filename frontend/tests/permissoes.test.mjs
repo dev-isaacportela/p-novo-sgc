@@ -78,10 +78,10 @@ test('RN-015 / P-13: excluem pedido admin, gestor e diretoria; veem Segurança a
   assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').aprovarDiretoria), ['admin', 'diretoria']);
 });
 
-test('menuParaPersona: o menu do analista tem quadro, compras inteligentes, agenda, notificações, B.O., fornecedores e o grupo Fiscal — nada de novo pedido (R-118), segurança nem coberturas', () => {
+test('menuParaPersona: o menu do analista tem quadro, compras inteligentes, pedido Galderma (R-150), movimentação de produtos (R-140), agenda, notificações, B.O., fornecedores e o grupo Fiscal — nada de novo pedido (R-118), segurança nem coberturas', () => {
   const rotas = menuParaPersona(permissoesDe('analista', 'MEMBER')).map((item) => item.to);
   assert.deepEqual(rotas, [
-    '/quadro', '/compras-inteligentes', '/solicitacoes', '/agenda', '/notificacoes',
+    '/quadro', '/compras-inteligentes', '/galderma', '/movimentacao', '/solicitacoes', '/agenda', '/notificacoes',
     '/bo', '/fornecedores',
     '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso',
     '/analises',

@@ -58,6 +58,22 @@
 - [x] **T-041** `[P]` — `CoberturasPage`: listagem por nível com `SelectMenu`, `Toolbar` colada à tabela, diálogo de cadastro/edição (`sgcEscCoberturaGravar`), desativação (`sgcEscCoberturaExcluir`) e formulário desabilitado (nunca escondido) para quem não é admin nem gestor → `frontend/src/pages/coberturas/CoberturasPage.tsx`
 - [x] **T-042** — **Pedir ao integrador**: rota `/coberturas` e item de menu (admin e gestor) → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx`
 
+### R-133 — a Análise no desenho do legado (branch `feature/003-analise-legado`)
+
+- [x] **T-043** — `venda-valida.mjs` (o recorte da R-131 num módulo só) e `sgcWintAnaliseMontagem` com `VENDA_PRIVADO`/`VENDA_PF`/`VENDA_PUBLICO`; `sgcItensGravar` aceita `manual` → `backend/venda-valida.mjs`, `backend/add-006-itens.mjs`, `backend/add-013-compras-inteligentes.mjs`
+- [x] **T-044** — Regras puras do topo e da tela ampla → `frontend/src/lib/resumo-pedido.ts`, `analise-pedido.ts`, `custo-do-item.ts`
+- [x] **T-045** — Rascunho compartilhado pelos blocos da fase, com as edições que sobrevivem a recarregar → `pages/quadros/abas/rascunho-contexto.ts`, `RascunhoProvider.tsx`, `ConteudoDaFase.tsx`, `lib/conteudo-da-fase.ts`
+- [x] **T-046** — Bloco resumo (banner, números, aderência, faixas) → `pages/quadros/abas/ResumoDoPedido.tsx`, `pedido-contexto.ts`
+- [x] **T-047** — Bloco itens enxuto e a tela ampla com as duas abas → `pages/quadros/abas/Itens.tsx`, `TelaAmpla.tsx`, `tela-ampla-analise.tsx`, `SeletorDeCusto.tsx`; `CaixaSelecao` e o tom `alert` do `MiniCartao` em `components/page.tsx`
+- [x] **T-048** — Drill-in com a Análise do Produto da 011: carga e conta do SKU tiradas da página da 011, bloco "Item no pedido", Clientes que compraram → `pages/compras-inteligentes/{carga-ressuprimento,use-analise-produto}.ts`, `lib/analise-sku.ts`, `pages/quadros/abas/DrillProduto.tsx`, `NomeDoProduto.tsx`
+- [x] **T-050** — R-134: a fórmula do legado na sugestão, na cobertura e nos meses do período, sobre a venda válida sem o público; trânsito somado (em trânsito + pedido ao ERP); caixa cheia só na tela; alvo e origem da cobertura no `title` de Dias → `frontend/src/lib/compras.ts`, `analise-pedido.ts`, `pages/quadros/abas/tela-ampla-analise.tsx`, `backend/add-006-itens.mjs`; testes C-002, C-003, C-005, RN-001, RN-004 reescritos em `frontend/tests/compras.test.mjs`
+- [x] **T-051** — Tela ampla: o resumo fica na base da área da tabela (cabeçalho no topo, Produto e Ação fixos) com poucas ou muitas linhas; o rodapé do diálogo mostra o estado do rascunho em vez de repetir o total; o item que a análise não trouxe fica marcado e sem divisão inventada (traço); teste de Privado + PF + Público = Venda → `pages/quadros/abas/tela-ampla-analise.tsx`, `TelaAmpla.tsx`, `lib/analise-pedido.ts`, `backend/simulator/smoke/003-itens.mjs`, `simulator/winthor-checar.mjs`
+- [x] **T-052** — R-135: Clientes que compraram no drill-in — logo depois do gráfico, aberta, meses em pílulas, por cliente (top 10, notas ao expandir) ou cliente × mês, sem o público; uma consulta ao abrir; `test('C-029 …')` → `lib/clientes-produto.ts`, `pages/compras-inteligentes/clientes-ui.tsx`, `analise-produto.tsx` (slot `depoisDoGrafico`), `pages/quadros/abas/DrillProduto.tsx`; os clientes da aba Vendas (R-133) saíram
+- [x] **T-053** — R-136: Caixa cheia arredonda a sugestão e a compra; venda e posição sempre em unidades; quantidade editada preservada; rodapé un. · cx; abre em Caixa cheia; `test('RN-018 / C-030 …')` e `test('C-030 …')` → `lib/analise-pedido.ts`, `pages/quadros/abas/tela-ampla-analise.tsx`
+- [x] **T-054** — R-137: linhas de altura fixa na tela ampla (44 px compacta, 56 px confortável) e na aba Itens (56 px), nome em uma linha, selos na linha da meta; medido em 79 produtos nos dois temas e nas duas densidades → `pages/quadros/abas/tela-ampla-analise.tsx`, `TelaAmpla.tsx`, `SeletorDeCusto.tsx`, `NomeDoProduto.tsx`
+- [x] **T-055** — R-138: o bloco Item no pedido numa linha alinhada pela base, nos dois estados, com Unidades/Caixas e o link "usar sugestão"; conferido a 1600 e 560 px nos dois temas → `pages/quadros/abas/DrillProduto.tsx`
+- [x] **T-049** — Uma carga do pedido por card aberto, qualquer que seja o número de blocos → `pages/quadros/abas/PedidoProvider.tsx`
+
 ## Testes
 
 Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo.
@@ -72,6 +88,10 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 - [x] **T-087** `[P]` — `test('C-004 …')`, `test('C-007 …')` (parte tela), `test('RN-002 …')` e `test('RN-004 …')` em `frontend/tests/compras.test.mjs`
 - [x] **T-088** `[P]` — `test('C-008 …')` e `test('RN-005 …')` em `frontend/tests/cobertura.test.mjs`
 - [x] **T-089** `[P]` — `test('C-015 …')` (parte tela), `test('C-016 …')`, `test('RN-006 …')` e `test('RN-007 …')` em `frontend/tests/prazo-pagamento.test.mjs`
+- [x] **T-094** — `teste('C-026 / RN-016 …')` e `teste('C-027 …')` em `backend/simulator/smoke/003-itens.mjs`; a divisão no WinThor real em `simulator/winthor-checar.mjs` (`npm run sim:winthor`)
+- [x] **T-095** `[P]` — `test('C-023 …')`, `test('C-024 …')` e `test('RN-015 …')` em `frontend/tests/resumo-pedido.test.mjs`
+- [x] **T-096** `[P]` — `test('C-025 …')`, `test('RN-017 …')`, `test('RN-018 …')` e `test('RN-019 …')` em `frontend/tests/analise-pedido.test.mjs`
+- [x] **T-097** `[P]` — `test('C-027 / RN-020 …')` e `test('RN-020 …')` em `frontend/tests/custo-do-item.test.mjs`; `test('C-028 …')` em `frontend/tests/analise-sku.test.mjs` e `ressuprimento-detalhe.test.mjs`
 
 ## Verificação
 
@@ -79,6 +99,7 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 - [x] **T-091** — `cd frontend && npm test` verde; `npm run build` e `npm run lint` limpos
 - [ ] **T-092** — Verificação manual no simulador: C-001 (tabela com 300 linhas rolando), C-007 (item acima do limite sinalizado com ponto e texto), C-013 (contagem de alertas na aba e no cartão), C-020 (tela de coberturas com formulário desabilitado para quem só lê)
 - [ ] **T-093** — Tema claro e tema escuro sem cor quebrada nas duas abas e na tela de coberturas
+- [x] **T-098** — R-133 no simulador com o WinThor real, pedido da Fresenius × filial 1 na Análise, nos dois temas: card estreito sem rolagem horizontal (1600, 1280 e 1024 px), tela ampla nas duas abas, drill-in, adicionar, lote, caixa cheia, busca com / e Esc, ordenação, custo especial, aceitar sugestão, incluir e atualizar solicitação, salvar
 
 ## Dependências
 
@@ -124,3 +145,10 @@ tudo → T-090 · T-091 → T-092 · T-093
 | RF-027 / C-020 | T-011, T-041, T-042 | T-085 |
 | RNF-001, RNF-002 | T-012, T-034, T-036, T-038 | T-082 |
 | RNF-003, RNF-004, RNF-005 | T-003, T-008, T-021 | T-080, T-083 |
+| RF-028 / C-023 | T-046 | T-095 |
+| RF-029 / C-024, RN-015 | T-044, T-046 | T-095 |
+| RF-030, RF-034 / C-025, RN-017, RN-018, RN-019 | T-044, T-045, T-047 | T-096, T-098 |
+| RF-031 / C-026, RN-016 | T-043 | T-094 |
+| RF-032 / C-027, RN-020 | T-043, T-044, T-047 | T-094, T-097 |
+| RF-033 / C-028 | T-048 | T-097, T-098 |
+| RNF-001, RNF-002 (R-133) | T-045, T-049 | T-098 |

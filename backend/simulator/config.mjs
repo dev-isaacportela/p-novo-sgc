@@ -66,6 +66,10 @@ export const PUBLISH_ORDER = [
   'add-012-indicadores.mjs',
   'add-013-compras-inteligentes.mjs',
   'add-014-coberturas-abc.mjs',
+  // Onda 5 (R-140): 013 -> add-015-movimentacao.mjs (lê a venda válida do add-013).
+  'add-015-movimentacao.mjs',
+  // Onda 5 (R-150): 014 -> add-016-galderma.mjs (o add-015 é da 013).
+  'add-016-galderma.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -140,4 +144,18 @@ export const CHECK_INPUT = {
   // nivel, limite e offset vêm da 003; situacao vem da 004, com o mesmo '' que
   // sgcCoberturaListar quer no ramo "todas".
   idCobertura: '0',
+  // spec 014 (pedido Galderma): só as chaves NOVAS (D-17). `codprods` (003) e
+  // `dataInicio`/`dataFim` (003) servem; `filiais` é FRAGMENTO entre aspas.
+  idNegociacao: '1', idItem: '1', filiais: "'1','2'",
+  dataInicioTri: '2026-05-01', dataFimTri: '2026-07-31', dataInicioMes: '2026-08-01', dataFimMes: '2026-08-31',
+  competenciaInicio: '2026-06', competenciaFim: '2026-09',
+  // spec 013 (movimentação de produtos): só as chaves NOVAS (D-17). codfilial
+  // (1), codfornec (1015), busca, limite, offset, codprods, hoje, id e
+  // diasPeriodo já vêm das specs acima com valores que servem; `situacao` ('')
+  // e `origem` ('manual') só esvaziam as listas — a sintaxe é o que o check prova.
+  codepto: '0', diasSemVenda: '90', somenteComEstoque: '1', janelaDias: '720',
+  diasHorizonte: '90', bloqueio: 'TODOS', diasJanela: '7', diasBase: '90', diasTotal: '97',
+  limiarPerc: '50', fatorMinimo: '1.5', prazoReposicao: '15', vendaMinima: '5',
+  incluirSemHistorico: '1', incluirExcecoes: '0', diasCoberturaAlvo: '30', severidade: '',
+  diasVencidos: '0', numlote: 'L-1',
 };

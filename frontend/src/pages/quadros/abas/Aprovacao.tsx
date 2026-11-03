@@ -17,7 +17,7 @@ import { fmtData, moeda, numeroPt } from '@/lib/formato';
 import { linhas } from '@/lib/mitra-api';
 import { mesesDoPeriodo } from '@/lib/compras';
 import { analiseParaAprovacao, comprasVsVendasDoFornecedor, type ComprasVsVendas, type Indicador } from '@/lib/aprovacao';
-import { rotuloPercentual } from '@/lib/resumo-do-pedido';
+import { rotuloPercentual } from '@/lib/capa-do-pedido';
 import { usePedido } from './pedido-contexto';
 
 const dias = (valor: number | null) => (valor === null ? '—' : `${numeroPt(valor)} d`);

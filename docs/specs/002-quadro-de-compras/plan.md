@@ -484,26 +484,26 @@ resultado aparece pelo `ctx.avisar()` da lib, na faixa de aviso do card.
 ### O card depois da Análise (R-141)
 
 `lib/conteudo-da-fase.ts` monta cada fase depois da Análise como o legado:
-`resumo` primeiro, depois o bloco de assunto da fase e os blocos de trabalho.
+`capa` primeiro (`CapaDoPedido.tsx`; o `resumo` é o da Análise, R-133), depois o bloco de assunto da fase e os blocos de trabalho.
 
 | Fase | Blocos |
 |---|---|
-| Técnica, Diretoria | resumo · aprovacao · itens · alertas |
-| Envio | resumo · envio |
-| Enviado | resumo · enviado · notas-fiscais · recebimento |
-| Trânsito | resumo · acompanhamento · recebimento · notas-fiscais |
-| Faturamento | resumo · notas-fiscais · conclusao · bo |
-| B.O. | resumo · bo · conclusao · notas-fiscais |
-| Concluído | resumo · concluido · bo (só com item) |
-| Cancelado | resumo · itens-pedido |
+| Técnica, Diretoria | capa · aprovacao · itens · alertas |
+| Envio | capa · envio |
+| Enviado | capa · enviado · notas-fiscais · recebimento |
+| Trânsito | capa · acompanhamento · recebimento · notas-fiscais |
+| Faturamento | capa · notas-fiscais · conclusao · bo |
+| B.O. | capa · bo · conclusao · notas-fiscais |
+| Concluído | capa · concluido · bo (só com item) |
+| Cancelado | capa · itens-pedido |
 
 Custo por abertura (RNF-001, teto de 300/min): continua `kbCardDetalhe` +
 `sgcPedidoCarregar`; o resumo, a aprovação, o envio, o enviado e o
 acompanhamento não chamam nada. Conclusão e concluído leem o mesmo
 `sgcNfListar`/`sgcBoCarregar` dos blocos Notas fiscais e B.O. por
 `abas/carga-do-card.ts` (promessa única por card durante 15 s; quem grava pede
-`forcar` e avisa os outros). O resumo só volta ao `sgcPedidoCarregar` quando o
-card muda de fase aberto. Regra pura: `resumo-do-pedido.ts`, `aprovacao.ts`,
+`forcar` e avisa os outros). A capa só volta ao `sgcPedidoCarregar` quando o
+card muda de fase aberto. Regra pura: `capa-do-pedido.ts`, `aprovacao.ts`,
 `envio-industria.ts`, `acompanhamento.ts`, `conclusao.ts` e `topoDoBo` em
 `bo.ts`, com teste em `frontend/tests/`.
 

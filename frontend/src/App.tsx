@@ -23,6 +23,10 @@ import BoPage from '@/pages/bo/BoPage';
 import SolicitacoesPage from '@/pages/solicitacoes/SolicitacoesPage';
 import AnalisesPage from '@/pages/analises/AnalisesPage';
 import ComprasInteligentesPage from '@/pages/compras-inteligentes/ComprasInteligentesPage';
+import PedidoGaldermaPage from '@/pages/galderma/PedidoGaldermaPage';
+import AcompanhamentoGaldermaPage from '@/pages/galderma/AcompanhamentoGaldermaPage';
+import ComposicaoGaldermaPage from '@/pages/galderma/ComposicaoGaldermaPage';
+import MovimentacaoPage from '@/pages/movimentacao/MovimentacaoPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -96,6 +100,12 @@ function Autenticado() {
         {/* R-118: o Novo pedido é janela sobre o quadro; o link antigo abre a janela. */}
         <Route path="pedidos/novo" element={<Navigate to="/quadro?novo=1" replace />} />
         <Route path="compras-inteligentes" element={<ComprasInteligentesPage />} />
+        {/* Onda 5 (R-150): pedido Galderma — mesa, acompanhamento e composição. */}
+        <Route path="galderma" element={<PedidoGaldermaPage />} />
+        <Route path="galderma/acompanhamento" element={<AcompanhamentoGaldermaPage />} />
+        <Route path="galderma/composicao" element={<ComposicaoGaldermaPage />} />
+        {/* Onda 5 (R-140): movimentação de produtos (013). */}
+        <Route path="movimentacao" element={<MovimentacaoPage />} />
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="fornecedores/:codfornec" element={<FornecedorPage />} />
         <Route path="coberturas" element={<CoberturasPage />} />

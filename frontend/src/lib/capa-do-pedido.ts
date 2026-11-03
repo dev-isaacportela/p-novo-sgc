@@ -1,9 +1,9 @@
-// O resumo que abre o card em toda fase depois da Análise (R-141, C-046 da
+// A capa que abre o card em toda fase depois da Análise (R-141, C-046 da
 // 002): o mesmo que o SGC legado mostra na coluna da esquerda
 // (PipeWorkspace.tsx:8603-8720) — fornecedor, filial, valor, % faturado e os
 // selos de quem aprovou, de quando saiu para a indústria e do cancelamento.
 // Puro: lê só a capa que `sgcPedidoCarregar` já traz (`P.*`), sem SF nova.
-// Testado em tests/resumo-do-pedido.test.mjs.
+// Testado em tests/capa-do-pedido.test.mjs.
 import { fmtData, fmtDataHora } from './formato.ts';
 
 export interface CapaDoResumo {

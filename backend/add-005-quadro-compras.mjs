@@ -563,7 +563,8 @@ LEFT JOIN SGC_SOLICITACAO SO ON SO.ID = I.ID_SOLICITACAO AND I.ID_SOLICITACAO > 
 LEFT JOIN INT_USER US ON US.ID = SO.CRIADO_POR
 WHERE I.ID_CARD = ${cardId} AND COALESCE(I.STATUS, '') <> 'removido'
 ORDER BY I.ID`);
-        const alertas = await query(`SELECT ID, CODPROD, TIPO, MENSAGEM, LIDO, LIDO_POR, LIDO_EM, JUSTIFICATIVA
+        // R-139: CHAVE (excesso:<codprod>:<codfilial>) leva a filial ao gráfico de vendas dela.
+        const alertas = await query(`SELECT ID, CODPROD, TIPO, CHAVE, MENSAGEM, LIDO, LIDO_POR, LIDO_EM, JUSTIFICATIVA
 FROM SGC_ALERTA
 WHERE ID_CARD = ${cardId}
 ORDER BY ID`);
