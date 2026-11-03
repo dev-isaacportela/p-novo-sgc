@@ -17,5 +17,6 @@ Uma pasta por feature: `spec.md` (o quê e por quê) → `plan.md` (como) → `t
 | [010-extrato-do-pedido](010-extrato-do-pedido/spec.md) | extrato do pedido em PDF (janela de impressão) e CSV, em qualquer fase, marca d'água pela fase | 3 | implementada (onda 3, 2026-09-16) |
 | [011-compras-inteligentes](011-compras-inteligentes/spec.md) | ressuprimento por fornecedor + filial, parâmetros e silenciamento, vendas desconsideradas, carrinho que cria o pedido, eficiência | 4 | implementada (onda 4, 2026-09-16) |
 | [012-coberturas-por-curva](012-coberturas-por-curva/spec.md) | curva ABC no limite de cobertura (`SGC_COBERTURA` por curva), auditoria, trava de saída da Análise pela curva | 4 | implementada (onda 4, 2026-09-16) |
+| [013-movimentacao-produtos](013-movimentacao-produtos/spec.md) | movimentação de produtos: sem venda, excedentes, a vencer (bloqueio e divergência de lote), alerta de ruptura, perdas com rastro do lote, plano de ação | 5 | em implementação (2026-11-03): perguntas P-01..P-07 com proposta |
 
 Ondas 3–5: ver o mapa em `000-visao-geral/README.md`; a onda 2 tem contrato próprio na seção "Onda 2" do 000.
