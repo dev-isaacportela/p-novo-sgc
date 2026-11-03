@@ -19,6 +19,7 @@
 		"publish:013": "node add-013-compras-inteligentes.mjs",
 		"publish:014": "node add-014-coberturas-abc.mjs",
 		"publish:015": "node add-015-movimentacao.mjs",
+		"publish:021": "node add-021-projecao-manual.mjs",
 		"sync:function-map": "node sync-server-function-map.mjs",
 		"sim": "node simulator/server.mjs",
 		"sim:seed": "node simulator/seed-cli.mjs",

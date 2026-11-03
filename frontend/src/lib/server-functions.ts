@@ -355,6 +355,10 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscEmpCancelar: 'sgcEscEmpCancelar',
   sgcEmpCarregar: 'sgcEmpCarregar',
   sgcEmpItensGravar: 'sgcEmpItensGravar',
+  // Onda 5 (R-200): projeção manual (019), estende a 011.
+  sgcProjecaoManualListar: 'sgcProjecaoManualListar',
+  sgcEscProjecaoManualSalvar: 'sgcEscProjecaoManualSalvar',
+  sgcEscProjecaoManualRemover: 'sgcEscProjecaoManualRemover',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -685,4 +689,8 @@ export const SERVER_FUNCTIONS = {
   sgcEscEmpCancelar: '8668',
   sgcEmpCarregar: '8680',
   sgcEmpItensGravar: '8681',
+  // Onda 5 (R-200): projeção manual (019) — faixa 91xx até o sync trazer os reais.
+  sgcProjecaoManualListar: '9101',
+  sgcEscProjecaoManualSalvar: '9150',
+  sgcEscProjecaoManualRemover: '9151',
 };

@@ -442,8 +442,8 @@ test('RN-015 / R-112: o carrinho agrupa por fornecedor e filial, sobe a priorida
   assert.match(motivoDaSugestao(emRuptura), /^Ruptura/);
 });
 
-test('C-024: a exportação leva as 12 colunas da tela (as duas curvas inclusas, R-122) e 3 linhas, separadas por ponto e vírgula, com as aspas da descrição escapadas', () => {
-  assert.equal(COLUNAS_CSV.length, 12);
+test('C-024: a exportação leva as 13 colunas da tela (as duas curvas inclusas, R-122; a projeção manual da 019 por último) e 3 linhas, separadas por ponto e vírgula, com as aspas da descrição escapadas', () => {
+  assert.equal(COLUNAS_CSV.length, 13);
   const linhas = montarRessuprimento(
     [
       medida({ CODPROD: 5401, DESCRICAO: 'WHEY 900 G "ZERO"' }),
@@ -455,7 +455,7 @@ test('C-024: a exportação leva as 12 colunas da tela (as duas curvas inclusas,
   const texto = textoCsv(COLUNAS_CSV, linhas.map(linhaCsv));
   const partes = texto.split('\r\n');
   assert.equal(partes.length, 4);
-  assert.equal(partes[0].split(';').length, 12);
+  assert.equal(partes[0].split(';').length, 13);
   assert.match(partes[1], /"WHEY 900 G ""ZERO"" \(5401\)"/);
   assert.match(partes[3], /sem giro/, 'produto sem giro não inventa número no CSV');
 });

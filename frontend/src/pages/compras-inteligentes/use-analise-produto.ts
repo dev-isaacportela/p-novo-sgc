@@ -13,6 +13,7 @@ import { montarRessuprimento, type AlvoDaCurva, type LinhaRessuprimento } from '
 import { DADOS_VAZIOS, historicoSemPublico } from '@/lib/ressuprimento-detalhe';
 import type { DadosDoSku, PontoHistorico, PosicaoFilial, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
 import { excessosPorProduto } from '@/lib/avisos-produto';
+import { projecoesAtivas } from '@/lib/projecao-manual';
 import type { FilialComExcesso } from '@/lib/ressuprimento-detalhe';
 import { oportunidadesDaLinha, previsaoDoSku, projetadaDoSku, sugestoesDaLinha } from '@/lib/analise-sku';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
@@ -107,7 +108,7 @@ export function useAnaliseProduto({
     if (!dadosCarga?.medidas) return null;
     const todas = montarRessuprimento(
       dadosCarga.medidas, dadosCarga.parametros ?? [], alvoDaCurvaDias, dadosCarga.porCaixa ?? new Map(),
-      { codfornec, hoje, desconsiderarLicitacao: semPublico }, dadosCarga.custosPadrao,
+      { codfornec, hoje, desconsiderarLicitacao: semPublico, projecoes: projecoesAtivas(dadosCarga.projecoes ?? [], hoje) }, dadosCarga.custosPadrao,
     );
     return todas.find((l) => Number(l.medida.CODPROD) === codprod) ?? null;
   }, [dadosCarga, alvoDaCurvaDias, codfornec, hoje, semPublico, codprod]);
@@ -118,7 +119,9 @@ export function useAnaliseProduto({
     return semPublico ? { ...d, historico: historicoSemPublico(d.historico, true) } : d;
   }, [sku, semPublico]);
   const desconsideradas = React.useMemo(() => dadosCarga?.desconsideradas ?? [], [dadosCarga]);
-  const previsao = React.useMemo(() => previsaoDoSku(sku, codprod, hoje, desconsideradas, semPublico), [sku, codprod, hoje, desconsideradas, semPublico]);
+  // Spec 019: a previsão leva o fator da projeção manual da linha (1 sem ajuste).
+  const fator = linha?.fatorProjecao ?? 1;
+  const previsao = React.useMemo(() => previsaoDoSku(sku, codprod, hoje, desconsideradas, semPublico, fator), [sku, codprod, hoje, desconsideradas, semPublico, fator]);
   const projetada = React.useMemo(() => projetadaDoSku(previsao, linha, modelo), [previsao, linha, modelo]);
   const sugestoes = React.useMemo(() => (linha
     ? sugestoesDaLinha(linha, oportunidadesDaLinha(linha, dadosCarga?.custosEspeciais ?? [], dadosCarga?.vendasClientes ?? []), previsao, modelo)

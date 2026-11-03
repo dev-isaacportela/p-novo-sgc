@@ -72,6 +72,8 @@ export const PUBLISH_ORDER = [
   'add-016-galderma.mjs',
   // Onda 5 (R-160): 015 -> add-017-empenhos.mjs (o add-005 importa dele o ramo do gancho, R-161).
   'add-017-empenhos.mjs',
+  // Onda 5 (R-200): 019 -> add-021-projecao-manual.mjs (estende a 011; só SQL do banco interno).
+  'add-021-projecao-manual.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
