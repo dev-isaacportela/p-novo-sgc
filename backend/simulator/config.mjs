@@ -77,6 +77,8 @@ export const PUBLISH_ORDER = [
   'add-018-fila-email-conclusao.mjs',
   // Onda 5 (R-180): 017 -> add-019-solicitacoes-apoio.mjs (lê os fragmentos do add-011).
   'add-019-solicitacoes-apoio.mjs',
+  // R-190: 018 -> add-020-fornecedores-exportar-excluir.mjs (lê e apaga as tabelas da 001).
+  'add-020-fornecedores-exportar-excluir.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');

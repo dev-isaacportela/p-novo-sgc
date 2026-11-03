@@ -841,3 +841,18 @@ Registros de decisão de **R-180** a R-189.
 | Id | Decisão |
 |---|---|
 | R-180 | **Apoio à avaliação e visões agrupadas nas solicitações** (2026-11-03). A pedido do usuário ("Todas as 6 lacunas"). O apoio fica na janela **Avaliar** da fila e **reusa** o que já existe: o gráfico de vendas de 6 meses fechados + o corrente da filial (`VendasNaFilial`, R-139), a regra de clientes do popup do kanban (`lib/clientes-produto.ts`, R-135) e três SFs do `add-013` (`sgcWintProdutoHistorico`, `sgcWintProdutoVendasNotas`, `sgcWintProdutoEstoqueFiliais`), todas sobre a venda válida de `backend/venda-valida.mjs` (R-131) sem o órgão público. As visões agrupadas são duas SFs novas (`sgcSolicitacoesAgrupar`/`…Total`, 8801–8802) que agrupam no servidor a fila inteira com os filtros e o recorte do comercial da lista da 008 — o `add-011` passa a exportar `RECORTE_COMERCIAL`, `JUNCOES_SOLICITACAO` e `FILTROS_PUBLICADOS` para o texto ser um só (R-070). Cada grupo conta seis situações que somam o total (pendente, na fila, em compra, atendida, não atendida, recusada ou cancelada); abrir o grupo filtra a lista. O `VendasNaFilial` ganha a prop opcional `semEstoque` (o texto quando o estoque é nulo; o padrão é o de antes). As decisões de negócio em aberto são as propostas P-01..P-09 da spec, implementadas com a opção recomendada e aguardando o usuário. | `docs/specs/017-solicitacoes-apoio-e-visoes/`, `backend/add-019-solicitacoes-apoio.mjs`, `frontend/src/lib/solicitacoes-apoio.ts`, `frontend/src/lib/solicitacoes-visoes.ts`, `frontend/src/pages/solicitacoes/` |
+
+## Onda 5 — Fornecedores: exportar e excluir com cópia (018, 2026-11-03)
+
+Extensão da 001, uma das seis lacunas do levantamento legado × SGC 2. Faixa **89xx**
+(`add-020-fornecedores-exportar-excluir.mjs`), tabela `SGC_FORNECEDOR_EXCLUSAO` (`DDL_018`),
+telas em `/fornecedores`. Registros de decisão **R-190..R-199**.
+
+| Spec | Assunto | Origem no legado |
+|---|---|---|
+| [`018-fornecedores-exportar-excluir`](../018-fornecedores-exportar-excluir/spec.md) | exportar a parametrização (todos, na lista; um, na parametrização) e excluir a parametrização guardando antes uma cópia | p-60523, `07-parametrizacoes.md` RN-PAR-07, RN-PAR-08, RN-PAR-12 (`ParametrizacaoFornecedorPage`) |
+
+| Id | Decisão |
+|---|---|
+| R-190 | **Exportar e excluir a parametrização de fornecedor** (2026-11-03). Exportação em CSV pelo `lib/csv.ts` (R-094), um arquivo com um bloco por fornecedor e as seções da aba do legado; `sgcFornecedorExportar` (JAVASCRIPT de leitura, 8980) devolve uma página de fornecedores com as filhas numa execução (blocos de 100). Exclusão por sete SQL de uma instrução chamadas da tela e guardadas por `:VAR_USER` com as personas da 001 (8950–8956): a primeira guarda a cópia em `SGC_FORNECEDOR_EXCLUSAO` (`UNIQUE (FORNECEDOR_ID)`: repetir não regrava), e cada exclusão só apaga se a cópia já existe. O histórico (`SGC_FORNECEDOR_LOG`) não é apagado. Sem bloqueio por pedido ou agendamento, como o legado. Perguntas P-01..P-07 com proposta implementada, aguardando o usuário. | `docs/specs/018-fornecedores-exportar-excluir/`, `backend/add-020-fornecedores-exportar-excluir.mjs`, `frontend/src/lib/fornecedor-planilha.ts`, `frontend/src/pages/fornecedores/` |
+| R-191 | **A cópia da exclusão vem da tela** (2026-11-03). O JSON da parametrização é relido pela tela (`sgcFornecedorCarregar`) logo antes de guardar e passa como `{{detalhe}}`; identidade, quem e quando são do servidor. Montar o JSON em SQL divergiria entre o MySQL e o SQLite do simulador (`JSON_ARRAYAGG` × `json_group_array`); marcado `ponytail:` no plan. | `docs/specs/018-fornecedores-exportar-excluir/plan.md` |

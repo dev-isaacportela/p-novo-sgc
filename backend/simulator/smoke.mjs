@@ -27,6 +27,7 @@ import { suite as movimentacao } from './smoke/013-movimentacao.mjs';
 import { suite as empenhos } from './smoke/015-empenhos.mjs';
 import { suite as filaEmail } from './smoke/016-fila-email.mjs';
 import { suite as solicitacoesApoio } from './smoke/017-solicitacoes-apoio.mjs';
+import { suite as fornecedoresExportarExcluir } from './smoke/018-fornecedores-exportar-excluir.mjs';
 
 const ctx = await abrirContexto();
 
@@ -52,6 +53,8 @@ await comprasInteligentes(ctx);
 await galderma(ctx);
 // Onda 5 (R-160): quadro de empenhos — quadro, produtos e clientes próprios.
 await empenhos(ctx);
+// R-190: exportar e excluir a parametrização (018) — parametriza e apaga o próprio 1099.
+await fornecedoresExportarExcluir(ctx);
 // Onda 5 (R-140): por último — a suíte cria um usuário somente-leitura próprio.
 await movimentacao(ctx);
 // Onda 5 (R-170): fila de e-mail e aviso de pronto — depois de todas: a rotina
