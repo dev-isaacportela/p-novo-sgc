@@ -58,6 +58,9 @@ const SQL_PENDENCIAS_NF = colunasDePendencia('pendencias-transito.sql')
 // vêm depois dos da NF (R-044).
 const SQL_PENDENCIAS_BO = colunasDePendencia('pendencias-bo-entrada.sql')
   + '\n' + colunasDePendencia('pendencias-conclusao-bo.sql');
+// R-144 (P-6, spec 005 RN-016): a conclusão exige 99,5 % do valor coberto
+// (faturado + B.O. que não vem mais), como o legado; o ramo vem depois do B.O.
+const SQL_PENDENCIAS_FATURADO = colunasDePendencia('pendencias-conclusao-faturado.sql');
 // Onda 2, R-023: o quarto ramo do feed de notificações (avisos de processo),
 // de backend/sql/notificacoes-avisos.sql (spec 005), sem as linhas de comentário.
 const SQL_AVISOS = fragmento('notificacoes-avisos.sql');
@@ -736,7 +739,7 @@ function contextoDoCard({ comDestino = true, comPendencias = true } = {}) {
   // PENDENCIAS_NF(_MOTIVO), de backend/sql/pendencias-transito.sql e
   // pendencias-conclusao-nf.sql. A 007 acrescenta aqui o par
   // PENDENCIAS_BO_ABERTOS/PENDENCIAS_BO_MOTIVO.
-  const pendencias = comPendencias ? `${SQL_PENDENCIAS}\n${SQL_PENDENCIAS_NF}\n${SQL_PENDENCIAS_BO}` : '';
+  const pendencias = comPendencias ? `${SQL_PENDENCIAS}\n${SQL_PENDENCIAS_NF}\n${SQL_PENDENCIAS_BO}\n${SQL_PENDENCIAS_FATURADO}` : '';
   const juncaoDestino = comDestino
     ? 'LEFT JOIN SGC_FASE FD              ON FD.BOARD_ID = {{boardId}} AND FD.FASE_ID = {{faseId}}'
     : '';
@@ -779,6 +782,7 @@ function sqlPodeMover() {
     WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_NF > 0 THEN 0
     WHEN T.PAR = 'faturamento>bo'     AND T.PENDENCIAS_BO_ENTRADA > 0             THEN 0
     WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_BO_ABERTOS > 0 THEN 0
+    WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_FATURADO > 0 THEN 0
     ELSE 1
   END`;
   // R-020 / C-06: o contrato da lib exige MOTIVO vazio quando PODE = 1 (a regra
@@ -814,6 +818,8 @@ function sqlPodeMover() {
       THEN '${M.boEntrada}'
     WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_BO_ABERTOS > 0
       THEN T.PENDENCIAS_BO_MOTIVO
+    WHEN T.PAR IN ('faturamento>concluido', 'bo>concluido') AND T.PENDENCIAS_FATURADO > 0
+      THEN T.PENDENCIAS_FATURADO_MOTIVO
     ELSE ''
   END END`;
   return `SELECT

@@ -77,6 +77,8 @@ export interface FaturamentoExtrato {
   notas: NotaDoFaturamento[];
   /** Percentual faturado em valor (soma das notas ÷ total do pedido). 0 sem nota ou com total zero. */
   percentual: number;
+  /** R-144 (RN-014 da 010): o saldo em reais ainda não faturado (nunca negativo). */
+  falta: number;
 }
 
 export interface ModeloExtrato {
@@ -156,6 +158,7 @@ function faturamentoDoPedido(nfsBrutas: NotaFiscalExtrato[], totalPedido: number
     temNota: notas.length > 0,
     notas,
     percentual: totalPedido > 0 ? Math.round((somaNotas / totalPedido) * 10000) / 100 : 0,
+    falta: Math.max(0, Math.round((totalPedido - somaNotas) * 100) / 100),
   };
 }
 

@@ -155,3 +155,10 @@ test('C-016 / RN-011: gerando às 15/09/2026 14:05 (hora local injetada) — a e
   assert.ok(modelo.geradoEm.includes('15/09/2026'));
   assert.ok(modelo.geradoEm.includes('14:05'));
 });
+
+test('C-018 / RN-014 (R-144): o faturamento do extrato diz o saldo a faturar — nunca negativo —, que a conclusão agora exige coberto', () => {
+  const parcial = montarExtrato(pedido({ VL_TOTAL: 1000 }), [], 'faturamento', [{ NUMNOTA: 1, SERIE: '', DT_EMISSAO: '2026-10-01', VL_TOTAL: 600 }]);
+  assert.equal(parcial.faturamento.falta, 400);
+  const demais = montarExtrato(pedido({ VL_TOTAL: 1000 }), [], 'faturamento', [{ NUMNOTA: 1, SERIE: '', DT_EMISSAO: '2026-10-01', VL_TOTAL: 1010 }]);
+  assert.equal(demais.faturamento.falta, 0);
+});

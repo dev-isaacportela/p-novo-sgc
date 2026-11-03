@@ -14,19 +14,29 @@ import type { ChaveFase } from '@/lib/transicoes';
 // `resumo` (banner de reprovação, os números, a aderência à sugestão e as
 // faixas) no topo, a análise de produtos com os itens, as solicitações do
 // comercial em cartões e, por fim, os alertas.
-export type Bloco = 'resumo' | 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes';
+//
+// Depois da Análise (R-141) o card segue o molde do legado
+// (docs/specs/000-visao-geral/legado-fases-do-card.md): a `capa` abre toda
+// fase (fornecedor, valor, % faturado, selos de aprovação, envio e
+// cancelamento); cada fase tem o seu bloco de assunto — `aprovacao`, `envio`,
+// `enviado`, `acompanhamento`, `conclusao`, `concluido` — antes dos blocos de
+// trabalho que já existiam. `itens-pedido` é a lista só de consulta do
+// cancelado (o bloco Itens da Análise abriria editável).
+export type Bloco =
+  | 'resumo' | 'itens' | 'alertas' | 'notas-fiscais' | 'recebimento' | 'bo' | 'solicitacoes'
+  | 'capa' | 'aprovacao' | 'envio' | 'enviado' | 'acompanhamento' | 'conclusao' | 'concluido' | 'itens-pedido';
 
 export const BLOCOS_POR_FASE: Record<ChaveFase, readonly Bloco[]> = {
   analise: ['resumo', 'itens', 'solicitacoes', 'alertas'],
-  tecnica: ['itens', 'alertas'],
-  diretoria: ['itens', 'alertas'],
-  envio: ['itens'],
-  enviado: ['notas-fiscais', 'recebimento'],
-  transito: ['recebimento', 'notas-fiscais'],
-  faturamento: ['notas-fiscais', 'bo'],
-  bo: ['bo', 'notas-fiscais'],
-  concluido: ['itens', 'notas-fiscais', 'bo'],
-  cancelado: ['itens'],
+  tecnica: ['capa', 'aprovacao', 'itens', 'alertas'],
+  diretoria: ['capa', 'aprovacao', 'itens', 'alertas'],
+  envio: ['capa', 'envio'],
+  enviado: ['capa', 'enviado', 'notas-fiscais', 'recebimento'],
+  transito: ['capa', 'acompanhamento', 'recebimento', 'notas-fiscais'],
+  faturamento: ['capa', 'notas-fiscais', 'conclusao', 'bo'],
+  bo: ['capa', 'bo', 'conclusao', 'notas-fiscais'],
+  concluido: ['capa', 'concluido', 'bo'],
+  cancelado: ['capa', 'itens-pedido'],
 };
 
 /** Fase desconhecida (mapa ainda carregando) = nada além dos campos do motor. */

@@ -13,8 +13,7 @@ import * as React from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import {
-  Alert, Button, Code, Dash, EmptyState, MetaDot, Panel, PanelHeader, Stat,
-  Status, Table, Td, Th, Tr, RowMeta, RowTitle,
+  Alert, Button, CartaoLinha, Code, Dash, EmptyState, ListaCartoes, MetaDot, Panel, PanelHeader, Stat, Status,
 } from '@/components/page';
 import { linhas, acao } from '@/lib/mitra-api';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
@@ -136,57 +135,42 @@ export default function AbaRecebimento(ctx: ExtensaoContexto) {
             hint="As notas chegam pela aba Notas fiscais, por detecção automática no WinThor ou pelo registro do número. A previsão de recebimento aparece aqui assim que a primeira for vinculada."
           />
         ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Nota</Th>
-                <Th>Faturamento</Th>
-                <Th>Prazo</Th>
-                <Th>Previsão</Th>
-                <Th>Recebimento</Th>
-                <Th>Situação</Th>
-                <Th numeric>Valor</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {notas.map((nota) => {
-                const prazo = rotuloPrazoEntrega(nota.prazoDias, nota.prazoTipo);
-                const atraso = rotuloAtraso(nota);
-                return (
-                  <Tr key={nota.id}>
-                    <Td>
-                      <RowTitle>
-                        <Code>NF {nota.numnota}</Code>
-                      </RowTitle>
-                      <RowMeta>
-                        {nota.serie ? `Série ${nota.serie}` : 'Sem série'}
-                        {nota.codfilial ? <> <MetaDot /> Filial {nota.codfilial}</> : null}
-                      </RowMeta>
-                    </Td>
-                    <Td>{nota.dtEmissao ? fmtData(nota.dtEmissao) : <Dash />}</Td>
-                    <Td>{prazo || <Dash />}</Td>
-                    <Td>{nota.dtPrevisao ? fmtData(nota.dtPrevisao) : <Dash />}</Td>
-                    <Td>{nota.dtRecebimento ? fmtData(nota.dtRecebimento) : <Dash />}</Td>
-                    <Td>
-                      <Status tone={tomSituacao(nota.situacao)}>{rotuloSituacao(nota.situacao)}</Status>
-                      {atraso ? <RowMeta>{atraso}</RowMeta> : null}
-                    </Td>
-                    <Td numeric>{nota.vlTotal ? moeda(nota.vlTotal) : <Dash />}</Td>
-                  </Tr>
-                );
-              })}
-            </tbody>
-          </Table>
+          <ListaCartoes rotulo="Notas do pedido">
+            {notas.map((nota) => {
+              const prazo = rotuloPrazoEntrega(nota.prazoDias, nota.prazoTipo);
+              const atraso = rotuloAtraso(nota);
+              return (
+                <CartaoLinha
+                  key={nota.id}
+                  titulo={<Code>NF {nota.numnota}</Code>}
+                  meta={(
+                    <>
+                      {nota.serie ? `Série ${nota.serie}` : 'Sem série'}
+                      {nota.codfilial ? <> <MetaDot /> Filial {nota.codfilial}</> : null}
+                      {nota.dtEmissao ? <> <MetaDot /> faturada {fmtData(nota.dtEmissao)}</> : null}
+                    </>
+                  )}
+                  valor={nota.vlTotal ? moeda(nota.vlTotal) : <Dash />}
+                >
+                  <Status tone={tomSituacao(nota.situacao)}>{rotuloSituacao(nota.situacao)}</Status>
+                  {atraso ? <span>{atraso}</span> : null}
+                  <span>Prazo {prazo || '—'}</span>
+                  <span>Previsão {nota.dtPrevisao ? fmtData(nota.dtPrevisao) : '—'}</span>
+                  {nota.dtRecebimento ? <span>Recebida {fmtData(nota.dtRecebimento)}</span> : null}
+                </CartaoLinha>
+              );
+            })}
+          </ListaCartoes>
         )}
 
         {notas.length > 0 ? (
           <p className="border-t border-rule-row px-4 py-3 text-[12px] text-ink-secondary">
-            <Stat>{resumo.recebidas}</Stat> recebidas
-            <MetaDot />
+            <Stat>{resumo.recebidas}</Stat> recebidas{' '}
+            <MetaDot />{' '}
             <Stat>{resumo.pendentes}</Stat> pendentes
             {resumo.semPrazo > 0 ? (
               <>
-                <MetaDot />
+                {' '}<MetaDot />{' '}
                 <Stat>{resumo.semPrazo}</Stat> sem prazo parametrizado
               </>
             ) : null}

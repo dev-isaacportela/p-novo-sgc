@@ -190,3 +190,21 @@ test("A-5 (revisão onda 2): todo canal do diálogo de contato está no IN de sg
   assert.equal(CANAIS_CONTATO.length, CANAIS_DA_ESCRITA.length,
     'R-026: a lista é fechada nos dois lados — a tela não pode esconder um canal que a escrita aceita');
 });
+
+// R-143 / P-5: os selos 90/120 do legado, ao lado da conferência da RN-005.
+import { seloDeValidade, contagemDeValidade } from '../src/lib/nf.ts';
+
+test('C-032: validade contada de hoje — abaixo de 90 é crítica, até 120 é atenção, acima é conforme; sem data não tem selo', () => {
+  const hoje = '2026-11-03';
+  assert.deepEqual(seloDeValidade('2027-01-31', hoje), { selo: 'critica', dias: 89 });
+  assert.deepEqual(seloDeValidade('2027-02-01', hoje), { selo: 'atencao', dias: 90 });
+  assert.deepEqual(seloDeValidade('2027-03-03', hoje), { selo: 'atencao', dias: 120 });
+  assert.deepEqual(seloDeValidade('2027-03-04', hoje), { selo: 'conforme', dias: 121 });
+  assert.equal(seloDeValidade('2026-10-01', hoje).selo, 'critica', 'vencido é crítico');
+  assert.equal(seloDeValidade('', hoje), null);
+  assert.equal(seloDeValidade(null, hoje), null);
+  assert.deepEqual(
+    contagemDeValidade([{ DT_VALIDADE: '2027-01-01' }, { DT_VALIDADE: '2027-02-15' }, { DT_VALIDADE: '2028-01-01' }, { DT_VALIDADE: '' }], hoje),
+    { critica: 1, atencao: 1, conforme: 1, semData: 1 },
+  );
+});

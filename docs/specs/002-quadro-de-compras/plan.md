@@ -481,6 +481,32 @@ Os diálogos seguem §9.5: `max-h-[90vh]`, `flex-col`, só o miolo rola, rodapé
 `flex-col-reverse sm:flex-row sm:justify-end`. Sem toast (UI-02 A): o
 resultado aparece pelo `ctx.avisar()` da lib, na faixa de aviso do card.
 
+### O card depois da Análise (R-141)
+
+`lib/conteudo-da-fase.ts` monta cada fase depois da Análise como o legado:
+`capa` primeiro (`CapaDoPedido.tsx`; o `resumo` é o da Análise, R-133), depois o bloco de assunto da fase e os blocos de trabalho.
+
+| Fase | Blocos |
+|---|---|
+| Técnica, Diretoria | capa · aprovacao · itens · alertas |
+| Envio | capa · envio |
+| Enviado | capa · enviado · notas-fiscais · recebimento |
+| Trânsito | capa · acompanhamento · recebimento · notas-fiscais |
+| Faturamento | capa · notas-fiscais · conclusao · bo |
+| B.O. | capa · bo · conclusao · notas-fiscais |
+| Concluído | capa · concluido · bo (só com item) |
+| Cancelado | capa · itens-pedido |
+
+Custo por abertura (RNF-001, teto de 300/min): continua `kbCardDetalhe` +
+`sgcPedidoCarregar`; o resumo, a aprovação, o envio, o enviado e o
+acompanhamento não chamam nada. Conclusão e concluído leem o mesmo
+`sgcNfListar`/`sgcBoCarregar` dos blocos Notas fiscais e B.O. por
+`abas/carga-do-card.ts` (promessa única por card durante 15 s; quem grava pede
+`forcar` e avisa os outros). A capa só volta ao `sgcPedidoCarregar` quando o
+card muda de fase aberto. Regra pura: `capa-do-pedido.ts`, `aprovacao.ts`,
+`envio-industria.ts`, `acompanhamento.ts`, `conclusao.ts` e `topoDoBo` em
+`bo.ts`, com teste em `frontend/tests/`.
+
 ## Regras puras (`frontend/src/lib/`)
 
 Nenhuma delas conhece React nem o transporte — é o que `node --test` executa.

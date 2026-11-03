@@ -24,6 +24,25 @@ export interface CapaPedido {
   prazoJustificativa: string;
   /** R-133: o pedido voltou reprovado (técnica e/ou diretoria) — o banner do topo da Análise. */
   reprovacoes: Reprovacao[];
+  /** R-141: o que a capa do card mostra depois da Análise — vem no mesmo `P.*`. */
+  tecEm: string;
+  tecNome: string;
+  tecMotivo: string;
+  dirEm: string;
+  dirNome: string;
+  dirMotivo: string;
+  dtEnvio: string;
+  canal: string;
+  emailEnvio: string;
+  numped: string;
+  envioObs: string;
+  envioNome: string;
+  cancMotivo: string;
+  cancEm: string;
+  cancNome: string;
+  vlFaturado: number;
+  percFaturadoValor: number;
+  dtPrevisaoBo: string;
 }
 
 export interface AlertaPedido {
@@ -81,6 +100,24 @@ export function capaDeLinha(linha: Linha): CapaPedido {
     prazoAcordado: String(linha.PRAZO_ACORDADO ?? ''),
     prazoJustificativa: String(linha.PRAZO_JUSTIFICATIVA ?? ''),
     reprovacoes: reprovacoesDoPedido(linha),
+    tecEm: String(linha.TEC_EM ?? ''),
+    tecNome: String(linha.TEC_NOME ?? ''),
+    tecMotivo: String(linha.TEC_MOTIVO ?? ''),
+    dirEm: String(linha.DIR_EM ?? ''),
+    dirNome: String(linha.DIR_NOME ?? ''),
+    dirMotivo: String(linha.DIR_MOTIVO ?? ''),
+    dtEnvio: String(linha.DT_ENVIO ?? ''),
+    canal: String(linha.CANAL ?? ''),
+    emailEnvio: String(linha.EMAIL_ENVIO ?? ''),
+    numped: String(linha.NUMPED_WINTHOR ?? ''),
+    envioObs: String(linha.ENVIO_OBS ?? ''),
+    envioNome: String(linha.ENVIO_NOME ?? ''),
+    cancMotivo: String(linha.CANC_MOTIVO ?? ''),
+    cancEm: String(linha.CANC_EM ?? ''),
+    cancNome: String(linha.CANC_NOME ?? ''),
+    vlFaturado: numero(linha.VL_FATURADO),
+    percFaturadoValor: numero(linha.PERC_FATURADO_VALOR),
+    dtPrevisaoBo: String(linha.DT_PREVISAO_BO ?? ''),
   };
 }
 

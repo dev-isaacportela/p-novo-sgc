@@ -44,6 +44,8 @@
 - [ ] **T-038** — **Pedir ao integrador**: ligar a aba no `/quadro` em `abasExtras`, **sem `contagem`** (R-049) e **sem `antesDeMover` nem `podeMover` novos** (R-046: os pares da onda 2 são recusados só pelo gancho, e a lib mostra a frase na faixa de aviso) → `frontend/src/pages/quadros/QuadroPage.tsx`
 - [ ] **T-039** `[P]` — `BoPainelPage`: `PageHeader` + `Panel` com `Toolbar` colada à tabela (`SearchInput`, `SelectMenu` de situação da previsão e de situação do item, `FilterChip`), tabela do §9.1, `Status` com ponto **e** texto, link da carta de falta, `Pagination` sobre `sgcBoPainel`/`sgcBoPainelTotal`, `EmptyState`; sem recorte por persona (D-012) → `frontend/src/pages/bo/BoPainelPage.tsx`
 - [ ] **T-040** — **Pedir ao integrador**: rota `/bo` (visível a todas as personas) → `frontend/src/App.tsx`
+- [x] **T-099** — R-141: bloco B.O. no molde do legado (aviso de previsão vencida, datas da fase, carta de falta, itens em cartões, total pendente) e a conta de dias do selo corrigida (o mês do `Date.UTC` sem `- 1` errava entre meses) → `frontend/src/pages/quadros/abas/Bo.tsx`
+- [x] **T-100** — R-144: "Não vem mais" (com confirmação) nos itens em aberto, por `sgcBoMarcar` com `status: 'cancelado'` → `frontend/src/pages/quadros/abas/Bo.tsx`
 
 ## Testes
 

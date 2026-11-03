@@ -13,12 +13,12 @@ import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 
 import { acao, linhas } from '@/lib/mitra-api';
 import { instanteIso, marcarItensDaFase, type PedidoCapa } from '@/lib/pedido';
-import { COPIA_COMPRAS } from '@/lib/quadro';
 import type { ChaveFase } from '@/lib/transicoes';
 import type { SessaoPersona } from '@/lib/persona';
 import { Button, Alert } from '@/components/page';
 import DialogoMotivo from '@/pages/quadros/DialogoMotivo';
-import DialogoEnvio, { type DadosDoEnvio } from '@/pages/quadros/DialogoEnvio';
+import DialogoEnvio from '@/pages/quadros/DialogoEnvio';
+import { registrarEnvio } from '@/pages/quadros/registrar-envio';
 // spec 010 (R-060/R-077): única feature desta onda que edita este arquivo —
 // os dois botões de extrato, em qualquer fase, com wrapper de execução
 // próprio (D-006: não chama recarregarPedido(), o extrato não muda o pedido).
@@ -110,28 +110,6 @@ export default function AcoesDoPedido({ ctx, sessao, pedido, fases, recarregarPe
     });
     await nota(`Compra cancelada por ${sessao.nome}: ${motivo}`);
     await mover('cancelado');
-  }
-
-  async function registrarEnvio(dados: DadosDoEnvio) {
-    // D-016: o texto do pedido é montado aqui, onde os dados já estão — o JS do
-    // servidor só envia, grava e registra.
-    const assunto = `Pedido de compra ${dados.numped} — ${pedido?.FILIAL ?? ''}`;
-    const corpo = [
-      `<p>Segue o pedido de compra <strong>${dados.numped}</strong>.</p>`,
-      `<p>Fornecedor: ${pedido?.FORNECEDOR ?? ''}<br>Filial: ${pedido?.FILIAL ?? ''}<br>`,
-      `Período de vendas analisado: ${pedido?.PERIODO_INICIO ?? ''} a ${pedido?.PERIODO_FIM ?? ''}</p>`,
-      dados.obs ? `<p>${dados.obs}</p>` : '',
-      `<p>Cópia para ${COPIA_COMPRAS}.</p>`,
-    ].join('');
-
-    const resposta = await acao('sgcEnvioIndustriaRegistrar', {
-      cardId: ctx.card.id, canal: dados.canal, para: dados.contato, assunto, corpo,
-      dtEnvio: dados.data, numped: dados.numped, obs: dados.obs,
-    });
-    if (!resposta?.ok) throw new Error(String(resposta?.error ?? 'O envio não foi registrado.'));
-    await marcarItensDaFase(ctx.card.id, 'enviado');
-    await ctx.recarregar();
-    ctx.avisar('success', 'Envio registrado no pedido.');
   }
 
   /**
@@ -280,7 +258,7 @@ export default function AcoesDoPedido({ ctx, sessao, pedido, fases, recarregarPe
         aberto={dialogo === 'envio'}
         onFechar={fechar}
         pedido={pedido}
-        onConfirmar={(dados) => executar(() => registrarEnvio(dados))}
+        onConfirmar={(dados) => executar(() => registrarEnvio(ctx, pedido, dados))}
       />
     </div>
   );

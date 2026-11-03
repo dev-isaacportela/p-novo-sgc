@@ -238,6 +238,18 @@ export function registerMysqlFunctions(db, { now = () => new Date() } = {}) {
 
   def('CONCAT', null, (...args) => (args.some((a) => a == null) ? null : args.map(String).join('')));
 
+  // R-144 (spec 005): FORMAT(x, casas[, 'pt_BR']) do MySQL — com o locale
+  // pt_BR, ponto no milhar e vírgula decimal (`1.234,56`); sem locale, o padrão
+  // en_US do MySQL (`1,234.56`). É o que a frase da trava de conclusão usa para
+  // dizer quanto falta faturar.
+  def('FORMAT', null, (valor, casas, locale) => {
+    if (valor == null) return null;
+    const n = Number(valor);
+    const d = Math.max(0, Math.trunc(Number(casas) || 0));
+    const fmt = (l) => n.toLocaleString(l, { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: true });
+    return String(locale ?? '').toLowerCase() === 'pt_br' ? fmt('pt-BR') : fmt('en-US');
+  });
+
   // Lib 1.9.2 (ordem e responsáveis em lote): FIND_IN_SET(x, 'a,b,c') -> posição 1-based, 0 se não achar;
   // SUBSTRING_INDEX(s, sep, n): até a n-ésima ocorrência (n < 0: conta do fim). Iguais ao dialeto da lib.
   def('FIND_IN_SET', 2, (needle, list) => {
