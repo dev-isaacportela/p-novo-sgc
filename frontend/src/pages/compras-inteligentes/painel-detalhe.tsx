@@ -13,21 +13,26 @@ import { ChevronsLeft, ChevronsRight, Eye, ShoppingCart, VolumeX } from 'lucide-
 
 import {
   Alert, Button, ChipContagem, Code, Dash, Disclosure, EmptyState, IconButton, Input, KpiCompacto, Panel, PanelHeader, RowMeta,
-  RowTitle, Status, Table, Td, Th, Tr,
+  Status, Table, Td, Th, Tr,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
+import { rotuloCobertura } from '@/lib/transito';
+import { cn } from '@/lib/utils';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
   JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
 import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from '@/lib/ressuprimento';
 import { filiaisComExcesso, simularCompra } from '@/lib/ressuprimento-detalhe';
-import type { DadosDoSku } from '@/lib/ressuprimento-detalhe';
+import type { DadosDoSku, FilialComExcesso } from '@/lib/ressuprimento-detalhe';
+import { AvisosProduto } from './avisos-ui';
+import type { EstadoLotes } from './use-lotes-bloqueados';
 import { GraficoComprasVendas } from './grafico';
 import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
 import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
 import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import { rolagemDoPainel } from '@/lib/largura-painel';
 import type { LarguraPainel } from '@/lib/largura-painel';
 import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
@@ -38,7 +43,8 @@ const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = 
 
 const quantidade = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 // Consumo quase nulo dá cobertura de milhares de dias: acima de 999 o número não informa nada.
-const dias = (valor: number | null) => (valor === null ? 'sem giro' : valor >= 1000 ? '999+ d' : `${Math.round(valor)} d`);
+// R-132: cobertura acima de 365 dias (consumo quase nulo) vira "> 365 d", como na lista.
+const dias = (valor: number | null) => rotuloCobertura(valor, 'sem giro');
 const pct = (valor: number | null) => (valor === null ? '—' : `${Math.round(valor)} %`);
 
 const ORIGEM_COBERTURA = { sku: 'do produto', fornecedor: 'do fornecedor', curva: 'alvo da curva' } as const;
@@ -108,7 +114,10 @@ export function PainelDetalhe({
   sugestoesEspeciais,
   onAdicionarEspecial,
   largura,
+  podeAlargar,
   onLargura,
+  lotesBloqueados,
+  excessosLista,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -136,9 +145,21 @@ export function PainelDetalhe({
   onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
   /** R-129: a largura do painel e o passo −/+ (a tela guarda a preferência). */
   largura: LarguraPainel;
+  /** Falso quando a próxima largura deixaria a lista com menos de 640 px. */
+  podeAlargar: boolean;
   onLargura: (passo: 1 | -1) => void;
+  /** R-130: os lotes bloqueados (carregados só com bloqueio) e o excesso que a lista já calculou. */
+  lotesBloqueados: EstadoLotes;
+  excessosLista: FilialComExcesso[];
 }) {
-  const rolagem = React.useRef<HTMLDivElement>(null);
+  // R-129 (correção): produto e gráfico num bloco fixo e "Mais detalhes" na sua
+  // própria rolagem — nada passa por baixo de nada. Sobrando pouca altura para
+  // os detalhes (medida no painel, não na janela: no Mitra a tela roda em iframe
+  // e com zoom), o painel inteiro rola junto.
+  const raiz = React.useRef<HTMLDivElement>(null);
+  const fixo = React.useRef<HTMLDivElement>(null);
+  const detalhes = React.useRef<HTMLDivElement>(null);
+  const [rolagem, setRolagem] = React.useState<'separada' | 'unica'>('separada');
   const [abertas, setAbertas] = React.useState<Set<Secao>>(() => new Set());
   const [simulada, setSimulada] = React.useState('');
   // C-048: um gráfico por vez — "Compras × vendas" (padrão) ou "Preço especial".
@@ -159,8 +180,22 @@ export function PainelDetalhe({
     setSimulada('');
     setAbaGrafico('vendas');
   }
-  // R-129: escolheu outro produto, o painel volta ao topo.
-  React.useEffect(() => { rolagem.current?.scrollTo({ top: 0 }); }, [codprod]);
+  // R-129: escolheu outro produto, o painel e os detalhes voltam ao topo.
+  React.useEffect(() => {
+    raiz.current?.scrollTo({ top: 0 });
+    detalhes.current?.scrollTo({ top: 0 });
+  }, [codprod]);
+  React.useEffect(() => {
+    const painel = raiz.current;
+    const bloco = fixo.current;
+    if (!painel || !bloco || typeof ResizeObserver === 'undefined') return;
+    const medir = () => setRolagem(rolagemDoPainel(painel.clientHeight, bloco.offsetHeight));
+    const observador = new ResizeObserver(medir);
+    observador.observe(painel);
+    observador.observe(bloco);
+    medir();
+    return () => observador.disconnect();
+  }, [codprod]);
 
   if (!linha) {
     return (
@@ -182,15 +217,15 @@ export function PainelDetalhe({
   const sugestaoDePartida = projetada ? projetada.sugestao : linha.sugerida;
   const quantidadeSimulada = simulada === '' ? sugestaoDePartida : unidadesDaDigitada(Number(simulada) || 0, linha.unidadesPorCaixa, referencia);
   const simulacao = simularCompra(linha, quantidadeSimulada);
-  const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
+  // A posição por produto (já carregada ao abrir) vale; antes dela, a da lista — a mesma regra (RN-025/RN-037).
+  const excessos = dados.pronto && dados.filiais.length > 0 ? filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias) : excessosLista;
+  const temAviso = Number(m.QT_BLOQUEADA) > 0 || excessos.length > 0;
 
   return (
-    // R-129: o painel tem a altura da lista e rola por dentro; produto e gráfico ficam grudados no
-    // topo. Em tela baixa (até 760 px) eles ocupariam o painel inteiro e "Mais detalhes" não teria
-    // onde aparecer: aí o topo rola junto — ao escolher o produto o painel volta ao início, com
-    // nome e gráfico inteiros à vista.
-    <div ref={rolagem} className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
-      <div className="flex flex-col gap-3 bg-ground lg:pb-1 lg:[@media(min-height:761px)]:sticky lg:[@media(min-height:761px)]:top-0 lg:[@media(min-height:761px)]:z-20">
+    // R-129: o painel tem a altura da lista. Bloco fixo (produto e gráfico) + área de detalhes com
+    // rolagem própria; no modo "única" (pouca altura) o painel inteiro rola.
+    <div ref={raiz} className={cn('flex flex-col gap-3 lg:h-full lg:min-h-0', rolagem === 'unica' ? 'lg:overflow-y-auto' : 'lg:overflow-hidden')}>
+      <div ref={fixo} className="flex flex-none flex-col gap-3">
       <Panel>
         <PanelHeader
           title={`${codprod} · ${String(m.DESCRICAO)}`}
@@ -200,7 +235,7 @@ export function PainelDetalhe({
             <IconButton label="Painel mais estreito (Alt+→)" disabled={largura === 'estreito'} onClick={() => onLargura(-1)}>
               <ChevronsRight aria-hidden />
             </IconButton>
-            <IconButton label="Painel mais largo (Alt+←)" disabled={largura === 'metade'} onClick={() => onLargura(1)}>
+            <IconButton label="Painel mais largo (Alt+←)" disabled={!podeAlargar} onClick={() => onLargura(1)}>
               <ChevronsLeft aria-hidden />
             </IconButton>
           </span>
@@ -208,6 +243,12 @@ export function PainelDetalhe({
             <Eye aria-hidden />
           </IconButton>
         </PanelHeader>
+        {/* R-130: os avisos logo abaixo do cabeçalho, antes dos números e do gráfico. */}
+        {temAviso ? (
+          <div className="border-t border-rule-row px-4 py-2">
+            <AvisosProduto qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} />
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-rule-row px-4 py-2">
           <KpiCompacto
             rotulo="Estoque"
@@ -249,6 +290,7 @@ export function PainelDetalhe({
           referencia={referencia}
           podeOperar={podeOperar}
           motivoBloqueio={motivoBloqueio}
+          abaGrafico="especial"
           onAdicionarEspecial={onAdicionarEspecial}
         />
       ) : (
@@ -256,6 +298,7 @@ export function PainelDetalhe({
       )}
       </div>
 
+      <div ref={detalhes} className={cn('flex flex-col gap-3', rolagem === 'separada' && 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto')}>
       <Panel>
         <PanelHeader title="Mais detalhes" hint={dados.erro || 'Abra só o que precisar; nada aqui custa consulta nova.'} />
 
@@ -384,35 +427,7 @@ export function PainelDetalhe({
           </div>
         </Disclosure>
 
-        <Disclosure
-          titulo="Filiais com excesso"
-          resumo={dados.pronto ? `${excessos.length} ${excessos.length === 1 ? 'filial' : 'filiais'} acima da cobertura alvo` : '…'}
-          aberta={abertas.has('filiais')}
-          onToggle={() => alterna('filiais')}
-        >
-          {dados.pronto && excessos.length === 0 ? (
-            <EmptyState title="Nenhuma outra filial com excesso" hint={`Excesso é cobertura acima de ${linha.coberturaDias} dias, ou estoque sem giro.`} />
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Filial</Th>
-                  <Th numeric>Disponível</Th>
-                  <Th numeric>Cobertura</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {excessos.map((f) => (
-                  <Tr key={f.codfilial}>
-                    <Td><RowTitle>{f.filial}</RowTitle><RowMeta><Code prefix="filial">{f.codfilial}</Code></RowMeta></Td>
-                    <Td numeric>{quantidade(f.estoque)}</Td>
-                    <Td numeric>{dias(f.coberturaDias)}</Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Disclosure>
+        {/* R-130: "Filiais com excesso" subiu para o alerta do topo (o detalhe abre nele). */}
 
         <Disclosure
           titulo="Parâmetros do cálculo"
@@ -446,6 +461,7 @@ export function PainelDetalhe({
           </div>
         </Disclosure>
       </Panel>
+      </div>
     </div>
   );
 }

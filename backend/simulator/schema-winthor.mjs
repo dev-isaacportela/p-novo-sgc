@@ -28,11 +28,19 @@ export const DDL = [
     UF VARCHAR(2)
   )`,
 
+  // R-131: CODCLI é o cliente que representa a filial — venda para ele é venda entre filiais.
   `CREATE TABLE IF NOT EXISTS PCFILIAL (
     CODIGO VARCHAR(10) PRIMARY KEY,
     RAZAOSOCIAL VARCHAR(200),
     CGC VARCHAR(18),
-    UF VARCHAR(2)
+    UF VARCHAR(2),
+    CODCLI INT
+  )`,
+
+  // R-131: a nota de saída da venda — CONDVENDA 8 é a remessa de entrega futura.
+  `CREATE TABLE IF NOT EXISTS PCNFSAID (
+    NUMTRANSVENDA INT PRIMARY KEY,
+    CONDVENDA INT
   )`,
 
   // sgcWintAnaliseMontagem / sgcWintBuscarProduto (003). OBS2 marca inativo;
@@ -68,7 +76,9 @@ export const DDL = [
     CUSTOULTENT DECIMAL(15,4),
     CUSTOFIN DECIMAL(15,4),
     DTULTENT VARCHAR(10),
-    DTULTSAIDA VARCHAR(10)
+    DTULTSAIDA VARCHAR(10),
+    CODDEVOL INT,
+    MOTIVOBLOQESTOQUE VARCHAR(200)
   )`,
 
   `CREATE TABLE IF NOT EXISTS PCESTTRANSITO (
@@ -99,7 +109,11 @@ export const DDL = [
     SERIE VARCHAR(10),
     NUMLOTE VARCHAR(30),
     DATAVALIDADE VARCHAR(10),
-    DTCANCEL VARCHAR(10)
+    DTCANCEL VARCHAR(10),
+    CODDEVOL INT,
+    QTBLOQUEADA DECIMAL(15,3),
+    ROTINALANC VARCHAR(20),
+    NUMTRANSVENDA INT
   )`,
 
   // Vendedor (RCA) da venda: PCMOV.CODUSUR -> PCUSUARI.NOME, para a aba Vendas
@@ -162,12 +176,78 @@ export const DDL = [
   )`,
 
   // sgcWintLotesAVencer (003): lote, endereço do lote e saldo por endereço.
+  // R-130 (sgcWintBloqueiosProduto, 011): saldo, bloqueio e observações do lote.
   `CREATE TABLE IF NOT EXISTS PCLOTE (
     ID INT AUTO_INCREMENT PRIMARY KEY,
     CODPROD INT,
     CODFILIAL VARCHAR(10),
     NUMLOTE VARCHAR(30),
-    DTVALIDADE VARCHAR(10)
+    DTVALIDADE VARCHAR(10),
+    QT DECIMAL(15,3),
+    QTBLOQUEADA DECIMAL(15,3),
+    QTRESERV DECIMAL(15,3),
+    QTINDENIZ DECIMAL(15,3),
+    MOTIVOBLOQESTOQUE VARCHAR(200),
+    OBS1 VARCHAR(200),
+    OBS2 VARCHAR(200),
+    OBSANALISE VARCHAR(200),
+    OBSBLOQUEIO VARCHAR(200),
+    OBSBLOQUEIOMANUAL VARCHAR(200),
+    DTBLOQUEIO1 VARCHAR(10),
+    DTBLOQUEIO2 VARCHAR(10),
+    CODFUNCRM INT,
+    DTULTMOVENT VARCHAR(10),
+    DTULTMOVSAI VARCHAR(10)
+  )`,
+
+  // R-130: motivo de devolução/bloqueio, funcionário e os três históricos de
+  // bloqueio que o legado consulta (o log do lote só diz quem e quando).
+  `CREATE TABLE IF NOT EXISTS PCTABDEV (
+    CODDEVOL INT PRIMARY KEY,
+    MOTIVO VARCHAR(200),
+    TIPO VARCHAR(10)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS PCEMPR (
+    MATRICULA INT PRIMARY KEY,
+    NOME VARCHAR(200)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS PCMOVBLOQUEIO (
+    CODFILIAL VARCHAR(10),
+    CODPROD INT,
+    NUMLOTE VARCHAR(30),
+    MOTIVO INT,
+    CODOPER VARCHAR(10),
+    CODFUNCLANC INT,
+    ROTINALANC VARCHAR(20),
+    DTMOV VARCHAR(19)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS PCBLOQUEIOEST (
+    CODFILIAL VARCHAR(10),
+    CODPROD INT,
+    NUMLOTE VARCHAR(30),
+    CODMOTIVO INT,
+    CODROTINA INT,
+    CODOPER VARCHAR(10),
+    CODFUNCLANC INT,
+    DATA VARCHAR(19),
+    DTLANC VARCHAR(19),
+    TIPOBLOQ VARCHAR(10),
+    OBS VARCHAR(200)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS PCLOTELOG (
+    CODFILIAL VARCHAR(10),
+    CODPROD INT,
+    NUMLOTE VARCHAR(30),
+    DATA VARCHAR(19),
+    PROGRAMA VARCHAR(40),
+    USUARIO VARCHAR(40),
+    OBSAPLICACAO VARCHAR(200),
+    QTBLOQUEADA_ANT DECIMAL(15,3),
+    QTBLOQUEADA DECIMAL(15,3)
   )`,
 
   `CREATE TABLE IF NOT EXISTS PCESTENDLOTE (
@@ -193,6 +273,15 @@ export const DDL = [
   )`,
 
   // sgcWintPrazoPagamento (003): condição praticada nos últimos pedidos.
+  // R-132: o item do pedido de compra — o saldo pendente (pedida − entregue) dá a previsão de chegada.
+  `CREATE TABLE IF NOT EXISTS PCITEM (
+    NUMPED INT,
+    CODPROD INT,
+    QTPEDIDA DECIMAL(15,3),
+    QTENTREGUE DECIMAL(15,3),
+    PCOMPRA DECIMAL(15,4)
+  )`,
+
   `CREATE TABLE IF NOT EXISTS PCPEDIDO (
     NUMPED INT PRIMARY KEY,
     CODFORNEC INT,

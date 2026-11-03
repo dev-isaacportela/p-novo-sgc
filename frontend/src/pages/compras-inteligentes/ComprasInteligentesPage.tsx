@@ -42,11 +42,15 @@ import type {
 } from '@/lib/ressuprimento';
 import { CHAVE_CARRINHO, carrinhoDeTexto, resumoDoCarrinho, textoDoCarrinho } from '@/lib/carrinho';
 import type { CarrinhoSalvo, ItemCarrinho } from '@/lib/carrinho';
-import { DADOS_VAZIOS, desconsideradasPorMes } from '@/lib/ressuprimento-detalhe';
+import { DADOS_VAZIOS, desconsideradasPorMes, historicoSemPublico } from '@/lib/ressuprimento-detalhe';
 import { modeloEscolhido, preverVendas, serieFechada, sugestaoProjetada } from '@/lib/previsao';
 import { lotesDeCodigos, oportunidadesDoItem, seloEspecial, sugestaoPorCliente } from '@/lib/custo-especial';
 import { AVISO_ERRO_CUSTO, carregarCustoPadrao } from '@/lib/custo-padrao-carga';
-import { CHAVE_LARGURA, curvasJuntas, larguraDe, proximaLargura } from '@/lib/largura-painel';
+import { carregarPosicoesFiliais } from '@/lib/avisos-carga';
+import { contarAvisos, excessosPorProduto, filtrarPorAvisos } from '@/lib/avisos-produto';
+import type { PosicaoOutraFilial } from '@/lib/avisos-produto';
+import { useLotesBloqueados } from './use-lotes-bloqueados';
+import { CHAVE_LARGURA, larguraDe, larguraEfetiva, proximaLargura } from '@/lib/largura-painel';
 import type { LarguraPainel } from '@/lib/largura-painel';
 import type { MapaCustoPadrao } from '@/lib/compras';
 import type { CustoEspecial, Oportunidade, SugestaoCliente, TabelaEspecial, VendaCliente } from '@/lib/custo-especial';
@@ -127,6 +131,8 @@ export default function ComprasInteligentesPage() {
   const [porCaixa, setPorCaixa] = React.useState<Map<number, number>>(() => new Map());
   // R-128: o custo de compra é o custo padrão do Gestão de Custos; `null` = a consulta falhou.
   const [custosPadrao, setCustosPadrao] = React.useState<MapaCustoPadrao | null | undefined>(undefined);
+  // R-130: a posição das outras filiais (uma vez por carga); `null` = falhou, a lista fica sem o selo.
+  const [posicoesFiliais, setPosicoesFiliais] = React.useState<PosicaoOutraFilial[] | null>([]);
   // R-125: as políticas de preço especial e a venda por cliente, uma carga por filial.
   const [custosEspeciais, setCustosEspeciais] = React.useState<CustoEspecial[]>([]);
   const [vendasClientes, setVendasClientes] = React.useState<VendaCliente[]>([]);
@@ -136,7 +142,8 @@ export default function ComprasInteligentesPage() {
   const [pedidoAberto, setPedidoAberto] = React.useState<PedidoAberto | null>(null);
   const [emPedidoAberto, setEmPedidoAberto] = React.useState<Map<number, PedidoAbertoDoItem>>(() => new Map());
 
-  const [desconsiderarLicitacao, setDesconsiderarLicitacao] = React.useState(false);
+  // R-131: a venda a órgão público fica FORA por padrão (seletor marcado); desmarcar mostra com ela.
+  const [desconsiderarLicitacao, setDesconsiderarLicitacao] = React.useState(true);
   const [referencia, setReferencia] = React.useState<ReferenciaSugestao>('unidades');
   const [visao, setVisao] = React.useState<VisaoRessuprimento>('comprar');
   // C-012: a visão de onde o chip "Silenciados" saiu, para voltar ao desligar.
@@ -281,10 +288,11 @@ export default function ComprasInteligentesPage() {
             }
           }
         } catch { /* a embalagem resolve */ }
-        const padrao = await carregarCustoPadrao(codprods);
+        const [padrao, posicoes] = await Promise.all([carregarCustoPadrao(codprods), carregarPosicoesFiliais(codprods, codfilial)]);
         if (!vivo) return;
         setPorCaixa(mapa);
         setCustosPadrao(padrao);
+        setPosicoesFiliais(posicoes);
 
         // R-125: as políticas de preço especial (gestao-de-custos) e, só se
         // houver alguma, a venda por cliente destes produtos (WinThor) — ambas
@@ -326,11 +334,22 @@ export default function ComprasInteligentesPage() {
     try { guardada = window.localStorage.getItem(CHAVE_LARGURA(usuarioId)); } catch { /* sem armazenamento */ }
     setLargura(larguraDe(guardada));
   }
+  // A largura de fato nunca deixa a lista com menos de 640 px: a grade é medida (iframe e zoom contam).
+  const [larguraGrade, setLarguraGrade] = React.useState(0);
+  const observadorGrade = React.useRef<ResizeObserver | null>(null);
+  const refGrade = React.useCallback((no: HTMLDivElement | null) => {
+    observadorGrade.current?.disconnect();
+    if (!no || typeof ResizeObserver === 'undefined') return;
+    observadorGrade.current = new ResizeObserver(([e]) => setLarguraGrade(Math.round(e.contentRect.width)));
+    observadorGrade.current.observe(no);
+  }, []);
+  const larguraUsada = larguraEfetiva(largura, larguraGrade);
+  const podeAlargar = larguraEfetiva(proximaLargura(larguraUsada, 1), larguraGrade) !== larguraUsada;
   const mudarLargura = React.useCallback((passo: 1 | -1) => setLargura((atual) => {
-    const proxima = proximaLargura(atual, passo);
+    const proxima = proximaLargura(larguraEfetiva(atual, larguraGrade), passo);
     try { window.localStorage.setItem(CHAVE_LARGURA(usuarioId), proxima); } catch { /* conveniência */ }
     return proxima;
-  }), [usuarioId]);
+  }), [usuarioId, larguraGrade]);
   // Alt+← alarga e Alt+→ estreita o painel (que está à direita).
   React.useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
@@ -390,11 +409,17 @@ export default function ComprasInteligentesPage() {
   ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao, custosPadrao]);
 
   const contagens = React.useMemo(() => contarVisoes(todas), [todas]);
+  // R-130 (RN-037): o excesso de cada produto pela regra da seção, com a cobertura alvo dele.
+  const excessos = React.useMemo(() => excessosPorProduto(posicoesFiliais ?? [],
+    todas.map((l) => ({ codprod: Number(l.medida.CODPROD), coberturaDias: l.coberturaDias })), codfilial), [posicoesFiliais, todas, codfilial]);
+  const avisoDe = React.useCallback((l: LinhaRessuprimento) => ({ codprod: Number(l.medida.CODPROD), qtBloqueada: Number(l.medida.QT_BLOQUEADA) || 0 }), []);
+  const contagemAvisos = React.useMemo(() => contarAvisos(linhasDaVisao(todas, visao), excessos, avisoDe), [todas, visao, excessos, avisoDe]);
 
   const termo = busca.trim().toLowerCase();
   const lista = React.useMemo(() => {
     let recorte = linhasDaVisao(todas, visao);
     if (filtros.soSilenciados) recorte = recorte.filter((l) => l.silenciado);
+    recorte = filtrarPorAvisos(recorte, filtros, excessos, avisoDe);
     if (filtros.situacao !== '') recorte = recorte.filter((l) => l.status === filtros.situacao);
     recorte = filtrarMovimentacao(recorte, filtros.movimentacao);
     if (termo !== '') {
@@ -402,7 +427,7 @@ export default function ComprasInteligentesPage() {
         || String(l.medida.CODPROD).includes(termo) || String(l.medida.CODFAB ?? '').toLowerCase().includes(termo));
     }
     return ordenarLinhas(recorte, filtros.ordem);
-  }, [todas, visao, filtros, termo]);
+  }, [todas, visao, filtros, termo, excessos, avisoDe]);
 
   const sugestaoTotal = React.useMemo(
     () => lista.reduce((soma, l) => soma + l.sugerida * Number(l.custo?.valor ?? 0), 0),
@@ -421,8 +446,15 @@ export default function ComprasInteligentesPage() {
   const previsaoDe = React.useCallback((codprod: number): Previsao | null => {
     const dadosSku = cacheSku.get(codprod);
     if (!codprod || !dadosSku?.pronto) return null;
-    return preverVendas(serieFechada(dadosSku.historico, hoje, desconsideradasPorMes(desconsideradas.filter((v) => v.codprod === codprod))));
-  }, [cacheSku, hoje, desconsideradas]);
+    return preverVendas(serieFechada(historicoSemPublico(dadosSku.historico, desconsiderarLicitacao), hoje, desconsideradasPorMes(desconsideradas.filter((v) => v.codprod === codprod))));
+  }, [cacheSku, hoje, desconsideradas, desconsiderarLicitacao]);
+  // R-131: o gráfico e os totais do painel e da janela contam a mesma venda da lista.
+  const dadosDe = React.useCallback((codprod: number): DadosDoSku => {
+    const dadosSku = cacheSku.get(codprod) ?? DADOS_VAZIOS;
+    return desconsiderarLicitacao ? { ...dadosSku, historico: historicoSemPublico(dadosSku.historico, true) } : dadosSku;
+  }, [cacheSku, desconsiderarLicitacao]);
+  const dadosSelecionado = React.useMemo(() => dadosDe(codprodSelecionado), [dadosDe, codprodSelecionado]);
+  const dadosDetalhe = React.useMemo(() => (detalheCompleto ? dadosDe(Number(detalheCompleto.medida.CODPROD)) : DADOS_VAZIOS), [dadosDe, detalheCompleto]);
   const projetar = React.useCallback((previsao: Previsao | null, linha: LinhaRessuprimento | null): SugestaoProjetada | null => {
     const r = previsao ? modeloEscolhido(previsao, modeloPrevisao) : null;
     return r && linha ? sugestaoProjetada(r.previsao, linha) : null;
@@ -434,6 +466,9 @@ export default function ComprasInteligentesPage() {
     () => (detalheCompleto ? todas.find((l) => Number(l.medida.CODPROD) === codprodDetalhe) ?? detalheCompleto : null),
     [detalheCompleto, todas, codprodDetalhe],
   );
+  // R-130: os lotes bloqueados só do produto aberto (painel e janela) e só com bloqueio.
+  const lotesDe = useLotesBloqueados(codfilial, recarga, [linhaSelecionada, linhaDetalhe]
+    .filter((l): l is LinhaRessuprimento => Boolean(l)).map(avisoDe));
   const previsaoDetalhe = React.useMemo(() => previsaoDe(codprodDetalhe), [previsaoDe, codprodDetalhe]);
   const projetadaDetalhe = React.useMemo(() => projetar(previsaoDetalhe, linhaDetalhe), [projetar, previsaoDetalhe, linhaDetalhe]);
 
@@ -654,7 +689,7 @@ export default function ComprasInteligentesPage() {
   });
 
   return (
-    <div className="flex flex-col lg:h-full lg:min-h-0">
+    <div className="flex flex-col lg:h-full lg:min-h-0 lg:overflow-hidden">
       {/* Cabeçalho compacto (pedido do usuário em 2026-10-30): uma linha só —
           fornecedor e filial à esquerda, as ações à direita; sem título nem
           descrição. A busca e o seletor de órgãos públicos ficam na lista. */}
@@ -758,9 +793,11 @@ export default function ComprasInteligentesPage() {
         <Panel className="mt-4"><EmptyState title="Nenhum produto ativo deste fornecedor nesta filial" /></Panel>
       ) : (
         // R-129: lista e painel ocupam a altura que sobra, cada um com a sua rolagem; a largura do painel é do usuário.
-        <div className={`mt-4 grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] ${COLUNAS_POR_LARGURA[largura]}`}>
+        <div ref={refGrade} className={`mt-4 grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] ${COLUNAS_POR_LARGURA[larguraUsada]}`}>
           <ListaProdutos
             visao={visao}
+            excessos={excessos}
+            contagemAvisos={contagemAvisos}
             linhas={lista}
             todas={todas}
             selecionado={codprodSelecionado}
@@ -775,7 +812,6 @@ export default function ComprasInteligentesPage() {
             desconsiderarLicitacao={desconsiderarLicitacao}
             onLicitacao={() => setDesconsiderarLicitacao((atual) => !atual)}
             emPedidoAberto={emPedidoAberto}
-            curvasNumaColuna={curvasJuntas(largura)}
             especiais={selosEspeciais}
             sugestaoProjetada={projetadaSelecionada ? { codprod: codprodSelecionado, sugestao: projetadaSelecionada.sugestao } : null}
             sugestaoTotal={sugestaoTotal}
@@ -797,7 +833,7 @@ export default function ComprasInteligentesPage() {
             codfilial={codfilial}
             fornecedor={nomeFornecedor}
             hoje={hoje}
-            dados={cacheSku.get(codprodSelecionado) ?? DADOS_VAZIOS}
+            dados={dadosSelecionado}
             referencia={referencia}
             desconsideradasDoSku={desconsideradas.filter((v) => v.codprod === codprodSelecionado).length}
             podeOperar={podeOperar}
@@ -814,7 +850,10 @@ export default function ComprasInteligentesPage() {
             projetada={projetadaSelecionada}
             sugestoesEspeciais={sugestoesSelecionada}
             onAdicionarEspecial={(tabela, quantidade) => { if (linhaSelecionada) adicionarEspecial(linhaSelecionada, tabela, quantidade); }}
-            largura={largura}
+            largura={larguraUsada}
+            podeAlargar={podeAlargar}
+            lotesBloqueados={lotesDe(codprodSelecionado)}
+            excessosLista={excessos.get(codprodSelecionado) ?? []}
             onLargura={mudarLargura}
           />
         </div>
@@ -849,7 +888,8 @@ export default function ComprasInteligentesPage() {
         codfilial={codfilial}
         fornecedor={nomeFornecedor}
         hoje={hoje}
-        dados={detalheCompleto ? cacheSku.get(Number(detalheCompleto.medida.CODPROD)) ?? DADOS_VAZIOS : DADOS_VAZIOS}
+        dados={dadosDetalhe}
+        semPublico={desconsiderarLicitacao}
         referencia={referencia}
         desconsideradas={desconsideradas}
         periodo={periodo}
@@ -869,11 +909,14 @@ export default function ComprasInteligentesPage() {
         projetada={projetadaDetalhe}
         sugestoesEspeciais={sugestoesDetalhe}
         onAdicionarEspecial={(tabela, quantidade) => { if (linhaDetalhe) adicionarEspecial(linhaDetalhe, tabela, quantidade); }}
+        lotesBloqueados={lotesDe(Number(linhaDetalhe?.medida.CODPROD ?? 0))}
+        excessosLista={excessos.get(Number(linhaDetalhe?.medida.CODPROD ?? 0)) ?? []}
       />
       <ParametrosDialogo alvo={parametroAlvo} onFechar={() => setParametroAlvo(null)} onSalvar={salvarParametro} />
       <SilenciarDialogo linha={silenciando} onFechar={() => setSilenciando(null)} onSilenciar={silenciar} />
       <VendasDialogo
         linha={vendasDe}
+        semPublico={desconsiderarLicitacao}
         codfilial={codfilial}
         periodo={periodo}
         desconsideradas={desconsideradas.map((v) => v.numtransitem)}

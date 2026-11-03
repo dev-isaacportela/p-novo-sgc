@@ -9,7 +9,8 @@
 // sgcWintProdutoEstoqueFiliais, sgcWintProdutoVendas, sgcParametrosCompraListar,
 // sgcVendasDesconsideradasListar, sgcPedidoAbertoDoFornecedor,
 // sgcEficienciaComprador), 8110-8111 do layout legado (sgcWintResumoFornecedores,
-// sgcItensEmPedidoAberto — R-117), escritas 8150-8154 (sgcEscParametroCompraSalvar,
+// sgcItensEmPedidoAberto — R-117), 8115-8116 dos avisos de excesso e bloqueio
+// (sgcWintEstoqueFiliaisProdutos, sgcWintBloqueiosProduto — R-130), escritas 8150-8154 (sgcEscParametroCompraSalvar,
 // sgcEscParametroCompraSilenciar, sgcEscParametroCompraRestaurar,
 // sgcEscVendaDesconsiderar, sgcEscVendaReconsiderar).
 //
@@ -39,7 +40,8 @@ import { jdbcIdWinthor } from './add-003-jdbc-winthor.mjs';
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
 export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico',
   'sgcWintProdutoUltimasCompras', 'sgcWintProdutoEstoqueFiliais', 'sgcWintProdutoVendas',
-  'sgcWintResumoFornecedores', 'sgcWintVendasClientesProdutos'];
+  'sgcWintResumoFornecedores', 'sgcWintVendasClientesProdutos', 'sgcWintEstoqueFiliaisProdutos',
+  'sgcWintBloqueiosProduto'];
 
 /* ──────────────────────────────────────────────────────────────────────────
    A guarda de persona — UM texto só, o da 002 (R-013), copiado literalmente de
@@ -67,8 +69,35 @@ const PARAMETRIZAR = ['admin', 'gestor'];
 /** Operar (desconsiderar venda): admin, analista e gestor (RN-019). */
 const OPERAR = ['admin', 'analista', 'gestor'];
 
-/** Cliente de órgão público — mesmo recorte da 003 (RN-011 daquela spec, R-084). */
-const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15, 20)';
+/**
+ * Cliente de órgão público (ramos 11 a 15 do PCATIVI, "ORGAO PUBLICO …"). R-131:
+ * fica FORA da demanda por padrão — a tela traz o seletor marcado e quem o
+ * desmarca vê com o público; por isso a consulta segue devolvendo a parte
+ * pública segregada. O ramo 20 é "FILIAL" (venda para a própria rede): saiu
+ * daqui e entrou em ENTRE_FILIAIS, que fica fora sempre.
+ */
+const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15)';
+
+/**
+ * R-131: venda para a própria rede — o ramo 20 (FILIAL) ou o cliente que é uma
+ * filial do grupo (PCFILIAL.CODCLI). No WinThor real os dois recortes são o
+ * mesmo (64 linhas, 4.827 un. em 153 dias na filial 1); os dois ficam por
+ * robustez. `NVL(M.CODCLI, 0)`: venda sem cliente não pode virar NULL no NOT.
+ */
+// `NVL(FX.CODCLI, 0) > 0` e não `IS NOT NULL`: o gerador CONNECT BY do dialeto do simulador casa
+// até o próximo `IS NOT NULL` da consulta (o calendário da principal viraria número).
+const ENTRE_FILIAIS = `(NVL(C.CODATV1, 0) = 20 OR NVL(M.CODCLI, 0) IN (SELECT FX.CODCLI FROM PCFILIAL FX WHERE NVL(FX.CODCLI, 0) > 0))`;
+
+/** R-131 (RN-CI-07 e RN-EST-11 do legado): remessa de entrega futura — a venda já contou na nota de venda (CONDVENDA 7). */
+const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA = M.NUMTRANSVENDA AND NF.CONDVENDA = 8)`;
+
+/**
+ * RN-001 (R-131): a venda que conta na 011 — UM recorte só, para lista,
+ * curvas, gráfico, previsão, aba Vendas, custo especial e o resumo do seletor
+ * baterem. Exige PCMOV como `M` e `LEFT JOIN PCCLIENT C`. O público fica de
+ * fora à parte (PUBLICO), porque a tela decide.
+ */
+const VENDA_VALIDA = `(M.CODOPER = 'S' AND M.QT > 0 AND NOT ${ENTRE_FILIAIS} AND NOT ${REMESSA_FUTURA})`;
 
 /* ─────────────── leituras — WinThor (Oracle) ─────────────── */
 
@@ -91,8 +120,16 @@ const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15, 20)';
 // 6. `{{excluir}}` é FRAGMENTO (lista de inteiros sem aspas), `0` quando não há
 //    nenhuma — `NUMTRANSITEM` começa em 1, então `NOT IN (0)` não exclui nada.
 //    Teto de 500 por chamada (R-087, ORA-01795).
-// 7. A venda pública fica na demanda (R-084) e sai segregada em VENDA_PUBLICA e
-//    CONSUMO_DIARIO_PUBLICO: quem decide é o seletor da tela, sem nova consulta.
+// 7. A venda pública sai segregada em VENDA_PUBLICA, CONSUMO_DIARIO_PUBLICO,
+//    FATURAMENTO_PUBLICO e RENTABILIDADE_PUBLICA: quem decide é o seletor da
+//    tela (R-131: marcado por padrão, o público fica fora), sem nova consulta.
+// 9. R-132 (C-049): PREVISAO_CHEGADA é a menor previsão de entrega
+//    (PCPEDIDO.DTPREVENT) dos pedidos da filial com saldo pendente no item
+//    (PCITEM: pedida − entregue > 0), dos últimos 12 meses; sem pedido assim, a
+//    tela cai em hoje + lead time e diz isso. Fica ANTES do calendário e sem
+//    "IS NOT NULL": o gerador CONNECT BY do simulador casa até o próximo.
+// 8. R-131: só entra a VENDA_VALIDA — venda entre filiais e remessa de entrega
+//    futura (CONDVENDA 8) ficam fora sempre, em todas as SFs que contam venda.
 const SQL_RESSUPRIMENTO = `WITH
   PRODUTOS_BASE AS (
     SELECT
@@ -139,6 +176,16 @@ const SQL_RESSUPRIMENTO = `WITH
       AND M.DTMOV >= ADD_MONTHS(TRUNC(SYSDATE), -12)
     GROUP BY M.CODPROD
   ),
+  PREVISAO_CHEGADA AS (
+    SELECT I.CODPROD, MIN(O.DTPREVENT) AS DT_PREV
+    FROM PCPEDIDO O
+    JOIN PCITEM I ON I.NUMPED = O.NUMPED
+    JOIN PRODUTOS_BASE PB ON PB.CODPROD = I.CODPROD
+    WHERE O.CODFILIAL = '{{codfilial}}'
+      AND NVL(I.QTPEDIDA, 0) - NVL(I.QTENTREGUE, 0) > 0
+      AND O.DTEMISSAO >= ADD_MONTHS(TRUNC(SYSDATE), -12)
+    GROUP BY I.CODPROD
+  ),
   DIAS AS (
     SELECT
       TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') + (LEVEL - 1) AS DIA,
@@ -153,12 +200,13 @@ const SQL_RESSUPRIMENTO = `WITH
       SUM(M.QT) AS QT_DIA,
       SUM(CASE WHEN ${PUBLICO} THEN M.QT ELSE 0 END) AS QT_DIA_PUBLICA,
       SUM(M.QT * NVL(M.PUNIT, 0)) AS VL_DIA,
-      SUM(M.QT * (NVL(M.PUNIT, 0) - NVL(M.CUSTOFIN, 0))) AS MARGEM_DIA
+      SUM(M.QT * (NVL(M.PUNIT, 0) - NVL(M.CUSTOFIN, 0))) AS MARGEM_DIA,
+      SUM(CASE WHEN ${PUBLICO} THEN M.QT * NVL(M.PUNIT, 0) ELSE 0 END) AS VL_DIA_PUBLICO,
+      SUM(CASE WHEN ${PUBLICO} THEN M.QT * (NVL(M.PUNIT, 0) - NVL(M.CUSTOFIN, 0)) ELSE 0 END) AS MARGEM_DIA_PUBLICA
     FROM PCMOV M
     JOIN PRODUTOS_BASE PB ON PB.CODPROD = M.CODPROD
     LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
-    WHERE M.CODOPER = 'S'
-      AND M.QT > 0
+    WHERE ${VENDA_VALIDA}
       AND M.CODFILIAL = '{{codfilial}}'
       AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
       AND M.NUMTRANSITEM NOT IN ({{excluir}})
@@ -171,6 +219,8 @@ const SQL_RESSUPRIMENTO = `WITH
       NVL(V.QT_DIA_PUBLICA, 0) AS QT_DIA_PUBLICA,
       NVL(V.VL_DIA, 0)         AS VL_DIA,
       NVL(V.MARGEM_DIA, 0)     AS MARGEM_DIA,
+      NVL(V.VL_DIA_PUBLICO, 0)     AS VL_DIA_PUBLICO,
+      NVL(V.MARGEM_DIA_PUBLICA, 0) AS MARGEM_DIA_PUBLICA,
       POWER(0.85, D.DIAS_ATE_FIM) AS PESO
     FROM PRODUTOS_BASE PB
     CROSS JOIN DIAS D
@@ -183,6 +233,8 @@ const SQL_RESSUPRIMENTO = `WITH
       SUM(D.QT_DIA_PUBLICA) AS VENDA_PUBLICA,
       SUM(D.VL_DIA)         AS FATURAMENTO_PERIODO,
       SUM(D.MARGEM_DIA)     AS RENTABILIDADE_PERIODO,
+      SUM(D.VL_DIA_PUBLICO)     AS FATURAMENTO_PUBLICO,
+      SUM(D.MARGEM_DIA_PUBLICA) AS RENTABILIDADE_PUBLICA,
       ROUND(SUM(D.QT_DIA * D.PESO)         / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO,
       ROUND(SUM(D.QT_DIA_PUBLICA * D.PESO) / NULLIF(SUM(D.PESO), 0), 4) AS CONSUMO_DIARIO_PUBLICO,
       ROUND(SQRT(GREATEST(AVG(D.QT_DIA * D.QT_DIA) - AVG(D.QT_DIA) * AVG(D.QT_DIA), 0)), 4) AS VOLATILIDADE_DIARIA
@@ -199,11 +251,15 @@ SELECT
   NVL(M.VENDA_PUBLICA, 0)          AS VENDA_PUBLICA,
   NVL(M.FATURAMENTO_PERIODO, 0)    AS FATURAMENTO_PERIODO,
   NVL(M.RENTABILIDADE_PERIODO, 0)  AS RENTABILIDADE_PERIODO,
+  NVL(M.FATURAMENTO_PUBLICO, 0)    AS FATURAMENTO_PUBLICO,
+  NVL(M.RENTABILIDADE_PUBLICA, 0)  AS RENTABILIDADE_PUBLICA,
   NVL(M.CONSUMO_DIARIO, 0)         AS CONSUMO_DIARIO,
   NVL(M.CONSUMO_DIARIO_PUBLICO, 0) AS CONSUMO_DIARIO_PUBLICO,
-  NVL(M.VOLATILIDADE_DIARIA, 0)    AS VOLATILIDADE_DIARIA
+  NVL(M.VOLATILIDADE_DIARIA, 0)    AS VOLATILIDADE_DIARIA,
+  TO_CHAR(PC.DT_PREV, 'YYYY-MM-DD') AS DT_PREV_CHEGADA
 FROM PRODUTOS_BASE PB
 LEFT JOIN RESSUPRIMENTO_PRODUTO R ON R.CODPROD = PB.CODPROD
+LEFT JOIN PREVISAO_CHEGADA PC ON PC.CODPROD = PB.CODPROD
 LEFT JOIN METRICAS M ON M.CODPROD = PB.CODPROD
 ORDER BY PB.DESCRICAO`;
 
@@ -212,9 +268,9 @@ ORDER BY PB.DESCRICAO`;
 // a janela passa a ser "12 meses a partir de hoje".
 const SQL_PRODUTO_HISTORICO = `SELECT
   TO_CHAR(M.DTMOV, 'YYYY-MM') AS MES,
-  SUM(CASE WHEN M.CODOPER = 'S' THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS,
+  SUM(CASE WHEN ${VENDA_VALIDA} THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS,
   SUM(CASE WHEN M.CODOPER = 'E' THEN NVL(M.QT, 0) ELSE 0 END) AS ENTRADAS,
-  SUM(CASE WHEN M.CODOPER = 'S' AND ${PUBLICO}
+  SUM(CASE WHEN ${VENDA_VALIDA} AND ${PUBLICO}
            THEN NVL(M.QT, 0) ELSE 0 END) AS SAIDAS_PUBLICAS
 FROM PCMOV M
 LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
@@ -285,8 +341,7 @@ const SQL_PRODUTO_VENDAS = `SELECT * FROM (
   LEFT JOIN PCUSUARI U ON U.CODUSUR = M.CODUSUR
   WHERE M.CODPROD = {{codprod}}
     AND M.CODFILIAL = '{{codfilial}}'
-    AND M.CODOPER = 'S'
-    AND M.QT > 0
+    AND ${VENDA_VALIDA}
     AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
   ORDER BY M.QT DESC, M.DTMOV DESC
 ) WHERE ROWNUM <= 50`;
@@ -321,7 +376,8 @@ const SQL_RESUMO_FORNECEDORES = `WITH
     SELECT M.CODPROD, SUM(M.QT) AS QT
     FROM PCMOV M
     JOIN BASE B ON B.CODPROD = M.CODPROD
-    WHERE M.CODOPER = 'S' AND M.QT > 0
+    LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+    WHERE ${VENDA_VALIDA} AND NOT (${PUBLICO})
       AND M.DTMOV >= TO_DATE('{{dataInicio}}', 'YYYY-MM-DD')
     GROUP BY M.CODPROD
   )
@@ -467,13 +523,100 @@ const SQL_VENDAS_CLIENTES = `SELECT
   SUM(CASE WHEN M.QT > 0 THEN M.QT ELSE 0 END) AS VENDA_CLIENTE_PERIODO
 FROM PCMOV M
 LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
-WHERE M.CODOPER = 'S'
-  AND M.QT > 0
+WHERE ${VENDA_VALIDA}
   AND M.CODFILIAL = '{{codfilial}}'
   AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
   AND M.CODPROD IN ({{codprods}})
   AND (NOT (${PUBLICO}) OR {{incluirPublico}} = 1)
 GROUP BY M.CODPROD, M.CODCLI`;
+
+// R-130: a posição das OUTRAS filiais para a lista inteira, numa chamada por
+// lote de 500 produtos (nada por linha — teto de 300/min). Mesmo estoque
+// líquido de R-085 e a mesma venda dos 3 meses do `sgcWintProdutoEstoqueFiliais`:
+// a tela aplica a MESMA regra de excesso da seção do painel (`filiaisComExcesso`,
+// RN-025), com a cobertura alvo de cada produto — por isso a consulta devolve a
+// posição, não a contagem. Só filial com estoque líquido > 0 (sem estoque não há
+// excesso). `{{codprods}}` é FRAGMENTO, como no `sgcWintVendasClientesProdutos`.
+const SQL_ESTOQUE_FILIAIS_PRODUTOS = `SELECT
+  E.CODPROD,
+  E.CODFILIAL,
+  NVL(F.RAZAOSOCIAL, E.CODFILIAL) AS FILIAL,
+  GREATEST(0, NVL(E.QTEST, 0) - NVL(E.QTBLOQUEADA, 0) - NVL(E.QTINDENIZ, 0) - NVL(E.QTRESERV, 0)) AS ESTOQUE_ATUAL,
+  NVL(E.QTVENDMES, 0) + NVL(E.QTVENDMES1, 0) + NVL(E.QTVENDMES2, 0) AS VENDA_3_MESES
+FROM PCEST E
+LEFT JOIN PCFILIAL F ON F.CODIGO = E.CODFILIAL
+WHERE E.CODPROD IN ({{codprods}})
+  AND E.CODFILIAL <> '{{codfilial}}'
+  AND NVL(E.QTEST, 0) - NVL(E.QTBLOQUEADA, 0) - NVL(E.QTINDENIZ, 0) - NVL(E.QTRESERV, 0) > 0
+ORDER BY E.CODPROD, E.CODFILIAL`;
+
+// R-130: os lotes bloqueados do produto na filial, com o motivo — a SQL do
+// legado (`ci_buscar_bloqueios_produto`), sem mudança. O motivo vem, nesta
+// ordem, do último PCMOVBLOQUEIO, do último PCBLOQUEIOEST, da última PCMOV com
+// CODDEVOL e do PCEST; PCLOTELOG responde só QUEM e QUANDO bloqueou (a
+// MATRICULA do OBSAPLICACAO '6366:<n>' em PCEMPR), nunca o motivo. A tela só
+// chama ao abrir o produto e só quando QT_BLOQUEADA > 0.
+const SQL_BLOQUEIOS_PRODUTO = `WITH HIST_MOV_BLOQ AS (
+  SELECT * FROM (SELECT M.CODFILIAL, M.CODPROD, M.NUMLOTE, M.MOTIVO AS CODDEVOL, D.MOTIVO AS MOTIVO_BLOQUEIO, D.TIPO AS TIPO_MOTIVO,
+      M.CODOPER, M.CODFUNCLANC, M.ROTINALANC, M.DTMOV,
+      ROW_NUMBER() OVER (PARTITION BY M.CODFILIAL, M.CODPROD, NVL(M.NUMLOTE,'-') ORDER BY M.DTMOV DESC) AS RN
+    FROM PCMOVBLOQUEIO M LEFT JOIN PCTABDEV D ON D.CODDEVOL = M.MOTIVO
+    WHERE M.CODPROD = {{codprod}} AND M.CODFILIAL = '{{codfilial}}') WHERE RN = 1
+), HIST_BLOQ_EST AS (
+  SELECT * FROM (SELECT B.CODFILIAL, B.CODPROD, B.NUMLOTE, B.CODMOTIVO AS CODDEVOL, D.MOTIVO AS MOTIVO_BLOQUEIO, D.TIPO AS TIPO_MOTIVO,
+      B.CODROTINA, B.CODOPER, B.CODFUNCLANC, B.DATA, B.DTLANC, B.TIPOBLOQ, B.OBS,
+      ROW_NUMBER() OVER (PARTITION BY B.CODFILIAL, B.CODPROD, NVL(B.NUMLOTE,'-') ORDER BY NVL(B.DATA, B.DTLANC) DESC) AS RN
+    FROM PCBLOQUEIOEST B LEFT JOIN PCTABDEV D ON D.CODDEVOL = B.CODMOTIVO
+    WHERE B.CODPROD = {{codprod}} AND B.CODFILIAL = '{{codfilial}}') WHERE RN = 1
+), HIST_MOV AS (
+  SELECT * FROM (SELECT M.CODFILIAL, M.CODPROD, M.NUMLOTE, M.CODDEVOL, D.MOTIVO AS MOTIVO_BLOQUEIO, D.TIPO AS TIPO_MOTIVO,
+      M.CODOPER, M.ROTINALANC, M.DTMOV, M.QT, M.QTBLOQUEADA,
+      ROW_NUMBER() OVER (PARTITION BY M.CODFILIAL, M.CODPROD, NVL(M.NUMLOTE,'-') ORDER BY M.DTMOV DESC, ABS(NVL(M.QTBLOQUEADA,0)) DESC) AS RN
+    FROM PCMOV M LEFT JOIN PCTABDEV D ON D.CODDEVOL = M.CODDEVOL
+    WHERE M.CODPROD = {{codprod}} AND M.CODFILIAL = '{{codfilial}}' AND M.CODDEVOL IS NOT NULL AND NVL(M.QTBLOQUEADA,0) <> 0) WHERE RN = 1
+), HIST_LOTELOG AS (
+  -- PCLOTELOG responde QUEM e QUANDO, nunca POR QUE: OBSAPLICACAO '6366:<n>' traz a MATRICULA de PCEMPR, não CODDEVOL.
+  -- Corte QTBLOQUEADA > QTBLOQUEADA_ANT: só o evento que bloqueou (desbloqueio parcial não entra).
+  SELECT * FROM (SELECT PL.CODFILIAL, PL.CODPROD, PL.NUMLOTE,
+      CASE WHEN REGEXP_LIKE(REGEXP_SUBSTR(PL.OBSAPLICACAO,'[^:]+',1,2),'^[0-9]+$') THEN TO_NUMBER(REGEXP_SUBSTR(PL.OBSAPLICACAO,'[^:]+',1,2)) END AS MATRICULA,
+      PL.DATA, PL.PROGRAMA, PL.USUARIO, PL.OBSAPLICACAO, PL.QTBLOQUEADA_ANT, PL.QTBLOQUEADA,
+      ROW_NUMBER() OVER (PARTITION BY PL.CODFILIAL, PL.CODPROD, NVL(PL.NUMLOTE,'-') ORDER BY PL.DATA DESC) AS RN
+    FROM PCLOTELOG PL
+    WHERE PL.CODPROD = {{codprod}} AND PL.CODFILIAL = '{{codfilial}}' AND NVL(PL.QTBLOQUEADA,0) > NVL(PL.QTBLOQUEADA_ANT,0)) WHERE RN = 1
+), HIST_EST AS (
+  SELECT E.CODFILIAL, E.CODPROD, E.CODDEVOL, COALESCE(D.MOTIVO, E.MOTIVOBLOQESTOQUE) AS MOTIVO_BLOQUEIO, D.TIPO AS TIPO_MOTIVO, E.MOTIVOBLOQESTOQUE
+  FROM PCEST E LEFT JOIN PCTABDEV D ON D.CODDEVOL = E.CODDEVOL
+  WHERE E.CODPROD = {{codprod}} AND E.CODFILIAL = '{{codfilial}}' AND NVL(E.QTBLOQUEADA,0) > 0
+)
+SELECT L.CODPROD, P.DESCRICAO, L.CODFILIAL, L.NUMLOTE,
+  NVL(L.QT,0) AS QT, NVL(L.QTBLOQUEADA,0) AS QTBLOQUEADA, NVL(L.QTRESERV,0) AS QTRESERV, NVL(L.QTINDENIZ,0) AS QTINDENIZ,
+  COALESCE(HMB.CODDEVOL, HBE.CODDEVOL, HM.CODDEVOL, HE.CODDEVOL) AS CODDEVOL,
+  COALESCE(HMB.MOTIVO_BLOQUEIO, HBE.MOTIVO_BLOQUEIO, HM.MOTIVO_BLOQUEIO, HE.MOTIVO_BLOQUEIO) AS MOTIVO_BLOQUEIO,
+  COALESCE(HMB.TIPO_MOTIVO, HBE.TIPO_MOTIVO, HM.TIPO_MOTIVO, HE.TIPO_MOTIVO) AS TIPO_MOTIVO,
+  CASE WHEN HMB.MOTIVO_BLOQUEIO IS NOT NULL THEN 'PCMOVBLOQUEIO' WHEN HBE.MOTIVO_BLOQUEIO IS NOT NULL THEN 'PCBLOQUEIOEST'
+       WHEN HM.MOTIVO_BLOQUEIO IS NOT NULL THEN 'PCMOV' WHEN HE.MOTIVO_BLOQUEIO IS NOT NULL THEN 'PCEST' END AS ORIGEM_MOTIVO,
+  COALESCE(HMB.CODOPER, HBE.CODOPER, HM.CODOPER) AS CODOPER,
+  COALESCE(HMB.CODFUNCLANC, HBE.CODFUNCLANC) AS CODFUNCLANC,
+  COALESCE(HMB.ROTINALANC, HM.ROTINALANC, TO_CHAR(HBE.CODROTINA), HLL.PROGRAMA) AS ROTINALANC,
+  TO_CHAR(COALESCE(HMB.DTMOV, HBE.DATA, HBE.DTLANC, HM.DTMOV, HLL.DATA),'YYYY-MM-DD') AS DTMOV_BLOQUEIO,
+  HBE.TIPOBLOQ, HBE.OBS AS OBS_BLOQUEIOEST,
+  HLL.PROGRAMA AS LOG_PROGRAMA, HLL.USUARIO AS LOG_USUARIO, HLL.OBSAPLICACAO AS LOG_OBSAPLICACAO, HLL.MATRICULA AS LOG_MATRICULA,
+  FB.NOME AS LOG_RESPONSAVEL,
+  L.MOTIVOBLOQESTOQUE, L.OBS1, L.OBS2, L.OBSANALISE, L.OBSBLOQUEIO, L.OBSBLOQUEIOMANUAL,
+  TO_CHAR(L.DTBLOQUEIO1,'YYYY-MM-DD') AS DTBLOQUEIO1, TO_CHAR(L.DTBLOQUEIO2,'YYYY-MM-DD') AS DTBLOQUEIO2,
+  L.CODFUNCRM, F.NOME AS FUNCIONARIO,
+  TO_CHAR(L.DTULTMOVENT,'YYYY-MM-DD') AS DTULTMOVENT, TO_CHAR(L.DTULTMOVSAI,'YYYY-MM-DD') AS DTULTMOVSAI, TO_CHAR(L.DTVALIDADE,'YYYY-MM-DD') AS DTVALIDADE
+FROM PCLOTE L
+JOIN PCPRODUT P ON P.CODPROD = L.CODPROD
+LEFT JOIN PCEMPR F ON F.MATRICULA = L.CODFUNCRM
+LEFT JOIN HIST_MOV_BLOQ HMB ON HMB.CODPROD = L.CODPROD AND HMB.CODFILIAL = L.CODFILIAL AND NVL(HMB.NUMLOTE,'-') = NVL(L.NUMLOTE,'-')
+LEFT JOIN HIST_BLOQ_EST HBE ON HBE.CODPROD = L.CODPROD AND HBE.CODFILIAL = L.CODFILIAL AND NVL(HBE.NUMLOTE,'-') = NVL(L.NUMLOTE,'-')
+LEFT JOIN HIST_MOV HM ON HM.CODPROD = L.CODPROD AND HM.CODFILIAL = L.CODFILIAL AND NVL(HM.NUMLOTE,'-') = NVL(L.NUMLOTE,'-')
+LEFT JOIN HIST_LOTELOG HLL ON HLL.CODPROD = L.CODPROD AND HLL.CODFILIAL = L.CODFILIAL AND NVL(HLL.NUMLOTE,'-') = NVL(L.NUMLOTE,'-')
+LEFT JOIN PCEMPR FB ON FB.MATRICULA = HLL.MATRICULA
+LEFT JOIN HIST_EST HE ON HE.CODPROD = L.CODPROD AND HE.CODFILIAL = L.CODFILIAL
+WHERE L.CODPROD = {{codprod}} AND L.CODFILIAL = '{{codfilial}}' AND NVL(L.QTBLOQUEADA,0) > 0
+ORDER BY L.NUMLOTE`;
 
 // R-125 (RN-CI-38 do legado): as políticas de preço especial vigentes por
 // produto, na conexão gestao-de-custos (projeto 60574: COST_POLICIES,
@@ -565,6 +708,16 @@ const LEITURAS = [
     name: 'sgcWintVendasClientesProdutos',
     code: SQL_VENDAS_CLIENTES,
     resumo: 'R-125/RN-032 - venda de cada cliente por produto na janela (CODPROD, CODCLI, CLIENTE, VENDA_CLIENTE_PERIODO), para as oportunidades com custo especial. Params: codprods fragmento (lotes de 500), codfilial string, dataInicio string, dataFim string, incluirPublico int (0 = sem orgao publico)',
+  },
+  {
+    name: 'sgcWintEstoqueFiliaisProdutos',
+    code: SQL_ESTOQUE_FILIAIS_PRODUTOS,
+    resumo: 'R-130/RN-037 - posicao das OUTRAS filiais com estoque liquido > 0 (CODPROD, CODFILIAL, FILIAL, ESTOQUE_ATUAL, VENDA_3_MESES), para o selo e o filtro de excesso da lista; a tela aplica a regra de excesso da RN-025. Params: codprods fragmento (lotes de 500), codfilial string (a filial da tela, que fica de fora)',
+  },
+  {
+    name: 'sgcWintBloqueiosProduto',
+    code: SQL_BLOQUEIOS_PRODUTO,
+    resumo: 'R-130/RN-038 - lotes com QTBLOQUEADA > 0 do produto na filial, com o motivo (PCMOVBLOQUEIO, PCBLOQUEIOEST, PCMOV, PCEST), quem bloqueou (PCLOTELOG + PCEMPR), reservado, indenizado, datas e validade; SQL do legado ci_buscar_bloqueios_produto. Params: codprod int, codfilial string',
   },
   {
     name: 'sgcParametrosCompraListar',

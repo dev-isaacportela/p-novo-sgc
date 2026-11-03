@@ -272,6 +272,15 @@ export function temAbaEspecial(sugestoes: Pick<SugestaoCliente, 'seguro'>[]): bo
   return (sugestoes ?? []).length > 0;
 }
 
+/**
+ * C-048 (decisão do usuário, "Sim, abrir expandidas"): escolher a aba "Preço
+ * especial" abre a seção "Oportunidade com preço especial" já expandida; as
+ * demais seções seguem recolhidas (R-126) e trocar de produto volta tudo ao padrão.
+ */
+export function secaoEspecialAberta(aba: AbaGrafico): boolean {
+  return aba === 'especial';
+}
+
 /** A aba que vale: a escolhida, ou "Compras × vendas" quando a especial não existe. O padrão é "vendas". */
 export function abaDoGrafico(escolhida: AbaGrafico, sugestoes: Pick<SugestaoCliente, 'seguro'>[]): AbaGrafico {
   return escolhida === 'especial' && temAbaEspecial(sugestoes) ? 'especial' : 'vendas';

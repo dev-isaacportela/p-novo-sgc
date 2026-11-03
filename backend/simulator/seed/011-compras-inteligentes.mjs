@@ -155,13 +155,26 @@ const ENTRADAS = [
   [960103, 5416, 970003, 10, 50, 12.0],
 ];
 
-// CODCLI, CLIENTE, CODATV1 — 9304 e 9305 são de órgão público (12 e 20).
+// CODCLI, CLIENTE, CODATV1 — 9304 e 9305 são de órgão público (12 e 13). R-131: o
+// ramo 20 é FILIAL (venda entre filiais, fora sempre): 9306 é do ramo 20 e 9307 é
+// o cliente que representa a filial 2 (PCFILIAL.CODCLI), com ramo comum.
 const CLIENTES = [
   [9301, 'Farmacia Central Ltda', 1],
   [9302, 'Distribuidora Vida Ltda', 1],
   [9303, 'Evento Corrida da Cidade Ltda', 1],
   [9304, 'Hospital Regional do Norte', 12],
-  [9305, 'Secretaria Municipal de Esportes', 20],
+  [9305, 'Secretaria Municipal de Esportes', 13],
+  [9306, 'Benenutri Filial Sul (cliente)', 20],
+  [9307, 'Benenutri Filial Norte (cliente)', 1],
+];
+
+// R-131: vendas que NUNCA entram na demanda do 5409 (que segue com 18, 6 públicas) —
+// NUMTRANSITEM, CODCLI, QT, dias atrás, NUMTRANSVENDA. A remessa de entrega
+// futura (CONDVENDA 8) é a 880001; a 880002 é venda comum (CONDVENDA 1).
+export const VENDAS_FORA_011 = [
+  [960026, 9306, 9, 3, 880002],
+  [960027, 9307, 7, 4, 880002],
+  [960028, 9301, 4, 5, 880001],
 ];
 
 /** Ids dos cards desta spec, para o smoke não depender da ordem de inserção. */
@@ -258,6 +271,47 @@ export function seed011(db, cenario) {
   inserirCustoPadrao.run(102, 5401, 11.0, '2026-01-01');
   let idCusto = 103;
   for (let codprod = 5403; codprod <= 5420; codprod += 1) inserirCustoPadrao.run(idCusto++, codprod, 10.0, '2026-01-01');
+
+  // R-130: os lotes bloqueados do 5401 na filial 1 (os 10 un. de QTBLOQUEADA do PCEST).
+  // L5401A (6 bloq., 2 reserv.): motivo pelo PCMOVBLOQUEIO (31 avaria no transporte),
+  // lançado pela matrícula 77. L5401B (4 bloq., 3 reserv.): sem histórico de motivo, só a
+  // observação do lote; quem bloqueou vem do PCLOTELOG — o evento que BLOQUEOU (0 → 6,
+  // matrícula 88), não o desbloqueio parcial depois (6 → 4, matrícula 99). L5401C sem
+  // bloqueio não aparece.
+  db.prepare("INSERT OR IGNORE INTO PCTABDEV (CODDEVOL, MOTIVO, TIPO) VALUES (31, 'AVARIA NO TRANSPORTE', 'A')").run();
+  const inserirFuncionario = db.prepare('INSERT OR IGNORE INTO PCEMPR (MATRICULA, NOME) VALUES (?, ?)');
+  inserirFuncionario.run(77, 'MARIA SOUZA');
+  inserirFuncionario.run(88, 'JOAO PEREIRA');
+  inserirFuncionario.run(99, 'CARLOS LIMA');
+  const inserirLoteBloqueado = db.prepare(`INSERT INTO PCLOTE
+    (CODPROD, CODFILIAL, NUMLOTE, DTVALIDADE, QT, QTBLOQUEADA, QTRESERV, QTINDENIZ, OBSBLOQUEIO, DTBLOQUEIO1, CODFUNCRM)
+    VALUES (5401, '1', ?, ?, ?, ?, ?, 0, ?, ?, ?)`);
+  inserirLoteBloqueado.run('L5401A', '2027-03-31', 60, 6, 2, null, haDias(20), 77);
+  inserirLoteBloqueado.run('L5401B', '2027-06-30', 40, 4, 3, 'AGUARDANDO LAUDO DE QUALIDADE', haDias(12), null);
+  inserirLoteBloqueado.run('L5401C', '2027-09-30', 30, 0, 0, null, null, null);
+  db.prepare(`INSERT INTO PCMOVBLOQUEIO (CODFILIAL, CODPROD, NUMLOTE, MOTIVO, CODOPER, CODFUNCLANC, ROTINALANC, DTMOV)
+    VALUES ('1', 5401, 'L5401A', 31, 'BL', 77, '1101', ?)`).run(haDias(20));
+  const inserirLogLote = db.prepare(`INSERT INTO PCLOTELOG
+    (CODFILIAL, CODPROD, NUMLOTE, DATA, PROGRAMA, USUARIO, OBSAPLICACAO, QTBLOQUEADA_ANT, QTBLOQUEADA)
+    VALUES ('1', 5401, 'L5401B', ?, 'PCSIS1106', ?, ?, ?, ?)`);
+  inserirLogLote.run(haDias(12), 'JPEREIRA', '6366:88', 0, 6);
+  inserirLogLote.run(haDias(5), 'CLIMA', '6366:99', 6, 4);
+
+  // R-132: o 5404 (trânsito 10) tem um pedido pendente na filial 1 que chega em 8 dias; o
+  // 970002 já entregou tudo e não conta. O 5403 tem pedido pendente ATRASADO (previsão há 3 dias).
+  db.prepare(`INSERT INTO PCPEDIDO (NUMPED, CODFORNEC, CODFILIAL, DTEMISSAO, DTPREVENT, VLTOTAL, PRAZO1, PRAZO2, PRAZO3)
+    VALUES (970004, 1042, '1', ?, ?, 0, 0, 0, 0), (970005, 1042, '1', ?, ?, 0, 0, 0, 0)`).run(haDias(2), haDias(-8), haDias(12), haDias(3));
+  const inserirItemCompra = db.prepare('INSERT INTO PCITEM (NUMPED, CODPROD, QTPEDIDA, QTENTREGUE, PCOMPRA) VALUES (?, ?, ?, ?, 10)');
+  inserirItemCompra.run(970004, 5404, 3, 0);
+  inserirItemCompra.run(970002, 5404, 100, 100);
+  inserirItemCompra.run(970005, 5403, 50, 10);
+
+  db.prepare("UPDATE PCFILIAL SET CODCLI = 9307 WHERE CODIGO = '2'").run();
+  db.prepare('INSERT OR IGNORE INTO PCNFSAID (NUMTRANSVENDA, CONDVENDA) VALUES (880001, 8), (880002, 1)').run();
+  const inserirVendaFora = db.prepare(`INSERT INTO PCMOV
+    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, CUSTOFIN, CODUSUR, NUMPED, NUMTRANSVENDA)
+    VALUES (?, 5409, '1', ?, 'S', ?, ?, 20, 8, 1, NULL, ?)`);
+  for (const [item, cli, qt, dias, transvenda] of VENDAS_FORA_011) inserirVendaFora.run(item, cli, haDias(dias), qt, transvenda);
 
   const inserirEntrada = db.prepare(`INSERT INTO PCMOV
     (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED, NUMTRANSENT, NUMNOTA)

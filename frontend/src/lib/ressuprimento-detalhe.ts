@@ -20,6 +20,16 @@ export interface PontoHistorico {
   MES: string; SAIDAS: number; ENTRADAS: number; SAIDAS_PUBLICAS: number;
 }
 
+/**
+ * R-131: com o seletor "Desconsiderar venda a órgãos públicos" marcado (o
+ * padrão), as saídas do gráfico, dos totais 3/6/12 e da série da previsão
+ * perdem a parte pública — os mesmos números da lista. Desmarcado, volta tudo.
+ */
+export function historicoSemPublico(historico: PontoHistorico[], semPublico: boolean): PontoHistorico[] {
+  if (!semPublico) return historico ?? [];
+  return (historico ?? []).map((p) => ({ ...p, SAIDAS: Math.max(0, numero(p.SAIDAS) - numero(p.SAIDAS_PUBLICAS)) }));
+}
+
 /** Um mês da série do gráfico: compras e vendas medidas, ou a projeção. */
 export interface PontoSerie {
   mes: string;

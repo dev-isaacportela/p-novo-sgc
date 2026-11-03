@@ -17,6 +17,7 @@ import {
   TextLink, Th, Tr, SecaoRecolhivel,
 } from '@/components/page';
 import { fmtData, moeda } from '@/lib/formato';
+import { rotuloCobertura } from '@/lib/transito';
 import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
 import {
   JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
@@ -25,7 +26,9 @@ import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from
 import {
   ENTRADAS_VISIVEIS, desconsideradasPorMes, entradaAtrasou, filiaisComExcesso, necessidade, simularCompra,
 } from '@/lib/ressuprimento-detalhe';
-import type { CompraDoProduto, DadosDoSku, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
+import type { CompraDoProduto, DadosDoSku, FilialComExcesso, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
+import { AvisosProduto } from './avisos-ui';
+import type { EstadoLotes } from './use-lotes-bloqueados';
 import { GraficoComprasVendas } from './grafico';
 import { BlocoSilenciado } from './painel-detalhe';
 import { AnaliseVendaFutura } from './previsao-ui';
@@ -42,10 +45,10 @@ const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = 
 };
 const ORIGEM_COBERTURA = { sku: 'do produto', fornecedor: 'do fornecedor', curva: 'alvo da curva' } as const;
 const ORIGEM_LEAD = { sku: 'do produto', fornecedor: 'do fornecedor', medido: 'medido no ERP', padrao: 'padrão' } as const;
-const FILIAIS_NO_AVISO = 6;
 
 const quantidade = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
-const dias = (valor: number | null) => (valor === null ? 'sem giro' : valor >= 1000 ? '999+ d' : `${Math.round(valor)} d`);
+// R-132: cobertura acima de 365 dias (consumo quase nulo) vira "> 365 d", como na lista.
+const dias = (valor: number | null) => rotuloCobertura(valor, 'sem giro');
 const pct = (valor: number | null) => (valor === null ? '—' : `${Math.round(valor)} %`);
 const data = (iso: unknown) => (iso ? fmtData(String(iso)) || <Dash /> : <Dash />);
 
@@ -76,6 +79,9 @@ export function AnaliseProdutoDialogo({
   projetada,
   sugestoesEspeciais,
   onAdicionarEspecial,
+  lotesBloqueados,
+  excessosLista,
+  semPublico = false,
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -103,6 +109,11 @@ export function AnaliseProdutoDialogo({
   projetada: SugestaoProjetada | null;
   sugestoesEspeciais: SugestaoCliente[];
   onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
+  /** R-130: os lotes bloqueados (carregados só com bloqueio) e o excesso que a lista já calculou. */
+  lotesBloqueados: EstadoLotes;
+  excessosLista: FilialComExcesso[];
+  /** R-131: o seletor de órgão público (marcado por padrão) — a aba Vendas segue a lista. */
+  semPublico?: boolean;
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
   const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
@@ -146,7 +157,8 @@ export function AnaliseProdutoDialogo({
   const resultadoModelo = previsao ? modeloEscolhido(previsao, modelo) : null;
   const simulacao = simularCompra(linha, quantidadeSimulada);
   const comSugestao = simularCompra(linha, linha.sugerida);
-  const excessos = filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias);
+  // A posição por produto (já carregada ao abrir) vale; antes dela, a da lista — a mesma regra (RN-025/RN-037).
+  const excessos = dados.pronto && dados.filiais.length > 0 ? filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias) : excessosLista;
   // R-128: o custo de compra é o custo padrão do Gestão de Custos; o ERP fica como histórico.
   const semCusto = rotuloSemCusto(linha.custo);
   const origemCusto = semCusto ? semCusto : `custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`;
@@ -176,6 +188,8 @@ export function AnaliseProdutoDialogo({
         <DialogBody>
           <div className="flex flex-col gap-3">
             {dados.erro ? <Alert tone="error">{dados.erro}</Alert> : null}
+            {/* R-130: os avisos logo abaixo do cabeçalho do produto, antes dos números e do gráfico. */}
+            <AvisosProduto qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} amplo />
 
             {/* Os 7 números numa faixa densa; a explicação de cada um vai no title. */}
             <GradeMini colunas={7}>
@@ -199,6 +213,7 @@ export function AnaliseProdutoDialogo({
                 onDesconsiderar={onDesconsiderar}
                 onReconsiderar={onReconsiderar}
                 onContagem={setTotalVendas}
+                semPublico={semPublico}
                 onOcupado={setOcupado}
               />
             ) : (
@@ -218,6 +233,7 @@ export function AnaliseProdutoDialogo({
                     referencia={referencia}
                     podeOperar={podeOperar}
                     motivoBloqueio={motivoBloqueio}
+                    abaGrafico="especial"
                     onAdicionarEspecial={onAdicionarEspecial}
                   />
                 ) : (
@@ -287,18 +303,7 @@ export function AnaliseProdutoDialogo({
                   <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} hoje={hoje} />
                 </SecaoRecolhivel>
 
-                {/* 4d. Excesso em outras filiais */}
-                {dados.pronto && excessos.length > 0 ? (
-                  <Alert tone="warn">
-                    <p className="font-semibold">Excesso de estoque em outras filiais</p>
-                    <ul className="mt-1 flex flex-col gap-0.5">
-                      {excessos.slice(0, FILIAIS_NO_AVISO).map((f) => (
-                        <li key={f.codfilial}>{`${f.codfilial} - ${f.filial} · Estoque ${quantidade(f.estoque)} · Cobertura ${f.coberturaDias === null ? 'sem giro' : `${Math.round(f.coberturaDias)} dias`}`}</li>
-                      ))}
-                    </ul>
-                    {excessos.length > FILIAIS_NO_AVISO ? <p className="mt-1">{`E mais ${excessos.length - FILIAIS_NO_AVISO}.`}</p> : null}
-                  </Alert>
-                ) : null}
+                {/* 4d. (R-130) o excesso em outras filiais subiu para o alerta do topo */}
 
                 {/* 4e. Compras do produto */}
                 <SecaoRecolhivel titulo="Compras do produto" resumo={!dados.pronto ? 'Carregando…' : !ultima ? 'nenhuma entrada registrada' : `última em ${fmtData(String(ultima.DT_ENTRADA))} · ${quantidade(ultima.QUANTIDADE)} un. · ${moeda(Number(ultima.VALOR_TOTAL))} · ${compras.length} ${compras.length === 1 ? 'entrada' : 'entradas'}`} aberta={abertas.has('compras')} onToggle={() => alternarSecao('compras')}>

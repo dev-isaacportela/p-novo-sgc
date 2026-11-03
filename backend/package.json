@@ -24,6 +24,7 @@
 		"sim:check": "node simulator/check.mjs",
 		"sim:smoke": "node simulator/smoke.mjs",
 		"sim:gestao-custos": "node simulator/gestao-custos-checar.mjs",
+		"sim:winthor": "node simulator/winthor-checar.mjs",
 		"test": "npm run sim:check && npm run sim:smoke"
 	},
 	"dependencies": {

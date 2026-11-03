@@ -17,6 +17,8 @@
 // ligado e é assim que o `node --test` de frontend/tests/ resolve o módulo.
 import { arredondarPorCaixa, curvaPorValor, custoPadraoDe, origemUnidadesPorCaixa, piorCurva, unidadesPorCaixa } from './compras.ts';
 import type { CurvaAbc, ItemPedido, OrigemUnidadesPorCaixa, CustoPadrao, MapaCustoPadrao } from './compras.ts';
+import { chegadaDoTransito } from './transito.ts';
+import type { ChegadaTransito } from './transito.ts';
 
 export type StatusRessuprimento =
   'ruptura' | 'excesso' | 'elevada_exposicao' | 'baixa_exposicao' | 'adequado';
@@ -47,6 +49,10 @@ export interface MedidaRessuprimento {
   VENDA_PERIODO: number; VENDA_PUBLICA: number;
   /** R-122: valor vendido e margem da janela (PCMOV: QT × PUNIT e QT × (PUNIT − CUSTOFIN)); opcionais para a medida antiga continuar válida. */
   FATURAMENTO_PERIODO?: number; RENTABILIDADE_PERIODO?: number;
+  /** R-131: a parte pública do faturamento e da margem, para as curvas sem o público. */
+  FATURAMENTO_PUBLICO?: number; RENTABILIDADE_PUBLICA?: number;
+  /** R-132: a previsão de chegada do pedido pendente mais próximo da filial (AAAA-MM-DD) ou null. */
+  DT_PREV_CHEGADA?: string | null;
   CONSUMO_DIARIO: number; CONSUMO_DIARIO_PUBLICO: number; VOLATILIDADE_DIARIA: number;
 }
 
@@ -218,9 +224,11 @@ export function motivoDaSugestao(r: Ressuprimento): string {
 }
 
 /** A cobertura que o item terá com a quantidade escolhida (R-112). Sem consumo, `null`. */
-export function coberturaFuturaComCompra(r: Ressuprimento, quantidade: number): number | null {
+export function coberturaFuturaComCompra(r: Ressuprimento & { chegada?: ChegadaTransito | null }, quantidade: number): number | null {
   if (r.consumoDiario <= 0) return null;
-  return (r.estoqueAtual + r.emTransito + Math.max(0, numero(quantidade))) / r.consumoDiario;
+  // R-132: com trânsito, a conta é a da chegada — o estoque vendido até lá não cobre nada depois.
+  const estoque = r.chegada ? r.chegada.estoqueNaChegada : r.estoqueAtual;
+  return (estoque + r.emTransito + Math.max(0, numero(quantidade))) / r.consumoDiario;
 }
 
 /** RN-018: sugerida > 0 e 0,8 × sugerida <= pedida <= 1,2 × sugerida (inclusive). */
@@ -241,6 +249,8 @@ export interface LinhaRessuprimento extends Ressuprimento {
   silenciadoAte: string; motivoSilencio: string;
   /** R-120: de onde veio a caixa — Gestão de Custos, cadastro do ERP, embalagem ou avulso. */
   origemCaixa: OrigemUnidadesPorCaixa;
+  /** R-132: quando chega o que está a caminho e a cobertura ao chegar; null sem trânsito. */
+  chegada?: ChegadaTransito | null;
 }
 
 export interface CurvasDaLinha { faturamento: CurvaAbc; rentabilidade: CurvaAbc; curva: CurvaAbc }
@@ -251,16 +261,18 @@ export interface CurvasDaLinha { faturamento: CurvaAbc; rentabilidade: CurvaAbc;
  * a pior das duas, como no sistema antigo. Medida sem as duas colunas (SF
  * ainda não republicada) cai na régua antiga, venda × custo, nas duas.
  */
-export function curvasDoRessuprimento(medidas: MedidaRessuprimento[]): Map<number, CurvasDaLinha> {
+export function curvasDoRessuprimento(medidas: MedidaRessuprimento[], semPublico = false): Map<number, CurvasDaLinha> {
   const lista = medidas ?? [];
   const antiga = (m: MedidaRessuprimento) => Math.max(0, numero(m.VENDA_PERIODO)) * Math.max(0, numero(m.CUSTO_ULT_ENTRADA));
+  // R-131: com o seletor marcado (o padrão), a venda pública sai das duas réguas também.
+  const menos = (valor: number, publico: unknown) => (semPublico ? Math.max(0, valor - numero(publico)) : valor);
   const faturamento = curvaPorValor(lista.map((m) => ({
     codprod: numero(m.CODPROD),
-    valor: m.FATURAMENTO_PERIODO === undefined ? antiga(m) : numero(m.FATURAMENTO_PERIODO),
+    valor: m.FATURAMENTO_PERIODO === undefined ? antiga(m) : menos(numero(m.FATURAMENTO_PERIODO), m.FATURAMENTO_PUBLICO),
   })));
   const rentabilidade = curvaPorValor(lista.map((m) => ({
     codprod: numero(m.CODPROD),
-    valor: m.RENTABILIDADE_PERIODO === undefined ? antiga(m) : numero(m.RENTABILIDADE_PERIODO),
+    valor: m.RENTABILIDADE_PERIODO === undefined ? antiga(m) : menos(numero(m.RENTABILIDADE_PERIODO), m.RENTABILIDADE_PUBLICA),
   })));
   const mapa = new Map<number, CurvasDaLinha>();
   for (const m of lista) {
@@ -293,7 +305,7 @@ export function montarRessuprimento(
   custos?: MapaCustoPadrao | null,
 ): LinhaRessuprimento[] {
   const lista = medidas ?? [];
-  const curvas = curvasDoRessuprimento(lista);
+  const curvas = curvasDoRessuprimento(lista, opcoes.desconsiderarLicitacao);
   const doFornecedor = (parametros ?? []).find((p) => numero(p.codprod) === 0) ?? null;
   const porSku = new Map((parametros ?? []).filter((p) => numero(p.codprod) > 0).map((p) => [numero(p.codprod), p]));
 
@@ -316,6 +328,7 @@ export function montarRessuprimento(
     return {
       ...calculo,
       medida,
+      chegada: chegadaDoTransito(calculo, medida.DT_PREV_CHEGADA, opcoes.hoje),
       curva,
       curvaFaturamento: daLinha.faturamento,
       curvaRentabilidade: daLinha.rentabilidade,
@@ -615,9 +628,14 @@ export interface FiltrosLista {
   ordem: OrdemLista;
   movimentacao: FiltroMovimentacao;
   soSilenciados: boolean;
+  /** R-130: os chips "Bloqueados" e "Excesso em outras filiais" (regra em `avisos-produto.ts`). */
+  soBloqueados: boolean;
+  soExcesso: boolean;
 }
 
-export const FILTROS_INICIAIS: FiltrosLista = { situacao: '', ordem: 'padrao', movimentacao: '', soSilenciados: false };
+export const FILTROS_INICIAIS: FiltrosLista = {
+  situacao: '', ordem: 'padrao', movimentacao: '', soSilenciados: false, soBloqueados: false, soExcesso: false,
+};
 
 /**
  * C-012 (o chip "Silenciados N"): a visão e o filtro de silenciados andam
