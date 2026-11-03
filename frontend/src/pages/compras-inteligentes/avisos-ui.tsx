@@ -15,6 +15,8 @@ import type { LoteBloqueado } from '@/lib/avisos-produto';
 import type { EstadoLotes } from './use-lotes-bloqueados';
 import type { FilialComExcesso } from '@/lib/ressuprimento-detalhe';
 import { cn } from '@/lib/utils';
+import type { ReferenciaSugestao } from '@/lib/ressuprimento';
+import { VendasNaFilial } from './vendas-filial-ui';
 
 const inteiro = (valor: unknown) => Math.round(Number(valor) || 0).toLocaleString('pt-BR');
 
@@ -27,12 +29,23 @@ function Expandir({ aberto, onAlternar, rotulo }: { aberto: boolean; onAlternar:
   );
 }
 
-function CartaoFilial({ filial }: { filial: FilialComExcesso }) {
+/** R-139: o cartão da filial é um botão — abre (e fecha) o gráfico de vendas dela logo abaixo dos cartões. */
+function CartaoFilial({ filial, selecionada, onClick }: { filial: FilialComExcesso; selecionada: boolean; onClick: () => void }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2 text-ink">
+    <button
+      type="button"
+      aria-pressed={selecionada}
+      onClick={onClick}
+      title={`Ver as vendas em ${filial.filial} nos últimos 6 meses`}
+      className={cn(
+        'flex flex-col gap-0.5 rounded-xl border bg-card px-3 py-2 text-left text-ink transition-colors',
+        'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+        selecionada ? 'border-primary ring-1 ring-primary' : 'border-rule-row',
+      )}
+    >
       <span className="text-[12px] font-semibold" title={filial.filial}>{filialCurta(filial.codfilial, filial.filial)}</span>
       <span className="text-[12px] text-ink-secondary">{`estoque ${inteiro(filial.estoque)} · ${textoCobertura(filial.coberturaDias)}`}</span>
-    </div>
+    </button>
   );
 }
 
@@ -65,18 +78,29 @@ function CartaoLote({ lote }: { lote: LoteBloqueado }) {
 }
 
 export function AvisosProduto({
+  codprod,
   qtBloqueada,
   lotes,
   excessos,
   amplo = false,
+  semPublico,
+  unidadesPorCaixa,
+  referencia,
 }: {
+  codprod: number;
   qtBloqueada: number;
   lotes: EstadoLotes;
   excessos: FilialComExcesso[];
   /** A janela tem largura para 3 colunas de cartões; o painel, 2. */
   amplo?: boolean;
+  /** R-139: o recorte de venda da tela, para o gráfico da filial. */
+  semPublico: boolean;
+  unidadesPorCaixa?: number;
+  referencia?: ReferenciaSugestao;
 }) {
   const [aberto, setAberto] = React.useState<'' | 'excesso' | 'bloqueio'>('');
+  const [filialAberta, setFilialAberta] = React.useState<{ codprod: number; codfilial: string } | null>(null);
+  const selecionada = filialAberta && filialAberta.codprod === codprod ? excessos.find((f) => f.codfilial === filialAberta.codfilial) ?? null : null;
   const textoExcesso = resumoExcesso(excessos);
   const listaLotes = Array.isArray(lotes) ? lotes : null;
   const textoBloqueio = resumoBloqueio(qtBloqueada, listaLotes);
@@ -111,8 +135,28 @@ export function AvisosProduto({
             <Expandir aberto={aberto === 'excesso'} onAlternar={() => alternar('excesso')} rotulo="Ver filiais" />
           </div>
           {aberto === 'excesso' ? (
-            <div className={grade}>
-              {excessos.slice(0, MAX_FILIAIS_DETALHE).map((f) => <CartaoFilial key={f.codfilial} filial={f} />)}
+            <div className="w-full">
+              <div className={grade}>
+                {excessos.slice(0, MAX_FILIAIS_DETALHE).map((f) => (
+                  <CartaoFilial
+                    key={f.codfilial}
+                    filial={f}
+                    selecionada={selecionada?.codfilial === f.codfilial}
+                    onClick={() => setFilialAberta((atual) => (atual && atual.codprod === codprod && atual.codfilial === f.codfilial ? null : { codprod, codfilial: f.codfilial }))}
+                  />
+                ))}
+              </div>
+              {selecionada ? (
+                <VendasNaFilial
+                  codprod={codprod}
+                  codfilial={selecionada.codfilial}
+                  filial={filialCurta(selecionada.codfilial, selecionada.filial)}
+                  estoque={selecionada.estoque}
+                  semPublico={semPublico}
+                  unidadesPorCaixa={unidadesPorCaixa}
+                  referencia={referencia}
+                />
+              ) : null}
             </div>
           ) : null}
         </Alert>

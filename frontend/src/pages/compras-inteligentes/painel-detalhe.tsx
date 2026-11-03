@@ -98,6 +98,7 @@ export function PainelDetalhe({
   hoje,
   dados,
   referencia,
+  semPublico = true,
   desconsideradasDoSku,
   podeOperar,
   podeParametrizar,
@@ -125,6 +126,8 @@ export function PainelDetalhe({
   hoje: string;
   dados: DadosDoSku;
   referencia: ReferenciaSugestao;
+  /** R-139: o seletor de público da tela, para o gráfico da filial em excesso. */
+  semPublico?: boolean;
   /** Quantas vendas deste SKU estão desconsideradas nesta filial (da lista que voltou do banco). */
   desconsideradasDoSku: number;
   podeOperar: boolean;
@@ -246,7 +249,7 @@ export function PainelDetalhe({
         {/* R-130: os avisos logo abaixo do cabeçalho, antes dos números e do gráfico. */}
         {temAviso ? (
           <div className="border-t border-rule-row px-4 py-2">
-            <AvisosProduto qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} />
+            <AvisosProduto codprod={Number(m.CODPROD)} qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} semPublico={semPublico} unidadesPorCaixa={linha.unidadesPorCaixa} referencia={referencia} />
           </div>
         ) : null}
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-rule-row px-4 py-2">

@@ -762,6 +762,7 @@ export default function ComprasInteligentesPage() {
             hoje={hoje}
             dados={dadosSelecionado}
             referencia={referencia}
+            semPublico={desconsiderarLicitacao}
             desconsideradasDoSku={desconsideradas.filter((v) => v.codprod === codprodSelecionado).length}
             podeOperar={podeOperar}
             podeParametrizar={podeParametrizar}

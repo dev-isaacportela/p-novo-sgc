@@ -30,6 +30,8 @@ export interface AlertaPedido {
   id: number;
   codprod: number;
   tipo: string;
+  /** `excesso:<codprod>:<codfilial>` ou `vencimento:…` (add-006). */
+  chave: string;
   mensagem: string;
   lido: boolean;
   lidoEm: string;
@@ -87,6 +89,7 @@ export function alertaDeLinha(linha: Linha): AlertaPedido {
     id: numero(linha.ID),
     codprod: numero(linha.CODPROD),
     tipo: String(linha.TIPO ?? ''),
+    chave: String(linha.CHAVE ?? ''),
     mensagem: String(linha.MENSAGEM ?? ''),
     lido: numero(linha.LIDO) === 1,
     lidoEm: String(linha.LIDO_EM ?? ''),

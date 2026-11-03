@@ -199,7 +199,7 @@ export function AnaliseProdutoDialogo({
             {dados.erro ? <Alert tone="error">{dados.erro}</Alert> : null}
             {topo}
             {/* R-130: os avisos logo abaixo do cabeçalho do produto, antes dos números e do gráfico. */}
-            <AvisosProduto qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} amplo />
+            <AvisosProduto codprod={codprod} qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} amplo semPublico={semPublico} unidadesPorCaixa={linha.unidadesPorCaixa} referencia={referencia} />
 
             {/* Os 7 números numa faixa densa; a explicação de cada um vai no title. */}
             <GradeMini colunas={7}>
