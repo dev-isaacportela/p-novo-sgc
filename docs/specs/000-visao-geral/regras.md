@@ -856,6 +856,12 @@ Como ler: **Hoje** é como o SGC atual (p-45547) faz; **Proposta** é o que foi 
 - **Proposta:** Manter na onda 4.
 - **Decisão:** Manter
 
+#### O4-05 · Layout do sistema antigo (Opção A) — 2026-10-30
+
+- **Hoje:** Cards de visão com contagem (a comprar, completar compra, todos, em trânsito), lista com painel de detalhe fixo (KPIs, gráfico compras × vendas com projeção, simulação, atributos, compras, vendas, filiais com excesso, parâmetros), carrinho persistido com retomada, pedido mínimo por grupo, variação de custo e arquivo de importação do WinThor. _(p-60523)_
+- **Proposta:** Reproduzir o layout (mockups aprovados), com tokens e vocabulário do kit; o que a spec 011 não tinha entra como cenário novo com teste; o que não cabe fica adiado na spec.
+- **Decisão:** Ajustar (R-117). Regra nova de gráfico: valor escrito em toda barra e ponto, inclusive projeção (R-116).
+
 ### Coberturas ABC
 
 #### O4-03 · Cobertura por curva

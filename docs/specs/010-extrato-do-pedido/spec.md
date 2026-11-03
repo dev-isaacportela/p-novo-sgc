@@ -143,6 +143,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
   inclusive Compras Concluídas e Compras Canceladas, onde hoje não há nenhuma outra ação
   disponível no pedido
 
+**C-018 — O extrato diz o saldo a faturar** *(R-144)*
+- **Dado que** o pedido de R$ 1.000,00 tem uma nota de R$ 600,00
+- **Quando** alguém gera o extrato
+- **Então** a seção de faturamento mostra "Saldo a faturar: R$ 400,00" e que a conclusão exige 99,5 % do valor coberto; com o pedido faturado por inteiro (ou a mais), a linha não aparece
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -205,6 +210,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
   impresso.
 - **RN-013 — Pop-up bloqueado.** Se a janela de impressão não abrir, a pessoa recebe um
   aviso explicando o motivo, em vez de nada acontecer.
+- **RN-014 — Saldo a faturar (R-144).** `falta = máx(0, total do pedido − soma das notas)`, das mesmas notas da RN-008. O extrato não lê o B.O.: a cobertura completa (com o saldo que não vem mais) é a do card e do servidor (RN-016 da 005).
 
 ## Testes
 
@@ -230,6 +236,7 @@ teste é cenário não entregue.
 | C-015 / RN-010 | pedido de identificação 4321: o nome do arquivo contém essa identificação | regra de tela |
 | C-016 / RN-011 | gerando às 15/09/2026 14:05 (hora local simulada no teste), a emissão mostrada é 15/09/2026 14:05 | regra de tela |
 | C-017 | já coberto por `frontend/tests/permissoes.test.mjs` (spec 002): acesso ao quadro é `true` para admin, analista, gestor e diretoria, e `false` para comercial — o extrato usa exatamente essa permissão, nenhuma nova | regra de tela |
+| C-018 / RN-014 | `extrato.test.mjs`: 600 de 1000 dá falta 400; nota acima do total dá 0 | regra de tela |
 
 - Cada cenário C-00N e cada regra RN-00N tem pelo menos uma linha acima.
 - O que só olho humano verifica fica em **Verificação manual**:

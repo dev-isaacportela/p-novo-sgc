@@ -122,3 +122,34 @@ export function gradeDoMes(ano: number, mes: number): DiaGrade[] {
     return { iso, noMes: parseIso(iso)?.mes === mes };
   });
 }
+
+/* ── Dias relativos no campo de data (R-119, spec 002 C-045) ── */
+
+/**
+ * "45", "45d", "45 dia", "45 dias" (1 a 3 dígitos, espaços e caixa livres)
+ * -> 45. Qualquer outra coisa — inclusive "15/09" e "1234" — é `null`: data
+ * completa tem 8 dígitos, então não há ambiguidade com quem está digitando.
+ */
+export function diasRelativos(texto: string): number | null {
+  const m = /^\s*(\d{1,3})\s*(?:d|dias?)?\s*$/i.exec(String(texto ?? ''));
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * A data a N dias corridos da `base`, no `sentido` (−1 = para trás, 1 = para
+ * a frente). Texto que não é "N dias" ou base inválida -> `null`.
+ */
+export function resolverRelativo(texto: string, base: string, sentido: -1 | 1): string | null {
+  const dias = diasRelativos(texto);
+  if (dias === null || !isoValido(base)) return null;
+  return somarDias(base, sentido * dias);
+}
+
+/** Dias corridos de `inicio` a `fim` (fim − início); alguma inválida -> `null`. */
+export function diasEntre(inicio: string, fim: string): number | null {
+  const a = parseIso(inicio);
+  const b = parseIso(fim);
+  if (!a || !b) return null;
+  const ms = Date.UTC(b.ano, b.mes - 1, b.dia) - Date.UTC(a.ano, a.mes - 1, a.dia);
+  return Math.round(ms / 86400000);
+}

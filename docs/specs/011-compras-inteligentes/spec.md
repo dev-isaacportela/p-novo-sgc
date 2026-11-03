@@ -1,6 +1,6 @@
 # Spec: Compras inteligentes — o que comprar hoje, por fornecedor e filial
 
-**ID:** 011-compras-inteligentes · **Status:** rascunho · **Data:** 2026-09-16
+**ID:** 011-compras-inteligentes · **Status:** rascunho · **Data:** 2026-09-16 · **Revisão:** 2026-10-30 (layout do sistema antigo, R-117)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -111,6 +111,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Dado que** o produto está sugerindo 48 unidades e a compradora sabe que a indústria não entrega antes do mês que vem
 - **Quando** ela silencia o produto com o motivo
 - **Então** o produto some da aba "a comprar" por **30 dias**, continua na aba "todos" marcado como silenciado com o motivo e a data, e volta à fila assim que ela o restaura
+- **E** o chip "Silenciados N" da lista mostra só os silenciados **em "Todos"** (ligá-lo troca a visão; clicar de novo volta à visão de antes; escolher um card desliga o filtro; com 0 ele não clica), e o painel de detalhe e a Análise do Produto mostram o bloco "Silenciado até dd/mm/aaaa · Motivo: …" (ou "Sem motivo informado") com "Devolver à fila" para quem parametriza
 
 **C-013 — Venda atípica desconsiderada baixa o consumo**
 - **Dado que** o produto vendeu 60 unidades num único dia para um cliente que não volta, e a compradora marca essa venda como desconsiderada com o motivo
@@ -122,10 +123,11 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Quando** a compradora liga "desconsiderar licitação"
 - **Então** o consumo passa a **1,5**, o estoque máximo cai de 70 para **52,5**, a sugestão cai de 48 para **24** e a situação passa de baixa exposição para **adequado**; desligando o seletor, tudo volta
 
-**C-015 — Curva ABC por valor, dentro do fornecedor e da filial**
-- **Dado que** o fornecedor tem 5 produtos com valor de venda na janela (venda × custo) de R$ 500, R$ 250, R$ 150, R$ 70 e R$ 30 — total R$ 1.000
-- **Quando** a curva é calculada
-- **Então** os dois primeiros são **A** (acumulado 50 % e 75 %), o terceiro é **B** (90 %) e os dois últimos são **C** (97 % e 100 %)
+**C-015 — Duas curvas ABC, dentro do fornecedor e da filial, e a pior das duas vale**
+- **Dado que** o fornecedor tem 5 produtos com faturamento na janela de R$ 500, R$ 250, R$ 150, R$ 70 e R$ 30 (total R$ 1.000) e rentabilidade de R$ 30, R$ 500, R$ 250, R$ 150 e R$ 70 (total R$ 1.000)
+- **Quando** as curvas são calculadas
+- **Então** pela curva de **faturamento** os dois primeiros são **A** (acumulado 50 % e 75 %), o terceiro é **B** (90 %) e os dois últimos são **C**; pela curva de **rentabilidade** o primeiro é **C** e os demais são **A, A, B, C**; a curva do produto — a que define o alvo de cobertura e viaja com o item do pedido — é a **pior das duas**: C, A, B, C, C. A lista mostra as duas letras lado a lado, com a que vale em destaque
+- **E** se a consulta ainda não devolve faturamento e rentabilidade (função não republicada), as duas curvas são a antiga, venda × custo
 
 **C-016 — Sem parâmetro, a cobertura é o alvo da curva do produto**
 - **Dado que** o produto não tem parâmetro próprio nem o fornecedor tem, e a curva dele é **A**, cujo alvo é 35 dias
@@ -177,6 +179,139 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **Quando** a lista é calculada
 - **Então** a situação é **excesso**, a sugestão é **0**, e cobertura atual e dias de gatilho aparecem como "sem giro" — nunca como um número inventado
 
+**C-026 — As visões são cards com contagem**
+- **Dado que** a lista do fornecedor na filial foi calculada
+- **Quando** a compradora olha o topo da tela
+- **Então** vê quatro cards — **A comprar**, **Completar compra**, **Todos** e **Em trânsito** —, cada um com a quantidade de produtos que mostra, e clicar num card troca o recorte da lista sem nova consulta
+
+**C-027 — Completar a compra com o que vai faltar em breve**
+- **Dado que** um produto tem sugestão zero, nada em trânsito, giro, e 75 em estoque disponível com consumo de 2 por dia (cobertura de 37,5 dias, dentro de cobertura de 35 + lead de 9)
+- **Quando** a compradora abre "Completar compra"
+- **Então** o produto aparece com uma caixa cheia pré-carregada como complemento; o produto com 200 em estoque (cobertura de 100 dias), o silenciado, o sem giro e o que tem trânsito não aparecem
+
+**C-028 — Carrinho salvo e retomada**
+- **Dado que** a compradora montou um carrinho com 3 itens em 2 pedidos e fechou a tela
+- **Quando** ela volta
+- **Então** vê "Você tem um carrinho salvo", com itens, pedidos, valor e quando foi aberto, e escolhe **continuar** (o carrinho volta inteiro, com quantidades e motivos) ou **descartar** (com confirmação)
+
+**C-029 — Pedido mínimo do fornecedor no carrinho**
+- **Dado que** o fornecedor foi parametrizado com pedido mínimo de R$ 1.000 e o grupo do carrinho soma R$ 300
+- **Quando** a compradora abre o carrinho
+- **Então** o grupo mostra "Faltam R$ 700 para o mínimo" com a barra em 30 %; com R$ 1.200 mostra "Pedido mínimo atingido"; fornecedor sem mínimo parametrizado está sempre atingido
+
+**C-030 — Arquivo de importação do WinThor**
+- **Dado que** o carrinho tem itens de dois fornecedores
+- **Quando** a compradora pede o arquivo de importação
+- **Então** recebe um arquivo por fornecedor e filial, uma linha por item no formato `CODPROD;PRECO;QTD`, sem cabeçalho, preço com ponto decimal e duas casas, quantidade inteira, e item com quantidade zero fica de fora
+
+**C-031 — Painel de detalhe fixo**
+- **Dado que** a lista carregou
+- **Quando** a compradora clica numa linha (o primeiro produto já vem selecionado)
+- **Então** o painel à direita mostra código e descrição, embalagem e fornecedor, quatro números — estoque e trânsito, cobertura e nível (disponível ÷ máximo, 50 de 70 é 71 %), situação, prioridade e gatilho —, o gráfico de compras × vendas e as seções recolhidas de "Mais detalhes"; selecionar um produto custa três consultas, uma vez por produto
+
+**C-032 — Compras × vendas com projeção e valores escritos**
+- **Dado que** o produto vendeu 10 em agosto e 20 em setembro e entrou 24 em agosto, com consumo diário de 2
+- **Quando** o gráfico é desenhado em 6 meses
+- **Então** mostra 6 meses medidos (zero onde não houve movimento) e 3 meses de projeção (62, 60 e 62 para out, nov e dez), cada barra e cada ponto com o valor escrito em cima, com a opção de 13 meses e de ver a mesma série em tabela, e o rodapé soma 3, 6 e 12 meses de vendas e compras e a projeção do próximo mês
+
+**C-033 — Filiais com excesso**
+- **Dado que** o produto tem, noutra filial, 120 em estoque e venda de 90 em 3 meses (cobertura de 120 dias) e, numa terceira, 10 em estoque sem venda
+- **Quando** a compradora abre "Filiais com excesso" com teto de 42 dias
+- **Então** vê as duas filiais, a sem giro primeiro; a filial da tela e a que tem 35 em estoque com a mesma venda (35 dias) não aparecem
+
+**C-034 — Simulação de compra**
+- **Dado que** o produto tem 50 disponíveis, consumo de 2 por dia, máximo de 70, caixa de 12 e custo de R$ 10
+- **Quando** a compradora simula 50 unidades
+- **Então** vê 60 unidades (5 caixas), R$ 600, cobertura de 55 dias e nível de 157 % depois da compra, e pode jogar essa quantidade no carrinho
+
+**C-035 — Produto que já está num pedido aberto**
+- **Dado que** o fornecedor tem um pedido em análise na filial com 5 produtos
+- **Quando** a lista é desenhada
+- **Então** cada um desses 5 produtos traz a nota "Pedido #N aberto, ainda sem trânsito" enquanto não tiver trânsito; para a filial cujo pedido já foi enviado não há nota
+
+**C-036 — O seletor de fornecedor já diz quanto há para comprar**
+- **Dado que** há fornecedores parametrizados
+- **Quando** a compradora abre o seletor
+- **Então** cada opção traz o número de itens ativos e uma **estimativa** do valor sugerido, apurada numa consulta só para todos os fornecedores, sem depender da filial
+
+**C-037 — Unidades ou caixas como referência**
+- **Dado que** a sugestão de um produto é 48 com caixa de 12
+- **Quando** a compradora alterna a referência para caixas
+- **Então** a sugestão passa a ler "4 cx · 48 un." e o campo de quantidade passa a mostrar e receber **caixas** (4; digitar 5 grava 60 unidades; fração sobe para a caixa cheia) — o cabeçalho diz "Qtd. (cx)"; produto avulso continua em unidades; o que fica guardado é sempre em unidades
+
+**C-038 — Ordem, movimentação e silenciados**
+- **Dado que** a lista tem produtos com e sem venda, com e sem estoque e com trânsito
+- **Quando** a compradora ordena por código, nome ou curva, filtra por movimentação ou clica na ficha "Silenciados"
+- **Então** a lista muda na hora, sem consulta, e as fichas de sugestão (unidades), rupturas e silenciados continuam contando o recorte
+
+**C-039 — Custo atual contra o da última entrada**
+- **Dado que** o custo da última entrada de um produto foi R$ 12 e o custo atual do ERP é R$ 11, e noutro foi R$ 10 e hoje é R$ 10,50
+- **Quando** o carrinho é desenhado com 24 do primeiro e 10 do segundo
+- **Então** o primeiro mostra variação de −8,3 % (caiu) e o segundo +5 % (subiu), e a "economia no custo" do carrinho é R$ 24 — só o que caiu conta
+
+**C-041 — Vendedor e pedido ao ERP nas consultas do produto** *(R-123)*
+- **Dado que** a compradora abre a Análise do Produto
+- **Quando** a lista de vendas e as últimas compras voltam do ERP
+- **Então** cada venda traz o código e o nome do vendedor ao lado do cliente, e cada entrada traz o número do pedido ao ERP, a data de emissão (solicitação) e a previsão de entrega — entrada sem pedido casado vem sem essas datas
+
+**C-042 — Análise do Produto, a janela do sistema antigo** *(R-123)*
+- **Dado que** a compradora selecionou um produto na lista (o painel já carregou histórico, compras e filiais)
+- **Quando** ela clica no olho do painel
+- **Então** abre a janela "Análise do Produto": cabeçalho com código, descrição, embalagem, fornecedor e situação; Estoque | Em trânsito | Cobertura | Cobertura futura e Necessidade | Sugestão | Custo; a aba **Análise** com simulação de compra (quantidade, caixas, valor previsto, estoque final, cobertura, Parâmetros e Adicionar ao carrinho), Compras × vendas (6m/13m, Caixas/Unidades quando há caixa, Gráfico/Tabela, legenda que esconde a série, a série Desconsideradas, o aviso "Ainda não há dados suficientes para análise histórica consistente." com menos de 3 meses com movimento), análise de venda futura, o aviso de excesso em até 6 outras filiais, compras do produto (a última em mini-cartões, com a previsão em atenção quando a entrada atrasou; histórico de 5 entradas e "Ver todas as N entradas") e os parâmetros do cálculo; a aba **Vendas (N)** com vendas listadas, quantidade e valor desconsiderados, os meses em pílula ("Outubro de 2026 · N vendas · R$ X"), a tabela com cliente e vendedor e Desconsiderar/Reconsiderar, a linha desconsiderada em fundo de atenção, "Carregando…" e "Nenhuma venda encontrada para o período atual."
+- **E** abrir a janela não custa consulta nova — só a aba Vendas custa 1, ao abrir
+- **E** o topo é compacto, para o gráfico aparecer sem rolar: código, descrição, embalagem · fornecedor, situação e as abas Análise | Vendas numa linha do título; os sete números (Estoque, Em trânsito, Cobertura, Cob. futura, Necessidade, Sugestão, Custo) numa faixa só, com a explicação no `title`; na aba Análise vêm o gráfico, a Simulação de compra (recolhida, com "Adicionar ao carrinho" no cabeçalho) e as demais seções, recolhidas
+- **E** as seções em card (Simulação de compra, Análise de venda futura, Compras do produto, Parâmetros do cálculo e Oportunidade com preço especial) nascem **recolhidas**, com um resumo de uma linha no cabeçalho e o cabeçalho inteiro como botão (teclado e `aria-expanded`); trocar de produto recolhe tudo; o card do gráfico continua aberto
+
+**C-043 — A série da previsão** *(R-124)*
+- **Dado que** o produto aberto no painel tem histórico mensal e vendas desconsideradas
+- **Quando** a previsão é montada
+- **Então** entram só os meses **fechados** (anteriores ao mês de hoje), do mais antigo ao mais recente, no máximo 12, cada um com as vendas do mês menos as desconsideradas dele (nunca abaixo de zero); com 4 ou mais pontos, o mês acima de média + 2 desvios vira a média e conta como outlier ajustado; com menos de 3 pontos não há projeção e a sugestão segue o consumo ponderado
+
+**C-044 — Os cinco modelos** *(R-124)*
+- **Dado que** a série ajustada tem 3 ou mais pontos
+- **Quando** cada modelo é calculado
+- **Então** a média móvel simples e a ponderada (3 últimos; pesos 50/30/20), a suavização exponencial (alpha de 0,1 a 0,9), o Holt (alpha e beta em 0,2 a 0,8) e o Holt-Winters aditivo (período 4, ou 6 com 12 pontos; sem dois períodos cai no Holt "sem sazonalidade") devolvem a previsão do próximo mês (nunca negativa) e os erros de um passo, de onde saem MAD, MAPE, erro acumulado e tracking signal; os parâmetros são os de menor MAD
+
+**C-045 — Best Fit e a sugestão projetada** *(R-124)*
+- **Dado que** os cinco modelos foram calculados para o produto aberto
+- **Quando** a compradora deixa o seletor em Best Fit (o padrão) ou escolhe um modelo
+- **Então** o Best Fit é o de menor MAD e o seletor diz qual venceu; a seção "Análise de venda futura" do painel e da Análise do Produto mostra projeção mensal, MAD com o MAPE, tracking signal com o limite ±4 e o estado (sob controle / fora), e a sugestão projetada com as caixas; mostra os pontos usados, os outliers ajustados, alpha/beta/gamma e as médias de 3, 6 e 12 meses da série ajustada; a última barra do gráfico passa a ser a projeção do modelo; a linha selecionada, a quantidade do simulador e o "adicionar ao carrinho" desse produto partem da sugestão projetada — as demais linhas seguem no consumo ponderado; a escolha do modelo é estado da tela e não é gravada
+- **E** a seção tem dois blocos com rótulo — "Previsão pelo modelo" (seletor, ajuda, Projeção mensal, MAD/MAPE, Tracking Signal, Sugestão projetada, e os fatos em pílulas: meses usados, outliers, médias 3/6/12) e "Regra de ressuprimento (consumo ponderado)" (consumo diário, projeção do mês, segurança, ponto de pedido, máximo, lead time medido) —, números inteiros onde é estoque ou alvo, 1 casa no consumo, no MAPE e no TS, 0 no MAD, e subtítulos curtos sem corte (a explicação longa fica no `title`); recolhida, o resumo é "Best Fit → <modelo> · N un./mês · sugestão N un. (N cx) · TS sob controle"
+
+**C-046 — As políticas de preço especial vigentes** *(R-125)*
+- **Dado que** o Gestão de Custos tem políticas de preço especial com itens e clientes
+- **Quando** a lista carrega
+- **Então** o sistema lê, por produto da lista, só as políticas vigentes (custo > 0, situação não encerrada, dentro das datas), com o cliente de cada uma — o cliente da lista da política, o cliente da própria política ou, sem nenhum dos dois, a política aberta para qualquer cliente — e a venda de cada cliente a esses produtos na janela, na filial, sem órgão público; nada disso custa mais que duas consultas por lote de 500 produtos
+
+**C-047 — A venda de cada cliente por produto** *(R-125)*
+- **Dado que** a filial vendeu um produto a vários clientes na janela
+- **Quando** a venda por cliente é consultada
+- **Então** vem uma linha por produto e cliente com o nome e a quantidade (só saídas positivas), sem órgão público por padrão e com ele quando pedido
+
+**C-048 — Oportunidade com preço especial no produto** *(R-125)*
+- **Dado que** um produto da lista tem política vigente para um cliente que comprou na janela, com custo especial abaixo do custo atual
+- **Quando** a compradora olha a lista e abre o produto
+- **Então** a linha mostra o selo "Especial N un." (ou "Especial N tabelas", em atenção, quando não há quantidade segura); o painel e a Análise do Produto mostram a seção "Oportunidade com preço especial", aberta, com o resumo (tabelas e ganho estimado), Comprar padrão | Tabelas especiais | Especial total, as tabelas em pílula e o card de cada uma (política, clientes, quantidade a comprar com caixas, risco, uso do limite seguro com compra especial e folga, o gráfico da venda do cliente por mês com a projeção segura, os 5 clientes com média, teto e projeção, o rodapé com limite, custo, ganho, "limitado por", ganho restante e validade); "Adicionar especial" põe no carrinho uma linha própria com o custo da política e o selo dela; o saldo fica como compra padrão
+- **E** o card do gráfico tem abas em pílula — "Compras × vendas" (o padrão, com 6m/13m, Gráfico/Tabela e o rodapé) e "Preço especial" (só quando há oportunidade: os KPIs, as tabelas e o card com o gráfico do cliente) — um gráfico por vez; trocar de produto volta para "Compras × vendas"
+- **E** (decisão do usuário, "Sim, abrir expandidas") escolher a aba "Preço especial", no painel ou na janela, abre a seção "Oportunidade com preço especial" já expandida; as demais seções seguem recolhidas (R-126) e trocar de produto volta tudo ao padrão — aba "Compras × vendas" e seções recolhidas
+
+**C-049 — A visão Em trânsito mostra a quantidade em trânsito**
+- **Dado que** a compradora abre o card "Em trânsito"
+- **Quando** a lista é mostrada
+- **Então** a grade é própria, como no sistema antigo: Produto · Situação · Estoque · **Em trânsito** (a quantidade em destaque, em caixas na referência Caixas, e embaixo "N dias com o trânsito" — (disponível + trânsito) ÷ consumo diário — ou "Sem consumo") · Preço compra (o custo atual; na falta, o da última entrada; senão "Sem custo", em perigo) · Sugestão (só leitura, na referência) · Ações (carrinho e silenciar); curvas e cobertura saem dessa visão, e as demais visões não mudam
+- **E** (R-132, pedido do usuário: "em trânsito deve mostrar a cobertura futura ao chegar") embaixo da quantidade vêm "chega em DD/MM (N d)" — a menor previsão de entrega dos pedidos da filial com saldo pendente; sem pedido, hoje + lead time e "prev. pelo lead time"; previsão vencida, "(atrasado)", contando como chegando hoje — e "cobre N d ao chegar" = (estoque que sobra até a chegada + trânsito) ÷ consumo diário, ou "Sem consumo"; se o estoque acaba antes de chegar, o selo em perigo "ruptura antes de chegar (N d sem estoque)"; cobertura acima de 365 dias vira "> 365 d" em toda a 011; e a "Cobertura futura" do painel e da janela, com trânsito, usa a mesma conta da chegada
+
+**C-051 — O excesso em outras filiais aparece na lista** *(R-130)*
+- **Dado que** outra filial tem o produto com estoque acima da cobertura alvo dele (ou com estoque e giro nenhum)
+- **Quando** a lista do fornecedor na filial é carregada
+- **Então** a linha mostra o selo "Excesso em N filial(is)", em atenção, embaixo do nome; o chip "Excesso em outras filiais N" filtra só esses produtos no recorte da visão; e a posição das outras filiais veio numa consulta só para a lista (em lotes de 500), nunca uma por linha
+
+**C-052 — O estoque bloqueado aparece na lista, no painel e na janela, com o motivo por lote** *(R-130)*
+- **Dado que** o produto tem estoque bloqueado na filial
+- **Quando** a compradora olha a lista e abre o produto
+- **Então** a linha mostra "Bloqueado N un." e o chip "Bloqueados N" filtra esses produtos; logo abaixo do cabeçalho do produto, no painel e na Análise do Produto, uma faixa de alerta diz "Estoque bloqueado: N un. em M lote(s) · R reservadas" e, ao expandir, mostra cada lote ("Lote X", o motivo, a quantidade bloqueada em destaque, "Motivo CODDEVOL" e os fatos Reservado, Indenizado, Bloq. 1, Bloq. 2, Validade, Categoria, Origem, Rotina, Bloqueado por e Funcionário); a consulta dos lotes só roda ao abrir um produto com bloqueio
+- **E** o excesso aparece na mesma faixa: "Excesso em outras filiais: 2 - GO · estoque 14 · sem giro" (+ "e mais N"), com até 6 filiais ao expandir; o aviso discreto do fim da seção e a seção "Filiais com excesso" do painel saem, para não duplicar
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -189,29 +324,43 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RF-006 | O sistema DEVE calcular, por produto: estoque de segurança (lead × consumo), ponto de pedido (2 × lead × consumo), estoque máximo (cobertura × consumo), quantidade sugerida, cobertura atual em dias e dias de gatilho | Os números de C-002 a C-007 | must |
 | RF-007 | A quantidade sugerida DEVE ser zero quando há trânsito, zero quando não há venda nem consumo, e nunca negativa; nos demais casos é o que falta para o estoque máximo, arredondado para cima em caixas cheias | C-002 a C-007, C-025 | must |
 | RF-008 | Cada produto DEVE receber uma das cinco situações: ruptura, excesso, elevada exposição, baixa exposição ou adequado | C-002 a C-007 | must |
-| RF-009 | O sistema DEVE classificar os produtos em curva A, B ou C pelo valor de venda da janela, dentro do fornecedor e da filial | Os cortes de 80 % e 95 % de C-015 | must |
+| RF-009 | O sistema DEVE classificar os produtos em duas curvas A, B ou C — pelo faturamento e pela rentabilidade da janela —, dentro do fornecedor e da filial, mostrar as duas e usar a pior delas como a curva do produto | Os cortes de 80 % e 95 % e a pior das duas de C-015 | must |
 | RF-010 | Cobertura, lead time e gatilho DEVEM ser parametrizáveis por fornecedor e por produto, valendo o mais específico; sem parâmetro, a cobertura é o alvo da curva do produto, o lead time é o medido e, na falta dele, 9 dias, e o gatilho é 15 dias | C-010, C-011, C-016 | must |
 | RF-011 | O sistema DEVE permitir silenciar um produto por um prazo, com motivo, tirando-o da fila de compra sem tirá-lo da lista, e restaurá-lo a qualquer momento | C-012 | must |
 | RF-012 | O sistema DEVE permitir desconsiderar uma venda específica do cálculo da demanda, com motivo, e reconsiderá-la | C-013 | must |
-| RF-013 | A venda a órgãos públicos DEVE contar na demanda por padrão e poder ser desconsiderada por um seletor da tela, que recalcula tudo sem nova consulta ao ERP | C-014 | must |
+| RF-013 | A venda a órgãos públicos DEVE ficar fora da demanda por padrão (R-131: o seletor "Desconsiderar venda a órgãos públicos" nasce marcado) e poder voltar ao desmarcá-lo, recalculando tudo sem nova consulta ao ERP — consumo, sugestão, curvas, gráfico, totais 3/6/12, previsão e aba Vendas | C-014, R-131 | must |
 | RF-014 | A lista DEVE ter três recortes: a comprar (sugestão maior que zero, sem os silenciados), todos (com filtro por situação) e em trânsito | C-007, C-012 | must |
 | RF-015 | O produto cujo gatilho é menor ou igual ao parâmetro de gatilho DEVE aparecer sinalizado como urgente e primeiro na ordem | Produto com gatilho 7 e parâmetro 15 vem antes e sinalizado; com gatilho 32, não (C-002, C-004) | should |
 | RF-016 | A quantidade sugerida DEVE ser editável e sempre reajustada para cima até a caixa cheia | C-017 | must |
 | RF-017 | O carrinho DEVE criar um pedido por fornecedor e filial, na primeira fase do quadro, com período igual à janela da tela, prioridade alta quando houver ruptura no grupo, valor total na capa e os itens já gravados com quantidade pedida, quantidade sugerida, custo e curva, marcado como originado das compras inteligentes | C-018 | must |
 | RF-018 | O carrinho DEVE ser recusado quando já houver pedido aberto (ainda não enviado à indústria) para aquele fornecedor e filial, citando o pedido e a fase | C-019 | must |
 | RF-019 | A montagem da análise dentro do pedido não DEVE sobrescrever a quantidade que veio do carrinho | C-020 | must |
-| RF-020 | O detalhe do produto DEVE mostrar posição de estoque aberta, histórico de 12 meses, últimas compras e estoque nas outras filiais | C-021 | must |
+| RF-020 | O detalhe do produto DEVE ser a janela "Análise do Produto" do sistema antigo — a versão expandida do painel (cabeçalho, métricas, aba Análise com simulação, Compras × vendas, venda futura, excesso em outras filiais, compras do produto e parâmetros; aba Vendas com os meses em pílula, cliente, vendedor e desconsiderar) sobre os dados que o painel já carregou | C-021, C-041, C-042 | must |
 | RF-021 | O sistema DEVE apurar a aderência do comprador: o percentual de itens de pedidos originados das compras inteligentes em que a quantidade pedida ficou dentro de 20 % para mais ou para menos da sugerida, por comprador e período | C-022 | should |
 | RF-022 | A tela DEVE ser aberta por analista, gestor, admin e diretoria (esta só lê); a parametrização e o silenciamento, só por admin e gestor; o comercial não DEVE alcançá-la | C-023 | must |
 | RF-023 | A lista visível DEVE poder ser exportada | C-024 | should |
+| RF-024 | O seletor de fornecedor DEVE mostrar, por fornecedor, o número de itens ativos e uma estimativa do valor sugerido, apurada numa consulta só | C-036 | should |
+| RF-025 | A lista DEVE sinalizar o produto que já está num pedido aberto do fornecedor na filial e ainda sem trânsito | C-035 | should |
+| RF-026 | A lista DEVE ter quatro visões com contagem — a comprar, completar compra, todos e em trânsito —, ordenação por código, nome ou curva, filtro de movimentação e ficha de silenciados, tudo sem consulta | C-026, C-027, C-038 | must |
+| RF-027 | A tela DEVE ter um painel de detalhe fixo com os quatro números, o gráfico sempre aberto e as seções de simulação, atributos e estoque, compras do produto, vendas do período, filiais com excesso e parâmetros do cálculo | C-031, C-033, C-034 | must |
+| RF-028 | O gráfico de compras × vendas DEVE mostrar 6 ou 13 meses, a projeção dos 3 meses seguintes, o valor escrito em cada barra e ponto, a visão em tabela e o rodapé de 3, 6 e 12 meses | C-032 | must |
+| RF-029 | O carrinho DEVE ficar guardado no navegador de quem o abriu, com quem e quando, e ser oferecido para continuar ou descartar na volta | C-028 | must |
+| RF-030 | O carrinho DEVE mostrar, por grupo, o quanto falta para o pedido mínimo do fornecedor | C-029 | must |
+| RF-031 | O carrinho DEVE gerar o arquivo de importação do WinThor, um por fornecedor e filial | C-030 | should |
+| RF-032 | A medida DEVE trazer o custo atual do ERP e o código de fábrica; o carrinho mostra a variação e a economia no custo | C-039 | should |
+| RF-033 | O produto aberto no painel DEVE ter previsão de venda por modelo (MMS, MMP, SE, Holt, Holt-Winters e Best Fit) sobre os meses fechados, com MAD, MAPE e tracking signal, e a sugestão projetada dele; a escolha do modelo é da compradora, Best Fit por padrão | C-043, C-044, C-045 | must |
+| RF-034 | O sistema DEVE mostrar as oportunidades de compra com custo especial do Gestão de Custos — por produto e cliente, com quantidade segura, risco e ganho — e deixar a compradora pôr a quantidade especial no carrinho com o custo da política | C-046, C-047, C-048 | must |
+| RF-035 | O custo de compra (preço na lista, Em trânsito, custo da janela, simulação, sugestão em reais, carrinho, pedido mínimo, variação e economia, economia do custo especial, item do pedido e arquivo do WinThor) DEVE ser o custo padrão atual do Gestão de Custos; sem custo lá, "Sem custo" e 0; com a consulta falhando, "Erro custo" em todos e um aviso; nunca o custo do ERP | C-050, R-128 | must |
+| RF-036 | Na tela larga (a partir de 1024 px) a lista e o painel de detalhe DEVEM ocupar a altura que sobra da tela, cada um com a sua rolagem: na lista só as linhas rolam (cabeçalho das colunas fixo; quantidade e ações presas à direita); no painel o produto e o gráfico ficam num bloco fixo e "Mais detalhes" rola à parte, abaixo dele (com menos de 160 px para os detalhes, o painel rola inteiro), e o painel volta ao topo ao trocar de produto. A lista nunca rola para o lado: o painel não a deixa com menos de 640 px e, abaixo de 900 px, ela fica compacta. O usuário DEVE poder alargar ou estreitar o painel em quatro larguras (Estreito, Médio, Largo, Metade da tela) por −/+ ou Alt+←/Alt+→, guardadas por usuário no navegador (Médio sem preferência); com a lista compacta as duas curvas viram a coluna "F/R" e a situação vai para baixo do nome | RN-036, R-129 | must |
+| RF-037 | A lista DEVE marcar o produto com estoque bloqueado ("Bloqueado N un.") e o que tem excesso em outra filial ("Excesso em N filial(is)"), com um chip-filtro para cada; o painel e a Análise do Produto DEVEM mostrar os dois avisos numa faixa de alerta logo abaixo do cabeçalho do produto, com o detalhe por filial (até 6) e por lote (motivo, quantidades, datas, quem bloqueou) ao expandir; a posição das outras filiais vem uma vez por carga e os lotes só ao abrir um produto com bloqueio | C-051, C-052, R-130 | must |
 
 ## Requisitos não-funcionais
 
 | ID | Requisito | Como se mede |
 |---|---|---|
-| RNF-001 | Abrir a tela custa no máximo **9** chamadas ao servidor, e trocar de fornecedor ou de filial no máximo **6**, qualquer que seja o número de produtos — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
+| RNF-001 | Abrir a tela custa no máximo **4** chamadas ao servidor (R-117: fornecedores, eficiência, quadro e o resumo por fornecedor); escolher o fornecedor **1**; escolher a filial **8** (R-120: a oitava é a das unidades por caixa do Gestão de Custos, em lotes de até 1000 produtos); selecionar um produto **3**, uma vez por produto — nenhuma chamada por linha | Contador de chamadas com um fornecedor de 20 e outro de 300 produtos: o mesmo número |
 | RNF-002 | Criar o pedido a partir do carrinho custa **3** chamadas por fornecedor e filial, qualquer que seja o número de itens | Contador com 1 e com 60 itens no carrinho: sempre 3 |
-| RNF-003 | Abrir o detalhe de um produto custa **3** chamadas; abrir a lista de vendas para desconsiderar, mais **1**; desconsiderar ou reconsiderar uma venda, **3** (gravar, reler a lista do que ficou desconsiderado e refazer a medida) | Contador ao abrir o detalhe, ao abrir o diálogo de vendas e ao marcar uma venda |
+| RNF-003 | Selecionar um produto na lista custa **3** chamadas, uma vez por produto (o detalhe completo reusa o que já veio); abrir a lista de vendas para desconsiderar, mais **1**; desconsiderar ou reconsiderar uma venda, **3** (gravar, reler a lista do que ficou desconsiderado e refazer a medida) | Contador ao selecionar, ao abrir o diálogo de vendas e ao marcar uma venda |
 | RNF-004 | A lista de um fornecedor com 300 produtos volta em uma consulta e é desenhada em até 3 s | Cronômetro sobre o fornecedor com mais produtos |
 | RNF-005 | Ligar e desligar o seletor de licitação, trocar de aba, filtrar por situação e ordenar não DEVEM custar nenhuma chamada ao servidor | Contador durante a interação: zero |
 | RNF-006 | Nenhuma operação desta tela escreve no ERP | Revisão das consultas: todas são leitura |
@@ -227,7 +376,7 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 
 ## Regras de negócio
 
-- **RN-001 — Consumo diário.** É a média da venda diária ponderada por recência: cada dia da janela pesa `0,85` elevado ao número de dias que o separam do fim da janela, e o consumo é a soma das vendas ponderadas dividida pela soma dos pesos. A janela padrão tem **153 dias** e termina hoje. Dia sem venda entra na conta com venda zero — é ele que faz a média ser diária e não "por dia com venda".
+- **RN-001 — Consumo diário.** É a média da venda diária ponderada por recência: cada dia da janela pesa `0,85` elevado ao número de dias que o separam do fim da janela, e o consumo é a soma das vendas ponderadas dividida pela soma dos pesos. A janela padrão tem **153 dias** e termina hoje. Dia sem venda entra na conta com venda zero — é ele que faz a média ser diária e não "por dia com venda". *Emendada pela R-131: só entra a **venda válida** — saída `S` com quantidade positiva, fora a venda entre filiais (ramo 20 "FILIAL" ou cliente que é filial do grupo, PCFILIAL.CODCLI) e a remessa de entrega futura (nota com CONDVENDA 8, cuja venda já contou na nota de venda futura), sempre; o mesmo recorte vale para as curvas, o histórico do gráfico e da previsão, a aba Vendas, a venda por cliente do custo especial e o resumo do seletor de fornecedor — um fragmento só no add-013.*
 - **RN-002 — Estoque e trânsito.** Estoque considerado = total − bloqueado − avariado − reservado, nunca negativo. Trânsito = quantidade já pedida ao ERP + quantidade em trânsito.
 - **RN-003 — Lead time.** Vale o do produto; na falta, o do fornecedor; na falta, o medido (média das entradas dos últimos 12 meses, da emissão do pedido ao ERP até a entrada da mercadoria, mínimo 1 dia, arredondada para cima); na falta de tudo, **9 dias**.
 - **RN-004 — Cobertura.** Vale a do produto; na falta, a do fornecedor; na falta, o **alvo da curva** do produto; na falta de regra alcançável, **35 dias**. É o alvo que entra no estoque máximo, nunca o teto que dispensa justificativa na montagem.
@@ -236,16 +385,36 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 - **RN-007 — Quantidade sugerida.** Com trânsito maior que zero, é **0**. Sem venda na janela e sem consumo, é **0**. Nos demais casos, é `máximo − disponível − trânsito`, arredondado para cima, nunca negativo, e depois arredondado para a caixa cheia. Unidades por caixa seguem a mesma regra da montagem do pedido.
 - **RN-008 — Cobertura atual e dias de gatilho.** Cobertura atual = disponível ÷ consumo. Dias de gatilho = parte inteira de `(disponível + trânsito − segurança) ÷ consumo − lead`. Sem consumo, as duas não existem: a tela mostra "sem giro", nunca um número.
 - **RN-009 — Situação.** Avaliada nesta ordem: **ruptura** (disponível ≤ 0); **excesso** (disponível + trânsito maior que o máximo); **elevada exposição** (disponível ≤ ponto de pedido e cobertura atual menor que o lead time); **baixa exposição** (disponível ≤ ponto de pedido); senão **adequado**.
-- **RN-010 — Curva.** Valor = venda da janela × custo da última entrada. Os produtos do fornecedor e da filial são ordenados por valor decrescente; enquanto o acumulado for até 80 % do total é A, até 95 % é B, o resto é C. Sem valor total, todos são C. É a mesma régua da montagem do pedido.
-- **RN-011 — Licitação.** A venda a clientes de órgão público (atividades 11 a 15 e 20) entra na demanda por padrão e aparece à parte. O seletor "desconsiderar licitação" subtrai a parte pública do consumo e recalcula tudo na tela, sem nova consulta.
+- **RN-010 — Curvas.** Duas curvas pela mesma régua da montagem do pedido (ordenar por valor decrescente dentro do fornecedor e da filial; acumulado até 80 % é A, até 95 % é B, o resto é C; sem valor total, todos C): a de **faturamento**, cujo valor é o que o produto vendeu na janela (quantidade × preço de cada venda), e a de **rentabilidade**, cujo valor é a margem da janela (quantidade × (preço − custo financeiro) de cada venda; margem negativa vale zero). A **curva do produto** é a pior das duas (A < B < C) — é ela que escolhe o alvo de cobertura (RN-004), vai no item do pedido (RN-015) e ordena a lista. A venda desconsiderada (RN-012) e a devolução ficam fora dos dois valores. Sem os dois valores na consulta, as duas curvas são a antiga: venda × custo da última entrada.
+- **RN-011 — Licitação.** A venda a clientes de órgão público (atividades 11 a 15 e 20) entra na demanda por padrão e aparece à parte. O seletor "desconsiderar licitação" subtrai a parte pública do consumo e recalcula tudo na tela, sem nova consulta. *Emendada pela R-131: órgão público são as atividades 11 a 15 (a 20 é "FILIAL", venda entre filiais, e sai sempre pela RN-001); o seletor nasce **marcado** — a venda pública fica fora por padrão de consumo, sugestão, curvas (faturamento e margem públicos saem segregados), gráfico, totais, previsão e aba Vendas — e desmarcá-lo devolve tudo.*
 - **RN-012 — Venda desconsiderada.** A venda marcada é tirada da demanda na origem, antes de qualquer média — não é descontada depois. No máximo 500 vendas desconsideradas por consulta.
-- **RN-013 — Silenciamento.** Silenciar guarda a data até quando e o motivo; o padrão são **30 dias** a partir de hoje. Produto silenciado sai da aba "a comprar" e continua na aba "todos" com a marca, o motivo e a data. Restaurar apaga a data.
+- **RN-013 — Silenciamento.** Silenciar guarda a data até quando e o motivo; o padrão são **30 dias** a partir de hoje. Produto silenciado sai da aba "a comprar" e continua na aba "todos" com a marca, o motivo e a data. Restaurar apaga a data. O chip "Silenciados" filtra sempre sobre "todos" — "a comprar" os exclui por definição —, e o painel mostra a data, o motivo e "Devolver à fila".
 - **RN-014 — Recorte do ERP.** Produto ativo (sem marcação de inativo) e fora dos departamentos 4 e 7; o fornecedor genérico nunca entra; venda é só saída com quantidade positiva.
 - **RN-015 — Carrinho.** Um pedido por fornecedor e filial. Título no padrão do sistema (filial e fornecedor em maiúsculas). Prioridade alta quando houver ao menos um produto em ruptura no grupo, normal nos demais casos. Período igual à janela da tela. Cada item nasce **completo**: a quantidade escolhida, a quantidade sugerida no momento da escolha, o custo, a curva e tudo o que a lista já sabe do produto — descrição, embalagem, unidade, departamento, seção, unidades por caixa, venda do período, venda pública, estoque e trânsito medidos, a cobertura futura calculada com a quantidade escolhida e o limite de cobertura que vale para ele. Campo que nascer vazio continua vazio quando o pedido for reaberto e a análise remontada (RN-017) — e some das verificações de saída da montagem.
 - **RN-016 — Pedido aberto bloqueia.** Existe pedido aberto quando há pedido daquele fornecedor e filial em qualquer fase anterior ao envio à indústria (análise, aprovação técnica, aprovação da diretoria ou envio). A recusa cita o pedido e a fase.
 - **RN-017 — O carrinho manda.** Ao montar a análise dentro do pedido, o produto que já está na lista mantém a quantidade que tem; só os produtos novos entram zerados.
 - **RN-018 — Aderência.** Um item é aderente quando a quantidade pedida fica entre 80 % e 120 % da sugerida, limites inclusive, e a sugerida é maior que zero. A aderência é o percentual de itens aderentes entre os itens de pedidos originados das compras inteligentes, no período e por comprador.
 - **RN-019 — Permissões.** Ver a tela: admin, analista, gestor e diretoria. Operar (carrinho, edição de quantidade, desconsiderar venda): admin, analista e gestor, zerado por acesso somente-leitura. Parametrizar e silenciar: admin e gestor. Comercial não vê. Acesso restrito opera e o pedido criado é dele.
+
+- **RN-020 — Completar compra.** Entra na visão o produto com sugestão zero, não silenciado, sem trânsito, com giro, e cobertura atual menor ou igual a `cobertura + lead time`: é o que vai entrar na fila no próximo ciclo. O complemento proposto é **uma caixa cheia** (uma unidade no avulso). Ordem: menor cobertura primeiro.
+- **RN-021 — Carrinho salvo.** O carrinho fica guardado no navegador, por usuário, com os itens, as quantidades, os motivos, quem abriu, quando abriu e quando foi salvo pela última vez. Na volta, com o carrinho da tela vazio, a tela oferece continuar ou descartar; descartar exige confirmação. Guardar no servidor (retomar de outra máquina) é dívida registrada.
+- **RN-022 — Pedido mínimo.** O mínimo do grupo é o pedido mínimo parametrizado do fornecedor (spec 001) no momento em que o item entrou. Falta = mínimo − total do grupo, nunca negativa; sem mínimo parametrizado, está sempre atingido.
+- **RN-023 — Arquivo do WinThor.** Um arquivo por fornecedor e filial, uma linha por item com quantidade, `CODPROD;PRECO;QTD`, sem cabeçalho, preço com ponto decimal e duas casas (o custo atual do ERP, ou o da última entrada na falta dele), quantidade inteira.
+- **RN-024 — Valor escrito em cada marca.** Em todo gráfico do sistema, cada barra e cada ponto de linha mostram o seu valor escrito em cima, inclusive a série de projeção (decisão do usuário, R-116).
+- **RN-025 — Filial com excesso.** Cobertura da filial = estoque disponível ÷ (venda de 3 meses ÷ 90). Há excesso quando a cobertura passa do teto (a cobertura alvo do produto) ou quando há estoque sem venda nenhuma. A filial da tela nunca entra. Sem giro primeiro, depois a maior cobertura.
+- **RN-026 — Resumo por fornecedor.** É estimativa: venda dos últimos 90 dias sem ponderação, cobertura de 35 dias, estoque disponível e pedido ao ERP somados em todas as filiais, custo da última entrada, nenhum parâmetro de SKU nem curva. Serve ao rótulo do seletor; a sugestão exata é a da lista.
+- **RN-027 — Variação e economia.** Variação = (custo atual − custo da última entrada) ÷ custo da última entrada; vermelho quando subiu, verde quando caiu; sem um dos dois custos não há variação. Economia no custo = soma de (última entrada − atual) × quantidade só nos itens em que o custo caiu. *Emendada pela R-128: o custo de compra é o custo padrão do Gestão de Custos — variação = (custo padrão − última entrada) ÷ última entrada; a última entrada do ERP fica como histórico.*
+- **RN-028 — Unidades por caixa (R-120).** A caixa de cada produto vem do Gestão de Custos quando ele a tem; senão do cadastro do ERP; senão da embalagem; senão é avulso — a mesma cadeia da montagem do pedido (RN-002 da 003). A tela mostra de onde veio, e a sugestão, a referência Unidades/Caixas e a simulação usam a caixa resolvida.
+- **RN-029 — Série da previsão.** Até 12 meses fechados (mês < mês de hoje) de vendas do produto na filial, em ordem crescente, cada mês menos as vendas desconsideradas dele, com piso zero. Com 4 ou mais pontos: média e desvio populacional; ponto acima de média + 2 desvios vira a média (outlier ajustado). Com menos de 3 pontos não há projeção.
+- **RN-030 — Modelos e erros.** MMS: média dos últimos w = min(3, n−1). MMP: pesos 0,5/0,3/0,2 do mais recente ao mais antigo, truncados a w e normalizados. SE: nível = s0, a cada passo prev = nível e nível = α·s + (1−α)·nível, α de 0,1 a 0,9. Holt: L = s0, T = s1−s0; prev = L+T; L' = α·s + (1−α)(L+T); T = β(L'−L) + (1−β)T; α, β em {0,2; 0,4; 0,6; 0,8}. Holt-Winters aditivo: m = 6 com 12 pontos, senão 4; com n < 2m devolve o Holt "sem sazonalidade"; L0 = média(m primeiros), T0 = (média(m seguintes) − L0)/m, S_k = s_k − L0; prev = L+T+S_k, atualizações com α, β, γ em {0,2; 0,4; 0,6}. Cada modelo devolve a previsão do próximo mês (máx(0, 2 casas)) e os erros real − previsto; MAD = Σ|e|/n; MAPE só sobre reais > 0; CE = Σe; TS = CE/MAD (0 sem MAD); sob controle ⇔ |TS| ≤ 4. Os parâmetros são os de menor MAD (empate: o primeiro). Best Fit = o modelo de menor MAD; é o padrão.
+- **RN-031 — Sugestão projetada.** Demanda diária = previsão/30. Sugestão projetada = arredonda à caixa cheia (demanda × cobertura − disponível − trânsito), nunca negativa, com a cobertura que o item já resolve (RN-004). Alvo no lead time = demanda × lead time + estoque de segurança. Vale só para o produto aberto no painel: a linha selecionada, a quantidade do simulador e o "adicionar ao carrinho" dele; as demais linhas e a consulta seguem na RN-001. A projeção manual em % (badge) não altera o cálculo.
+- **RN-032 — Oportunidade por produto × cliente.** Exige cliente, venda do cliente no período, custo especial e economia unitária = máx(0, custo atual − especial) > 0 (sem custo atual, vale o da última entrada). Cobertura segura = clamp(cobertura resolvida ou 30, 1, 45). Projeção do cliente = teto(venda do cliente ÷ dias do período × cobertura segura). Quantidade segura qs = mín(sugestão, projeção do cliente). Risco: qs ≤ 0 Monitorar; venda ≥ 2·qs Seguro; senão Moderado. Ganho = qs × economia. Ordem por ganho.
+- **RN-033 — Sugestão segura por tabela.** Fator de cobertura = clamp(cobertura, 1, 45)/30; venda mensal do SKU = consumo diário × 30; cap recente do SKU = mediana dos 6 últimos meses fechados com venda, até 25 % acima dela e nunca acima do pico; fator de previsão = projeção do modelo ÷ venda mensal do SKU (1 sem um dos dois). Por cliente: participação = mín(1, venda do cliente ÷ soma dos últimos 12 meses com venda); mensais do cliente = meses × participação; média e cap do cliente = mín(máx mensal, máx(média, mediana × 1,25)); base = média, ou projeção do cliente ÷ fator de cobertura; teto = mín(cap do cliente ou base × 1,05, cap do SKU × participação); projeção mensal = teto(mín(base × fator de previsão, teto)); seguro = à caixa(projeção × fator de cobertura); crescimento = projeção ÷ base; risco Seguro (crescimento ≤ 1 e seguro ≤ projeção do cliente), Moderado (≤ 1,05) ou Arriscado; "limitado por" cliente, SKU ou ambos.
+- **RN-034 — Tabelas e distribuição.** Agrupa por política + custo: soma os seguros e o ganho potencial, junta os clientes, fica com o pior risco e a menor validade. Ficam as tabelas com seguro > 0, por maior economia e depois maior seguro. A quantidade simulada (à caixa) se distribui: cada tabela recebe mín(restante, seguro) e ganho = quantidade × economia; o que sobra é compra padrão. A linha especial do carrinho tem chave própria (produto, filial, política, custo), o custo da política e o tipo de preço especial no item do pedido.
+- **RN-035 — Custo de compra.** É o custo padrão atual do Gestão de Custos: por produto, a linha de data de referência mais recente da tabela de custo padrão. Sem linha, o produto fica "Sem custo" e o custo é 0 (sem fallback para o ERP); se a consulta falha, TODOS ficam "Erro custo" e a tela avisa — nunca custo parcial. O ERP fica como histórico: preço da última entrada, últimas compras, pedidos ao ERP.
+- **RN-036 — Largura do painel.** Quatro larguras, da mais estreita à mais larga: Estreito (380 px), Médio (480 px), Largo (620 px), Metade da tela. Mais larga/mais estreita anda um passo e para nas pontas. A preferência é do usuário no navegador; ausente ou inválida vale Médio. A largura usada é a escolhida ou a maior abaixo dela que deixa a lista com ao menos 640 px. A lista medida abaixo de 900 px fica compacta (curvas numa coluna "F/R", situação sob o nome). O painel rola inteiro quando sobram menos de 160 px para "Mais detalhes"; senão, só os detalhes rolam.
+- **RN-037 — Excesso e bloqueio na lista.** O excesso em outra filial segue a regra da RN-025 (cobertura da filial acima da cobertura alvo do produto, ou estoque sem giro; a filial da tela fica de fora), com a cobertura alvo de cada produto; os selos são "Bloqueado N un." (só com bloqueio) e "Excesso em 1 filial" / "Excesso em N filiais"; os chips contam o recorte da visão e filtram juntos ou separados. O resumo do alerta é "Excesso em outras filiais: <código> - <UF> · estoque N · sem giro | cobertura N d", com "e mais N" quando há outras.
+- **RN-038 — Motivo do bloqueio.** Por lote, o motivo é o do histórico (PCMOVBLOQUEIO, depois PCBLOQUEIOEST, depois a PCMOV com CODDEVOL, depois o PCEST), senão as observações do lote nesta ordem: OBSBLOQUEIO, OBSBLOQUEIOMANUAL, OBSANALISE, MOTIVOBLOQESTOQUE, OBS1, OBS2; nada, "Sem motivo vinculado". Quem bloqueou vem do log do lote (só o evento que aumentou o bloqueio), nunca o motivo. O resumo é "Estoque bloqueado: N un. em M lote(s) · R reservadas" (R = reservado dos lotes bloqueados); antes dos lotes, só o total.
 
 ## Testes
 
@@ -262,10 +431,10 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | C-009 | consulta: lead medido 5 para o produto com entradas de 4 e 6 dias, 0 (sem medida) para o produto sem entrada; regra: com lead 5 → `adequado` e gatilho 5; com lead 9 (sem medida) → `baixa_exposicao` e gatilho −3; entrada no mesmo dia da emissão conta 1 | regra de negócio + regra de tela |
 | C-010 | parâmetro de fornecedor cobertura 20 → máximo 40 e, com disponível 50, `excesso` e sugerida 0 | regra de tela |
 | C-011 | parâmetro de produto cobertura 45 sobre fornecedor 20 → máximo 90 e sugerida 48; produto sem parâmetro próprio continua em 40 | regra de tela |
-| C-012 | gravar silenciamento até hoje+30 e ler de volta a data e o motivo; a regra tira o produto de "a comprar" e o mantém em "todos"; restaurar apaga a data e o produto volta | regra de negócio + regra de tela |
+| C-012 | gravar silenciamento até hoje+30 e ler de volta a data e o motivo; a regra tira o produto de "a comprar" e o mantém em "todos"; restaurar apaga a data e o produto volta; o chip liga o filtro e leva a "todos" (de "trânsito" volta a "trânsito"), escolher um card desliga | regra de negócio + regra de tela |
 | C-013 | consulta sem exclusão → venda 90; com a venda de 60 na lista de exclusão → venda 30 e consumo menor; a lista de desconsideradas traz 1 linha com o motivo; reconsiderar deixa a lista vazia e a venda volta a 90 | regra de negócio |
 | C-014 | consumo total 2,0 e público 0,5, disponível 30: com licitação → máximo 70, sugerida 48, `baixa_exposicao`; sem licitação → consumo 1,5, máximo 52,5, sugerida 24, `adequado` | regra de tela |
-| C-015 | 5 produtos com valores 500, 250, 150, 70 e 30 → A, A, B, C, C | regra de tela |
+| C-015 | faturamento 500/250/150/70/30 e rentabilidade 30/500/250/150/70 → faturamento A, A, B, C, C; rentabilidade C, A, A, B, C; curva do produto C, A, B, C, C; sem os dois valores, venda × custo nas duas | regra de tela |
 | C-016 | sem parâmetro nenhum, alvo da curva A = 35 → máximo 70; curva B = 45 → 90; curva C = 60 → 120; sem regra alcançável → 35 | regra de tela |
 | C-017 | sugestão 48 e caixa 12: quantidade digitada 50 → 60; digitada 48 → 48; digitada 0 → 0 | regra de tela |
 | C-018 | criar o pedido a partir de um carrinho de 3 itens (um em ruptura) devolve 1 card na fase de análise, com origem `compras_inteligentes`, prioridade `alta`, período da janela, valor total igual à soma e 3 itens gravados completos: quantidade pedida, sugerida, custo e curva, **e** descrição não vazia e limite de cobertura maior que zero nos três | regra de negócio |
@@ -295,6 +464,50 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 | RN-017 | mesclar a lista montada com a existente mantém a quantidade da existente e zera só as novas | regra de tela |
 | RN-018 | (100, 100) → aderente; (100, 80) → aderente; (100, 120) → aderente; (100, 79) → não; (100, 121) → não; (0, 10) → não | regra de tela |
 | RN-019 | a matriz de C-023, perfil a perfil e nível a nível | regra de tela |
+| C-026, C-027, RN-020 | quatro medidas (20, 75, 200 e 30 com trânsito 20) → contagens 1 / 1 / 4 / 1; completar devolve só o de 75, com uma caixa (12) de complemento; silenciado, sem giro e com trânsito nunca entram; ordem por menor cobertura | regra de tela |
+| C-028, RN-021 | o texto guardado volta ao carrinho só com versão 1 e ao menos um item com quantidade; texto inválido vira `null`; ida e volta sem perda; resumo de 3 itens em 2 filiais = 3 · 2 · total | regra de tela |
+| C-029, RN-022 | (300, 1000) → falta 700, 30 %; (1200, 1000) → atingido; (10, 0) → atingido; mínimo do grupo = maior entre os itens | regra de tela |
+| C-030, RN-023 | 3 itens (um com quantidade 0) → `5401;12.00;24\r\n5403;10.46;12`; nome `winthor-1042-filial-1-2026-09-16.txt` | regra de tela |
+| C-031 | nível: 50 de 70 → 71,4 %; máximo 0 → nulo | regra de tela |
+| C-032, RN-024 | série de 6 meses + 3 de projeção (62, 60, 62 a consumo 2); 13 meses dão 16 pontos; rodapé 3m/6m/12m/projeção com os números da tabela de casos | regra de tela |
+| C-033, RN-025 | posições de 5 filiais com teto 42 → excesso nas filiais 4 (sem giro) e 2 (120 d), nessa ordem | regra de tela |
+| C-034 | simular 50 → 60 un., 5 cx, R$ 600, 55 d, 157 %; sem giro → cobertura nula | regra de tela |
+| C-035 | a consulta de itens em pedido aberto devolve os 5 produtos do pedido em análise do 1042 na filial 1, com card e fase pela chave, e nada para a filial 2 (enviado) | regra de negócio |
+| C-036, RN-026 | o resumo do 1042 devolve os itens ativos do catálogo menos o inativo e o do departamento 4, e valor estimado > 0 | regra de negócio |
+| C-037 | (48, 12, unidades) → "48 un. · 4 cx"; (48, 12, caixas) → "4 cx · 48 un."; (48, 1) → "48 un."; campo: 315 un. com caixa 15 em "caixas" mostra 21, digitar 22 grava 330, 1,5 grava 22,5 e o blur sobe a 30; avulso e "unidades" em unidades | regra de tela |
+| C-038 | ordem por código, nome e curva (A, B, C); cada filtro de movimentação devolve só as linhas certas | regra de tela |
+| C-040 | consulta do ressuprimento: o 5410 (50 un. a 20 com custo financeiro 12) devolve faturamento 1000 e rentabilidade 400; devolução e venda desconsiderada ficam fora dos dois; produto sem venda tem 0 e 0 | regra de negócio |
+| C-041 | `sgcWintProdutoVendas` do 5408 → 4 vendas, todas com `CODUSUR` > 0 e `VENDEDOR`; `sgcWintProdutoUltimasCompras` do 5403 → a entrada do pedido 970001 com `DT_SOLICITACAO`, `DT_PREVISAO` e a entrada depois da previsão | regra de negócio |
+| C-042 | meses de vendas: 2 em outubro (R$ 1.400) e 1 em setembro, do mais recente ao mais antigo, filtro por mês e resumo do que está fora (60 un., R$ 1.200); série Desconsideradas por mês só quando pedida, em caixas dividida por 12 com 1 decimal; 2 meses com movimento → histórico insuficiente, 3 → suficiente; entrada em 04/09 com previsão 02/09 atrasou, sem previsão não; necessidade 70 − 30 − 0 = 40, inteira e nunca negativa | regra de tela |
+| C-043 | histórico com outubro (mês corrente), setembro 20 com 25 desconsideradas, agosto 30 com 10, julho 5, jan/25 1 → série [1, 5, 20, 0]; 14 meses → ficam os 12 mais recentes | regra de tela |
+| RN-029 | 7 meses de 10 e um de 100 → média 21,25, σ 29,76, o 100 vira 21,25 e conta 1; com 3 pontos nada muda | regra de tela |
+| C-044 | 10, 20, 30, 40, 50: MMS prevê 40 (erros 20, 20 → MAD 20, MAPE 45, CE 40, TS 2) e MMP 43 (MAD 17); SE com 10, 20 → alpha 0,1 e previsão 11; Holt na série linear 10, 20, 30 → 40 com MAD 0; Holt-Winters com 5 pontos cai no Holt "sem sazonalidade" e com 8 constantes prevê 10 com MAD 0 | regra de tela |
+| RN-030 | erros 5 ×5 → MAD 5, CE 25, TS 5 fora de controle; MAPE só sobre reais > 0; sem MAD, TS 0 | regra de tela |
+| C-045 | série linear 10..50 → Best Fit = Holt (MAD 0); "bestfit" resolve para ele; com 2 pontos não há modelos; médias 3/6/12 da série ajustada | regra de tela |
+| C-046 | `sgcCustoEspeciaisProdutos` para 5401..5405 → 5401 e 5403 (9301, tabela 1), 5405 aberta (0, tabela 4); inativa e vencida fora; lista vazia → nada | regra de negócio |
+| C-047 | `sgcWintVendasClientesProdutos` 5408/5409 → 9303 60, 9301 20, 9302 10, 9301 12; com órgão público, também 9304 6 | regra de negócio |
+| RN-032 | tabela A para o 9301 (custo 11 − 8 = 3, projeção 70, qs 48, seguro, ganho 144); política aberta para cada cliente; sem economia nada; venda < 2·qs moderado; sugestão 0 monitorar; cobertura 90 vira 45 | regra de tela |
+| C-048 | selo "Especial 113 un." (positivo) com quantidade segura, "Especial 2 tabelas" (atenção) sem ela, nada sem oportunidade; chave da linha especial `5401-1-especial-7-8`; lotes de 500; a aba "Preço especial" só existe com oportunidade e sem ela a escolha cai em "Compras × vendas" | regra de tela |
+| RN-033 | cliente com 85 % do SKU (306 de 360 em 6 meses de 60): média 51, caps 51, projeção 51, seguro 60 (caixa 12), crescimento 1, seguro, limitado por ambos; previsão 120 não passa do teto; sem série, base 60 e limitado pelo SKU; cap recente 31,25 para 10/20/30/100 | regra de tela |
+| RN-034 | tabelas 1-8 (economia 3, seguro 60) e 2-6 (economia 5, seguro 12 + 12, pior risco arriscado, validade 15/11) com quantidade 100 → 2-6 compra 24, 1-8 compra 60, padrão 16, ganho 300; tabela com seguro 0 fica fora; carrinho: total 24 × 10 + 12 × 8, item especial com preço 8 e tipo especial | regra de tela |
+| C-049 | 50 disponíveis + 100 em trânsito a 2/dia → 75 dias; sem consumo → nulo; preço: atual 11 → 11 (atual), só última 12 → 12 (última), nenhum → nulo | regra de tela |
+| C-050 / RN-035 | `sgcCustoPadraoAtual` 5401 → 11 (2026, não os 12 de 2025), 5403 → 10, 5402 não volta; regra: data mais recente vence, sem linha "Sem custo" 0, consulta falhou "Erro custo" 0 em todos, montagem do pedido com o custo padrão e a curva pesando venda × esse custo | regra de negócio + regra de tela |
+| RN-036 | + e − a partir de Estreito: Médio, Largo, Metade, Metade; e de volta: Largo, Médio, Estreito, Estreito; guardado "largo" volta Largo, nada/""/"enorme" volta Médio; chave por usuário; grade de 1200 px: Largo e Metade viram Médio; 1100 px: só Estreito; lista compacta abaixo de 900 px; painel de 560 px com bloco fixo de 420 rola inteiro, de 600 rola só os detalhes | regra de tela |
+| C-051 / R-130 | `sgcWintEstoqueFiliaisProdutos` (5401, 5402, 5403, 5415 na filial 1) devolve só 5403:2 = 120/30 e 5403:3 = 30/30; pela filial 2, as filiais 1 e 3 | regra de negócio |
+| C-052 / R-130 | `sgcWintBloqueiosProduto` 5401 filial 1 → L5401A 6 un. (2 reserv.) motivo 31 AVARIA NO TRANSPORTE pelo PCMOVBLOQUEIO, rotina 1101, MARIA SOUZA; L5401B 4 un. (3 reserv.) sem motivo de histórico, OBSBLOQUEIO, bloqueado por JOAO PEREIRA (não o desbloqueio parcial); 5403 nada | regra de negócio |
+| RN-037 | 5403 com alvo 35 em 2 filiais, com alvo 100 em 1; 5404 sem giro; 5405 (10 d) fora; selos "Bloqueado 15 un.", "Excesso em 1 filial", "em 2 filiais"; resumo "Excesso em outras filiais: 2 - GO · estoque 14 · sem giro" e "… cobertura 360 d e mais 1"; chips filtram e contam | regra de tela |
+| RN-038 | cascata do motivo até "Sem motivo vinculado"; "Estoque bloqueado: 10 un. em 2 lotes · 5 reservadas", "6 un. em 1 lote · 2 reservadas", só o total sem lotes; fatos na ordem do legado e só com valor | regra de tela |
+| C-048 (aba) | `secaoEspecialAberta`: aba "especial" → expandida; "vendas" → recolhida; sem oportunidade a aba vale "vendas" | regra de tela |
+| C-053 / R-131 | 5409 segue com 18 (6 públicas) com as vendas fora no seed (ramo 20 9 un., cliente-filial 7 un., remessa CONDVENDA 8 4 un.); histórico 18/6; aba Vendas sem as 3; venda por cliente 9301 12 e 9304 6; o 9305 (ramo 13) é público; faturamento e margem públicos segregados | regra de negócio |
+| RN-001 / RN-011 (R-131) | curva de um produto vendido quase só a órgão público cai de A sem o público; histórico sem a parte pública com o seletor marcado, igual desmarcado, nunca negativo | regra de tela |
+| C-054 / R-132 | `sgcWintRessuprimento` traz DT_PREV_CHEGADA: 5404 em 8 dias (o pedido já entregue não conta), 5403 atrasado (há 3 dias), 5405 sem data | regra de negócio |
+| C-056 / R-135 | `sgcWintProdutoVendasNotas` (Clientes que compraram, do pedido da 003): as vendas válidas do 5409 por nota com cliente e ramo — sem o público 12 (só o 9301), com 18; filial e remessa nunca; a soma por mês = SAIDAS − SAIDAS_PUBLICAS do histórico | regra de negócio |
+| C-057 / R-139 | o gráfico de vendas da filial em excesso: os 6 meses fechados e o corrente parcial com zero no mês sem venda (mai–nov/26 em 03/11/2026), o público fora quando a tela o tira; total e média dos 6 fechados, estoque e cobertura na filial (15 ÷ (100/6/30) = 27 d; sem venda, sem giro); a filial do alerta do card sai da chave `excesso:<codprod>:<codfilial>` | regra de tela |
+| C-049 (R-132) | estoque 50, trânsito 100, 2/dia, chega em 10 d: sobram 30, cobre 65 d; sem pedido, hoje + lead time e "prev. pelo lead time"; estoque 10 a 2/dia e chegada em 12: 7 d sem estoque; atrasado conta como hoje; sem consumo, sem cobertura; 27611 → "> 365 d" | regra de tela |
+| C-045 (resumo) | série 10..50: "Best Fit → Holt · 40 un./mês · sugestão 312 un. (26 cx) · TS sob controle"; modelo escolhido vem só com o nome; sem histórico "…"; com 2 pontos avisa; `numeroPt(1234,5, 1)` = "1.234,5" | regra de tela |
+| RN-031 | previsão 300 → 10/dia; cobertura 35, estoque 100, trânsito 50, caixa 12 → 200 → 204; alvo no lead time (9 d, segurança 20) = 110; nunca negativa | regra de tela |
+| C-039, RN-027 | a consulta devolve custo atual 11 (última 12) no 5401, 10,5 no 5403 e código de fábrica; variação −8,3 % e +5 %; economia de 24 só com o que caiu | regra de negócio + regra de tela |
+| RN-028 | produto com 6 no Gestão de Custos e "CX 12" na embalagem fica com caixa 6 e origem gestão (sugestão em múltiplos de 6); sem o mapa, 12 pela embalagem; com 24 no ERP, origem ERP; a integração no simulador devolve 12 e 24 para 5001 e 5002 e nada para 5010 | regra de tela + regra de negócio |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-001 — a lista com 300 produtos rola sem travar, com os números alinhados à direita e o código do produto discreto
@@ -305,15 +518,19 @@ dias** e caixa de **12 unidades** — de onde saem estoque de segurança **18**,
 
 ## Fora de escopo
 
-- [ ] **Previsão de demanda** (modelos estatísticos, corte de outlier, escolha por menor erro) — dívida registrada para a onda 5; aqui a projeção é a tendência ponderada de RN-001.
+- [x] ~~**Previsão de demanda** (modelos estatísticos, corte de outlier, escolha por menor erro)~~ Entrou (R-124): os cinco modelos do legado, o cap de outliers e o Best Fit, só para o produto aberto no painel (C-043..C-045).
 - [ ] **Estoque de segurança estatístico** (fator de serviço sobre a volatilidade) — a volatilidade é medida e mostrada, mas não entra na fórmula; dívida registrada.
-- [ ] **Oportunidades de custo especial** e políticas de preço por cliente — dependem do módulo de custos.
-- [ ] **Diálogo de bloqueios de lote.**
-- [ ] **Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.
+- [ ] **Na Análise do Produto (R-123)**: o fator Z do estoque de segurança fica para a onda 5. ~~A oportunidade com preço especial~~ entrou (R-125); ~~o seletor de modelos de previsão~~ entrou (R-124).
+- [x] ~~**Oportunidades de custo especial** e políticas de preço por cliente — dependem do módulo de custos.~~ Entrou (R-125): C-046..C-048, RN-032..RN-034, com o módulo de custos ligado (conexão gestao-de-custos, projeto 60574).
+- [x] ~~**Diálogo de bloqueios de lote**~~ — *saiu do adiado pela R-130*: o detalhe por lote abre no alerta "Estoque bloqueado" do painel e da janela, com `sgcWintBloqueiosProduto`.
+- [x] ~~**Exportação para o ERP** ("gerar exportação WinThor") — nunca existiu de fato no sistema antigo.~~ Existia (R-117): entrou como RF-031 / C-030.
 - [ ] **Planilha (xlsx) e PDF** — a exportação é em texto separado por ponto e vírgula, como nas demais telas.
-- [ ] **Curva por rentabilidade e "a pior das duas"** — a curva é uma só, a mesma da montagem do pedido.
+- [x] ~~**Curva por rentabilidade e "a pior das duas"** — a curva é uma só, a mesma da montagem do pedido.~~ Entrou (R-122): RN-010 e C-015 têm as duas curvas e a pior das duas; a montagem do pedido (003) segue com a régua única até a consulta dela trazer os dois valores.
 - [ ] **Custo padrão vindo da gestão de custos** — o custo é o da última entrada, como na montagem; dívida registrada.
-- [ ] **"Completar compra"** (sugestão complementar para atingir pedido mínimo) e **pedido mínimo por fornecedor.**
+- [x] ~~**"Completar compra"** (sugestão complementar para atingir pedido mínimo) e **pedido mínimo por fornecedor.**~~ Entraram (R-117): RF-026 / C-027 e RF-030 / C-029; o mínimo é o da parametrização do fornecedor (001).
+- [x] ~~**Selo de "custo especial"** no carrinho — adiado.~~ Entrou (R-125): a linha especial do carrinho leva o selo da política e o custo dela.
+- [ ] **Carrinho guardado no servidor** (retomar de outra máquina ou de outro usuário) — **adiado**: o carrinho fica no navegador (RN-021); custaria uma tabela e três leituras/escritas.
+- [ ] **Juntar itens a um pedido já aberto** — **adiado**: a lista sinaliza o pedido aberto (RF-025); o carrinho continua recusado enquanto ele existir (RF-018).
 - [ ] **Bloco novo no card do pedido** — esta tela existe antes do pedido; o único ponto de contato é a criação pelo carrinho.
 - [ ] **Alterar o alvo e a tolerância por curva** — é a tela de coberturas (spec 012); aqui a curva só é consumida.
 - [ ] **Sugerir de qual fornecedor comprar hoje** (o painel comparativo entre fornecedores) — fornecedor e filial continuam sendo escolha de quem abre a tela.

@@ -10,18 +10,7 @@
  * nome aqui ou o primitivo está mal ajustado — corrija aqui, não na tela.
  */
 import * as React from 'react';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Minus,
-  Search,
-  SlidersHorizontal,
-  X,
-} from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Search, SlidersHorizontal, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button as ButtonPrimitive } from '@/components/ui/button';
@@ -66,7 +55,7 @@ export {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 export type { ChartConfig } from '@/components/ui/chart';
-export { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+export { Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts';
 
 // ── 8.1 Estrutura de tela ─────────────────────────────────────────────────
 
@@ -558,6 +547,96 @@ export function CheckRow({
 }
 
 /**
+ * R-133: a caixa de seleção sozinha, para a coluna de seleção em lote de uma
+ * tabela — o mesmo desenho da `CheckRow`, sem o texto (o nome vai no `label`).
+ */
+export function CaixaSelecao({
+  marcado,
+  onToggle,
+  label,
+  disabled,
+  parcial,
+}: {
+  marcado: boolean;
+  onToggle: () => void;
+  label: string;
+  disabled?: boolean;
+  /** Parte da lista marcada (a caixa do cabeçalho). */
+  parcial?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={marcado}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'inline-flex size-6 shrink-0 items-center justify-center rounded-lg transition-colors',
+        'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+        'disabled:pointer-events-none disabled:opacity-60'
+      )}
+    >
+      <span
+        className={cn(
+          'flex size-4 items-center justify-center rounded border transition-colors',
+          marcado || parcial ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card'
+        )}
+        aria-hidden
+      >
+        {marcado ? <Check className="size-3" /> : parcial ? <Minus className="size-3" /> : null}
+      </span>
+    </button>
+  );
+}
+
+export interface AcaoDoMenu {
+  label: string;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  tone?: 'neutral' | 'danger';
+}
+
+/**
+ * "Mais ▾": as ações secundárias de uma barra num menu só (spec 014, topo da
+ * mesa Galderma) — a barra fica com a ação principal e uma ou duas
+ * secundárias. Item desabilitado continua visível, nunca escondido.
+ */
+export function MenuAcoes({ label = 'Mais', itens }: { label?: string; itens: AcaoDoMenu[] }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <ButtonPrimitive type="button" variant="outline" size="sm" aria-expanded={open}>
+          {label}
+          <ChevronDown aria-hidden />
+        </ButtonPrimitive>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-1">
+        {itens.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            disabled={item.disabled}
+            onClick={() => { setOpen(false); item.onClick(); }}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors [&_svg]:size-4',
+              'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:text-ink-muted',
+              item.tone === 'danger' ? 'text-destructive' : 'text-ink',
+            )}
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
  * Ação terciária que se lê como link, não como botão: "Esqueci minha senha",
  * "Criar conta", "Voltar". É `<button>` e não `<a>` porque não navega — troca
  * o passo da mesma tela; o sublinhado no hover é o que sinaliza que clica.
@@ -589,19 +668,25 @@ const STATUS_TONE = {
   alert: { dot: 'bg-destructive', text: 'text-destructive' },
 } as const;
 
-/** Estado dentro de tabela: ponto + texto. Selo preenchido não entra em célula. */
+/**
+ * Estado dentro de tabela: ponto + texto. Selo preenchido não entra em célula.
+ * `truncar` é para célula estreita (calendário): o texto corta com reticências
+ * em vez de vazar para a célula vizinha — o completo vai no `title` de quem chama.
+ */
 export function Status({
   tone,
   children,
+  truncar,
 }: {
   tone: keyof typeof STATUS_TONE;
   children: React.ReactNode;
+  truncar?: boolean;
 }) {
   const style = STATUS_TONE[tone];
   return (
-    <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', style.text)}>
+    <span className={cn('inline-flex items-center gap-1.5', truncar ? 'min-w-0 max-w-full' : 'whitespace-nowrap', style.text)}>
       <span className={cn('size-1.5 shrink-0 rounded-full', style.dot)} aria-hidden />
-      {children}
+      {truncar ? <span className="truncate">{children}</span> : children}
     </span>
   );
 }
@@ -679,10 +764,13 @@ export function Alert({
   tone,
   children,
   className,
+  icon,
 }: {
   tone: keyof typeof ALERT_TONE;
   children: React.ReactNode;
   className?: string;
+  /** Ícone lucide à esquerda (o primitivo abre a coluna dele quando há `svg`). */
+  icon?: React.ReactNode;
 }) {
   return (
     <AlertPrimitive
@@ -691,9 +779,11 @@ export function Alert({
       role={tone === 'error' ? 'alert' : 'status'}
       className={className}
     >
+      {icon}
       {/* O primitivo é grid [0_1fr]: texto solto cai na coluna de largura
           zero e quebra palavra a palavra. A descrição o posiciona certo. */}
-      <AlertDescriptionPrimitive>{children}</AlertDescriptionPrimitive>
+      {/* min-w-0: o texto pode truncar em vez de empurrar a faixa para fora (R-130). */}
+      <AlertDescriptionPrimitive className="min-w-0">{children}</AlertDescriptionPrimitive>
     </AlertPrimitive>
   );
 }
@@ -844,15 +934,23 @@ export function BoardCard({ children }: { children: React.ReactNode }) {
 export function Table({
   children,
   className,
+  cabecalhoFixo = false,
 }: {
   children: React.ReactNode;
   className?: string;
+  /**
+   * R-129: quem rola é o contêiner de fora (lista de altura fixa); o cabeçalho
+   * das colunas fica grudado no topo dele. Sem a rolagem própria do wrapper,
+   * que prenderia o `sticky`.
+   */
+  cabecalhoFixo?: boolean;
 }) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className={cabecalhoFixo ? 'w-full' : 'w-full overflow-x-auto'}>
       <table
         className={cn(
           'w-full border-collapse text-[13px] [&_tr:last-child>td]:border-b-0',
+          cabecalhoFixo && '[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card',
           className
         )}
       >
@@ -1060,6 +1158,28 @@ export function Kpi({
 }
 
 /**
+ * O `Kpi` em versão mínima, para painel lateral onde o gráfico precisa de
+ * espaço (layout legado da 011, R-117): rótulo pequeno e valor na MESMA
+ * linha, sem caixa — a explicação vai no `title`. Quatro cabem numa faixa.
+ */
+export function KpiCompacto({
+  rotulo,
+  valor,
+  hint,
+}: {
+  rotulo: string;
+  valor: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap" title={hint}>
+      <span className="shrink-0 text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
+      <span className="truncate text-[13px] font-bold text-ink">{valor}</span>
+    </div>
+  );
+}
+
+/**
  * A escala da `BarraConsumo`, em doze passos. É FECHADA de propósito: o
  * Tailwind gera classe a partir do código-fonte, nunca de variável, e
  * `style={{}}` não entra neste projeto (§1.4).
@@ -1170,7 +1290,11 @@ export function PainelGrafico({
   titulo: string;
   hint?: React.ReactNode;
   acoes?: React.ReactNode;
-  altura?: 'padrao' | 'alta';
+  /**
+   * `adaptavel`: 220 px em tela baixa, 320 px a partir de 800 px de altura (R-127).
+   * `justa`: 150 px em tela baixa (até 760 px), 220 px acima — o painel lateral (R-129).
+   */
+  altura?: 'padrao' | 'alta' | 'adaptavel' | 'justa';
   largura?: 'padrao' | 'total';
   rodape?: React.ReactNode;
   children: React.ReactNode;
@@ -1186,10 +1310,364 @@ export function PainelGrafico({
         </div>
         {acoes ? <div className="flex items-center gap-2">{acoes}</div> : null}
       </div>
-      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : 'h-[220px]')}>
+      <div className={cn('w-full min-w-0', altura === 'alta' ? 'h-[320px]' : altura === 'adaptavel' ? 'h-[220px] [@media(min-height:800px)]:h-[320px]' : altura === 'justa' ? 'h-[150px] [@media(min-height:761px)]:h-[220px]' : 'h-[220px]')}>
         {children}
       </div>
       {rodape}
     </Panel>
+  );
+}
+
+// ── 8.8 Layout legado da 011 (R-117): visões, fichas, seções, alternador ─────
+
+/**
+ * Card de visão que funciona como aba: rótulo + contagem, o ativo em fundo
+ * primário. É botão com `aria-pressed`, não `Tabs`, porque o conteúdo abaixo é
+ * um só e o card muda o RECORTE dele. Sem dado a contagem é `Dash`, nunca 0.
+ */
+export function CardVisao({
+  rotulo,
+  contagem,
+  ativo,
+  onClick,
+}: {
+  rotulo: string;
+  contagem: number | null;
+  ativo: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      className={cn(
+        // Em tela baixa (R-129) o card encolhe para a lista e o painel caberem.
+        'flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors [@media(max-height:760px)]:gap-0 [@media(max-height:760px)]:p-2',
+        'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+        ativo ? 'border-primary bg-primary text-primary-foreground' : 'border-rule-row bg-card text-ink hover:bg-accent',
+      )}
+    >
+      <span className={cn('text-[11px] font-semibold tracking-wide uppercase', ativo ? 'text-primary-foreground/80' : 'text-ink-muted')}>
+        {rotulo}
+      </span>
+      <span className="font-title text-2xl font-bold [@media(max-height:760px)]:text-lg">
+        {contagem === null ? <Dash /> : contagem.toLocaleString('pt-BR')}
+      </span>
+    </button>
+  );
+}
+
+/** A fileira de cards de visão: dois por linha no mobile, quatro a partir de `xl`. */
+export function GradeVisoes({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>;
+}
+
+/**
+ * Ficha de contagem da linha de chips da lista ("Sugestão 240 un.", "Rupturas
+ * 3"). Só leitura, ou clicável quando é filtro — aí vira botão com
+ * `aria-pressed`, e o ativo ganha o fundo primário.
+ */
+// Todos com borda (transparente onde não há contorno): é o que faz a ficha ter
+// a mesma altura do gatilho do SelectMenu (h-9) numa Toolbar com `items-end`.
+const CHIP_TONE = {
+  neutral: 'border border-transparent bg-muted text-ink-secondary',
+  alert: 'border border-transparent bg-destructive-bg text-destructive',
+  attention: 'border border-input bg-card text-attention',
+} as const;
+
+export function ChipContagem({
+  children,
+  ativo,
+  onClick,
+  title,
+  tone = 'neutral',
+}: {
+  children: React.ReactNode;
+  ativo?: boolean;
+  onClick?: () => void;
+  title?: string;
+  tone?: keyof typeof CHIP_TONE;
+}) {
+  const classes = cn(
+    'inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[13px] whitespace-nowrap',
+    ativo ? 'border border-primary bg-primary text-primary-foreground' : CHIP_TONE[tone],
+  );
+  if (!onClick) return <span className={classes} title={title}>{children}</span>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={Boolean(ativo)}
+      title={title}
+      className={cn(
+        classes,
+        'transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+        ativo ? 'hover:bg-primary/90' : 'hover:bg-accent hover:text-accent-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Seção recolhível do painel de detalhe: título à esquerda, resumo e seta à
+ * direita, `aria-expanded` no botão. Não é `<details>` nativo (§1.4): o
+ * marcador e o foco seguem o kit.
+ */
+export function Disclosure({
+  titulo,
+  resumo,
+  aberta,
+  onToggle,
+  children,
+}: {
+  titulo: string;
+  resumo?: React.ReactNode;
+  aberta: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-t border-rule-row">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={aberta}
+        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+      >
+        <span className="shrink-0 font-title text-[13px] font-bold text-ink">{titulo}</span>
+        <span className="flex min-w-0 items-center gap-2 text-[12px] text-ink-secondary">
+          <span className="truncate">{resumo}</span>
+          <ChevronDown className={cn('size-4 shrink-0 transition-transform', aberta && 'rotate-180')} aria-hidden />
+        </span>
+      </button>
+      {aberta ? <div className="px-4 pb-4">{children}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Mini-cartão de número com nome (R-123, a janela "Análise do Produto"): o
+ * `Kpi` em tamanho de grade — rótulo pequeno em cima, valor de 13 px em
+ * negrito, nota opcional embaixo. `tone="attention"` pinta o valor em âmbar
+ * (uma previsão que a entrada não cumpriu). Sem dado é `Dash`, nunca 0.
+ */
+export function MiniCartao({
+  rotulo,
+  valor,
+  hint,
+  tone = 'neutral',
+  title,
+}: {
+  rotulo: string;
+  valor: React.ReactNode;
+  /** Curto, de uma linha; a explicação longa vai em `title`. */
+  hint?: React.ReactNode;
+  /** R-133: `alert` = perigo (alertas não lidos no resumo do pedido). */
+  tone?: 'neutral' | 'attention' | 'alert';
+  title?: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border border-rule-row bg-card px-3 py-2" title={title}>
+      <span className="truncate text-[10px] font-semibold tracking-wide text-ink-muted uppercase">{rotulo}</span>
+      <span className={cn('truncate text-[13px] font-bold', tone === 'attention' ? 'text-attention' : tone === 'alert' ? 'text-destructive' : 'text-ink')}>{valor}</span>
+      {/* R-126: o subtítulo quebra a linha, nunca corta com reticência. */}
+      {hint ? <span className="text-[11px] break-words text-ink-secondary">{hint}</span> : null}
+    </div>
+  );
+}
+
+/** A grade dos mini-cartões: 2 por linha no mobile, 3 em `sm`, `colunas` a partir de `lg`. */
+export function GradeMini({ children, colunas = 6 }: { children: React.ReactNode; colunas?: 1 | 2 | 3 | 4 | 6 | 7 }) {
+  // 7: a faixa densa do topo da Análise do Produto — 4 + 3 em telas estreitas, uma fileira a partir de `lg`.
+  if (colunas === 7) return <div className="grid grid-cols-4 gap-2 lg:grid-cols-7">{children}</div>;
+  if (colunas === 1) return <div className="grid grid-cols-1 gap-2">{children}</div>;
+  if (colunas === 2) return <div className="grid grid-cols-2 gap-2">{children}</div>;
+  const emLg = { 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 6: 'lg:grid-cols-6' }[colunas];
+  return <div className={cn('grid grid-cols-2 gap-2 sm:grid-cols-3', emLg)}>{children}</div>;
+}
+
+/**
+ * Seção recolhível em card (R-126): título, resumo de uma linha com o
+ * essencial e chevron; NASCE RECOLHIDA, e o cabeçalho inteiro é o botão
+ * (`aria-expanded`, foco visível). `extra` é um selo ao lado do resumo. Quem
+ * controla `aberta` é a tela, para tudo voltar recolhido ao trocar de produto.
+ * Vale para toda seção com título, subtítulo e grade de KPIs do SGC 2.
+ */
+export function SecaoRecolhivel({
+  titulo,
+  resumo,
+  extra,
+  acao,
+  aberta,
+  onToggle,
+  children,
+}: {
+  titulo: string;
+  resumo?: React.ReactNode;
+  extra?: React.ReactNode;
+  /** A ação principal da seção, visível mesmo recolhida (fora do botão de abrir). */
+  acao?: React.ReactNode;
+  aberta: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Panel>
+      <div className="flex items-center">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={aberta}
+        className={cn(
+          'flex min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-accent',
+          'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+          aberta && 'rounded-b-none',
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-title text-[15px] font-bold text-ink">{titulo}</span>
+          {resumo ? <span className="mt-0.5 block truncate text-[12px] text-ink-secondary">{resumo}</span> : null}
+        </span>
+        {extra ? <span className="shrink-0">{extra}</span> : null}
+        <ChevronDown className={cn('size-4 shrink-0 text-ink-muted transition-transform', aberta && 'rotate-180')} aria-hidden />
+      </button>
+      {acao ? <div className="shrink-0 pr-4">{acao}</div> : null}
+      </div>
+      {aberta ? <div className="border-t border-rule-row p-4">{children}</div> : null}
+    </Panel>
+  );
+}
+
+/**
+ * Alternador de poucas opções exclusivas (Unidades/Caixas, 6m/13m): o mesmo
+ * desenho do `AlternaVisao`, generalizado. `aria-pressed` na opção ativa.
+ */
+export function AlternaOpcoes<T extends string>({
+  rotulo,
+  opcoes,
+  valor,
+  onValor,
+}: {
+  rotulo: string;
+  opcoes: { value: T; label: string }[];
+  valor: T;
+  onValor: (valor: T) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-0.5" role="group" aria-label={rotulo}>
+      {opcoes.map((opcao) => (
+        <button
+          key={opcao.value}
+          type="button"
+          onClick={() => onValor(opcao.value)}
+          aria-pressed={valor === opcao.value}
+          className={cn(
+            'rounded-lg px-2.5 py-1 text-[12px] font-medium transition-colors',
+            'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+            valor === opcao.value ? 'bg-card text-ink shadow-sm' : 'text-ink-secondary hover:text-ink',
+          )}
+        >
+          {opcao.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── O card do pedido em coluna estreita (R-141) ──────────────────────────
+ * A aba "Nesta fase" mede ~590 px: tabela de cinco colunas ou mais rola na
+ * horizontal ou espreme o produto. No card, a linha vira cartão — produto à
+ * esquerda, o número principal à direita, o resto em linhas de apoio. */
+
+/** A lista de cartões que substitui a tabela larga dentro do card. */
+export function ListaCartoes({ children, rotulo }: { children: React.ReactNode; rotulo?: string }) {
+  return <ul className="divide-y divide-rule-row" aria-label={rotulo}>{children}</ul>;
+}
+
+/**
+ * Uma linha da lista: `titulo` e `meta` à esquerda, `valor` (o número que se
+ * lê de relance) à direita, `children` para as linhas de apoio e `acoes`
+ * para os botões, que quebram para baixo quando não cabem.
+ */
+export function CartaoLinha({
+  titulo,
+  meta,
+  valor,
+  valorMeta,
+  acoes,
+  children,
+}: {
+  titulo: React.ReactNode;
+  meta?: React.ReactNode;
+  valor?: React.ReactNode;
+  valorMeta?: React.ReactNode;
+  acoes?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <li className="flex flex-col gap-1.5 px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold break-words text-ink">{titulo}</p>
+          {meta ? <p className="text-[12px] text-ink-secondary">{meta}</p> : null}
+        </div>
+        {valor !== undefined ? (
+          <div className="shrink-0 text-right">
+            <p className="text-[13px] font-bold whitespace-nowrap text-ink tabular-nums">{valor}</p>
+            {valorMeta ? <p className="text-[11px] whitespace-nowrap text-ink-secondary">{valorMeta}</p> : null}
+          </div>
+        ) : null}
+      </div>
+      {children ? <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-secondary">{children}</div> : null}
+      {acoes ? <div className="flex flex-wrap items-center gap-2">{acoes}</div> : null}
+    </li>
+  );
+}
+
+/** O rodapé de totais da lista (o `tfoot` do legado): rótulo à esquerda, total à direita. */
+export function RodapeTotal({ rotulo, valor }: { rotulo: React.ReactNode; valor: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-t border-rule-table px-4 py-2.5 text-[12px] text-ink-secondary">
+      <span>{rotulo}</span>
+      <span className="text-[13px] font-bold whitespace-nowrap text-ink tabular-nums">{valor}</span>
+    </div>
+  );
+}
+
+const CARIMBO_TONE = {
+  live: 'border-primary/25 bg-accent',
+  neutral: 'border-rule-row bg-muted',
+  attention: 'border-attention/30 bg-attention-bg',
+  alert: 'border-destructive/30 bg-alert-bg',
+} as const;
+
+const CARIMBO_TITULO = {
+  live: 'text-primary',
+  neutral: 'text-ink',
+  attention: 'text-attention',
+  alert: 'text-destructive',
+} as const;
+
+/**
+ * Selo de um fato do pedido (aprovado por, enviado em, cancelado por): o
+ * título no tom, o texto em tinta normal. Não é `Alert` — não pede ação.
+ */
+export function Carimbo({
+  tone = 'neutral',
+  titulo,
+  children,
+}: {
+  tone?: keyof typeof CARIMBO_TONE;
+  titulo: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={cn('rounded-xl border px-3 py-2 text-[12px] leading-5', CARIMBO_TONE[tone])}>
+      <p className={cn('font-semibold', CARIMBO_TITULO[tone])}>{titulo}</p>
+      {children ? <p className="break-words text-ink-secondary">{children}</p> : null}
+    </div>
   );
 }

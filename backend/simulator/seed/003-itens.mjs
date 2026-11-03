@@ -162,6 +162,7 @@ export function seed003(db, cenario) {
   inserirCliente.run(9001, 'Clinica Privada Ltda', 'J', 1);
   inserirCliente.run(9002, 'Hospital Municipal', 'J', 12);
   inserirCliente.run(9003, 'Secretaria Estadual de Saude', 'J', 20);
+  inserirCliente.run(9004, 'Maria Consumidora', 'F', 1);
 
   const inserirMov = db.prepare(`INSERT INTO PCMOV
     (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED)
@@ -171,6 +172,18 @@ export function seed003(db, cenario) {
     inserirMov.run(transitem, codprod, FILIAL_PEDIDO, codcli, 'S', '2026-08-15', qt);
     transitem += 1;
   }
+  // R-133: a divisão da venda do 5002 — 6 privado (9001), 8 PF (9004), 3 público
+  // (9002, ramo 12); 5 para a própria rede (9003, ramo 20) e 4 de remessa de
+  // entrega futura (CONDVENDA 8) ficam fora das três, e dentro da venda total.
+  const inserirMovNota = db.prepare(`INSERT INTO PCMOV
+    (NUMTRANSITEM, CODPROD, CODFILIAL, CODCLI, CODOPER, DTMOV, QT, PUNIT, NUMPED, NUMTRANSVENDA)
+    VALUES (?, 5002, ?, ?, 'S', '2026-08-16', ?, 0, 0, ?)`);
+  inserirMovNota.run(transitem, FILIAL_PEDIDO, 9004, 8, 0);
+  inserirMovNota.run(transitem + 1, FILIAL_PEDIDO, 9003, 5, 0);
+  inserirMovNota.run(transitem + 2, FILIAL_PEDIDO, 9001, 4, 830001);
+  inserirMovNota.run(transitem + 3, FILIAL_PEDIDO, 9002, 3, 0);
+  db.prepare('INSERT OR IGNORE INTO PCNFSAID (NUMTRANSVENDA, CONDVENDA) VALUES (830001, 8)').run();
+  transitem += 4;
   // Provas do recorte de RN-011: entrada e venda fora do período não contam.
   inserirMov.run(transitem, 5001, FILIAL_PEDIDO, 9001, 'E', '2026-08-20', 500);
   inserirMov.run(transitem + 1, 5001, FILIAL_PEDIDO, 9001, 'S', '2026-06-01', 500);
@@ -205,13 +218,24 @@ export function seed003(db, cenario) {
   const inserirCusto = db.prepare('INSERT INTO CUSTO_PRODUTOS (CODPROD, UNIDADES_POR_CAIXA) VALUES (?, ?)');
   inserirCusto.run(5001, 12);
   inserirCusto.run(5002, 24);
+  // R-128: custo padrão do Gestão de Custos — o 5001 tem dois (vale o mais recente, 11,50), o 5002 um.
+  const inserirCustoPadrao = db.prepare('INSERT OR IGNORE INTO CUSTOPRODUTO (ID, CODPROD, CUSTO, DATA_REF) VALUES (?, ?, ?, ?)');
+  inserirCustoPadrao.run(1, 5001, 10.0, '2025-01-01');
+  inserirCustoPadrao.run(2, 5001, 11.5, '2026-01-01');
+  inserirCustoPadrao.run(3, 5002, 20.0, '2026-01-01');
 
-  /* ── SGC: limites de cobertura (C-008) ── */
+  /* ── SGC: coberturas por curva (C-008 da 003; C-001/C-002 da 012) ──
+     Valores de referencia de R-089: departamento 2 = A 35/20 %, B 45/10 %,
+     C 60/5 % (tetos 42, 49,5 e 63) e sku 5001 = A 20/0, B 25/0, C 30/0.
+     A secao 21 NAO e semeada: o C-020 do smoke da 003 cria e apaga uma linha
+     de `secao`/`21`, que colidiria na chave unica; ela so existe como fixture
+     dos testes puros. */
   const inserirCobertura = db.prepare(`INSERT INTO SGC_COBERTURA
-    (NIVEL, CODIGO, DESCRICAO, LIMITE_DIAS, ATIVO, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
-    VALUES (?, ?, ?, ?, 1, '2026-09-15T08:00:00', 1, '2026-09-15T08:00:00')`);
-  inserirCobertura.run('departamento', '2', 'NUTRICAO CLINICA', 60);
-  inserirCobertura.run('sku', '5001', 'CREME NUTRICIONAL MORANGO 200 ML', 20);
+    (NIVEL, CODIGO, DESCRICAO, ALVO_A_DIAS, TOLERANCIA_A_PCT, ALVO_B_DIAS, TOLERANCIA_B_PCT,
+     ALVO_C_DIAS, TOLERANCIA_C_PCT, ATIVO, CRIADO_EM, ATUALIZADO_POR, ATUALIZADO_EM)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '2026-09-15T08:00:00', 1, '2026-09-15T08:00:00')`);
+  inserirCobertura.run('departamento', '2', 'NUTRICAO CLINICA', 35, 20, 45, 10, 60, 5);
+  inserirCobertura.run('sku', '5001', 'CREME NUTRICIONAL MORANGO 200 ML', 20, 0, 25, 0, 30, 0);
 
   /* ── SGC: os pedidos de teste, todos na fase Análise ── */
 

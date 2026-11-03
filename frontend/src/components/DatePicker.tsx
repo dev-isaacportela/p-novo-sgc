@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   aplicarMascaraData, dentroDoLimite, fimDaSemana, gradeDoMes,
   inicioDaSemana, isoParaTexto, isoPorExtenso, isoValido, mesAdjacente,
-  nomeDiaSemanaAbrev, nomeMes, somarDias, textoParaIso,
+  nomeDiaSemanaAbrev, nomeMes, resolverRelativo, somarDias, textoParaIso,
 } from '@/lib/data';
 
 export interface DatePickerProps {
@@ -33,6 +33,13 @@ export interface DatePickerProps {
   placeholder?: string;
   'aria-label'?: string;
   className?: string;
+  /**
+   * R-119 (spec 002, C-045): com esta prop o campo também aceita uma
+   * quantidade de dias ("45", "45 dias") e, ao sair do campo ou no Enter,
+   * resolve para a data a N dias da `base` no `sentido` (−1 = para trás, 1 =
+   * para a frente). Sem a prop, o campo é exatamente o de sempre.
+   */
+  relativo?: { base: string; sentido: -1 | 1 };
 }
 
 export function DatePicker({
@@ -42,10 +49,12 @@ export function DatePicker({
   min,
   max,
   disabled,
-  placeholder = 'dd/mm/aaaa',
+  placeholder,
   'aria-label': ariaLabel,
   className,
+  relativo,
 }: DatePickerProps) {
+  const placeholderFinal = placeholder ?? (relativo ? 'dd/mm/aaaa ou 45 dias' : 'dd/mm/aaaa');
   const [texto, setTexto] = React.useState(() => isoParaTexto(value));
   // Sincroniza o texto quando o valor muda por fora (reset de formulário,
   // carregamento) — ajuste de estado durante a renderização, não em efeito
@@ -72,11 +81,29 @@ export function DatePicker({
     if (open) diaRefs.current.get(diaFoco)?.focus();
   }, [open, diaFoco]);
 
+  // Com `relativo`, "N dias" (até 3 dígitos, com ou sem a palavra) passa sem a
+  // máscara; a partir do 4º dígito é data e a máscara volta a valer.
+  const pareceDias = (bruto: string) => Boolean(relativo) && /^\s*\d{0,3}\s*[a-z]*\s*$/i.test(bruto);
+
   function handleTextChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const digitado = aplicarMascaraData(e.target.value);
+    const bruto = e.target.value;
+    if (pareceDias(bruto)) {
+      setTexto(bruto);
+      return;
+    }
+    const digitado = aplicarMascaraData(bruto);
     setTexto(digitado);
     const iso = textoParaIso(digitado);
     if (iso !== null) onChange(iso);
+  }
+
+  /** Só ao sair do campo ou no Enter: quem está no meio de uma data não é interrompido. */
+  function resolverDias() {
+    if (!relativo) return;
+    const iso = resolverRelativo(texto, relativo.base, relativo.sentido);
+    if (iso === null || !dentroDoLimite(iso, min, max)) return;
+    onChange(iso);
+    setTexto(isoParaTexto(iso));
   }
 
   function handleOpenChange(next: boolean) {
@@ -140,12 +167,14 @@ export function DatePicker({
         id={id}
         value={texto}
         onChange={handleTextChange}
-        placeholder={placeholder}
+        placeholder={placeholderFinal}
         aria-label={ariaLabel}
         disabled={disabled}
-        inputMode="numeric"
+        inputMode={relativo ? 'text' : 'numeric'}
         autoComplete="off"
         className="pr-9"
+        onBlur={relativo ? resolverDias : undefined}
+        onKeyDown={relativo ? (e) => { if (e.key === 'Enter') { e.preventDefault(); resolverDias(); } } : undefined}
       />
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>

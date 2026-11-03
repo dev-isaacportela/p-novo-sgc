@@ -39,7 +39,7 @@ test('C-044 / RN-021: a persona comercial é a única sem acesso ao quadro; o me
   const menu = menuParaPersona(comercial);
   // Onda 3 (R-056): Solicitações entra e o comercial passa a ter DOIS itens.
   assert.deepEqual(menu.map((item) => item.to), ['/solicitacoes', '/bo']);
-  for (const rota of ['/quadro', '/agenda', '/fornecedores', '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso', '/analises']) {
+  for (const rota of ['/quadro', '/agenda', '/fornecedores', '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso', '/analises', '/compras-inteligentes']) {
     assert.equal(menu.some((item) => item.to === rota), false, `${rota} não é do comercial`);
   }
 });
@@ -78,16 +78,17 @@ test('RN-015 / P-13: excluem pedido admin, gestor e diretoria; veem Segurança a
   assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').aprovarDiretoria), ['admin', 'diretoria']);
 });
 
-test('menuParaPersona: o menu do analista tem quadro, novo pedido, agenda, notificações, B.O., fornecedores e o grupo Fiscal — e nada de segurança nem coberturas', () => {
+test('menuParaPersona: o menu do analista tem quadro, compras inteligentes, pedido Galderma (R-150), movimentação de produtos (R-140), agenda, notificações, B.O., o grupo Empenhos (R-160), fornecedores e o grupo Fiscal — nada de novo pedido (R-118), segurança nem coberturas', () => {
   const rotas = menuParaPersona(permissoesDe('analista', 'MEMBER')).map((item) => item.to);
   assert.deepEqual(rotas, [
-    '/quadro', '/pedidos/novo', '/solicitacoes', '/agenda', '/notificacoes', '/bo', '/fornecedores',
+    '/quadro', '/compras-inteligentes', '/galderma', '/movimentacao', '/solicitacoes', '/agenda', '/notificacoes',
+    '/bo', '/empenhos', '/empenhos/pregoes', '/empenhos/indicadores', '/fornecedores',
     '/notas-fiscais', '/faturamentos-pendentes', '/nfs-em-atraso',
     '/analises',
   ]);
   assert.ok(menuParaPersona(permissoesDe('admin', 'ADMIN')).some((item) => item.to === '/seguranca'));
   assert.ok(menuParaPersona(permissoesDe('gestor', 'MEMBER')).some((item) => item.to === '/coberturas'));
-  // Somente leitura vê o quadro, mas não a criação de pedido.
+  // Somente leitura vê o quadro; a criação de pedido não está no menu de ninguém (R-118).
   const leitura = menuParaPersona(permissoesDe('gestor', 'READ_ONLY')).map((item) => item.to);
   assert.ok(leitura.includes('/quadro'));
   assert.equal(leitura.includes('/pedidos/novo'), false);
@@ -156,4 +157,50 @@ test('C-021 / R-056 e R-061 (onda 3): chaves novas por persona — o comercial r
   const gestao = menuParaPersona(permissoesDe('gestor', 'MEMBER')).filter((i) => i.grupo === 'Gestão');
   assert.deepEqual(gestao.map((i) => i.to), ['/analises'], 'Gestão fica só com Análises (R-114)');
   assert.equal(menuParaPersona(permissoesDe('comercial', 'MEMBER')).length, 2, 'o comercial tem exatamente 2 itens de menu');
+});
+
+test('C-023 / RN-019 (011, R-095): chaves novas de compras inteligentes — ver inclui a diretoria e atravessa READ_ONLY (como verCoberturas), operar é de admin/analista/gestor, parametrizar só de admin e gestor, e o item de menu entra logo depois de "Novo pedido"', () => {
+  const chave = (nome) => PERSONAS.filter((p) => permissoesDe(p, 'MEMBER')[nome]);
+
+  assert.deepEqual(chave('verComprasInteligentes'), ['admin', 'analista', 'gestor', 'diretoria']);
+  assert.deepEqual(chave('operarComprasInteligentes'), ['admin', 'analista', 'gestor']);
+  assert.deepEqual(chave('parametrizarCompras'), ['admin', 'gestor']);
+
+  // READ_ONLY: ver* atravessa (como verCoberturas), as duas escritas zeram.
+  const leitura = permissoesDe('gestor', 'READ_ONLY');
+  assert.equal(leitura.verComprasInteligentes, true, 'READ_ONLY continua vendo verComprasInteligentes');
+  assert.equal(leitura.operarComprasInteligentes, false, 'READ_ONLY zera operarComprasInteligentes');
+  assert.equal(leitura.parametrizarCompras, false, 'READ_ONLY zera parametrizarCompras');
+
+  // RESTRICTED opera: o card que ele cria é dele (R-095) — o recorte "só os
+  // próprios" é `somenteProprios`, não a chave.
+  const restrito = permissoesDe('analista', 'RESTRICTED');
+  assert.equal(restrito.operarComprasInteligentes, true);
+  assert.equal(restrito.somenteProprios, true);
+
+  // Menu: grupo Compras, logo depois do quadro (R-118 tirou "Novo pedido"); o comercial fica fora.
+  const compras = menuParaPersona(permissoesDe('gestor', 'MEMBER')).filter((i) => i.grupo === 'Compras');
+  assert.equal(compras[0].to, '/quadro');
+  assert.equal(compras[1].to, '/compras-inteligentes');
+  assert.equal(compras[1].label, 'Compras inteligentes');
+  assert.equal(
+    menuParaPersona(permissoesDe('comercial', 'MEMBER')).some((i) => i.to === '/compras-inteligentes'),
+    false,
+    'o comercial não vê compras inteligentes',
+  );
+  // A diretoria vê o item mesmo sem operar nem parametrizar.
+  assert.ok(menuParaPersona(permissoesDe('diretoria', 'MEMBER')).some((i) => i.to === '/compras-inteligentes'));
+});
+
+test('C-011 (012): a tela de coberturas e de admin e gestor — analista, diretoria e comercial nao entram; o gestor somente-leitura ve a lista inteira e nao grava, porque `podeManter` e verCoberturas E NAO somenteLeitura', () => {
+  assert.deepEqual(PERSONAS.filter((p) => permissoesDe(p, 'MEMBER').verCoberturas), ['admin', 'gestor']);
+
+  const leitura = permissoesDe('gestor', 'READ_ONLY');
+  assert.equal(leitura.verCoberturas, true, 'READ_ONLY ve: o porteiro de rota deixa passar');
+  assert.equal(leitura.somenteLeitura, true, 'e a tela desabilita os controles de escrita com esta chave');
+
+  const analista = permissoesDe('analista', 'MEMBER');
+  assert.equal(analista.verCoberturas, false, 'pelo endereco direto tambem recebe a recusa (A-8)');
+  assert.equal(menuParaPersona(analista).some((i) => i.to === '/coberturas'), false);
+  assert.equal(menuParaPersona(permissoesDe('gestor', 'READ_ONLY')).some((i) => i.to === '/coberturas'), true);
 });

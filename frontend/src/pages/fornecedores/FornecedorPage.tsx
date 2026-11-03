@@ -6,17 +6,25 @@
 // acesso READ_ONLY) vê tudo e não salva — o botão some e um aviso explica. A
 // regra que quebra produção continua no servidor: sgcFornecedorSalvar recusa
 // e devolve o motivo em Alert.
+//
+// Spec 018: "Exportar" baixa a parametrização GRAVADA deste fornecedor (P-02);
+// "Excluir parametrização" (mesma permissão de salvar, P-05) confirma com o
+// AVISO_EXCLUSAO, guarda a cópia e apaga (exportar-excluir.ts); a tela volta
+// ao estado "sem parametrização", como no legado.
 import { useCallback, useEffect, useState } from 'react';
 import { usePersona } from '@/lib/persona';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import { acao, linhas as linhasSf } from '@/lib/mitra-api';
 import {
   PageHeader, Panel, PanelHeader, Button, LabelledField, Input, SelectMenu, Table, Th, Td, Tr,
   Status, Dash, IconButton, Alert, EmptyState, Badge,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from '@/components/page';
 import { formatarCnpj, normalizarCnpj, rotuloPrazoEntrega, slaEfetivo, documentoVencido, validarParametrizacao } from '@/lib/fornecedor';
 import { fmtDataHora, hojeIso } from '@/lib/formato';
+import { AVISO_EXCLUSAO } from '@/lib/fornecedor-planilha';
+import { exportarParametrizacao, excluirParametrizacao } from './exportar-excluir';
 import LinhaDialogo from './LinhaDialogo';
 import DocumentoDialogo from './DocumentoDialogo';
 import type { FornecedorForm, LinhaEdit, DocumentoEdit } from './tipos';
@@ -67,6 +75,10 @@ export default function FornecedorPage() {
   const [erro, setErro] = useState('');
   const [salvoEm, setSalvoEm] = useState<Date | null>(null);
   const [novo, setNovo] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [excluidoEm, setExcluidoEm] = useState<Date | null>(null);
 
   const [form, setForm] = useState<FornecedorForm>(() => formVazio(codfornec));
   const [filiais, setFiliais] = useState<FilialEdit[]>([]);
@@ -184,9 +196,44 @@ export default function FornecedorPage() {
         return;
       }
       setSalvoEm(new Date());
+      setExcluidoEm(null);
       await carregar();
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function exportar() {
+    setExportando(true);
+    setErro('');
+    try {
+      if (!(await exportarParametrizacao(codfornec))) setErro('Este fornecedor ainda não tem parametrização gravada para exportar.');
+    } catch {
+      setErro('Não foi possível exportar a parametrização.');
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  async function excluir() {
+    setExcluindo(true);
+    setErro('');
+    try {
+      const excluida = await excluirParametrizacao(codfornec);
+      setConfirmandoExclusao(false);
+      if (!excluida) {
+        setErro('A parametrização não foi excluída: só admin, gestor e diretoria excluem.');
+        return;
+      }
+      setSalvoEm(null);
+      setExcluidoEm(new Date());
+      setCarregando(true);
+      await carregar();
+    } catch {
+      setConfirmandoExclusao(false);
+      setErro('A exclusão não terminou. Tente de novo: nada é apagado sem a cópia guardada, e a nova tentativa termina o que faltou.');
+    } finally {
+      setExcluindo(false);
     }
   }
 
@@ -204,6 +251,19 @@ export default function FornecedorPage() {
         description={<span className="text-[12px] text-ink-secondary">Código {codfornec}</span>}
         actions={<>
           <Button onClick={() => navigate('/fornecedores')}>Voltar</Button>
+          {!novo && !carregando ? <>
+            <Button onClick={exportar} disabled={exportando} title="A parametrização gravada deste fornecedor, num arquivo para o Excel">
+              <Download aria-hidden />{exportando ? 'Exportando…' : 'Exportar'}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => setConfirmandoExclusao(true)}
+              disabled={excluindo || salvando || somenteLeitura}
+              title={somenteLeitura ? 'O seu perfil não exclui a parametrização de fornecedores.' : 'Excluir a parametrização deste fornecedor'}
+            >
+              <Trash2 aria-hidden />Excluir parametrização
+            </Button>
+          </> : null}
           <Button
             variant="primary"
             onClick={salvar}
@@ -217,6 +277,7 @@ export default function FornecedorPage() {
 
       {somenteLeitura ? <Alert tone="info">Consulta apenas: o seu perfil não altera a parametrização de fornecedores.</Alert> : null}
       {erro ? <Alert tone="error">{erro}</Alert> : null}
+      {excluidoEm ? <Alert tone="success">{`Parametrização excluída às ${excluidoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}. Uma cópia ficou guardada.`}</Alert> : null}
       {salvoEm ? <Alert tone="success">{`Salvo às ${salvoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}</Alert> : null}
       {novo && !carregando ? <Alert tone="info">Fornecedor sem parametrização ainda — os campos abaixo começam em branco.</Alert> : null}
 
@@ -374,6 +435,19 @@ export default function FornecedorPage() {
 
       <LinhaDialogo open={linhaDialogoAberto} linha={linhaEditando} onOpenChange={setLinhaDialogoAberto} onSalvar={salvarLinha} />
       <DocumentoDialogo open={documentoDialogoAberto} onOpenChange={setDocumentoDialogoAberto} onSalvar={adicionarDocumento} />
+
+      <Dialog open={confirmandoExclusao} onOpenChange={(v) => { if (!excluindo) setConfirmandoExclusao(v); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Excluir parametrização</DialogTitle></DialogHeader>
+          <DialogBody>
+            <p className="text-[13px] text-ink-secondary">{`${form.fornecedor || `Fornecedor ${codfornec}`} · código ${codfornec}. ${AVISO_EXCLUSAO}`}</p>
+          </DialogBody>
+          <DialogFooter>
+            <Button onClick={() => setConfirmandoExclusao(false)} disabled={excluindo}>Voltar</Button>
+            <Button variant="danger" onClick={excluir} disabled={excluindo}>{excluindo ? 'Excluindo…' : 'Excluir parametrização'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

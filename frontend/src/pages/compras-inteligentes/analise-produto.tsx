@@ -1,0 +1,414 @@
+// A janela "Análise do Produto" (R-123): o detalhe completo do SKU no desenho
+// do sistema antigo, aberta pelo olho do painel de detalhe. É a versão
+// EXPANDIDA do painel — os mesmos blocos, todos abertos, mais a aba Vendas —
+// sobre os mesmos dados que a página já carregou para o SKU (`dados`, 3
+// execuções por produto, em cache): abrir a janela não custa consulta nova,
+// salvo as vendas, que carregam ao abrir a aba Vendas (1 execução, RNF-003).
+//
+// O que o legado tinha e fica registrado como adiado na spec: a oportunidade
+// com preço especial (módulo de custos), os modelos de previsão (Best Fit,
+// Holt…) e o fator Z do estoque de segurança (onda 5).
+import * as React from 'react';
+import { ShoppingCart, SlidersHorizontal } from 'lucide-react';
+
+import {
+  Alert, Button, ChipContagem, Code, Dash, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
+  DialogTitle, EmptyState, GradeMini, Input, MiniCartao, RowMeta, Status, Table, Td,
+  TextLink, Th, Tr, SecaoRecolhivel,
+} from '@/components/page';
+import { fmtData, moeda } from '@/lib/formato';
+import { rotuloCobertura } from '@/lib/transito';
+import { ROTULO_ORIGEM_CAIXA, arredondarPorCaixa, rotuloSemCusto } from '@/lib/compras';
+import {
+  JANELA_DIAS, ROTULO_STATUS, nivelDeCobertura, quantidadeNaReferencia, rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
+} from '@/lib/ressuprimento';
+import type { LinhaRessuprimento, ReferenciaSugestao, StatusRessuprimento } from '@/lib/ressuprimento';
+import {
+  ENTRADAS_VISIVEIS, desconsideradasPorMes, entradaAtrasou, filiaisComExcesso, necessidade, simularCompra,
+} from '@/lib/ressuprimento-detalhe';
+import type { CompraDoProduto, DadosDoSku, FilialComExcesso, VendaDesconsiderada } from '@/lib/ressuprimento-detalhe';
+import { AvisosProduto } from './avisos-ui';
+import type { EstadoLotes } from './use-lotes-bloqueados';
+import { GraficoComprasVendas } from './grafico';
+import { BlocoSilenciado } from './painel-detalhe';
+import { BlocoProjecaoManual, BotaoProjecaoManual } from './projecao-manual-ui';
+import { AnaliseVendaFutura } from './previsao-ui';
+import { OportunidadeEspecial } from './custo-especial-ui';
+import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
+import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
+import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
+import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
+import { VendasDoProduto } from './dialogos';
+import type { VendasDoProdutoProps } from './dialogos';
+
+const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = {
+  ruptura: 'alert', elevada_exposicao: 'alert', baixa_exposicao: 'attention', excesso: 'attention', adequado: 'live',
+};
+const ORIGEM_COBERTURA = { sku: 'do produto', fornecedor: 'do fornecedor', curva: 'alvo da curva' } as const;
+const ORIGEM_LEAD = { sku: 'do produto', fornecedor: 'do fornecedor', medido: 'medido no ERP', padrao: 'padrão' } as const;
+
+const quantidade = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+// R-132: cobertura acima de 365 dias (consumo quase nulo) vira "> 365 d", como na lista.
+const dias = (valor: number | null) => rotuloCobertura(valor, 'sem giro');
+const pct = (valor: number | null) => (valor === null ? '—' : `${Math.round(valor)} %`);
+const data = (iso: unknown) => (iso ? fmtData(String(iso)) || <Dash /> : <Dash />);
+
+type Aba = 'analise' | 'vendas';
+
+export function AnaliseProdutoDialogo({
+  linha,
+  codfilial,
+  fornecedor,
+  hoje,
+  dados,
+  referencia,
+  desconsideradas,
+  periodo,
+  pedidoMinimo,
+  podeOperar,
+  podeParametrizar,
+  motivoBloqueio,
+  onFechar,
+  onAdicionar,
+  onParametros,
+  onProjecao = () => undefined,
+  onRestaurar,
+  onDesconsiderar,
+  onReconsiderar,
+  previsao,
+  modelo,
+  onModelo,
+  projetada,
+  sugestoesEspeciais,
+  onAdicionarEspecial,
+  lotesBloqueados,
+  excessosLista,
+  semPublico = false,
+  topo,
+  depoisDoGrafico,
+  rotuloAdicionar = 'Adicionar ao carrinho',
+}: {
+  linha: LinhaRessuprimento | null;
+  codfilial: string;
+  fornecedor: string;
+  hoje: string;
+  dados: DadosDoSku;
+  referencia: ReferenciaSugestao;
+  /** Todas as desconsideradas da filial, como voltaram do banco (D-03). */
+  desconsideradas: VendaDesconsiderada[];
+  periodo: { inicio: string; fim: string };
+  pedidoMinimo: number;
+  podeOperar: boolean;
+  podeParametrizar: boolean;
+  motivoBloqueio: string;
+  onFechar: () => void;
+  onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
+  onParametros: (linha: LinhaRessuprimento) => void;
+  /** Spec 019: abre a janela de projeção manual (no pedido não há: o botão fica desabilitado com o motivo). */
+  onProjecao?: (linha: LinhaRessuprimento) => void;
+  onRestaurar: (linha: LinhaRessuprimento) => void;
+  onDesconsiderar: VendasDoProdutoProps['onDesconsiderar'];
+  onReconsiderar: VendasDoProdutoProps['onReconsiderar'];
+  /** R-124: a previsão por modelo deste produto, a escolha e a sugestão projetada. */
+  previsao: Previsao | null;
+  modelo: ModeloPrevisao;
+  onModelo: (modelo: ModeloPrevisao) => void;
+  projetada: SugestaoProjetada | null;
+  sugestoesEspeciais: SugestaoCliente[];
+  onAdicionarEspecial: (tabela: TabelaEspecial, quantidade: number) => void;
+  /** R-130: os lotes bloqueados (carregados só com bloqueio) e o excesso que a lista já calculou. */
+  lotesBloqueados: EstadoLotes;
+  excessosLista: FilialComExcesso[];
+  /** R-131: o seletor de órgão público (marcado por padrão) — a aba Vendas segue a lista. */
+  semPublico?: boolean;
+  /** R-133: o bloco do topo quando a janela abre de um pedido ("Item no pedido"). */
+  topo?: React.ReactNode;
+  /** R-135: o bloco logo depois do gráfico, na aba Análise (Clientes que compraram, no pedido). */
+  depoisDoGrafico?: React.ReactNode;
+  /** R-133: aberta de um pedido, a simulação adiciona ao pedido, não ao carrinho. */
+  rotuloAdicionar?: string;
+}) {
+  const [aba, setAba] = React.useState<Aba>('analise');
+  const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
+  // R-126: as seções em card nascem recolhidas; trocar de produto recolhe tudo.
+  const [abertas, setAbertas] = React.useState<Set<string>>(() => new Set());
+  const alternarSecao = (secao: string) => setAbertas((atual) => {
+    const proximo = new Set(atual);
+    if (proximo.has(secao)) proximo.delete(secao); else proximo.add(secao);
+    return proximo;
+  });
+  const [simulada, setSimulada] = React.useState('');
+  // C-037: o campo segue a referência (caixas ou unidades); `simulada` é o texto digitado nela.
+  const [referenciaAnterior, setReferenciaAnterior] = React.useState(referencia);
+  if (referencia !== referenciaAnterior) {
+    setReferenciaAnterior(referencia);
+    setSimulada('');
+  }
+  const [todasEntradas, setTodasEntradas] = React.useState(false);
+  const [totalVendas, setTotalVendas] = React.useState<number | null>(null);
+  const [ocupado, setOcupado] = React.useState(false);
+
+  // Trocou de produto: a janela volta ao início — ajuste de estado na renderização.
+  const codprod = linha ? Number(linha.medida.CODPROD) : 0;
+  const [ultimo, setUltimo] = React.useState(codprod);
+  if (codprod !== ultimo) {
+    setUltimo(codprod);
+    setAba('analise');
+    setAbaGrafico('vendas');
+    setAbertas(new Set());
+    setSimulada('');
+    setTodasEntradas(false);
+    setTotalVendas(null);
+  }
+
+  if (!linha) return null;
+  const m = linha.medida;
+
+  const nivel = nivelDeCobertura(linha);
+  const sugestaoDePartida = projetada ? projetada.sugestao : linha.sugerida;
+  const quantidadeSimulada = simulada === '' ? sugestaoDePartida : unidadesDaDigitada(Number(simulada) || 0, linha.unidadesPorCaixa, referencia);
+  const resultadoModelo = previsao ? modeloEscolhido(previsao, modelo) : null;
+  const simulacao = simularCompra(linha, quantidadeSimulada);
+  const comSugestao = simularCompra(linha, linha.sugerida);
+  // A posição por produto (já carregada ao abrir) vale; antes dela, a da lista — a mesma regra (RN-025/RN-037).
+  const excessos = dados.pronto && dados.filiais.length > 0 ? filiaisComExcesso(dados.filiais, codfilial, linha.coberturaDias) : excessosLista;
+  // R-128: o custo de compra é o custo padrão do Gestão de Custos; o ERP fica como histórico.
+  const semCusto = rotuloSemCusto(linha.custo);
+  const origemCusto = semCusto ? semCusto : `custo padrão · Gestão de Custos · ${fmtData(linha.custo?.dataRef ?? '')}`;
+  const compras = dados.compras as unknown as CompraDoProduto[];
+  const ultima = compras[0];
+  const entradas = todasEntradas ? compras : compras.slice(0, ENTRADAS_VISIVEIS);
+  const doSku = desconsideradas.filter((v) => v.codprod === codprod);
+  const foraPorMes = desconsideradasPorMes(doSku);
+
+  return (
+    <Dialog open onOpenChange={(aberto) => !aberto && !ocupado && onFechar()}>
+      <DialogContent className="sm:max-w-6xl">
+        <DialogHeader>
+          {/* R-127: o cabeçalho do produto cabe no título — código, descrição, embalagem · fornecedor, abas e situação numa linha. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 pr-8">
+            <DialogTitle className="min-w-0 truncate">{`${codprod} - ${String(m.DESCRICAO)}`}</DialogTitle>
+            <span className="min-w-0 truncate text-[12px] text-ink-secondary">{`${String(m.EMBALAGEM) || '—'} · ${fornecedor || '—'}`}</span>
+            <Status tone={TOM_STATUS[linha.status]}>{ROTULO_STATUS[linha.status]}</Status>
+            <div className="ml-auto flex gap-1.5" role="tablist" aria-label="Seções da análise">
+              <ChipContagem ativo={aba === 'analise'} onClick={() => setAba('analise')}>Análise</ChipContagem>
+              <ChipContagem ativo={aba === 'vendas'} onClick={() => setAba('vendas')}>
+                {totalVendas === null ? 'Vendas' : `Vendas (${totalVendas.toLocaleString('pt-BR')})`}
+              </ChipContagem>
+            </div>
+          </div>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-3">
+            {dados.erro ? <Alert tone="error">{dados.erro}</Alert> : null}
+            {topo}
+            {/* R-130: os avisos logo abaixo do cabeçalho do produto, antes dos números e do gráfico. */}
+            <AvisosProduto codprod={codprod} qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} amplo semPublico={semPublico} unidadesPorCaixa={linha.unidadesPorCaixa} referencia={referencia} />
+
+            {/* Os 7 números numa faixa densa; a explicação de cada um vai no title. */}
+            <GradeMini colunas={7}>
+              <MiniCartao rotulo="Estoque" valor={`${quantidade(linha.estoqueAtual)} un.`} title="Disponível na filial: total menos bloqueado, avariado e reservado" />
+              <MiniCartao rotulo="Em trânsito" valor={`${quantidade(linha.emTransito)} un.`} title="Pedido ao ERP + trânsito" />
+              <MiniCartao rotulo="Cobertura" valor={`${dias(linha.coberturaAtualDias)} · ${pct(nivel)}`} title={`Dias de estoque · nível: % do máximo de ${Math.round(linha.estoqueMaximo).toLocaleString('pt-BR')} un.`} />
+              <MiniCartao rotulo="Cob. futura" valor={dias(comSugestao.coberturaFuturaDias)} title="Cobertura com a quantidade sugerida" />
+              <MiniCartao rotulo="Necessidade" valor={`${quantidade(necessidade(linha))} un.`} title="O que falta ao estoque máximo" />
+              <MiniCartao rotulo="Sugestão" valor={textoDaSugestao(linha.sugerida, linha.unidadesPorCaixa, referencia)} title={linha.sugerida > 0 ? `${moeda(comSugestao.total)} ao ${origemCusto}` : 'Nada a comprar agora'} />
+              <MiniCartao rotulo="Custo" valor={semCusto ?? moeda(linha.custo?.valor ?? 0)} tone={semCusto ? 'attention' : 'neutral'} title={origemCusto} />
+            </GradeMini>
+
+            <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
+            <BlocoProjecaoManual linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onAlterar={onProjecao} />
+
+            {aba === 'vendas' ? (
+              <VendasDoProduto
+                linha={linha}
+                codfilial={codfilial}
+                periodo={periodo}
+                desconsideradas={desconsideradas.map((v) => v.numtransitem)}
+                onDesconsiderar={onDesconsiderar}
+                onReconsiderar={onReconsiderar}
+                onContagem={setTotalVendas}
+                semPublico={semPublico}
+                onOcupado={setOcupado}
+              />
+            ) : (
+              <>
+                {/* 1. Compras × vendas | Preço especial — um gráfico por vez (C-048), logo no alto */}
+                {temAbaEspecial(sugestoesEspeciais) ? (
+                  <div className="flex flex-wrap gap-2" role="tablist" aria-label="Gráfico do produto">
+                    <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'vendas'} onClick={() => setAbaGrafico('vendas')}>Compras × vendas</ChipContagem>
+                    <ChipContagem ativo={abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial'} onClick={() => setAbaGrafico('especial')} tone="attention">Preço especial</ChipContagem>
+                  </div>
+                ) : null}
+                {abaDoGrafico(abaGrafico, sugestoesEspeciais) === 'especial' ? (
+                  <OportunidadeEspecial
+                    linha={linha}
+                    sugestoes={sugestoesEspeciais}
+                    quantidade={simulacao.quantidade}
+                    referencia={referencia}
+                    podeOperar={podeOperar}
+                    motivoBloqueio={motivoBloqueio}
+                    abaGrafico="especial"
+                    onAdicionarEspecial={onAdicionarEspecial}
+                  />
+                ) : (
+                  <GraficoComprasVendas
+                    historico={dados.historico}
+                    hoje={hoje}
+                    consumoDiario={linha.consumoDiario}
+                    pronto={dados.pronto}
+                    expandido
+                    unidadesPorCaixa={linha.unidadesPorCaixa}
+                    desconsideradas={foraPorMes}
+                    projecaoMes={projetada && resultadoModelo ? resultadoModelo.previsao : null}
+                  />
+                )}
+
+                {depoisDoGrafico}
+
+                {/* 2. Simulação de compra — depois do gráfico (R-127) */}
+                <SecaoRecolhivel
+                  titulo="Simulação de compra"
+                  resumo={`${textoDaSugestao(simulacao.quantidade, linha.unidadesPorCaixa, referencia)} · ${moeda(simulacao.total)} · cobertura ${dias(simulacao.coberturaFuturaDias)}`}
+                  aberta={abertas.has('simulacao')}
+                  onToggle={() => alternarSecao('simulacao')}
+                  acao={(
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={!podeOperar || simulacao.quantidade <= 0}
+                      title={podeOperar ? undefined : motivoBloqueio}
+                      onClick={() => onAdicionar(linha, simulacao.quantidade)}
+                    >
+                      <ShoppingCart aria-hidden />
+                      {rotuloAdicionar}
+                    </Button>
+                  )}
+                >
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="flex w-48 flex-col gap-1 text-[12px] text-ink-secondary">
+                        {`Quantidade (${rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 'caixas' : 'unidades'})`}
+                        <Input
+                          type="number"
+                          min={0}
+                          step={rotuloDaQuantidade(linha.unidadesPorCaixa, referencia) === 'cx' ? 1 : linha.unidadesPorCaixa}
+                          value={simulada === '' ? String(quantidadeNaReferencia(sugestaoDePartida, linha.unidadesPorCaixa, referencia)) : simulada}
+                          onChange={(e) => setSimulada(e.target.value)}
+                          onBlur={(e) => setSimulada(String(quantidadeNaReferencia(arredondarPorCaixa(unidadesDaDigitada(Number(e.target.value) || 0, linha.unidadesPorCaixa, referencia), linha.unidadesPorCaixa), linha.unidadesPorCaixa, referencia)))}
+                        />
+                      </label>
+                      <RowMeta>{linha.unidadesPorCaixa > 1 ? `${quantidade(simulacao.caixas)} cx de ${linha.unidadesPorCaixa}` : 'avulso'}</RowMeta>
+                      <div className="ml-auto flex gap-2">
+                        <Button size="sm" disabled={!podeParametrizar} title={podeParametrizar ? undefined : motivoBloqueio} onClick={() => onParametros(linha)}>
+                          <SlidersHorizontal aria-hidden />
+                          Parâmetros
+                        </Button>
+                        <BotaoProjecaoManual linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onProjecao={onProjecao} />
+                      </div>
+                    </div>
+                    <GradeMini colunas={3}>
+                      <MiniCartao rotulo="Valor previsto" valor={moeda(simulacao.total)} />
+                      <MiniCartao rotulo="Estoque final" valor={`${quantidade(linha.estoqueAtual + linha.emTransito + simulacao.quantidade)} un.`} hint={`Nível ${pct(simulacao.nivelFuturoPct)}`} />
+                      <MiniCartao rotulo="Cobertura" valor={dias(simulacao.coberturaFuturaDias)} hint="Depois da compra" />
+                    </GradeMini>
+                  </div>
+                </SecaoRecolhivel>
+
+
+                {/* 4c. Análise de venda futura */}
+                <SecaoRecolhivel titulo="Análise de venda futura" resumo={resumoVendaFutura({ previsao, modelo, projetada, unidadesPorCaixa: linha.unidadesPorCaixa })} aberta={abertas.has('previsao')} onToggle={() => alternarSecao('previsao')}>
+                  <AnaliseVendaFutura linha={linha} previsao={previsao} modelo={modelo} onModelo={onModelo} projetada={projetada} referencia={referencia} hoje={hoje} />
+                </SecaoRecolhivel>
+
+                {/* 4d. (R-130) o excesso em outras filiais subiu para o alerta do topo */}
+
+                {/* 4e. Compras do produto */}
+                <SecaoRecolhivel titulo="Compras do produto" resumo={!dados.pronto ? 'Carregando…' : !ultima ? 'nenhuma entrada registrada' : `última em ${fmtData(String(ultima.DT_ENTRADA))} · ${quantidade(ultima.QUANTIDADE)} un. · ${moeda(Number(ultima.VALOR_TOTAL))} · ${compras.length} ${compras.length === 1 ? 'entrada' : 'entradas'}`} aberta={abertas.has('compras')} onToggle={() => alternarSecao('compras')}>
+                  {!dados.pronto ? (
+                    <EmptyState title="Carregando…" />
+                  ) : !ultima ? (
+                    <EmptyState title="Nenhuma entrada registrada" />
+                  ) : (
+                    <div className="flex flex-col gap-3 p-4">
+                      <GradeMini colunas={6}>
+                        <MiniCartao rotulo="Pedido" valor={Number(ultima.NUMPED) > 0 ? <Code>{String(ultima.NUMPED)}</Code> : <Dash />} hint={`NF ${String(ultima.NUMNOTA)} · filial ${String(ultima.CODFILIAL)}`} />
+                        <MiniCartao rotulo="Total item" valor={moeda(Number(ultima.VALOR_TOTAL))} hint={`${moeda(Number(ultima.PRECO_UNITARIO))} a unidade`} />
+                        <MiniCartao rotulo="Quantidade" valor={`${quantidade(ultima.QUANTIDADE)} un.`} />
+                        <MiniCartao rotulo="Solicitação" valor={data(ultima.DT_SOLICITACAO)} hint="Emissão do pedido ao ERP" />
+                        <MiniCartao
+                          rotulo="Previsão"
+                          valor={data(ultima.DT_PREVISAO)}
+                          tone={entradaAtrasou(ultima) ? 'attention' : 'neutral'}
+                          hint={entradaAtrasou(ultima) ? 'A entrada chegou depois da previsão' : 'Previsão de entrega'}
+                        />
+                        <MiniCartao rotulo="Entrada" valor={data(ultima.DT_ENTRADA)} />
+                      </GradeMini>
+                      <p className="text-[11px] font-semibold tracking-wide text-ink-muted uppercase">Histórico de entradas</p>
+                      <Table>
+                        <thead>
+                          <tr>
+                            <Th>Pedido</Th>
+                            <Th>Solicitação</Th>
+                            <Th>Previsão</Th>
+                            <Th>Entrada</Th>
+                            <Th numeric>Qtd.</Th>
+                            <Th numeric>Unitário</Th>
+                            <Th numeric>Total</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {entradas.map((c, indice) => (
+                            <Tr key={`${String(c.NUMTRANSENT)}-${indice}`}>
+                              <Td>{Number(c.NUMPED) > 0 ? <Code>{String(c.NUMPED)}</Code> : <Dash />}</Td>
+                              <Td>{data(c.DT_SOLICITACAO)}</Td>
+                              <Td>{entradaAtrasou(c) ? <Status tone="attention">{fmtData(String(c.DT_PREVISAO))}</Status> : data(c.DT_PREVISAO)}</Td>
+                              <Td>{data(c.DT_ENTRADA)}</Td>
+                              <Td numeric>{quantidade(c.QUANTIDADE)}</Td>
+                              <Td numeric>{moeda(Number(c.PRECO_UNITARIO))}</Td>
+                              <Td numeric>{moeda(Number(c.VALOR_TOTAL))}</Td>
+                            </Tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                      {compras.length > ENTRADAS_VISIVEIS ? (
+                        <div>
+                          <TextLink onClick={() => setTodasEntradas((atual) => !atual)}>
+                            {todasEntradas ? `Ver só as ${ENTRADAS_VISIVEIS} últimas` : `Ver todas as ${compras.length} entradas`}
+                          </TextLink>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </SecaoRecolhivel>
+
+                {/* 4f. Parâmetros do cálculo */}
+                <SecaoRecolhivel titulo="Parâmetros do cálculo" resumo={`janela ${JANELA_DIAS} dias · lead time ${linha.leadTimeDias} d (${ORIGEM_LEAD[linha.parametros.origemLeadTime]}) · cobertura ${linha.coberturaDias} d (${ORIGEM_COBERTURA[linha.parametros.origemCobertura]})`} aberta={abertas.has('parametros')} onToggle={() => alternarSecao('parametros')}>
+                  <div className="p-4">
+                    <GradeMini colunas={6}>
+                      <MiniCartao rotulo="Janela" valor={`${JANELA_DIAS} dias`} hint={`${fmtData(periodo.inicio)} a ${fmtData(periodo.fim)}`} />
+                      <MiniCartao rotulo="Demanda" valor={`${linha.consumoDiario.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} un./dia`} hint={`Venda na janela ${quantidade(m.VENDA_PERIODO)} un.`} />
+                      <MiniCartao rotulo="Lead time" valor={`${linha.leadTimeDias} d`} hint={ORIGEM_LEAD[linha.parametros.origemLeadTime]} />
+                      <MiniCartao rotulo="Volatilidade" valor={Number(m.VOLATILIDADE_DIARIA ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} hint="Desvio da venda diária" />
+                      <MiniCartao rotulo="Segurança" valor={`${quantidade(linha.estoqueSeguranca)} un.`} hint="Lead time × consumo" />
+                      <MiniCartao rotulo="Pedido mínimo" valor={pedidoMinimo > 0 ? moeda(pedidoMinimo) : <Dash />} hint="Do fornecedor" />
+                      <MiniCartao rotulo="Fornecedor" valor={fornecedor || <Dash />} />
+                      <MiniCartao rotulo="Unidade" valor={`${String(m.EMBALAGEM) || '—'} · ${String(m.UNIDADE) || '—'}`} />
+                      <MiniCartao rotulo="Un. por caixa" valor={String(linha.unidadesPorCaixa)} hint={ROTULO_ORIGEM_CAIXA[linha.origemCaixa]} />
+                      <MiniCartao rotulo="Cobertura" valor={`${linha.coberturaDias} d`} hint={`${ORIGEM_COBERTURA[linha.parametros.origemCobertura]} · gatilho ${linha.gatilhoDias} d`} />
+                      <MiniCartao rotulo="Origem do custo" valor={semCusto ?? 'Gestão de Custos'} hint={`última entrada (ERP) ${moeda(Number(m.CUSTO_ULT_ENTRADA))}`} />
+                      <MiniCartao rotulo="Data do custo" valor={linha.custo?.dataRef ? data(linha.custo.dataRef) : <Dash />} hint="data de referência" />
+                    </GradeMini>
+                  </div>
+                </SecaoRecolhivel>
+              </>
+            )}
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button onClick={onFechar} disabled={ocupado}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

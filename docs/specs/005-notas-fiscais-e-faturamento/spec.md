@@ -191,6 +191,38 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** a rotina diária de faturamento roda
 - **Então** nenhum aviso de faturamento é criado para ele — mas ele **continua** na lista de faturamentos pendentes, mostrando a previsão de liberação registrada no B.O. e quantos itens ainda estão em aberto
 
+### O card no Faturamento e no Concluído (R-141)
+
+**C-029 — Saldo por item que a indústria ainda não faturou**
+- **Dado que** o pedido 8372 tem 28 produtos e a nota 1954868 faturou menos do que o pedido em 4 deles
+- **Quando** o comprador abre o card em Faturamento
+- **Então** "Itens pendentes de faturamento", recolhido, diz "4 produtos com saldo"; aberto, cada um traz pedida, faturada, pendente e a barra do %
+
+**C-030 — O que falta para concluir, com a mesma trava do servidor**
+- **Dado que** o pedido tem conferências sem decisão, item em B.O. em aberto e saldo a faturar
+- **Quando** o comprador abre o card em Faturamento ou em Produtos em B.O.
+- **Então** vê "Pendências para concluir o pedido" com as conferências e o B.O. marcados como trava e o saldo como aviso; sem conferência pendente e sem B.O. em aberto, "Pedido pronto para conclusão" (o saldo não trava — P-6 do levantamento)
+
+**C-031 — O pedido concluído lista o que chegou**
+- **Dado que** o pedido 8401 foi concluído com 4 notas
+- **Quando** alguém abre o card em Compras Concluídas
+- **Então** vê valor faturado, itens faturados e recusados, e cada item com a nota, lote, validade, quantidade × preço, subtotal e a decisão das conferências daquele item naquela nota
+
+**C-032 — Selos de validade 90/120 do legado** *(R-143, P-5)*
+- **Dado que** a nota tem um lote que vence em 85 dias, um em 110 e um em 300
+- **Quando** o comprador abre o card
+- **Então** cada item mostra o selo "Validade crítica" (abaixo de 90 dias), "Validade em atenção" (até 120) ou "Validade conforme", com os dias até vencer, e o resumo de faturamento conta quantos itens há em cada selo; a conferência de validade contra o mínimo do fornecedor (RN-005) continua igual
+
+**C-033 — Só conclui com 99,5 % do valor coberto** *(R-144, P-6)*
+- **Dado que** o pedido de R$ 120.000,00 tem R$ 72.000,00 faturados, nenhuma conferência pendente e nenhum item em B.O. em aberto
+- **Quando** alguém tenta mover para Compras Concluídas, de Faturamento ou de Produtos em B.O.
+- **Então** o servidor recusa com "Falta faturar R$ 48.000,00 (60,0 % coberto; o mínimo para concluir é 99,5 %). Registre a nota complementar ou marque o saldo em B.O. como \"não vem mais\"."; com 99,5 % libera; e o saldo marcado em B.O. como "não vem mais" conta como coberto
+
+**C-034 — Notificar gestor a partir de 5 dias úteis** *(R-146, P-3)*
+- **Dado que** o pedido está há 9 dias úteis sem faturamento completo
+- **Quando** a Ana abre o card em Trânsito, clica "Notificar gestor" e escolhe o Gil
+- **Então** o Gil recebe o aviso nas notificações, entra nos responsáveis do card e o histórico registra quem notificou; de novo no mesmo dia não duplica; abaixo de 5 dias úteis, com 100 % faturado, para quem não é gestor ou por quem não opera a nota, nada é gravado
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -259,6 +291,8 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-013 — Linha do faturamento no cartão.** Sem nota vinculada e com menos de 3 dias úteis de atraso, o cartão não mostra linha de faturamento. Com nota: `R$ <faturado> (<percentual> %) · saldo R$ <saldo>`. Sem nota e com 3 dias úteis ou mais: `Faturamento pendente · <n> dias úteis`.
 - **RN-014 — Cobrança.** O sistema nunca envia e-mail ao fornecedor por conta própria. A cobrança é um clique, sai com cópia para compras@benenutri.com e vira comunicação e contato do pedido.
 - **RN-015 — Nota cancelada.** Nota cancelada no ERP não é sugerida, não é vinculada e não conta no faturamento.
+- **RN-016 — Conclusão coberta (R-144, P-6).** Faturamento → Concluídas e B.O. → Concluídas exigem `(faturado nas notas + saldo em B.O. cancelado × custo do item) ≥ 99,5 % do valor do pedido` (RN-NF-34 do legado: 99,5 % conta como 100 %). A trava é do servidor (`pendencias-conclusao-faturado.sql` no `sgcPodeMover`), depois das de conferência e de B.O. em aberto, e a recusa diz quanto falta em reais e o % coberto. Pedido de valor zero não trava aqui. B.O. liberado não cobre: volta a esperar nota.
+- **RN-017 — Notificar gestor (R-146, P-3).** A partir do nível 5 (5 dias úteis desde o envio, contados como na RN-001) e abaixo de 100 % faturado, nas fases Enviado, Trânsito e Faturamento, quem opera a nota (admin, analista, gestor) grava um aviso para UM usuário com a persona gestor, no máximo um por gestor por pedido por dia (`sgcEscGestorNotificar`, guarda `:VAR_USER`). A tela põe o gestor nos responsáveis do card. A escalada automática do cron (RF-019/RF-020) continua igual.
 
 ## Testes
 
@@ -307,6 +341,12 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-013 | sem nota e 2 dias úteis → texto vazio; com nota → `R$ 72.000,00 (60 %) · saldo R$ 48.000,00`; sem nota e 4 dias úteis → `Faturamento pendente · 4 dias úteis` | regra de tela |
 | RN-014 | a rotina diária de cobrança não envia nenhum e-mail; a cobrança manual envia 1, com a cópia fixa | regra de negócio |
 | RN-015 | nota com cancelamento no ERP não aparece nas candidatas nem no valor faturado | regra de negócio |
+| C-029 | `conclusao.test.mjs`: saldo soma todas as notas, ignora quantidade zero, não fica negativo e ordena pelo maior pendente | regra de tela |
+| C-030 | `conclusao.test.mjs`: conferência pendente e B.O. em aberto travam; saldo só avisa; sem nada, pronto | regra de tela |
+| C-031 | `conclusao.test.mjs`: item faturado com nota, subtotal, lote e decisão (recusa vence pendente, pendente vence aceito) | regra de tela |
+| C-032 | `nf.test.mjs`: selo por dias até vencer (89 crítica, 90 e 120 atenção, 121 conforme, vencido crítico, sem data nada) e a contagem do resumo | regra de tela |
+| C-033 / RN-016 | smoke `005-notas-fiscais.mjs`: 60 % recusa com a frase exata dos dois lados (Faturamento e B.O.), 99,4 % recusa, 99,5 % libera, B.O. cancelado cobre e liberado não; `conclusao.test.mjs` com a MESMA frase | regra de negócio e de tela |
+| C-034 / RN-017 | smoke `005-notas-fiscais.mjs`: 1 aviso para o gil, sem duplicar no dia, no feed dele; alvo não gestor, comercial, diretoria, < 5 dias e 100 % não gravam; `acompanhamento.test.mjs` com o limiar, a lista de gestores e os responsáveis | regra de negócio e de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-007 — a aba de notas fiscais com 3 notas e 40 conferências, agrupadas por item, legível nos dois temas

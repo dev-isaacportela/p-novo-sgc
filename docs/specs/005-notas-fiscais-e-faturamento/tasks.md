@@ -48,13 +48,18 @@
 - [x] **T-040** `[P]` — **Pedir à base (S2)**: `lib/dias-uteis.ts` (`diasUteisEntre`, `somarDiasUteis`, `somarDiasCorridos`), `lib/csv.ts` (`textoCsv`, `baixarCsv`) e as chaves `verNotasFiscais`, `operarNf`, `verFaturamentoPendente`, `registrarContato` em `lib/permissoes.ts` (R-028: diretoria lê os dois painéis; `operarNf` cobre também a 006) → `frontend/src/lib/`
 - [x] **T-041** `[P]` — `lib/nf.ts`: `TOLERANCIA_PRECO`, `VALIDADE_MINIMA_PADRAO_DIAS`, `pontuarSugestao`, `casarItem`, `classificarDelta`, `diasDeValidade`, `resultadoDeValidade`, `resultadoDeQuantidade`, `resultadoDePrazo` (importando `parcelasDoPrazo`/`textoDeParcelas` da 003), `ocorrenciasDaNota` e `textoDaOcorrencia` → `frontend/src/lib/nf.ts`
 - [x] **T-042** `[P]` — `lib/faturamento.ts`: `percentuaisFaturados`, `nivelDeAlerta`, `textoDaCapaFaturamento`, `colunasDoCsv` → `frontend/src/lib/faturamento.ts`
-- [x] **T-043** — Bloco 75xx em `SERVER_FUNCTION_NAMES` e `SERVER_FUNCTIONS` (7501–7515 e 7550–7559), no formato rígido do arquivo → `frontend/src/lib/server-functions.ts`
+- [x] **T-043** — Bloco 75xx em `SERVER_FUNCTION_NAMES` e `SERVER_FUNCTIONS` (7501–7516 e 7550–7559), no formato rígido do arquivo → `frontend/src/lib/server-functions.ts`
 - [x] **T-044** — `AbaNotasFiscais`: uma chamada de `sgcNfListar` por abertura; blocos de sugestões, notas vinculadas com itens e ocorrências agrupadas por item, contatos; `Status` com rótulo escrito para resultado e decisão (tons `live`/`attention`/`alert`, os do `page.tsx`); a aba **não** declara `contagem` — `AbaExtra.contagem` é síncrona e lê só `card.valores`, e não há campo do quadro com notas pendentes (R-049) → `frontend/src/pages/quadros/abas/NotasFiscais.tsx`
 - [x] **T-045** — Diálogos da aba: registrar NF pelo número (`sgcWintNfBuscar` → `sgcNfVincular`), decidir ocorrência (recusa com contador de 10 caracteres), registrar contato (`DatePicker` na previsão) e enviar cobrança (contatos do fornecedor pela 001) → `frontend/src/pages/quadros/abas/nf-dialogos.tsx`
 - [x] **T-046** — Ações da aba: "Validar" (`sgcNfVincular` → `sgcEscSugestaoDecidir` com `validada`), "Recusar" (`sgcEscSugestaoDecidir`), "Aceitar todos os conformes" e decisão individual (`sgcOcorrenciaDecidir`), cada uma seguida de `recarregar()` e, quando `capaMudou`, de `atualizarCapaDoQuadro(card, { faturamento })` — o módulo `abas/capa-do-quadro.ts` da 003, reusado sem alteração (R-042) → `frontend/src/pages/quadros/abas/NotasFiscais.tsx`
 - [x] **T-047** `[P]` — `NotasFiscaisPage`: fila de sugestões paginada, filtro por situação e fornecedor, busca por número, ações Validar / Ver / Recusar, controles desabilitados (nunca escondidos) para quem não opera; o total exibido vem de `sgcNfSugestoesListarTotal`, nunca de contagem local, e nenhum teste desta tela assere número absoluto de sugestões (R-045) → `frontend/src/pages/notas-fiscais/NotasFiscaisPage.tsx`
 - [x] **T-048** `[P]` — `FaturamentosPendentesPage`: total (de `sgcFaturamentoPendenteListarTotal`, nunca contado na tela), as quatro faixas em `FilterChip`, busca, exportar CSV por `textoCsv`/`baixarCsv`, "Registrar contato" e "Enviar cobrança"; pedido em B.O. aparece com a previsão de liberação e os itens em aberto; os testes da tela exercitam `colunasDoCsv`/`nivelDeAlerta` com linhas montadas à mão — nenhuma asserção sobre o total do banco (R-045) → `frontend/src/pages/faturamentos/FaturamentosPendentesPage.tsx`
 - [ ] **T-049** — **Pedir ao integrador**: ligar a aba no `/quadro` (`abasExtras` com "Notas fiscais"), as rotas `/notas-fiscais` e `/faturamentos-pendentes`, os dois itens de menu **no `MENU` de `frontend/src/lib/permissoes.ts`** (é lá que mora o menu, com a chave de permissão de cada item; o `AdminLayout` só fornece o ícone — G-7) e a linha de faturamento + etiqueta na capa do cartão (a partir do campo `faturamento`) → `frontend/src/pages/quadros/QuadroPage.tsx`, `frontend/src/App.tsx`, `frontend/src/lib/permissoes.ts`, `frontend/src/components/AdminLayout.tsx`
+- [x] **T-100** — R-141: bloco Notas fiscais em cartões (`abas/nf-cartoes.tsx`): números em cima e ações embaixo; nota recolhida com divergências e conferências sem decisão no cabeçalho; aberta, só o que diverge, com "Mostrar os N itens conformes" → `frontend/src/pages/quadros/abas/NotasFiscais.tsx`
+- [x] **T-101** — R-141: blocos Conclusão (saldo por item + pendências) e Concluído (itens faturados), lendo o MESMO `sgcNfListar`/`sgcBoCarregar` pela carga compartilhada (`abas/carga-do-card.ts`) → `frontend/src/pages/quadros/abas/`
+- [x] **T-102** — R-143 (P-5): `seloDeValidade`/`contagemDeValidade` em `lib/nf.ts`; selo no item da nota, faixa no resumo de faturamento e no concluído → `frontend/src/pages/quadros/abas/nf-cartoes.tsx`, `NotasFiscais.tsx`, `Concluido.tsx`
+- [x] **T-103** — R-144 (P-6): `pendencias-conclusao-faturado.sql` no `sgcPodeMover` (add-005) com `FORMAT(..., 'pt_BR')` (shim novo no dialeto do simulador); `coberturaDoFaturamento`/`textoFaltaFaturar` em `lib/conclusao.ts`; "Não vem mais" no B.O. → `backend/sql/`, `backend/add-005-quadro-compras.mjs`, `frontend/src/pages/quadros/abas/Conclusao.tsx`, `Bo.tsx`
+- [x] **T-104** — R-146 (P-3): `sgcEscGestorNotificar` (add-008, id local 8501) e o painel "Notificar gestor" no acompanhamento do Trânsito → `backend/add-008-notas-fiscais.mjs`, `frontend/src/pages/quadros/abas/NotificarGestor.tsx`
 
 ## Testes
 
@@ -75,6 +80,7 @@ Cada id da seção **Testes** do `plan.md` aparece em exatamente uma task abaixo
 - [x] **T-092** `[P]` — `test('C-008 …')` (parte tela), `test('C-010 …')`, `test('C-011 …')`, `test('C-012 …')`, `test('C-013 …')`, `test('RN-004 …')`, `test('RN-005 …')`, `test('RN-006 …')` e `test('RN-007 …')` em `frontend/tests/nf.test.mjs`
 - [x] **T-093** `[P]` — `test('C-014 …')`, `test('C-019 …')`, `test('C-026 …')` (parte tela), `test('RN-008 …')`, `test('RN-009 …')` e `test('RN-013 …')` em `frontend/tests/faturamento.test.mjs`
 - [x] **T-094** `[P]` — `test('C-027 …')` em `frontend/tests/permissoes.test.mjs` (**arquivo da 002**): as quatro chaves novas por persona, diretoria lendo e não operando, `READ_ONLY` zerando `operarNf` e `registrarContato`
+- [x] **T-099** — D-016: `sgcWintProdutosCodigos` (7516, `WINTHOR`) substitui o subselect em `PCPRODUT` que `sgcNfVincular` e `sgcNfDetectar` mandavam por `runQueryMitra` (`codigosDoErp` no prelúdio); `teste('D-016 …')` em `smoke/005-notas-fiscais.mjs` (executor externo + `onQuery`, em `BEGIN … ROLLBACK`) e `teste('S0-018 …')` em `smoke/000-esqueleto.mjs` → `backend/add-008-notas-fiscais.mjs`, `frontend/src/lib/server-functions.ts`
 
 ## Verificação
 
@@ -129,6 +135,7 @@ tudo → T-095 · T-096 → T-097 · T-098
 | RF-026 / C-027 | T-010..T-013, T-015, T-040 | T-089, T-094 |
 | RNF-001 | T-014, T-044 | T-082 |
 | RNF-002, RNF-006 | T-004, T-018 | T-080 |
+| RF-002, RF-007 / D-016 | T-099 | T-099 |
 | RNF-003 | T-019 | T-087 |
 | RNF-004 | T-004, T-005, T-006 | T-080, T-081 |
 | RNF-005 | T-007, T-008 | T-088 |

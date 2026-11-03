@@ -427,3 +427,40 @@ export function linhaDoCsv(
     detalhe && detalhe.diasCobertura !== null ? String(Math.round(detalhe.diasCobertura)) : '',
   ];
 }
+
+/* ─────────────── R-133: o cartão da solicitação na Análise ─────────────── */
+
+const quantidadeBr = (valor: number) => (Number.isFinite(valor) ? valor : 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+
+/** Urgente em perigo, alta em atenção, normal neutra (o selo do cartão). */
+export const TOM_PRIORIDADE_CARTAO: Record<Prioridade, TomBadge> = { urgente: 'alert', alta: 'attention', normal: 'neutral' };
+export const ROTULO_PRIORIDADE: Record<Prioridade, string> = { urgente: 'Urgente', alta: 'Alta', normal: 'Normal' };
+
+/** Fora do pedido, no pedido com a quantidade pedida (ou mais), ou no pedido com menos. */
+export type EstadoNoPedido = 'fora' | 'completa' | 'menor';
+
+export function estadoNoPedido(solicitada: unknown, noPedido: unknown): EstadoNoPedido {
+  const qtNoPedido = Number(noPedido) || 0;
+  if (qtNoPedido <= 0) return 'fora';
+  return qtNoPedido >= (Number(solicitada) || 0) ? 'completa' : 'menor';
+}
+
+/** "No pedido: X — comercial pediu Y"; `null` fora do pedido. */
+export function textoNoPedido(solicitada: unknown, noPedido: unknown): string | null {
+  if (estadoNoPedido(solicitada, noPedido) === 'fora') return null;
+  return `No pedido: ${quantidadeBr(Number(noPedido))} — comercial pediu ${quantidadeBr(Number(solicitada))}`;
+}
+
+/** As partes da linha de dados do cartão: código, quantidade, cliente, abertura e solicitante. */
+export function metaDaSolicitacao(s: {
+  CODPROD: unknown; QUANTIDADE: unknown; CODCLI: unknown; CLIENTE: unknown; CRIADO_EM: unknown; CRIADO_POR_NOME: unknown;
+}): { codigo: string; quantidade: string; cliente: string; abertura: string; solicitante: string } {
+  const data = String(s.CRIADO_EM ?? '').slice(0, 10);
+  return {
+    codigo: `Cód. ${Number(s.CODPROD) || '—'}`,
+    quantidade: `${quantidadeBr(Number(s.QUANTIDADE) || 0)} un.`,
+    cliente: Number(s.CODCLI) > 0 ? String(s.CLIENTE || `cliente ${Number(s.CODCLI)}`) : 'Sem cliente informado',
+    abertura: data ? data.split('-').reverse().join('/') : '—',
+    solicitante: String(s.CRIADO_POR_NOME || '—'),
+  };
+}

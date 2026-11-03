@@ -51,6 +51,8 @@ cd frontend && npm test           # node --test sobre a regra pura de src/lib/
 cd backend && npm run sim         # simulador em http://localhost:3109 (senha mitra123)
 cd frontend && npm run dev -- --port 5179   # sem VITE_MITRA_AUTH_URL entra no simulador
 cd frontend && npm run build && npm run lint  # obrigatório antes de subir
+# SIMULATOR_WINTHOR=oracle no backend/.env: sgcWint* no WinThor REAL (só onde há acesso ao Oracle; ver simulator/README.md)
+# SIMULATOR_GESTAO_CUSTOS=mitra no backend/.env: unidades por caixa da plataforma (só GESTAO_CUSTOS_*; nunca MITRA_*; sem env, SQLite)
 ```
 
 Ou tudo junto pelo painel: `node ../mitra-hub/server.mjs`.
@@ -124,7 +126,7 @@ push, prompt do sandbox com a ordem dos `add-*` (perfil por último), `git pull`
 - `verbatimModuleSyntax`: importe tipos com `import type`.
 - `npm run build` roda `tsc -b`: erro de tipo derruba o build.
 - `base: './'` no `vite.config.ts` faz o app funcionar em subpath. Não mexa.
-- `resolve.dedupe` e `server.fs.allow` (vite) e o `paths` de `react`/`react-dom` (`tsconfig.app.json`) existem para a lib linkada de `../../mitra-kanban` (`npm link`, enquanto a 1.5.0 não está no registry); no sandbox são inertes.
+- `resolve.dedupe` e `server.fs.allow` (vite) e o `paths` de `react`/`react-dom` (`tsconfig.app.json`) existem para desenvolver a lib localmente por `npm link` de `../../mitra-kanban`; com o pacote do registry (o padrão, `^1.9.2` nos dois lados) são inertes.
 
 ## Antes de dizer que terminou
 

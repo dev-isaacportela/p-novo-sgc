@@ -72,8 +72,20 @@ const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
  *                      o codigo publicado mandaria. Sem ele, o e-mail so aparece
  *                      no console; com ele, o smoke confere destinatario,
  *                      assunto e CORPO (spec 002, C-032..C-034).
+ * @param externo       { aceita(definition), query(sql) } opcional — banco
+ *                      EXTERNO para as definitions que `aceita`: o SQL sai
+ *                      ligado (bindParams) e literal, sem passar pelo dialeto
+ *                      SQLite. E assim que winthor-oracle.mjs leva as sgcWint*
+ *                      ao WinThor real; sem ele, tudo roda no SQLite.
+ * @param externos      mais executores, na ordem; um com `executar(definition,
+ *                      input, userId)` recebe a definition inteira (e assim que
+ *                      gestao-custos.mjs roda a INTEGRATION, cujo `code` e JSON).
  */
-export function createRunner(db, { resolveById = () => null, onQuery, onEmail } = {}) {
+export function createRunner(db, { resolveById = () => null, onQuery, onEmail, externo = null, externos = [] } = {}) {
+  // Um executor externo por banco de fora: o WinThor (SQL literal, `query(sql)`)
+  // e o Gestão de Custos (INTEGRATION, `executar(definition, input)`). O
+  // primeiro que `aceita` a definition responde; sem nenhum, tudo no SQLite.
+  const todosExternos = [...(externo ? [externo] : []), ...externos];
   const run = (sql) => {
     const translated = toSqlite(sql);
     if (onQuery) onQuery(translated, sql);
@@ -126,6 +138,13 @@ export function createRunner(db, { resolveById = () => null, onQuery, onEmail } 
 
   async function execute(definition, input, userId) {
     if (!definition) return { rows: [], simulatorMissingFunction: true };
+    for (const ex of todosExternos) {
+      if (!ex.aceita(definition)) continue;
+      if (ex.executar) return { rows: await ex.executar(definition, input, userId) };
+      const sql = bindParams(definition.code, input, userId);
+      if (onQuery) onQuery(sql, definition.code);
+      return { rows: await ex.query(sql) };
+    }
     return definition.type === 'JAVASCRIPT'
       ? runJavascript(definition, input, userId)
       : runSql(definition, input, userId);

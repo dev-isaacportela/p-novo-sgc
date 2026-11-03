@@ -8,11 +8,16 @@
 // RF-019/D-010: o comercial só vê o que registrou porque o RECORTE é do
 // servidor — a tela não esconde nada. RF-020/C-019: quem não opera vê os
 // controles DESABILITADOS com o motivo no `title`, nunca escondidos.
+//
+// Spec 017: o alternador de visões (Detalhada, Por vendedor, Por fornecedor,
+// Por filial — RN-SOL-16). Na visão agrupada a lista não é consultada; quem
+// consulta é `VisoesAgrupadas`, com os mesmos filtros. Abrir um grupo aplica o
+// filtro dele (o vendedor é filtro novo da tela, com ficha) e volta à Detalhada.
 import * as React from 'react';
 import { Eye, Ban, Plus, LineChart } from 'lucide-react';
 import {
-  Alert, Badge, Button, Code, Dash, EmptyState, FilterChip, IconButton, PageHeader, Pagination,
-  Panel, RowMeta, RowTitle, SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
+  Alert, AlternaOpcoes, Badge, Button, Code, Dash, EmptyState, FilterChip, IconButton, PageHeader, Pagination,
+  Panel, PanelHeader, RowMeta, RowTitle, SearchInput, SelectMenu, Status, Table, Td, Th, Toolbar, Tr,
 } from '@/components/page';
 import { acao, comPadrao, linha, linhas } from '@/lib/mitra-api';
 import { usePersona } from '@/lib/persona';
@@ -24,6 +29,8 @@ import {
 import { AvaliarDialogo, DetalheSolicitacaoDialogo, NovaSolicitacaoDialogo } from './solicitacoes-dialogos';
 import { carimboGravado } from './carimbo';
 import RastreioPainel from './RastreioPainel';
+import VisoesAgrupadas from './VisoesAgrupadas';
+import { OPCOES_VISAO, ROTULO_DIMENSAO, comOpcao, type FiltroDoGrupo, type Visao } from '@/lib/solicitacoes-visoes';
 
 const LIMITE = 20;
 
@@ -67,6 +74,12 @@ export default function SolicitacoesPage() {
   const [codfornec, setCodfornec] = React.useState('');
   const [codfilial, setCodfilial] = React.useState('');
   const [minhas, setMinhas] = React.useState('0');
+  const [vendedor, setVendedor] = React.useState<{ id: number; nome: string } | null>(null);
+  // O rótulo do fornecedor ou da filial do grupo aberto: o seletor tira as
+  // opções da página à vista, e a ficha precisa do nome mesmo antes dela chegar.
+  const [rotulosDoGrupo, setRotulosDoGrupo] = React.useState<{ codfornec: string; codfilial: string }>({ codfornec: '', codfilial: '' });
+  const [visao, setVisao] = React.useState<Visao>('detalhe');
+  const [totalGrupos, setTotalGrupos] = React.useState(0);
   const [pagina, setPagina] = React.useState(1);
   const [versao, setVersao] = React.useState(0);
 
@@ -81,18 +94,18 @@ export default function SolicitacoesPage() {
   const [detalhando, setDetalhando] = React.useState<LinhaSolicitacao | null>(null);
   const [mostrarRastreio, setMostrarRastreio] = React.useState(false);
 
+  const codVendedor = vendedor ? String(vendedor.id) : '0';
+  /** Os filtros da fila, com os padrões ('' no texto, '0' no número) — os mesmos nas duas visões (RN-09 da 017). */
+  const filtrosDaFila = React.useMemo(() => comPadrao(
+    { status, situacao, codfornec, codfilial, minhas, busca, vendedor: codVendedor },
+    { status: '', situacao: '', codfornec: '0', codfilial: '', minhas: '0', busca: '', vendedor: '0' },
+  ), [status, situacao, codfornec, codfilial, minhas, busca, codVendedor]);
+
   React.useEffect(() => {
+    // RNF-02 da 017: na visão agrupada, quem consulta é `VisoesAgrupadas`.
+    if (visao !== 'detalhe') return undefined;
     let vivo = true;
-    const filtros = comPadrao(
-      {
-        status, situacao, codfornec, codfilial, minhas, busca, vendedor: '0',
-        limite: String(LIMITE), offset: String((pagina - 1) * LIMITE),
-      },
-      {
-        status: '', situacao: '', codfornec: '0', codfilial: '', minhas: '0', busca: '', vendedor: '0',
-        limite: String(LIMITE), offset: '0',
-      },
-    );
+    const filtros = { ...filtrosDaFila, limite: String(LIMITE), offset: String((pagina - 1) * LIMITE) };
     Promise.all([
       linhas('sgcSolicitacoesListar', filtros),
       linha('sgcSolicitacoesListarTotal', filtros),
@@ -108,7 +121,7 @@ export default function SolicitacoesPage() {
       })
       .finally(() => { if (vivo) setCarregando(false); });
     return () => { vivo = false; };
-  }, [busca, status, situacao, codfornec, codfilial, minhas, pagina, versao]);
+  }, [filtrosDaFila, pagina, versao, visao]);
 
   function refiltrar(mudar: () => void) {
     setCarregando(true);
@@ -125,17 +138,37 @@ export default function SolicitacoesPage() {
 
   const lastPage = Math.max(1, Math.ceil(total / LIMITE));
 
+  function trocarVisao(nova: Visao) {
+    if (nova === 'detalhe') setCarregando(true);
+    setVisao(nova);
+  }
+
+  /** RN-11 da 017 (P-07): abrir o grupo filtra a lista por ele e volta à Detalhada. */
+  function abrirGrupo(filtro: FiltroDoGrupo) {
+    refiltrar(() => {
+      if (filtro.campo === 'vendedor') setVendedor(filtro.vendedor);
+      else if (filtro.campo === 'codfornec') {
+        setCodfornec(filtro.valor);
+        setRotulosDoGrupo((r) => ({ ...r, codfornec: filtro.rotulo }));
+      } else {
+        setCodfilial(filtro.valor);
+        setRotulosDoGrupo((r) => ({ ...r, codfilial: filtro.rotulo }));
+      }
+      setVisao('detalhe');
+    });
+  }
+
   /** Fornecedores e filiais da página atual — o filtro é sobre o que está à vista. */
   const fornecedores = React.useMemo(() => {
     const vistos = new Map<string, string>();
     for (const registro of registros) vistos.set(String(registro.CODFORNEC), registro.FORNECEDOR);
-    return [...vistos].map(([value, label]) => ({ value, label }));
-  }, [registros]);
+    return comOpcao([...vistos].map(([value, label]) => ({ value, label })), codfornec, rotulosDoGrupo.codfornec);
+  }, [registros, codfornec, rotulosDoGrupo.codfornec]);
   const filiais = React.useMemo(() => {
     const vistos = new Map<string, string>();
     for (const registro of registros) vistos.set(String(registro.CODFILIAL), registro.FILIAL || registro.CODFILIAL);
-    return [...vistos].map(([value, label]) => ({ value, label }));
-  }, [registros]);
+    return comOpcao([...vistos].map(([value, label]) => ({ value, label })), codfilial, rotulosDoGrupo.codfilial);
+  }, [registros, codfilial, rotulosDoGrupo.codfilial]);
 
   const podeCriar = !!sessao?.permissoes.criarSolicitacao;
   const podeAvaliar = !!sessao?.permissoes.avaliarSolicitacao;
@@ -199,7 +232,9 @@ export default function SolicitacoesPage() {
         description="Demandas que o comercial registrou, a avaliação de compras e a situação de atendimento de cada uma."
         meta={
           <span>
-            <strong>{total.toLocaleString('pt-BR')}</strong> na fila
+            {visao === 'detalhe'
+              ? <><strong>{total.toLocaleString('pt-BR')}</strong> na fila</>
+              : <><strong>{totalGrupos.toLocaleString('pt-BR')}</strong> {totalGrupos === 1 ? 'grupo' : 'grupos'}</>}
             {salvoEm ? ` · salvo às ${salvoEm}` : ''}
           </span>
         }
@@ -225,6 +260,12 @@ export default function SolicitacoesPage() {
       {erro ? <Alert tone="error">{erro}</Alert> : null}
 
       <Panel>
+        <PanelHeader
+          title={visao === 'detalhe' ? 'Fila de solicitações' : `Fila por ${ROTULO_DIMENSAO[visao].toLowerCase()}`}
+          hint={visao === 'detalhe' ? undefined : 'Clique no nome do grupo para ver as solicitações dele na lista.'}
+        >
+          <AlternaOpcoes rotulo="Visão da fila" opcoes={OPCOES_VISAO} valor={visao} onValor={trocarVisao} />
+        </PanelHeader>
         <Toolbar>
           <SearchInput
             placeholder="Buscar por produto, cliente ou fornecedor"
@@ -278,7 +319,7 @@ export default function SolicitacoesPage() {
           </div>
         </Toolbar>
 
-        {statusFiltrado || situacaoFiltrada || fornecedorFiltrado || filialFiltrada || minhasFiltrado ? (
+        {statusFiltrado || situacaoFiltrada || fornecedorFiltrado || filialFiltrada || minhasFiltrado || vendedor ? (
           <div className="flex flex-wrap gap-2 px-4 pt-3">
             {statusFiltrado ? (
               <FilterChip label="Situação" value={statusFiltrado.label} onClear={() => refiltrar(() => setStatus(''))} />
@@ -295,10 +336,21 @@ export default function SolicitacoesPage() {
             {minhasFiltrado ? (
               <FilterChip label="Autoria" value="Só as minhas" onClear={() => refiltrar(() => setMinhas('0'))} />
             ) : null}
+            {vendedor ? (
+              <FilterChip label="Vendedor" value={vendedor.nome} onClear={() => refiltrar(() => setVendedor(null))} />
+            ) : null}
           </div>
         ) : null}
 
-        {!carregando && registros.length === 0 ? (
+        {visao !== 'detalhe' ? (
+          <VisoesAgrupadas
+            key={`${visao}|${JSON.stringify(filtrosDaFila)}`}
+            dimensao={visao}
+            filtros={filtrosDaFila}
+            onAbrir={abrirGrupo}
+            onTotal={setTotalGrupos}
+          />
+        ) : !carregando && registros.length === 0 ? (
           <EmptyState
             title="Nenhuma solicitação por aqui"
             hint="Ajuste a busca ou os filtros — ou registre a primeira demanda do cliente."
@@ -314,7 +366,7 @@ export default function SolicitacoesPage() {
                 <Th>Vendedor</Th>
                 <Th>Situação</Th>
                 <Th>Atendimento</Th>
-                <Th className="w-28 text-right">Ações</Th>
+                <Th className="w-36 text-right">Ações</Th>
               </tr>
             </thead>
             <tbody>
@@ -359,7 +411,9 @@ export default function SolicitacoesPage() {
                       {registro.TITULO_CARD ? <RowMeta>{registro.TITULO_CARD}</RowMeta> : null}
                     </Td>
                     <Td className="text-right">
-                      <span className="inline-flex items-center justify-end gap-1">
+                      {/* Cada ação tem a sua coluna fixa (olho · avaliar · cancelar): a linha que
+                          não tem uma delas deixa o lugar vazio, e nada salta entre as linhas. */}
+                      <span className="ml-auto grid w-fit grid-cols-[2rem_4.75rem_2rem] items-center justify-items-center gap-1">
                         <IconButton label="Ver o histórico da solicitação" onClick={() => setDetalhando(registro)}>
                           <Eye aria-hidden />
                         </IconButton>
@@ -372,7 +426,7 @@ export default function SolicitacoesPage() {
                           >
                             Avaliar
                           </Button>
-                        ) : null}
+                        ) : <span aria-hidden />}
                         {registro.STATUS === 'pendente' && propria ? (
                           <IconButton
                             // O `label` do primitivo vira `title` E `aria-label`:
@@ -384,7 +438,7 @@ export default function SolicitacoesPage() {
                           >
                             <Ban aria-hidden />
                           </IconButton>
-                        ) : null}
+                        ) : <span aria-hidden />}
                       </span>
                     </Td>
                   </Tr>
@@ -394,15 +448,17 @@ export default function SolicitacoesPage() {
           </Table>
         )}
 
-        <Pagination
-          page={pagina}
-          lastPage={lastPage}
-          total={total}
-          unit="solicitações"
-          busy={carregando}
-          onPrevious={() => { setCarregando(true); setPagina((p) => Math.max(1, p - 1)); }}
-          onNext={() => { setCarregando(true); setPagina((p) => Math.min(lastPage, p + 1)); }}
-        />
+        {visao === 'detalhe' ? (
+          <Pagination
+            page={pagina}
+            lastPage={lastPage}
+            total={total}
+            unit="solicitações"
+            busy={carregando}
+            onPrevious={() => { setCarregando(true); setPagina((p) => Math.max(1, p - 1)); }}
+            onNext={() => { setCarregando(true); setPagina((p) => Math.min(lastPage, p + 1)); }}
+          />
+        ) : null}
       </Panel>
 
       {mostrarRastreio ? <RastreioPainel registros={registros} /> : null}

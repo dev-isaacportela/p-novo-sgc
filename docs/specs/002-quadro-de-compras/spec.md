@@ -63,6 +63,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** move o pedido para "Aprovação Técnica"
 - **Então** o pedido fica em "Aprovação Técnica" e a passagem fica registrada
 
+**C-045 — O período aceita a quantidade de dias** *(2026-10-30, R-119)*
+- **Dado que** a pessoa está criando o pedido e o fim do período de vendas é 30/10/2026
+- **Quando** ela escreve "30" no campo **Dias** ao lado das datas e sai do campo
+- **Então** o início vira 30/09/2026 (fim − 30) e o campo Dias continua mostrando 30; mudando o início para 01/10/2026, Dias passa a 29 — é derivado das datas; Dias vazio ou fora de 1 a 999 não mexe nas datas e avisa "Informe de 1 a 999 dias"; o padrão mostra 45 (a mesma conta do período padrão); escrever "45" direto no campo de data também resolve, mas o campo Dias é o caminho visível
+
 **C-005 — A Análise nunca vai direto para a Diretoria**
 - **Dado que** o pedido 10 está em "Análise/Montagem de Pedido"
 - **Quando** qualquer pessoa tenta mandá-lo para "Aprovação da Diretoria"
@@ -235,10 +240,10 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém olha o quadro
 - **Então** o cartão mostra os quatro dados, os responsáveis, as etiquetas e os três tempos; na etapa de Análise mostra também os alertas pendentes e, em Canceladas, o motivo
 
-**C-036 — Criar pedido é pelo botão do SGC**
+**C-036 — Criar pedido é pelo botão do SGC** *(revisado em 2026-10-30, R-118)*
 - **Dado que** qualquer pessoa com permissão de criar abre o quadro
 - **Quando** procura como criar
-- **Então** existe um único botão, "Novo pedido", que abre a criação de pedido do SGC — não o formulário genérico de card
+- **Então** existe um único botão, "Novo pedido", que abre a criação do pedido numa janela sobre o quadro — não o formulário genérico de card, e não uma página à parte; o menu lateral não tem "Novo pedido", e o pedido criado aparece na etapa de Análise e abre em seguida
 
 **C-037 — O quadro atualiza sozinho**
 - **Dado que** o quadro está aberto e outra pessoa move um pedido
@@ -275,18 +280,45 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém abre o histórico do pedido
 - **Então** encontra as 4 decisões em ordem, cada uma com quem decidiu, quando e o motivo quando houver, além das passagens por etapa
 
+### O card depois da Análise (R-141)
+
+**C-046 — O card abre com o resumo do pedido e os selos do que aconteceu**
+- **Dado que** o pedido foi aprovado tecnicamente pelo Gil, aprovado pela diretoria e enviado por e-mail com o número 8372
+- **Quando** alguém abre o card em qualquer fase depois da Análise
+- **Então** o topo mostra fornecedor, filial, valor do pedido, o % faturado com a barra (depois do envio; antes, o prazo de pagamento) e os selos "Aprovação técnica por Gil em…", "Aprovado pela diretoria por… em…" e "Enviado à indústria"; num pedido cancelado, o selo "Compra cancelada" traz motivo, quem e quando
+
+**C-047 — A aprovação lê a análise do pedido antes dos itens**
+- **Dado que** o pedido em Aprovação Técnica ou da Diretoria tem 12 itens, 2 em preço especial e 2 com cobertura acima do limite da curva
+- **Quando** quem aprova abre o card
+- **Então** vê "Análise para aprovação" com itens, cobertura média hoje → depois da compra, os itens acima do limite com o valor e o preço especial com o % do pedido; e "Indicadores do pedido", recolhido, com cada indicador abrindo os produtos que o compõem
+
+**C-048 — O envio mostra o que vai ao fornecedor**
+- **Dado que** o pedido está em Envio para Indústria
+- **Quando** o comprador abre o card
+- **Então** vê produtos, unidades e valor total, "Copiar itens" (código, produto, embalagem, quantidade e custo, sem a marca Comercial), "Arquivo WinThor" no formato da RN-023 da 011, os itens em cartões com o total e "Registrar envio" no fim — o mesmo diálogo da coluna da direita
+
+**C-049 — O enviado diz como saiu e o que falta para o trânsito**
+- **Dado que** o pedido está em Enviado para Indústria, sem nota vinculada
+- **Quando** o comprador abre o card
+- **Então** vê data, método, contato e número do pedido do envio, a observação, e "Próximo movimento: Em Trânsito para BN — Vincule a nota fiscal para liberar"; com 1 nota, "1 nota vinculada"
+
+**C-050 — Compras × vendas do fornecedor na aprovação** *(R-147, P-1)*
+- **Dado que** o pedido da Fresenius na filial 1 analisou as vendas de 19/09 a 02/11 e soma R$ 328.859,14
+- **Quando** quem aprova abre "Compras × vendas do fornecedor" no card
+- **Então** o card consulta o WinThor só nesse momento e mostra o comprado e o vendido do fornecedor na filial no período, o % compras × vendas de hoje e o de depois deste pedido; sem meta de compras (decisão do usuário), e com "sem compra nem venda no período" quando o fornecedor não aparece
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
 |---|---|---|---|
-| RF-001 | O sistema DEVE criar o pedido a partir de fornecedor, filial e período de vendas, os três obrigatórios | C-001 cria 1 pedido na primeira etapa; C-002 recusa citando o campo em falta | must |
+| RF-001 | O sistema DEVE criar o pedido a partir de fornecedor, filial e período de vendas, os três obrigatórios; cada data do período pode ser escrita como data ou como quantidade de dias a partir da outra ponta (R-119) | C-001 cria 1 pedido na primeira etapa; C-002 recusa citando o campo em falta; C-045 resolve "45" para a data | must |
 | RF-002 | O título do pedido DEVE ser gerado como "FILIAL · FORNECEDOR" e não é editável | pedido de filial "1 — Matriz" e fornecedor "Nutrilatina" nasce "1 — MATRIZ · NUTRILATINA" | must |
 | RF-003 | O período de vendas DEVE vir sugerido com os últimos 45 dias, editável | em 15/09/2026 a sugestão é 01/08/2026 a 15/09/2026 | must |
 | RF-004 | O criador do pedido DEVE ser quem criou e também o responsável inicial | o pedido de C-001 mostra a Ana nos dois papéis | must |
 | RF-005 | O quadro DEVE ter as dez etapas do processo, na ordem, identificadas por uma chave que não muda quando o administrador renomeia ou recolore | renomear "Produtos em B.O." para "Pendências" não quebra nenhuma regra de C-004 a C-034 | must |
 | RF-006 | O cartão DEVE mostrar fornecedor, filial, valor total e prioridade, mais alertas pendentes na Análise e o motivo em Canceladas | C-035 | must |
 | RF-007 | O quadro DEVE se atualizar sozinho a cada 60 segundos | C-037 | should |
-| RF-008 | O quadro DEVE oferecer "Novo pedido" no lugar do botão genérico de criar cartão | C-036: existe um botão, e ele abre a criação do SGC | must |
+| RF-008 | O quadro DEVE oferecer "Novo pedido" no lugar do botão genérico de criar cartão, abrindo a criação numa janela sobre o quadro; criar pedido não é item de menu (R-118) | C-036: existe um botão, ele abre a janela, e nenhum menu leva a uma página de criação | must |
 | RF-009 | As transições DEVEM ser exatamente: Análise→Técnica; Técnica→Diretoria ou →Análise; Diretoria→Envio, →Técnica ou →Análise; Envio→Enviado ou →Diretoria; Enviado→Trânsito; Trânsito→Faturamento; Faturamento→B.O. ou →Concluídas; B.O.→Faturamento ou →Concluídas; qualquer etapa ativa→Canceladas | as 10 etapas × 10 destinos conferidas uma a uma: 22 pares liberados (14 do fluxo + 8 cancelamentos), os demais recusados | must |
 | RF-010 | Destino fora da regra DEVE aparecer desabilitado com o motivo, nunca sumir | C-005, C-006, C-017, C-023, C-029 | must |
 | RF-011 | A mesma regra de movimentação DEVE valer no servidor, independentemente da tela | C-011: a chamada direta é recusada com o mesmo motivo | must |
@@ -395,7 +427,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-033 | entrar na etapa 9 com 2 anexos: o corpo lista as 2 linhas "nome — endereço"; sem anexos, "Nenhum anexo" | regra de negócio |
 | C-034 | entrar na etapa 10: assunto de cancelado e o motivo no corpo | regra de negócio |
 | C-035 | o cartão devolve os 4 valores de capa e, na etapa 1, o número de alertas pendentes | regra de tela |
-| C-036 | o quadro expõe 1 botão de criação e ele leva para a criação do SGC | regra de tela |
+| C-036 | o rótulo do botão é "Novo pedido" e o menu de nenhuma persona, em nenhum nível, tem `/pedidos/novo` (R-118); a janela em si é verificação manual | regra de tela |
 | C-037 | o intervalo de atualização configurado é 60000 ms | regra de tela |
 | C-038 | gestor: administração recusada; admin: liberada | regra de negócio |
 | C-039 | excluir como analista → recusa; como gestor → aceito; como diretoria → aceito | regra de negócio |
@@ -404,6 +436,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-042 | salvar persona "gestor" para o Gil devolve 1 linha atualizada; a mesma escrita como analista → recusa | regra de negócio |
 | C-043 | depois das 4 decisões, o histórico do pedido tem 4 linhas de decisão, cada uma com quem e quando | regra de negócio |
 | C-044 | persona comercial: o menu devolve 0 itens de compras, a rota do quadro é recusada e `PODE = 0` em mover e excluir, com a frase do perfil | regra de tela e de negócio |
+| C-045 | `diasRelativos` aceita "45", "45d", "45 dias" e recusa "1234", "abc", "15/09"; `resolverRelativo("45", 30/10/2026, −1)` = 15/09/2026, `("30", 01/10, 1)` = 31/10, `"0"` = a base, vira mês e ano; `diasEntre` 15/09→30/10 = 45 | regra de tela |
 | RN-001 | sem persona e acesso comum → analista; acesso administrador → admin; acesso restrito → comercial | regra de tela |
 | RN-002 | somente leitura + persona gestor → não opera; restrito + analista → só os próprios | regra de tela |
 | RN-021 | comercial: `verQuadro` falso na tela e recusa no servidor em mover e excluir | regra de tela e de negócio |
@@ -425,6 +458,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-018 | prioridade aceita normal/alta/urgente e nasce normal | regra de negócio |
 | RN-019 | as 7 ações da lista geram 7 linhas de histórico, cada uma com autor e instante | regra de negócio |
 | RN-020 | nas etapas 5, 6, 7 e 8 a única recusa possível é de persona | regra de negócio |
+| C-046 | `capa-do-pedido.test.mjs`: selos na ordem (técnica, diretoria, envio), reprovação como alerta com a da diretoria primeiro, cancelamento com motivo/quem/quando, faturado satura em 100 e diz quanto falta | regra de tela |
+| C-047 | `aprovacao.test.mjs`: total, cobertura média atual → após, preço especial e os 9 indicadores com a lista de produtos (limite de cobertura do item, não 60 fixo) | regra de tela |
+| C-048 | `envio-industria.test.mjs`: só vai o que tem quantidade, totais, texto do "Copiar itens" com cabeçalho e número pt-BR | regra de tela |
+| C-049 | `envio-industria.test.mjs`: próximo movimento travado sem nota e liberado com 1 ou mais | regra de tela |
+| C-050 | `aprovacao.test.mjs`: acha o fornecedor no ranking da `sgcWintComprasVsVendas` (009), % hoje e depois do pedido, `null` sem venda | regra de tela |
 
 Verificação manual (só olho humano verifica):
 

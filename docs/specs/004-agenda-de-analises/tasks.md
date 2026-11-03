@@ -61,6 +61,7 @@ estas tasks concluídas não está pronta.
 - [x] **T-091** — `cd frontend && npm test` verde; `npm run build` e `npm run lint` limpos
 - [ ] **T-092** — Verificação manual no simulador: C-001 (seletor de data só pelo teclado: Tab, setas, PageUp/PageDown, Enter, Esc), C-011 (diálogo com os quatro recortes e os hints), C-013 (confirmação e resultado no fluxo da tela, sem aviso passageiro)
 - [ ] **T-093** — C-018 nos dois temas: as quatro situações legíveis, sempre com texto ao lado do ponto, e o calendário do `DatePicker` sem cor quebrada
+- [x] **T-094** — *(2026-10-30, R-121)* visão de calendário: `ocorrenciasNoMes`/`agruparPorDia` em `lib/agenda.ts` (testes C-022), `pages/agenda/AgendaCalendario.tsx`, alternador Lista | Calendário na `AgendaPage` com carga própria do mês; janela de agendamento com a linha data/duração/recorrência alinhada e participantes em chips → `frontend/src/lib/agenda.ts`, `pages/agenda/*`
 
 ## Dependências
 

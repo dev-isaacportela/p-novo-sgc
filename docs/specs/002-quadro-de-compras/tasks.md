@@ -42,6 +42,11 @@
 - [x] **T-038** `[P]` — `NotificacoesPage`: `sgcNotificacoesListar` + `…Total`, páginas de 25, `Badge` por tipo, link para o pedido, `EmptyState` "Tudo em dia" → `frontend/src/pages/notificacoes/NotificacoesPage.tsx`
 - [x] **T-039** `[P]` — `SegurancaPage`: busca, tabela de usuários com `SelectMenu` de persona por linha (`sgcEscPersonaSalvar`), paginação, e recusa visível para quem não é admin nem diretoria → `frontend/src/pages/seguranca/SegurancaPage.tsx`
 - [x] **T-040** — **(integrador)** pedir as rotas `/pedidos/novo`, `/notificacoes` e `/seguranca` e os itens de menu correspondentes, filtrados por permissão: a persona comercial não vê Quadro, Agenda nem Fornecedores (P-03, RN-021) → `frontend/src/App.tsx`, `frontend/src/components/AdminLayout.tsx`
+- [x] **T-094** — R-141: capa do pedido no topo de toda fase depois da Análise (`lib/capa-do-pedido.ts`, `abas/CapaDoPedido.tsx`; a capa do `PedidoProvider` ganha aprovações, envio, faturado e cancelamento do mesmo `sgcPedidoCarregar`) → `frontend/src/pages/quadros/abas/`
+- [x] **T-095** — R-141: "Análise para aprovação" nas fases Técnica e Diretoria (`lib/aprovacao.ts`, `abas/Aprovacao.tsx`), antes do bloco Itens → `frontend/src/pages/quadros/abas/Aprovacao.tsx`
+- [x] **T-096** — R-141: bloco Envio (resumo para a indústria, Copiar itens, Arquivo WinThor, itens em cartões, Registrar envio) e bloco Enviado (envio registrado, próximo movimento, itens recolhidos); `registrarEnvio` sai do `AcoesDoPedido` para `registrar-envio.ts`, usado pelos dois → `frontend/src/pages/quadros/`
+- [x] **T-097** — R-141: Cancelado mostra os itens só de consulta (`abas/ItensDoPedido.tsx`) em vez do bloco Itens editável da Análise → `frontend/src/lib/conteudo-da-fase.ts`
+- [x] **T-098** — R-147 (P-1): seção "Compras × vendas do fornecedor" na aprovação, recolhida, que lê `sgcWintComprasVsVendas` (009) só ao abrir → `frontend/src/pages/quadros/abas/Aprovacao.tsx`, `frontend/src/lib/aprovacao.ts`
 
 ## Testes
 
@@ -68,6 +73,9 @@ com o id no título.
 - [x] **T-091** — `cd frontend && npm test` verde; `npm run build` e `npm run lint` limpos
 - [ ] **T-092** — verificação manual no simulador, com os 5 logins do seed: C-035 (a capa do cartão), C-040 (ação desabilitada com o motivo), C-023 (destino apagado ao lado da ação "Cancelar compra"), C-041 e C-042 (as duas telas novas)
 - [ ] **T-093** — as quatro telas nos dois temas (claro e escuro), sem cor literal e sem `style={{}}`
+
+- [x] **T-034b** — *(2026-10-30, R-118)* `NovoPedidoPage` vira `NovoPedidoDialogo` (janela sobre o quadro, estado na URL `?novo=1`); `QuadroPage` abre a janela no `novoCard` e remonta o quadro ao criar; `/pedidos/novo` redireciona para `/quadro?novo=1`; item de menu, ícone e `ROTA_NOVO_PEDIDO` saem; testes C-036 e do menu ajustados → `frontend/src/pages/pedidos/NovoPedidoDialogo.tsx`, `pages/quadros/QuadroPage.tsx`, `App.tsx`, `lib/permissoes.ts`, `components/AdminLayout.tsx`, `lib/quadro.ts`
+- [x] **T-034c** — *(2026-10-30, R-119)* `lib/data.ts` ganha `diasRelativos`, `resolverRelativo` e `diasEntre` (testes em `tests/data.test.mjs`, C-045); `DatePicker` ganha a prop opcional `relativo` (sem ela, idêntico ao de hoje); a janela "Novo pedido" usa a prop nos dois campos do período e mostra "Período de N dias" → `frontend/src/lib/data.ts`, `components/DatePicker.tsx`, `pages/pedidos/NovoPedidoDialogo.tsx`
 
 ## Dependências
 

@@ -28,6 +28,11 @@ import { seed008 } from './seed/008-solicitacoes.mjs';
 // semearam (R-062), e as quatro linhas de SGC_RELATORIO saíram com
 // `/relatorios` (R-114). Os estados de SLA e agenda que os cenários precisam
 // são arranjados dentro do próprio teste, em `smoke/009-indicadores.mjs`.
+import { seed011 } from './seed/011-compras-inteligentes.mjs';
+import { seed013 } from './seed/013-movimentacao.mjs';
+import { seed014 } from './seed/014-galderma.mjs';
+import { seed015 } from './seed/015-empenhos.mjs';
+import { seed017 } from './seed/017-solicitacoes-apoio.mjs';
 
 const iso = (data) => data.toISOString().slice(0, 19);
 
@@ -107,6 +112,17 @@ export function seedDatabase(dbPath, { reset = false } = {}) {
   seed006(db, CENARIO);
   seed007(db, CENARIO);
   seed008(db, CENARIO);
+  // Onda 4: a 012 não tem seed próprio — ela é dona das linhas de
+  // SGC_COBERTURA do seed/003-itens.mjs nesta onda (R-096).
+  seed011(db, CENARIO);
+  // Onda 5 (R-140): movimentação de produtos.
+  seed013(db, CENARIO);
+  // Onda 5 (R-150): pedido Galderma.
+  seed014(db, CENARIO);
+  // Onda 5 (R-160): quadro de empenhos — o segundo quadro, com fases e campos próprios.
+  seed015(db, CENARIO);
+  // Onda 5 (R-180): apoio à avaliação das solicitações — só WinThor (produto 5311).
+  seed017(db, CENARIO);
 
   db.close();
   return counts;

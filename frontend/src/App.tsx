@@ -10,7 +10,6 @@ import { Alert, Button, Card } from '@/components/page';
 import LoginPage from '@/pages/LoginPage';
 import QuadroPage from '@/pages/quadros/QuadroPage';
 import QuadroAdminPage from '@/pages/quadros/QuadroAdminPage';
-import NovoPedidoPage from '@/pages/pedidos/NovoPedidoPage';
 import FornecedoresPage from '@/pages/fornecedores/FornecedoresPage';
 import FornecedorPage from '@/pages/fornecedores/FornecedorPage';
 import CoberturasPage from '@/pages/coberturas/CoberturasPage';
@@ -23,6 +22,15 @@ import NfsAtrasoPage from '@/pages/fiscal/NfsAtrasoPage';
 import BoPage from '@/pages/bo/BoPage';
 import SolicitacoesPage from '@/pages/solicitacoes/SolicitacoesPage';
 import AnalisesPage from '@/pages/analises/AnalisesPage';
+import ComprasInteligentesPage from '@/pages/compras-inteligentes/ComprasInteligentesPage';
+import PedidoGaldermaPage from '@/pages/galderma/PedidoGaldermaPage';
+import AcompanhamentoGaldermaPage from '@/pages/galderma/AcompanhamentoGaldermaPage';
+import ComposicaoGaldermaPage from '@/pages/galderma/ComposicaoGaldermaPage';
+import MovimentacaoPage from '@/pages/movimentacao/MovimentacaoPage';
+import EmpenhosPage from '@/pages/empenhos/EmpenhosPage';
+import EmpenhosAdminPage from '@/pages/empenhos/EmpenhosAdminPage';
+import PregoesPage from '@/pages/empenhos/PregoesPage';
+import IndicadoresEmpenhosPage from '@/pages/empenhos/IndicadoresEmpenhosPage';
 
 /**
  * Guarda de sessão: autenticar na Mitra não basta — kbUsuarioSessao precisa
@@ -82,7 +90,9 @@ function Autenticado() {
   // (002), fornecedores (001), itens e coberturas (003), agenda (004); onda 2 —
   // notas fiscais e faturamentos pendentes (005), NFs em atraso (006), produtos
   // em B.O. (007); onda 3 — solicitações do comercial (008), análises e
-  // relatórios (009), as três ainda em construção. Quem barra persona sem
+  // relatórios (009); onda 4 — compras inteligentes (011), ainda em
+  // construção (as coberturas por curva, 012, moram na rota `/coberturas` que
+  // já existe). Quem barra persona sem
   // acesso é cada página, no topo, com a mesma frase do servidor; o menu
   // (AdminLayout) só esconde.
   return (
@@ -91,7 +101,19 @@ function Autenticado() {
         <Route index element={<Navigate to="/quadro" replace />} />
         <Route path="quadro" element={<QuadroPage />} />
         <Route path="quadro/admin" element={<QuadroAdminPage />} />
-        <Route path="pedidos/novo" element={<NovoPedidoPage />} />
+        {/* R-118: o Novo pedido é janela sobre o quadro; o link antigo abre a janela. */}
+        <Route path="pedidos/novo" element={<Navigate to="/quadro?novo=1" replace />} />
+        <Route path="compras-inteligentes" element={<ComprasInteligentesPage />} />
+        {/* Onda 5 (R-150): pedido Galderma — mesa, acompanhamento e composição. */}
+        <Route path="galderma" element={<PedidoGaldermaPage />} />
+        <Route path="galderma/acompanhamento" element={<AcompanhamentoGaldermaPage />} />
+        <Route path="galderma/composicao" element={<ComposicaoGaldermaPage />} />
+        {/* Onda 5 (R-140): movimentação de produtos (013). */}
+        <Route path="movimentacao" element={<MovimentacaoPage />} />
+        <Route path="empenhos" element={<EmpenhosPage />} />
+        <Route path="empenhos/admin" element={<EmpenhosAdminPage />} />
+        <Route path="empenhos/pregoes" element={<PregoesPage />} />
+        <Route path="empenhos/indicadores" element={<IndicadoresEmpenhosPage />} />
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="fornecedores/:codfornec" element={<FornecedorPage />} />
         <Route path="coberturas" element={<CoberturasPage />} />

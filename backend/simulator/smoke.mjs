@@ -9,6 +9,8 @@ import { abrirContexto } from './smoke/base.mjs';
 import { suite as esqueleto } from './smoke/000-esqueleto.mjs';
 import { suite as diasUteis } from './smoke/000-dias-uteis.mjs';
 import { suite as dialeto } from './smoke/000-dialeto.mjs';
+import { suite as winthorReal } from './smoke/000-winthor-real.mjs';
+import { suite as gestaoCustos } from './smoke/000-gestao-custos.mjs';
 import { suite as fornecedores } from './smoke/001-fornecedores.mjs';
 import { suite as quadro } from './smoke/002-quadro.mjs';
 import { suite as itens } from './smoke/003-itens.mjs';
@@ -18,21 +20,51 @@ import { suite as transito } from './smoke/006-transito.mjs';
 import { suite as bo } from './smoke/007-bo.mjs';
 import { suite as solicitacoes } from './smoke/008-solicitacoes.mjs';
 import { suite as indicadores } from './smoke/009-indicadores.mjs';
+import { suite as comprasInteligentes } from './smoke/011-compras-inteligentes.mjs';
+import { suite as coberturas } from './smoke/012-coberturas.mjs';
+import { suite as galderma } from './smoke/014-galderma.mjs';
+import { suite as movimentacao } from './smoke/013-movimentacao.mjs';
+import { suite as empenhos } from './smoke/015-empenhos.mjs';
+import { suite as filaEmail } from './smoke/016-fila-email.mjs';
+import { suite as solicitacoesApoio } from './smoke/017-solicitacoes-apoio.mjs';
+import { suite as fornecedoresExportarExcluir } from './smoke/018-fornecedores-exportar-excluir.mjs';
+import { suite as projecaoManual } from './smoke/019-projecao-manual.mjs';
 
 const ctx = await abrirContexto();
 
 await esqueleto(ctx);
 await diasUteis(ctx);
 await dialeto(ctx);
+await winthorReal(ctx);
+await gestaoCustos(ctx);
 await fornecedores(ctx);
 await quadro(ctx);
 await itens(ctx);
+// A 012 revalida o smoke da 003 e é dona das linhas de SGC_COBERTURA do seed
+// dela nesta onda (R-096/R-107): vem logo depois de `itens`.
+await coberturas(ctx);
 await agenda(ctx);
 await notasFiscais(ctx);
 await transito(ctx);
 await bo(ctx);
 await solicitacoes(ctx);
 await indicadores(ctx);
+await comprasInteligentes(ctx);
+// Onda 5 (R-150): pedido Galderma — produtos, clientes e competência próprios.
+await galderma(ctx);
+// Onda 5 (R-160): quadro de empenhos — quadro, produtos e clientes próprios.
+await empenhos(ctx);
+// R-190: exportar e excluir a parametrização (018) — parametriza e apaga o próprio 1099.
+await fornecedoresExportarExcluir(ctx);
+// Onda 5 (R-200): projeção manual — produtos 5401–5403 do seed da 011, tabela própria.
+await projecaoManual(ctx);
+// Onda 5 (R-140): por último — a suíte cria um usuário somente-leitura próprio.
+await movimentacao(ctx);
+// Onda 5 (R-170): fila de e-mail e aviso de pronto — depois de todas: a rotina
+// das 08h10 avisa qualquer card pronto do banco compartilhado.
+await filaEmail(ctx);
+// Onda 5 (R-180): depois de todas — insere as próprias solicitações (fornecedor 1099) e só lê.
+await solicitacoesApoio(ctx);
 
 console.log(`\n  ${ctx.contagem()} verificacoes passaram.`);
 ctx.fechar();

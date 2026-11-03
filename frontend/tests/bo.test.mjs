@@ -99,3 +99,28 @@ test('A-15 (revisão onda 2): linhasCsvBo — as colunas do painel de /bo, valor
   ]]);
   assert.deepEqual(linhasCsvBo([]), []);
 });
+
+// R-141 / C-018: o topo da fase B.O. no card.
+import { topoDoBo } from '../src/lib/bo.ts';
+
+test('C-018: total pendente só dos itens em aberto, a carta de falta mais recente e o aviso de previsão vencida', () => {
+  const topo = topoDoBo({
+    itens: [
+      { STATUS: 'aberto', VL_PENDENTE: 100 },
+      { STATUS: 'aberto', VL_PENDENTE: 50.5 },
+      { STATUS: 'liberado', VL_PENDENTE: 999 },
+    ],
+    documentos: [
+      { TIPO: 'carta_falta', ENVIADO_EM: '2026-10-20T10:00:00' },
+      { TIPO: 'outro', ENVIADO_EM: '2026-10-30T10:00:00' },
+      { TIPO: 'carta_falta', ENVIADO_EM: '2026-10-25T09:00:00' },
+    ],
+    dtPrevisao: '2026-10-30',
+    hoje: '2026-11-02',
+  });
+  assert.equal(topo.totalPendente, 150.5);
+  assert.equal(topo.cartaEm, '2026-10-25T09:00:00');
+  assert.equal(topo.avisoVencida, 'Previsão de liberação vencida há 3 dias. Reavalie com o fornecedor e registre uma previsão nova.');
+  const semNada = topoDoBo({ itens: [], documentos: [], dtPrevisao: '2026-11-05', hoje: '2026-11-02' });
+  assert.deepEqual(semNada, { totalPendente: 0, cartaEm: '', avisoVencida: '' });
+});

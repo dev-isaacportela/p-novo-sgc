@@ -2,7 +2,7 @@
 // detecção automática de NF de entrada, conferência NF × pedido, faturamento
 // e cobrança. Ver docs/specs/005-notas-fiscais-e-faturamento/.
 //
-// Faixa de id local: 75xx (R-024) — leituras e JAVASCRIPT 7501–7515, escritas
+// Faixa de id local: 75xx (R-024) — leituras e JAVASCRIPT 7501–7516, escritas
 // 7550–7559. O id local vem de SERVER_FUNCTIONS em
 // frontend/src/lib/server-functions.ts até o sync-server-function-map.mjs
 // trazer os reais do sandbox — mesmo padrão de add-006-itens.mjs.
@@ -27,7 +27,8 @@ const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', im
 const MARCADOR_IDS = '__SGC_IDS__';
 
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
-export const WINTHOR = ['sgcWintNfEntradas', 'sgcWintNfItens', 'sgcWintNfParcelas', 'sgcWintNfBuscar'];
+export const WINTHOR = ['sgcWintNfEntradas', 'sgcWintNfItens', 'sgcWintNfParcelas', 'sgcWintNfBuscar',
+  'sgcWintProdutosCodigos'];
 
 // R-048: o campo do quadro `faturamento` (texto, capa: "R$ 72.000,00 (60 %) ·
 // saldo R$ 48.000,00"), no MESMO formato de `CAMPOS` de add-005-quadro-compras.mjs.
@@ -136,6 +137,16 @@ const SQL_NF_BUSCAR = `SELECT * FROM (
   WHERE N.NUMNOTA = {{numnota}} AND N.CODFORNEC = {{codfornec}} AND N.DTCANCEL IS NULL
   ORDER BY N.DTEMISSAO DESC
 ) WHERE ROWNUM <= 5`;
+
+// D-016: PCPRODUT só existe no Oracle. O código de fábrica e o EAN dos itens do
+// PEDIDO (o lado SGC_PEDIDO_ITEM do casamento da RN-003) vinham de um subselect
+// em PCPRODUT dentro de runQueryMitra — o banco do projeto, onde a tabela não
+// existe (o simulador, que imita as PC* no mesmo SQLite, não denunciava).
+// `codprods` é FRAGMENTO (lista de inteiros sem aspas), como na 003.
+const SQL_PRODUTOS_CODIGOS = `SELECT P.CODPROD,
+  NVL(TRIM(P.CODFAB), '') AS CODFAB, NVL(TRIM(P.CODAUXILIAR), '') AS EAN
+FROM PCPRODUT P
+WHERE P.CODPROD IN ({{codprods}})`;
 
 /* ─────────────── leituras — banco do projeto ─────────────── */
 
@@ -343,6 +354,27 @@ WHERE {{cardId}} > 0 AND TRIM('{{resumo}}') <> ''
   AND ${guarda(NF)}`,
   },
   {
+    name: 'sgcEscGestorNotificar',
+    resumo: 'R-146 (P-3, C-034/RN-017) - o botao do legado "Notificar gestor": a partir de 5 dias uteis sem faturamento completo, quem opera a nota avisa UM gestor escolhido (aviso PARA_USUARIO_ID, um por gestor por dia). Escrita de TELA (:VAR_USER); a tela poe o gestor nos responsaveis pelo kbCardAtualizar. Params: cardId, gestorId, texto, criadoEm',
+    code: `INSERT INTO SGC_AVISO (ID_CARD, TIPO, CHAVE, PARA_USUARIO_ID, PARA_PERSONA, TEXTO, CRIADO_EM)
+SELECT P.ID_CARD, 'faturamento_gestor',
+  CONCAT('faturamento_gestor:', P.ID_CARD, ':', {{gestorId}}, ':', DATE_FORMAT(CURDATE(), '%Y-%m-%d')),
+  {{gestorId}}, '', '{{texto}}', '{{criadoEm}}'
+FROM SGC_PEDIDO P
+JOIN KB_CARD C ON C.ID = P.ID_CARD AND C.EXCLUIDO_EM IS NULL
+JOIN SGC_FASE F ON F.BOARD_ID = C.BOARD_ID AND F.FASE_ID = C.FASE_ID
+WHERE P.ID_CARD = {{cardId}} AND TRIM('{{texto}}') <> ''
+  AND F.CHAVE IN ('enviado', 'transito', 'faturamento')
+  AND TRIM(COALESCE(P.DT_ENVIO, '')) <> ''
+  AND COALESCE(P.PERC_FATURADO_VALOR, 0) < 100
+  AND ${diasUteisEntre('P.DT_ENVIO', 'CURDATE()')} >= 5
+  AND EXISTS (SELECT 1 FROM INT_USER G JOIN SGC_USUARIO_PERSONA GP ON GP.USUARIO_ID = G.ID
+              WHERE G.ID = {{gestorId}} AND G.ATIVO = TRUE AND GP.PERSONA = 'gestor')
+  AND NOT EXISTS (SELECT 1 FROM SGC_AVISO A
+                  WHERE A.CHAVE = CONCAT('faturamento_gestor:', P.ID_CARD, ':', {{gestorId}}, ':', DATE_FORMAT(CURDATE(), '%Y-%m-%d')))
+  AND ${guarda(NF)}`,
+  },
+  {
     name: 'sgcEscPedidoFaturamento',
     interna: true,
     resumo: 'RF-016/RN-008 - as quatro medidas do faturamento somadas no PROPRIO banco (nunca por parametro): capa, SGC_PEDIDO e listagem nao podem divergir. Params: idCard int, usuarioId int, agora string',
@@ -424,6 +456,25 @@ async function chamar(nome, entrada) {
     throw new Error('Falha em ' + nome + ': ' + (resultado.error || 'sem detalhe'));
   }
   return desembrulhar(resposta);
+}
+// D-016: devolve as mesmas linhas com CODFAB e EAN lidos do WinThor por
+// sgcWintProdutosCodigos (jdbcId), em lotes de 500 (ORA-01795, como a 003).
+// runQueryMitra nao alcanca PCPRODUT: o banco do projeto nao tem as PC*.
+async function codigosDoErp(itens) {
+  const codprods = [];
+  for (const item of itens) {
+    const codprod = inteiro(item.CODPROD);
+    if (codprod > 0 && codprods.indexOf(codprod) === -1) codprods.push(codprod);
+  }
+  const porProduto = {};
+  for (let inicio = 0; inicio < codprods.length; inicio += 500) {
+    const linhas = linhasDe(await chamar('sgcWintProdutosCodigos', { codprods: codprods.slice(inicio, inicio + 500).join(', ') }));
+    for (const linha of linhas) porProduto[inteiro(linha.CODPROD)] = linha;
+  }
+  return itens.map(function (item) {
+    const codigos = porProduto[inteiro(item.CODPROD)] || {};
+    return Object.assign({}, item, { CODFAB: String(codigos.CODFAB || '').trim(), EAN: String(codigos.EAN || '').trim() });
+  });
 }
 function inteiro(valor) { const n = Number(valor); return Number.isFinite(n) ? Math.trunc(n) : 0; }
 function numero(valor) { const n = Number(valor); return Number.isFinite(n) ? n : 0; }
@@ -651,12 +702,11 @@ const gravada = (await consultar(
 if (!gravada) return { ok: false, erro: 'A nota nao foi gravada: confira o seu perfil de acesso.' };
 const idNf = inteiro(gravada.ID);
 
-// 2. os itens da nota, num lote so (D-002).
-const itensPedido = await consultar(
-  'SELECT I.CODPROD, I.DESCRICAO, I.QT_PEDIDA, I.PRECO_CUSTO,'
-  + " COALESCE((SELECT TRIM(PP.CODFAB) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS CODFAB,"
-  + " COALESCE((SELECT TRIM(PP.CODAUXILIAR) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS EAN"
-  + ' FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD = ' + cardId + " AND COALESCE(I.STATUS, '') <> 'removido'");
+// 2. os itens da nota, num lote so (D-002). Os codigos alternativos dos itens
+// do pedido vem do ERP (D-016), nunca de PCPRODUT pelo banco do projeto.
+const itensPedido = await codigosDoErp(await consultar(
+  'SELECT I.CODPROD, I.DESCRICAO, I.QT_PEDIDA, I.PRECO_CUSTO'
+  + ' FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD = ' + cardId + " AND COALESCE(I.STATUS, '') <> 'removido'"));
 
 const COLUNAS_ITEM = ${JSON.stringify(emLista(COLUNAS_NF_ITEM))};
 const COLUNAS_OCO = ${JSON.stringify(emLista(COLUNAS_OCORRENCIA))};
@@ -867,6 +917,21 @@ const erros = [];
 let sugestoes = 0;
 let consultasErp = 0;
 
+// D-016: PCPRODUT nao existe no banco do projeto. Os itens dos 30 cards saem
+// numa consulta e os codigos de fabrica/EAN deles vem do Oracle numa leitura
+// por RODADA (sgcWintProdutosCodigos, lotes de 500) — fora da conta de RNF-002,
+// que e a busca de notas por fornecedor+filial. Sem o ERP aqui, a rodada segue
+// casando so por CODPROD e NUMPED e registra o motivo em erros[].
+let itensDosCards = cards.length === 0 ? [] : await consultar(
+  'SELECT I.ID_CARD, I.CODPROD FROM SGC_PEDIDO_ITEM I'
+  + ' WHERE I.ID_CARD IN (' + cards.map(function (c) { return inteiro(c.ID_CARD); }).join(', ') + ')'
+  + " AND COALESCE(I.STATUS, '') <> 'removido'");
+try {
+  itensDosCards = await codigosDoErp(itensDosCards);
+} catch (erro) {
+  erros.push({ grupo: '', erro: 'Codigos de fabrica e EAN dos itens nao lidos do WinThor: ' + ((erro && erro.message) || String(erro)) });
+}
+
 for (const chave of Object.keys(grupos)) {
   const grupo = grupos[chave];
   try {
@@ -912,14 +977,9 @@ for (const chave of Object.keys(grupos)) {
       else jaSugeridas.push(inteiro(existente.ID_CARD) + '|' + chaveNota);
     }
 
-    // Itens de todos os cards do grupo, numa consulta.
-    const idsDoGrupo = grupo.cards.map(function (c) { return inteiro(c.ID_CARD); }).join(', ');
-    const itens = await consultar(
-      'SELECT I.ID_CARD, I.CODPROD,'
-      + " COALESCE((SELECT TRIM(PP.CODFAB) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS CODFAB,"
-      + " COALESCE((SELECT TRIM(PP.CODAUXILIAR) FROM PCPRODUT PP WHERE PP.CODPROD = I.CODPROD), '') AS EAN"
-      + ' FROM SGC_PEDIDO_ITEM I WHERE I.ID_CARD IN (' + idsDoGrupo + ")"
-      + " AND COALESCE(I.STATUS, '') <> 'removido'");
+    // Itens de todos os cards do grupo, recortados da leitura unica da rodada.
+    const idsDoGrupo = grupo.cards.map(function (c) { return inteiro(c.ID_CARD); });
+    const itens = itensDosCards.filter(function (i) { return idsDoGrupo.indexOf(inteiro(i.ID_CARD)) !== -1; });
 
     for (const id of Object.keys(notas)) {
       if (jaVinculadas.indexOf(id) !== -1) continue;
@@ -1168,7 +1228,14 @@ const assunto = String(event.assunto || '').trim()
 
 // EM-02: a copia fixa entra aqui e nunca duplica o destinatario.
 const destinatarios = [para, COPIA_FIXA].filter(function (email, indice, lista) { return lista.indexOf(email) === indice; });
-await sendEmailMitra({ projectId, to: destinatarios, subject: assunto, body: corpo });
+// Spec 016 (R-171, P-01): sai na hora; se falhar, a cobranca e registrada do
+// mesmo jeito e o e-mail entra na fila de nova tentativa (add-018).
+let erroEmail = '';
+try {
+  await sendEmailMitra({ projectId, to: destinatarios, subject: assunto, body: corpo });
+} catch (erro) {
+  erroEmail = String((erro && erro.message) || erro || 'falha sem detalhe');
+}
 
 const enviadoEm = agora();
 // R-033 ajustada (D-005): o JS grava SO a comunicacao; o contato e da tela.
@@ -1178,14 +1245,24 @@ await chamar('sgcEscComunicacaoInserir', {
   enviadoPor: quem.id, enviadoEm: enviadoEm,
 });
 const ultima = (await consultar('SELECT MAX(ID) AS ID FROM SGC_COMUNICACAO WHERE ID_CARD = ' + cardId))[0];
+const emailNaFila = Boolean(erroEmail);
+if (emailNaFila) {
+  const idComunicacao = inteiro(ultima && ultima.ID);
+  await chamar('sgcEscEmailFilaInserir', { idComunicacao: idComunicacao, erro: texto(erroEmail, 1900), agora: enviadoEm });
+  const fila = (await consultar('SELECT ID FROM SGC_EMAIL_FILA WHERE ID_COMUNICACAO = ' + idComunicacao))[0];
+  if (!fila) throw new Error('O e-mail nao saiu e nao entrou na fila de nova tentativa: ' + erroEmail);
+}
 
 try {
   await chamar('kbNotaRegistrar', {
-    cardId: cardId, usuarioId: quem.id, texto: 'Cobranca de faturamento enviada para ' + para + '.',
+    cardId: cardId, usuarioId: quem.id,
+    texto: emailNaFila
+      ? 'Cobranca de faturamento registrada; o e-mail para ' + para + ' nao saiu agora e entrou na fila de nova tentativa.'
+      : 'Cobranca de faturamento enviada para ' + para + '.',
   });
 } catch (e) { /* nota e acessoria */ }
 
-return { ok: true, destinatarios: destinatarios, comunicacaoId: inteiro(ultima && ultima.ID) };`;
+return { ok: true, destinatarios: destinatarios, comunicacaoId: inteiro(ultima && ultima.ID), emailNaFila: emailNaFila };`;
 
 /* ─────────────── a lista publicada ─────────────── */
 
@@ -1194,6 +1271,7 @@ const LEITURAS = [
   { name: 'sgcWintNfItens', code: SQL_NF_ITENS, resumo: 'RF-006/RF-007 - itens de UMA nota com lote, validade, codigo de fabrica e EAN. Params: numnota int, serie string, codfornec int' },
   { name: 'sgcWintNfParcelas', code: SQL_NF_PARCELAS, resumo: 'RF-009/RN-007 - duplicatas da nota com os dias entre emissao e vencimento. Params: numnota int, codfornec int' },
   { name: 'sgcWintNfBuscar', code: SQL_NF_BUSCAR, resumo: 'RF-005 (O2-07) - registro hibrido: acha a nota pelo numero SEM exigir entrada no armazem. Params: numnota int, codfornec int' },
+  { name: 'sgcWintProdutosCodigos', code: SQL_PRODUTOS_CODIGOS, resumo: 'RF-002/RF-007 (D-016) - codigo de fabrica e EAN dos produtos da lista, para o casamento NF x pedido; PCPRODUT nao existe no banco do projeto. Params: codprods lista' },
   { name: 'sgcNfSugestoesListar', code: SQL_SUGESTOES_LISTAR, resumo: 'RF-024 - fila de sugestoes com pedido, fase, score, motivo e situacao; a nota ja vinculada sai da fila (RN-010). Params: status, codfornec, busca, hoje, limite, offset' },
   { name: 'sgcNfSugestoesListarTotal', code: SQL_SUGESTOES_TOTAL, resumo: 'RF-024/RNF-005 - total da fila de sugestoes, para a paginacao. Params: status, codfornec, busca' },
   { name: 'sgcFaturamentoPendenteListar', code: SQL_PENDENTE_LISTAR, resumo: 'RF-025/C-028 - pedidos enviados sem 100 % faturado, com os dias uteis desde o envio, contatos e as duas colunas de B.O. (R-041). Params: faixa, busca, hoje, limite, offset' },
@@ -1207,7 +1285,7 @@ const JAVASCRIPT = [
   { name: 'sgcNfVincular', code: JS_NF_VINCULAR, resumo: 'RF-005 a RF-013/RF-016 - grava a nota, os itens e as sete conferencias e recalcula o faturamento. Params: cardId, idSugestao, numnota, serie, codfornec, codfilial, origem, itensJson' },
   { name: 'sgcOcorrenciaDecidir', code: JS_OCORRENCIA_DECIDIR, resumo: 'RF-011/RF-012 - aceita ou recusa conferencia (individual ou todas as conformes numa execucao); recusa exige 10 caracteres. Params: cardId, idOcorrencia, modo, decisao, justificativa' },
   { name: 'sgcFaturamentoMonitorar', code: JS_FATURAMENTO_MONITORAR, cron: '0 2 11 * * *', resumo: 'RF-018 a RF-021/RNF-003 - rotina diaria de cobranca: niveis 3/5/diario em dias uteis, aviso e espelho da capa; pula a fase bo (R-041); nao envia e-mail nem consulta o ERP. Sem parametros' },
-  { name: 'sgcCobrancaEnviar', code: JS_COBRANCA_ENVIAR, resumo: 'RF-023/RN-014 - cobranca MANUAL por e-mail, com copia fixa compras@benenutri.com; grava so SGC_COMUNICACAO (o contato e da tela, D-005). Params: cardId, para, assunto, corpo' },
+  { name: 'sgcCobrancaEnviar', code: JS_COBRANCA_ENVIAR, resumo: 'RF-023/RN-014 - cobranca MANUAL por e-mail, com copia fixa compras@benenutri.com; grava so SGC_COMUNICACAO (o contato e da tela, D-005); e-mail que falha entra na fila de nova tentativa (016, emailNaFila). Params: cardId, para, assunto, corpo' },
 ];
 
 /** Materializa `definitions` com o mapa nome -> id injetado nos corpos JAVASCRIPT. */
@@ -1277,7 +1355,7 @@ VALUES (${boardId}, NULL, '${campo.chave}', '${escapar(campo.label)}', '${campo.
     console.log(`  campo criado     ${campo.chave}`);
   }
 
-  /* 2. as 25 server functions — ids reais por NOME (R-016), nunca hardcoded */
+  /* 2. as 26 server functions — ids reais por NOME (R-016), nunca hardcoded */
   const existentes = async () => {
     const lista = (await sdk.listServerFunctionsMitra({ projectId })).result ?? [];
     return new Map(lista.map((f) => [f.name, f.id]));

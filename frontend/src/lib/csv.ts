@@ -27,7 +27,14 @@ export function textoCsv(cabecalho: string[], linhas: (string | number)[][]): st
 const BOM_UTF8 = String.fromCharCode(0xfeff);
 
 export function baixarCsv(nome: string, texto: string): void {
-  const blob = new Blob([BOM_UTF8 + texto], { type: 'text/csv;charset=utf-8;' });
+  baixarTexto(nome, BOM_UTF8 + texto, 'text/csv;charset=utf-8;');
+}
+
+/** O mesmo download para um texto qualquer — sem BOM: o arquivo de importação
+ * do WinThor (011, R-117) é lido pelo ERP, não pelo Excel, e o BOM quebraria a
+ * primeira linha. */
+export function baixarTexto(nome: string, texto: string, tipo = 'text/plain;charset=utf-8;'): void {
+  const blob = new Blob([texto], { type: tipo });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

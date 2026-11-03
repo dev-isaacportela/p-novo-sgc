@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS SGC_PEDIDO (
 - `TEC_PRODUTOS_REPROVADOS` guarda os códigos separados por vírgula (`"1024,2088"`), no mesmo formato que a lib usa para `responsaveisIds`. A lista de produtos para marcar vem da 003.
 - `ENVIO_OBS`, `ENVIO_POR` e `ENVIO_EM` completam o registro do envio de EN-03.
 - **Não existe coluna `PRIORIDADE`** (R-009): prioridade vive só no campo do quadro, que é
-  onde a pessoa a edita; `/pedidos/novo` a informa nos `valores` de `api.cardCriar`.
+  onde a pessoa a edita; a janela "Novo pedido" a informa nos `valores` de `api.cardCriar`.
 
 Campos do quadro `compras` (`KB_CAMPO`, criados pelo `add-005`, chave estável):
 
@@ -453,9 +453,9 @@ A cópia para `compras@benenutri.com` é destinatário fixo das dez primeiras
 
 | Tela / rota | Responsabilidade | Componentes reusados | Novos |
 |---|---|---|---|
-| `/quadro` | `KanbanBoard slug="compras"` com `novoCard` ("Novo pedido" → `/pedidos/novo`), `atualizarACadaMs={60000}`, `podeMover`, `antesDeMover`, `podeExcluir`, `acoesExtras`; `abasExtras` são da 003 (o integrador junta). Persona `comercial` não passa da guarda: `Alert` com "Seu perfil não tem acesso ao quadro de compras." e nada de `KanbanBoard` (RN-021) | `KanbanBoard` da lib, `Alert` | `pages/quadro/QuadroPage.tsx` (já existe, ganha as props), `pages/quadro/AcoesDoPedido.tsx` |
+| `/quadro` | `KanbanBoard slug="compras"` com `novoCard` ("Novo pedido" → janela `NovoPedidoDialogo` sobre o quadro, `?novo=1` na URL, R-118), `atualizarACadaMs={60000}`, `podeMover`, `antesDeMover`, `podeExcluir`, `acoesExtras`; `abasExtras` são da 003 (o integrador junta). Persona `comercial` não passa da guarda: `Alert` com "Seu perfil não tem acesso ao quadro de compras." e nada de `KanbanBoard` (RN-021) | `KanbanBoard` da lib, `Alert` | `pages/quadro/QuadroPage.tsx` (já existe, ganha as props), `pages/quadro/AcoesDoPedido.tsx` |
 | `/quadro/admin` | `BoardAdmin`; a rota só renderiza para a persona admin, e quem chega sem permissão vê um `Alert` com o motivo e o caminho de volta | `BoardAdmin` da lib, `Alert` | guarda em `pages/quadro/QuadroAdminPage.tsx` |
-| `/pedidos/novo` | criação manual: fornecedor, filial, período e prioridade; título e responsável são automáticos | `PageHeader`, `Panel`, `LabelledField`, `SelectMenu` (fornecedor, filial e prioridade), `DatePicker` (spec 004, UI-03 B — o campo de data de todas as telas), `Button`, `Alert` | `pages/pedidos/NovoPedidoPage.tsx` |
+| `/quadro?novo=1` (R-118; `/pedidos/novo` redireciona para cá) | criação manual numa janela sobre o quadro: fornecedor, filial, período e prioridade; título e responsável são automáticos; fornecedores carregados só ao abrir | `Dialog`, `Field`, `SelectMenu` (fornecedor, filial e prioridade), `DatePicker` (spec 004, UI-03 B), `Button`, `Alert` | `pages/pedidos/NovoPedidoDialogo.tsx` |
 | `/notificacoes` | feed paginado de responsável novo, pedido movido e mensagem nova | `PageHeader`, `Panel`, `PanelHeader`, `Table`/`Tr`/`Td`/`RowTitle`/`RowMeta`, `Badge`, `Pagination`, `EmptyState` | `pages/notificacoes/NotificacoesPage.tsx` |
 | `/seguranca` | persona por usuário (admin e diretoria) | `PageHeader`, `Panel`, `Toolbar`, `SearchInput`, `Table`, `SelectMenu`, `Pagination`, `Alert` | `pages/seguranca/SegurancaPage.tsx` |
 
@@ -480,6 +480,32 @@ projeto (`src/components/DatePicker.tsx`, spec 004; UI-03 B e a emenda do
 Os diálogos seguem §9.5: `max-h-[90vh]`, `flex-col`, só o miolo rola, rodapé
 `flex-col-reverse sm:flex-row sm:justify-end`. Sem toast (UI-02 A): o
 resultado aparece pelo `ctx.avisar()` da lib, na faixa de aviso do card.
+
+### O card depois da Análise (R-141)
+
+`lib/conteudo-da-fase.ts` monta cada fase depois da Análise como o legado:
+`capa` primeiro (`CapaDoPedido.tsx`; o `resumo` é o da Análise, R-133), depois o bloco de assunto da fase e os blocos de trabalho.
+
+| Fase | Blocos |
+|---|---|
+| Técnica, Diretoria | capa · aprovacao · itens · alertas |
+| Envio | capa · envio |
+| Enviado | capa · enviado · notas-fiscais · recebimento |
+| Trânsito | capa · acompanhamento · recebimento · notas-fiscais |
+| Faturamento | capa · notas-fiscais · conclusao · bo |
+| B.O. | capa · bo · conclusao · notas-fiscais |
+| Concluído | capa · concluido · bo (só com item) |
+| Cancelado | capa · itens-pedido |
+
+Custo por abertura (RNF-001, teto de 300/min): continua `kbCardDetalhe` +
+`sgcPedidoCarregar`; o resumo, a aprovação, o envio, o enviado e o
+acompanhamento não chamam nada. Conclusão e concluído leem o mesmo
+`sgcNfListar`/`sgcBoCarregar` dos blocos Notas fiscais e B.O. por
+`abas/carga-do-card.ts` (promessa única por card durante 15 s; quem grava pede
+`forcar` e avisa os outros). A capa só volta ao `sgcPedidoCarregar` quando o
+card muda de fase aberto. Regra pura: `capa-do-pedido.ts`, `aprovacao.ts`,
+`envio-industria.ts`, `acompanhamento.ts`, `conclusao.ts` e `topoDoBo` em
+`bo.ts`, com teste em `frontend/tests/`.
 
 ## Regras puras (`frontend/src/lib/`)
 
@@ -566,7 +592,7 @@ export function validarEnvio(
 
 ## Fluxo
 
-**Criar pedido** (`/pedidos/novo`) — duas chamadas, nunca uma JS aninhada:
+**Criar pedido** (janela "Novo pedido" do quadro, R-118) — duas chamadas, nunca uma JS aninhada:
 
 1. A tela valida com `validarNovoPedido` e monta o título com `tituloDoPedido`.
 2. `api.cardCriar({ boardId, titulo, valores, responsaveisIds })` (transporte da
@@ -698,7 +724,7 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 | C-033 | `backend/simulator/smoke/002-quadro.mjs` | com 2 anexos, o corpo do e-mail da automação 11 tem 2 linhas "nome — url"; sem anexos, "Nenhum anexo" |
 | C-034 | `backend/simulator/smoke/002-quadro.mjs` | mover para `cancelado` dispara a automação 10 e o assunto contém "cancelado" |
 | C-035 | `backend/simulator/smoke/002-quadro.mjs` | `kbCardsListar` devolve `valores.fornecedor`, `filial`, `valor_total`, `prioridade`; `KB_FASE.CAPA_JSON` da `analise` cita `alertas_pendentes` |
-| C-036 | `frontend/tests/pedido.test.mjs` | `lib/quadro.ts` exporta `ROTULO_NOVO_PEDIDO === 'Novo pedido'` e `ROTA_NOVO_PEDIDO === '/pedidos/novo'` |
+| C-036 | `frontend/tests/pedido.test.mjs` | `lib/quadro.ts` exporta `ROTULO_NOVO_PEDIDO === 'Novo pedido'` e `menuParaPersona` não tem `/pedidos/novo` para persona nenhuma (R-118) |
 | C-037 | `frontend/tests/pedido.test.mjs` | `lib/quadro.ts` exporta `ATUALIZAR_A_CADA_MS === 60000` |
 | C-038 | `frontend/tests/permissoes.test.mjs` | `permissoesDe('admin', …).administrarQuadro` = true; as outras 4 personas = false |
 | C-039 | `backend/simulator/smoke/002-quadro.mjs` | `sgcPodeExcluir` com ana → 0 e motivo citando "Cancelar compra"; com gil e dora → 1; `kbCardExcluir` como ana recusado |
@@ -751,7 +777,7 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 **Consome da 001 (fornecedores):**
 
 - `sgcFornecedorListar({ ativo: 1 })` é a **única** origem do seletor de
-  fornecedor de `/pedidos/novo` (R-002: fornecedor inativo não é oferecido);
+  fornecedor da janela "Novo pedido" (R-002: fornecedor inativo não é oferecido);
   `sgcWintFornecedores` nunca aparece em tela de pedido — é da parametrização.
 - As filiais atendidas vêm de `sgcFornecedorCarregar(codfornec).filiais`, a
   única fonte (C-09): o seletor de filial só abre depois do fornecedor
@@ -824,10 +850,10 @@ filial, valor e prioridade são campos do quadro, já carregados com a lista.
 | D-004 | Os campos do quadro são espelho de mão única (pedido → quadro) | gravar nos dois sentidos | dois donos do mesmo dado divergem; a regra lê sempre o pedido, e o campo do quadro só existe para a capa e a busca não custarem SF por cartão (DS-01 A) |
 | D-005 | O quadro tem 6 campos (confirmados no `000` revisado): `fornecedor`, `filial`, `valor_total`, `prioridade`, `alertas_pendentes`, `motivo_cancelamento` | só os 4 primeiros | C-06 pede os alertas na capa da Análise e CA-04 pede o motivo na capa de Canceladas; sem campo, cada cartão custaria uma consulta |
 | D-006 | Uma automação de e-mail por fase (11 no total) | uma só, sem `faseId` | EM-01 A pede "por fase" justamente para o administrador ajustar o texto de uma etapa sem tocar em código; o custo é 11 linhas no instalador |
-| D-007 | `/pedidos/novo` chama `kbCardCriar` e depois a escrita da capa, da tela | uma JS do SGC que chame `kbCardCriar` por dentro | chamada aninhada não propaga `:VAR_USER` com garantia: o card nasceria sem criador e sem responsável |
+| D-007 | a janela "Novo pedido" chama `kbCardCriar` e depois a escrita da capa, da tela | uma JS do SGC que chame `kbCardCriar` por dentro | chamada aninhada não propaga `:VAR_USER` com garantia: o card nasceria sem criador e sem responsável |
 | D-008 | `sgcEnvioIndustriaRegistrar` confere persona e fase **no próprio JS**, e as duas escritas que ele chama recebem `enviadoPor` como parâmetro | `:VAR_USER` nas escritas do envio | a chamada é aninhada (mesma razão de D-076 da lib). A conferência acontece uma vez, antes do e-mail — que é a parte irreversível |
 | D-009 | `sgcAnaliseSair` (003) **é** o `antesDeMover` de `analise → tecnica`: verificar e arrumar acontecem na mesma execução, antes do `ctx.mover` (R-011) | verificar numa JS e arrumar em outra, depois do movimento | arrumar depois deixa o card em Técnica com itens zerados e reprovações velhas se a segunda chamada falhar — pior que o inverso. Verificar antes e recusar sem gravar é a mesma chamada, uma JS a menos por saída, e o gancho `sgcPodeMover` reconfere no servidor. **Risco aceito**: se o motor recusar o movimento depois da arrumação, as escritas já feitas não são destrutivas (o zerado sairia de qualquer jeito; a reprovação some com o card ainda em Análise), a persona já foi barrada pelo `podeMover` síncrono e o quadro não tem campo obrigatório |
-| D-010 | Prioridade vive **só** no campo do quadro; `SGC_PEDIDO` não tem a coluna (R-009) | guardar nas duas pontas e sincronizar | prioridade é o único dos campos que a **pessoa** edita direto no card (C-07 B); sincronizar de volta custaria uma escrita por edição de campo, e o motor não avisa o consumidor quando um campo muda. `/pedidos/novo` passa o valor inicial nos `valores` de `api.cardCriar` |
+| D-010 | Prioridade vive **só** no campo do quadro; `SGC_PEDIDO` não tem a coluna (R-009) | guardar nas duas pontas e sincronizar | prioridade é o único dos campos que a **pessoa** edita direto no card (C-07 B); sincronizar de volta custaria uma escrita por edição de campo, e o motor não avisa o consumidor quando um campo muda. a janela "Novo pedido" passa o valor inicial nos `valores` de `api.cardCriar` |
 | D-011 | Cancelar segue a mesma regra de movimento: quem não move aquele card não o cancela (a diretoria cancela na fase dela) | diretoria cancela de qualquer fase | CA-01 libera a fase de origem, P-07 limita a persona; juntas, cancelar é um movimento como os outros, e o gancho não precisa de exceção |
 | D-012 | Nenhum campo do quadro é obrigatório | marcar os campos da fase como obrigatórios | o motor cobra obrigatório em qualquer direção e barraria cancelar e voltar (F-05 A) |
 | D-013 | A persona é lida uma vez por sessão (`sgcPersonaAtual`) e guardada em memória | consultar a cada tela | teto de 300 execuções/min; a persona muda raramente e a mudança vale na sessão seguinte (C-042) |

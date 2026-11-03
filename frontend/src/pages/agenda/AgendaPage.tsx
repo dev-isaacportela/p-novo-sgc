@@ -11,15 +11,23 @@ import { situacao, type SituacaoAgenda } from '@/lib/agenda';
 import { permissoesDe } from '@/lib/permissoes';
 import { DatePicker } from '@/components/DatePicker';
 import {
-  PageHeader, Panel, Toolbar, FilterChip, SelectMenu, Field, Table, Th, Td, Tr,
+  AlternaOpcoes, PageHeader, Panel, Toolbar, FilterChip, SelectMenu, Field, Table, Th, Td, Tr,
   RowTitle, RowMeta, Status, Code, Dash, Alert, EmptyState, Pagination,
   Button, IconButton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogBody, DialogFooter, MetaDot, Stat,
 } from '@/components/page';
 import { AgendaDialogo } from './AgendaDialogo';
+import { AgendaCalendario } from './AgendaCalendario';
+import type { LinhaDoCalendario } from './AgendaCalendario';
 import { ProcessarDialogo } from './ProcessarDialogo';
 
 const POR_PAGINA = 50;
+
+const VISOES: { value: 'lista' | 'calendario'; label: string }[] = [
+  { value: 'lista', label: 'Lista' }, { value: 'calendario', label: 'Calendário' },
+];
+/** Teto da carga do calendário: um mês de agendamentos, recorrentes antigos inclusos. */
+const LIMITE_CALENDARIO = 500;
 
 const SITUACAO_OPCOES = [
   { value: '', label: 'Todas as situações' },
@@ -65,6 +73,15 @@ export default function AgendaPage() {
   const [carregando, setCarregando] = React.useState(true);
   const [erro, setErro] = React.useState('');
 
+  // R-121: visão de calendário. O mês tem a sua própria carga (um mês inteiro,
+  // sem paginação), recorrentes que começaram antes inclusos — a projeção das
+  // ocorrências dentro do mês é regra pura (`agruparPorDia`).
+  const [visao, setVisao] = React.useState<'lista' | 'calendario'>('lista');
+  const [mes, setMes] = React.useState(() => hojeIso().slice(0, 7));
+  const [linhasMes, setLinhasMes] = React.useState<LinhaDoCalendario[]>([]);
+  const [carregandoMes, setCarregandoMes] = React.useState(false);
+  const [versaoMes, setVersaoMes] = React.useState(0);
+
   const [dialogoAberto, setDialogoAberto] = React.useState(false);
   const [idEditando, setIdEditando] = React.useState<number | null>(null);
   const [processarAberto, setProcessarAberto] = React.useState(false);
@@ -97,6 +114,21 @@ export default function AgendaPage() {
   }, [fornecedor, filial, dataInicio, dataFim, situacaoFiltro, pagina]);
 
   React.useEffect(() => { carregar(); }, [carregar]);
+
+  React.useEffect(() => {
+    if (visao !== 'calendario') return;
+    let vivo = true;
+    const [ano, numeroMes] = mes.split('-').map(Number);
+    const fimDoMes = `${ano}-${String(numeroMes).padStart(2, '0')}-${String(new Date(Date.UTC(ano, numeroMes, 0)).getUTCDate()).padStart(2, '0')}`;
+    linhas('sgcAgendaListar', {
+      codfornec: Number(fornecedor) || 0, codfilial: filial, dataInicio: '', dataFim: fimDoMes,
+      situacao: situacaoFiltro, hoje: hojeIso(), limite: LIMITE_CALENDARIO, offset: 0,
+    })
+      .then((rows) => { if (vivo) setLinhasMes(rows as unknown as LinhaDoCalendario[]); })
+      .catch(() => { if (vivo) setErro('Não foi possível carregar o calendário agora.'); })
+      .finally(() => { if (vivo) setCarregandoMes(false); });
+    return () => { vivo = false; };
+  }, [visao, mes, fornecedor, filial, situacaoFiltro, versaoMes]);
 
   // Fornecedores para o filtro: ativo:0 (RN-015 — agendamento antigo de
   // fornecedor inativo continua na lista, então o filtro também os oferece;
@@ -138,6 +170,7 @@ export default function AgendaPage() {
       setAlerta({ tone: 'success', texto: `Agendamento de ${cancelando.FORNECEDOR} cancelado.` });
       setCancelando(null);
       carregar();
+      setVersaoMes((n) => n + 1);
     } catch {
       setAlerta({ tone: 'error', texto: 'Não foi possível cancelar o agendamento.' });
     }
@@ -166,6 +199,14 @@ export default function AgendaPage() {
 
       <Panel>
         <Toolbar>
+          <Field label="Visão">
+            <AlternaOpcoes
+              rotulo="Visão da agenda"
+              opcoes={VISOES}
+              valor={visao}
+              onValor={(v) => { setVisao(v); if (v === 'calendario') setCarregandoMes(true); }}
+            />
+          </Field>
           <Field label="Fornecedor">
             <SelectMenu
               label="Fornecedor" value={fornecedor} onChange={(v) => { setFornecedor(v); setPagina(1); }}
@@ -203,7 +244,16 @@ export default function AgendaPage() {
           </div>
         ) : null}
 
-        {!carregando && linhasAgenda.length === 0 ? (
+        {visao === 'calendario' ? (
+          <AgendaCalendario
+            mes={mes}
+            onMes={(m) => { setMes(m); setCarregandoMes(true); }}
+            linhas={linhasMes}
+            carregando={carregandoMes}
+            podeEditar={permissoes.agendar}
+            onEditar={abrirEditar}
+          />
+        ) : !carregando && linhasAgenda.length === 0 ? (
           <EmptyState
             title="Nenhum agendamento"
             hint="Ajuste os filtros ou crie o primeiro agendamento de análise."
@@ -264,18 +314,20 @@ export default function AgendaPage() {
           </Table>
         )}
 
-        <Pagination
-          page={pagina} lastPage={lastPage} total={total} unit="agendamentos" busy={carregando}
-          onPrevious={() => setPagina((p) => Math.max(1, p - 1))}
-          onNext={() => setPagina((p) => Math.min(lastPage, p + 1))}
-        />
+        {visao === 'lista' ? (
+          <Pagination
+            page={pagina} lastPage={lastPage} total={total} unit="agendamentos" busy={carregando}
+            onPrevious={() => setPagina((p) => Math.max(1, p - 1))}
+            onNext={() => setPagina((p) => Math.min(lastPage, p + 1))}
+          />
+        ) : null}
       </Panel>
 
       <AgendaDialogo
         open={dialogoAberto}
         onOpenChange={setDialogoAberto}
         idAgenda={idEditando}
-        onSalvo={() => { setDialogoAberto(false); carregar(); }}
+        onSalvo={() => { setDialogoAberto(false); carregar(); setVersaoMes((n) => n + 1); }}
       />
       <ProcessarDialogo
         open={processarAberto}

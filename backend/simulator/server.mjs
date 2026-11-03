@@ -20,6 +20,8 @@ import {
 import { seedDatabase } from './seed.mjs';
 import { registerMysqlFunctions, toSqlite } from './mysql-dialect.mjs';
 import { loadDefinitions, createRunner } from './runtime.mjs';
+import { abrirWinthor } from './winthor-oracle.mjs';
+import { abrirGestaoCustos } from './gestao-custos.mjs';
 
 if (!existsSync(DB_PATH)) {
   console.log('[simulador] banco nao encontrado — gerando dados simulados...');
@@ -81,7 +83,13 @@ function lerMapaDoFrontend() {
   return nomes && ids ? { nomes, ids } : null;
 }
 
-const execute = createRunner(db, { resolveById: (id) => byId.get(id) ?? null });
+// Com SIMULATOR_WINTHOR=oracle no .env, as sgcWint* leem o WinThor REAL em vez
+// das PC* do seed (winthor-oracle.mjs); sem a chave, tudo fica no SQLite.
+const winthor = await abrirWinthor();
+// A INTEGRATION gestao-de-custos: no SQLite (CUSTO_PRODUTOS do seed) por
+// padrão, na plataforma com SIMULATOR_GESTAO_CUSTOS=mitra (gestao-custos.mjs).
+const gestaoCustos = await abrirGestaoCustos({ db });
+const execute = createRunner(db, { resolveById: (id) => byId.get(id) ?? null, externo: winthor, externos: [gestaoCustos] });
 const idsSemDefinicao = new Set();
 const errosPorId = new Map();
 
@@ -187,6 +195,8 @@ const server = createServer(async (req, res) => {
         projeto: PROJECT_LABEL,
         db: DB_PATH,
         projectId: PROJECT_ID,
+        winthor: winthor ? winthor.descricao : 'sqlite (PC* do seed)',
+        gestaoCustos: gestaoCustos.descricao,
         [HEALTH_TABLE]: db.prepare(`SELECT COUNT(*) AS n FROM ${HEALTH_TABLE}`).get().n,
         serverFunctions: byId.size,
         definicoesCarregadas: byName.size,
@@ -303,6 +313,8 @@ server.listen(PORT, () => {
   console.log('');
   console.log(`  ${PROJECT_LABEL}`);
   console.log(`  Simulador em                    http://localhost:${PORT}`);
+  console.log(`  WinThor                         ${winthor ? winthor.descricao : 'sqlite (PC* do seed)'}`);
+  console.log(`  Gestão de Custos                ${gestaoCustos.descricao}`);
   console.log(`  Banco                           ${DB_PATH}`);
   console.log(`  Server Functions por id         ${byId.size}${mapa ? ' (mapa do frontend)' : ' (ordem das definicoes — sem mapa)'}`);
   if (overridden.length) console.log(`  Redefinidas                     ${overridden.map((o) => o.name).join(', ')}`);

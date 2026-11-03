@@ -1059,10 +1059,10 @@ cobre sintaxe; o conteúdo é do smoke). **Não** entram `leadTimeDias`, `cobert
 | C-008 | `smoke/011-compras-inteligentes.mjs` | com `dataInicio` = ontem, `dataFim` = hoje e `diasPeriodo` 2: 5405 → `VENDA_PERIODO` 20, `CONSUMO_DIARIO` 10, `VOLATILIDADE_DIARIA` 0; 5406 → 20 / 9,1892 / 10; 5407 → 20 / 10,8108 / 10 |
 | C-009 | `smoke/…` + `tests/ressuprimento.test.mjs` | consulta: `LEAD_TIME_MEDIDO` 5 no 5403, 1 no 5416 (mesmo dia) e 0 no 5410; regra: linhas 8 e 9 da tabela |
 | C-010, C-011 | `tests/ressuprimento.test.mjs` | linhas 10 e 11 da tabela, e `resolverParametros` devolvendo `origemCobertura` `fornecedor` e `sku` |
-| C-012 | `smoke/…` + `tests/ressuprimento.test.mjs` | `sgcEscParametroCompraSilenciar` como `gil` (gestor) grava `SILENCIADO_ATE` = hoje+30 e o motivo, e `sgcParametrosCompraListar` os devolve; como `ana` (analista) **não** grava nada; `sgcEscParametroCompraRestaurar` limpa; a regra tira o produto de `aComprar()` e o mantém na lista com `silenciado: true` |
+| C-012 | `smoke/…` + `tests/ressuprimento.test.mjs` | `sgcEscParametroCompraSilenciar` como `gil` (gestor) grava `SILENCIADO_ATE` = hoje+30 e o motivo, e `sgcParametrosCompraListar` os devolve; como `ana` (analista) **não** grava nada; `sgcEscParametroCompraRestaurar` limpa; a regra tira o produto de `aComprar()` e o mantém na lista com `silenciado: true`; o chip: `alternarSilenciados` / `escolherVisao` (`RecorteLista`) em `tests/ressuprimento.test.mjs` — ligar → `todos` + filtro, religar → visão anterior, card → filtro desligado |
 | C-013 | `smoke/011-compras-inteligentes.mjs` | 5408 com `excluir: '0'` → `VENDA_PERIODO` 90; `sgcEscVendaDesconsiderar` do `NUMTRANSITEM` da venda de 60 grava 1 linha; com `excluir` = esse número → `VENDA_PERIODO` 30 e `CONSUMO_DIARIO` menor; `sgcEscVendaReconsiderar` apaga e a venda volta a 90 |
 | C-014 | `tests/ressuprimento.test.mjs` | linhas 15 e 16 da tabela: com e sem licitação, todas as grandezas e o status |
-| C-015 | `tests/ressuprimento.test.mjs` | 5 medidas com valores 500/250/150/70/30 → `['A','A','B','C','C']` por `montarRessuprimento` (a régua é a `curvaAbc` da 003) |
+| C-015 | `tests/ressuprimento.test.mjs` | 5 medidas com `FATURAMENTO_PERIODO` 500/250/150/70/30 e `RENTABILIDADE_PERIODO` 30/500/250/150/70 → `curvaFaturamento` `['A','A','B','C','C']`, `curvaRentabilidade` `['C','A','A','B','C']`, `curva` `['C','A','B','C','C']` por `montarRessuprimento` (`curvasDoRessuprimento`: a régua `curvaPorValor` da 003 duas vezes e `piorCurva`); sem as duas colunas, venda × custo nas duas; `tests/compras.test.mjs` prova `curvaPorValor` ≡ `curvaAbc` e `piorCurva` |
 | C-016 | `tests/ressuprimento.test.mjs` | sem parâmetro, com alvos 35/45/60 por curva → máximos 70/90/120 (linhas 12 a 14); sem regra alcançável → 35 |
 | C-017 | `tests/ressuprimento.test.mjs` | `arredondarPorCaixa(50, 12)` → 60; `(48, 12)` → 48; `(0, 12)` → 0 (linha 19 cobre caixa 1) |
 | C-018 | `smoke/011-compras-inteligentes.mjs` | `kbCardCriar` + `sgcEscPedidoCriar` (`origem: 'compras_inteligentes'`) + `sgcItensGravar` com 3 itens: 1 card na fase `analise`, `SGC_PEDIDO.ORIGEM` = `compras_inteligentes`, `PERIODO_INICIO/FIM` iguais à janela, `VALORES_JSON` com prioridade `alta`, 3 linhas em `SGC_PEDIDO_ITEM` com `QT_PEDIDA`, `QT_SUGERIDA`, `PRECO_CUSTO` e `CURVA_ABC`, e `VL_TOTAL` = soma |
@@ -1072,6 +1072,10 @@ cobre sintaxe; o conteúdo é do smoke). **Não** entram `leadTimeDias`, `cobert
 | C-022 | `smoke/…` + `tests/ressuprimento.test.mjs` | `sgcEficienciaComprador` recortada por `codfornec: 1042` e `compradorId` do criador devolve `ITENS` 5, `ADERENTES` 3 e `PERC_ADERENCIA` 60,0 (R-045: nada de literal absoluto sobre a listagem global); `aderenteASugestao` devolve o mesmo para os 5 pares |
 | C-023 | `smoke/…` + `tests/permissoes.test.mjs` | matriz: `verComprasInteligentes` para admin/analista/gestor/diretoria e não para comercial; `operarComprasInteligentes` zerada em `READ_ONLY`; `parametrizarCompras` só admin/gestor; no servidor, `sgcEscParametroCompraSalvar` grava como `gil` e não grava como `ana` nem como `leo` |
 | C-024 | `tests/ressuprimento.test.mjs` | `COLUNAS_CSV` tem 10 títulos; `linhaCsv` de 3 linhas + `textoCsv` produz 4 linhas com `;`, com a descrição contendo `"` escapada |
+| C-040 | `smoke/011-compras-inteligentes.mjs` | `sgcWintRessuprimento` devolve `FATURAMENTO_PERIODO` (Σ QT × PUNIT) e `RENTABILIDADE_PERIODO` (Σ QT × (PUNIT − CUSTOFIN)) por produto: 5410 → 1000 e 400; a faixa 5401..5420 inteira = venda × 20 e venda × 8; sem venda → 0; com `excluir` da venda de 60 do 5408 → 600 e 240 |
+| C-041 | `smoke/011-compras-inteligentes.mjs` | `sgcWintProdutoVendas` (5408, janela) → ≥ 4 vendas com `CODUSUR` > 0 e `VENDEDOR` não vazio; em C-021, a entrada do 970001 traz `DT_SOLICITACAO` e `DT_PREVISAO` no formato ISO e `DT_PREVISAO < DT_ENTRADA` |
+| C-042 | `tests/ressuprimento-detalhe.test.mjs` | `rotuloMesLongo`, `mesesDeVendas`, `vendasDoMes`, `resumoDeVendas`, `desconsideradasPorMes` + `serieComprasVendas` com a 5ª série, `serieEmCaixas`, `mesesComMovimento`/`historicoSuficiente`, `entradaAtrasou`, `necessidade` (R-123) |
+| C-043, RN-029, C-044, RN-030, C-045, RN-031 | `tests/previsao.test.mjs` | `serieFechada`, `ajustarOutliers`, `mms`/`mmp`/`se`/`holt`/`holtWinters`, `metricas`, `preverVendas`/`modeloEscolhido`, `mediasDaSerie`, `sugestaoProjetada` (R-124), com os valores da tabela de testes; `tests/ressuprimento-detalhe.test.mjs` prova a projeção do modelo na última barra e no rodapé |
 | RN-001 | `smoke/011-compras-inteligentes.mjs` | os pesos, pela janela de 2 dias de C-008 (o dia do fim vale 1 e o anterior 0,85: 18,5 ÷ 1,85 = 10) |
 | RN-002 | `smoke/011-compras-inteligentes.mjs` | 5401 → `ESTOQUE_TOTAL` 100 e `ESTOQUE_ATUAL` 80; 5402 → `ESTOQUE_ATUAL` 0 (nunca negativo); 5404 → `ESTOQUE_EM_TRANSITO` 10 |
 | RN-003, RN-004, RN-005 | `tests/ressuprimento.test.mjs` | `resolverParametros` com as quatro combinações de cada eixo (sku, fornecedor, medido/curva, padrão) |
@@ -1225,3 +1229,82 @@ implementa — estão em `tasks.md` como tarefas de base, cada uma com o trecho 
 - **R-113** — os shims encadeados em `toSqlite` sem remover nenhuma reescrita da onda 3, as
   colunas de `PCEST`, a chave de `CHECK_INPUT`, as permissões, a rota, o menu e a página-stub
   (T-020 a T-024, T-037).
+
+## Layout legado — Opção A (R-117, 2026-10-30)
+
+A tela foi redesenhada no layout do sistema antigo (p-60523), mantendo tudo o que a
+spec já tinha e acrescentando os cenários C-026..C-039. Nada da regra pura anterior
+mudou; o que entrou está em módulos próprios para o `max-lines` de 800.
+
+### Arquivos
+
+| Arquivo | Conteúdo |
+|---|---|
+| `frontend/src/lib/ressuprimento.ts` | **+** visões (`linhasDaVisao`, `contarVisoes`, `completarCompra`, `quantidadeParaCompletar`, `emTransito`), ordem (`ordenarLinhas`), movimentação (`filtrarMovimentacao`), `nivelDeCobertura`, `textoDaSugestao`, `FiltrosLista`; a medida ganha `CUSTO_ATUAL` e `CODFAB` opcionais |
+| `frontend/src/lib/ressuprimento-detalhe.ts` | **novo**: `serieComprasVendas`, `totaisDoRodape`, `filiaisComExcesso`, `simularCompra`, calendário de meses, `DadosDoSku` |
+| `frontend/src/lib/carrinho.ts` | **novo**: `ItemCarrinho` (motivo + pedido mínimo), `carrinhoDeTexto`/`textoDoCarrinho` (RN-021), `resumoDoCarrinho`, `variacaoDePreco`, `economiaNoCusto`, `faltaParaMinimo`, `pedidoMinimoDoGrupo`, `filtrarCarrinho`, `textoImportacaoWinthor`, `nomeArquivoWinthor` |
+| `frontend/src/lib/csv.ts` | **+** `baixarTexto` (sem BOM) — o arquivo do WinThor é lido pelo ERP |
+| `frontend/src/components/page.tsx` | **+** §8.8: `CardVisao`, `GradeVisoes`, `ChipContagem`, `Disclosure`, `AlternaOpcoes`; reexporta `ComposedChart` e `LabelList` |
+| `pages/compras-inteligentes/ComprasInteligentesPage.tsx` | orquestração: cabeçalho com ações (Unidades/Caixas, Parâmetros do fornecedor, Coberturas ABC, Atualizar), barra de recorte, aviso de carrinho salvo, cards de visão, duas colunas a partir de `xl` (`xl:grid-cols-[minmax(0,1fr)_440px]`), carrinho em janela, diálogos |
+| `pages/compras-inteligentes/grid.tsx` | `ListaProdutos`: subtítulo, botão do carrinho, chips, tabela com linha selecionável (fundo accent + barra de 4px), paginação |
+| `pages/compras-inteligentes/painel-detalhe.tsx` | `PainelDetalhe`: 4 `Kpi`, o gráfico, as seis `Disclosure` |
+| `pages/compras-inteligentes/grafico.tsx` | `GraficoComprasVendas`: `ComposedChart` com `LabelList` em toda marca (R-116), 6m/13m, Gráfico/Tabela, rodapé |
+| `pages/compras-inteligentes/Carrinho.tsx` | `CarrinhoDialogo` (Dialog `sm:max-w-6xl`): cabeçalho, busca, grupos com `BarraConsumo` do mínimo, colunas do legado, rodapé |
+| `pages/compras-inteligentes/dialogos.tsx` | inalterado: `DetalheSku` (botão olho), `ParametrosDialogo`, `SilenciarDialogo`, `VendasDialogo` |
+
+### Contratos novos (add-013, bloco 81xx)
+
+| Nome | Tipo | Params | Saída | Id local |
+|---|---|---|---|---|
+| `sgcWintResumoFornecedores` | SQL (Oracle, `jdbcId`) | `codfornecs` **fragmento** (lista de CODFORNEC), `dataInicio`, `diasPeriodo` | `CODFORNEC`, `ITENS`, `VALOR_SUGERIDO` (RN-026) | 8110 |
+| `sgcItensEmPedidoAberto` | SQL (banco do projeto) | `codfornec`, `codfilial`, `limite`, `offset` | `CODPROD`, `ID_CARD`, `TITULO`, `FASE_CHAVE`, `QT_PEDIDA` — fases de RN-016, pela CHAVE | 8111 |
+
+`sgcWintRessuprimento` ganha duas colunas: `CODFAB` (`PCPRODUT.CODFAB`) e `CUSTO_ATUAL`
+(`PCEST.CUSTOFIN`). No simulador, `PCEST` ganha `CUSTOFIN` (`schema-winthor.mjs`) e o
+seed 011 grava `FAB-<codprod>` e dois custos atuais diferentes do da última entrada
+(5401: 12 → 11; 5403: 10 → 10,50). `CHECK_INPUT` ganha `codfornecs: '1042'`.
+
+### Fluxo e orçamento (RNF-001 emendada)
+
+1. Abrir: `sgcFornecedorListar` + `sgcEficienciaComprador` + `api.boardCarregar` (3) e, com a lista de
+   fornecedores, `sgcWintResumoFornecedores` (1) → o `hint` de cada opção do seletor.
+2. Fornecedor: `sgcFornecedorCarregar` (1) → filiais e `PEDIDO_MINIMO`.
+3. Filial: `sgcParametrosCompraListar`, `sgcVendasDesconsideradasListar`, `sgcCoberturaListar`,
+   `sgcPedidoAbertoDoFornecedor`, `sgcItensEmPedidoAberto` em paralelo (5), `sgcWintRessuprimento` (1) e,
+   com os códigos da lista, `sgcCustoUnidadesPorCaixa` (R-120, 1 por lote de 1000) → o `Map` de
+   `montarRessuprimento`, que também grava a origem da caixa na linha (`origemCaixa`).
+4. Selecionar um produto (o primeiro vem selecionado): `sgcWintProdutoHistorico` (13 meses),
+   `sgcWintProdutoUltimasCompras`, `sgcWintProdutoEstoqueFiliais` (3), em cache por SKU; "Atualizar"
+   limpa o cache. O gráfico, as filiais com excesso e a simulação saem desses dados e da linha.
+5. Carrinho: cada mudança grava no `localStorage` (`CHAVE_CARRINHO(usuarioId)`), com `abertoEm`,
+   `abertoPor` e `salvoEm`; ao abrir a tela com carrinho da tela vazio e texto guardado, o aviso.
+   "Criar N pedidos" é o mesmo caminho de antes (3 execuções por grupo); o "por que comprar" vai
+   como `observacao` do item. O carrinho só é bloqueado pelo pedido aberto do fornecedor + filial
+   **da tela** (os demais grupos, vindos de um carrinho salvo, não custam consulta extra).
+
+### Testes acrescentados
+
+| Cenário / regra | Arquivo |
+|---|---|
+| C-026, C-027, RN-020, C-038, C-031, C-037 | `frontend/tests/ressuprimento.test.mjs` |
+| C-032, C-033, C-034, RN-025, calendário | `frontend/tests/ressuprimento-detalhe.test.mjs` |
+| C-028, C-029, C-030, C-039 (tela), RN-021, RN-022, RN-023, RN-027 | `frontend/tests/carrinho.test.mjs` |
+| C-035, C-036, C-039 (servidor), RN-026, RN-027 | `backend/simulator/smoke/011-compras-inteligentes.mjs` |
+| C-046, C-047 | `smoke/011-compras-inteligentes.mjs` | `sgcCustoEspeciaisProdutos` (INTEGRATION; executor SQLite sobre COST_POLICIES/POLICY_ITEMS/COST_POLICY_CLIENTS do seed) e `sgcWintVendasClientesProdutos`; `smoke/000-gestao-custos.mjs` G-007 prova a emulação REST (`custosEspeciaisDeRegistros`) |
+| RN-032, C-048, RN-033, RN-034 | `tests/custo-especial.test.mjs` + `tests/ressuprimento.test.mjs` (R-125) | `oportunidadesDoItem`, `seloEspecial`, `sugestaoPorCliente`/`capRecenteSku`, `planoEspecial`, `chaveEspecial`/`lotesDeCodigos`; `chaveDaEntrada`, `custoDaEntrada`, `agruparCarrinho` e `itemDoCarrinho` com a linha especial |
+| C-049 | `tests/ressuprimento.test.mjs` | `coberturaComTransito` (50 + 100 a 2/dia → 75; sem consumo → null) e `precoDeCompra` (atual, última, nenhum) |
+| C-051, C-052 | `smoke/011-compras-inteligentes.mjs` + `npm run sim:winthor` | `sgcWintEstoqueFiliaisProdutos` (só as outras filiais com estoque líquido > 0) e `sgcWintBloqueiosProduto` (SQL do legado `ci_buscar_bloqueios_produto`) no seed (lotes do 5401, PCMOVBLOQUEIO, PCLOTELOG, PCEMPR, PCTABDEV); o `sim:winthor` acha no WinThor real um lote bloqueado com estoque e prova contagem > 0 nas duas |
+| RN-037, RN-038 | `tests/avisos-produto.test.mjs` | `excessosPorProduto`, `seloBloqueado`, `seloExcesso`, `filialCurta`, `resumoExcesso`, `motivoDoLote`, `resumoBloqueio`, `fatosDoLote`, `filtrarPorAvisos`, `contarAvisos` |
+| C-053, RN-001 / RN-011 (R-131) | `smoke/011-compras-inteligentes.mjs` + `tests/venda-valida.test.mjs` + `npm run sim:winthor` | fragmento `VENDA_VALIDA` (com `ENTRE_FILIAIS` e `REMESSA_FUTURA`) em todas as SFs da 011 que contam venda; `PUBLICO` só 11 a 15, com faturamento e margem públicos segregados; seed com PCNFSAID e PCFILIAL.CODCLI; `curvasDoRessuprimento(…, semPublico)` e `historicoSemPublico`; o `sim:winthor` prova contagem > 0 de cada exclusão e que a venda do 54 cai |
+| C-054, C-049 (R-132) | `smoke/011-compras-inteligentes.mjs` + `tests/transito.test.mjs` + `npm run sim:winthor` | CTE `PREVISAO_CHEGADA` (PCPEDIDO + PCITEM com saldo pendente) na consulta principal; `chegadaDoTransito`, `rotuloCobertura`, `textoChegada`; `coberturaFuturaComCompra` pela chegada; o `sim:winthor` prova previsão para os itens com trânsito |
+
+### Decisões
+
+| # | Decisão | Alternativa descartada | Por quê |
+|---|---|---|---|
+| D-017 | O carrinho é guardado no **navegador**, por usuário | Tabela `SGC_CARRINHO` + 3 SFs | Zero execução a mais na carga (RNF-001) e nenhuma tabela nova; retomar de outra máquina é dívida registrada na spec |
+| D-018 | "Completar compra" = sugestão 0, sem trânsito, com giro, cobertura ≤ alvo + lead (RN-020) | Todo produto com sugestão 0 | Com sugestão 0 o disponível já passa do máximo: listar tudo seria oferecer o que sobra para fechar o mínimo; a régua pega o que fura no próximo ciclo |
+| D-019 | O arquivo do WinThor é `CODPROD;PRECO;QTD`, ponto decimal, sem cabeçalho, sem BOM, um por grupo | Planilha | É um arquivo para o ERP ler; o formato exato do importador do WinThor deve ser confirmado com quem opera o ERP |
+| D-020 | O resumo do seletor é uma **estimativa** numa consulta para todos os fornecedores, sem filial (RN-026) | A consulta principal por fornecedor | 200 fornecedores × consulta pesada não cabe em nenhum orçamento; a estimativa custa 1 execução e o rótulo diz "sugestão" sem prometer a conta exata |
+| D-021 | O detalhe custa 3 execuções **ao selecionar**, uma vez por SKU, com cache | Carregar o detalhe de toda a lista | Nada por linha; o painel fixo precisa dos dados ao clicar, e a mesma consulta alimenta gráfico, filiais com excesso e compras |
+| D-022 | As unidades por caixa vêm do Gestão de Custos numa execução por carga (R-120) | Mapa vazio, como D-006 fazia por orçamento | A referência Unidades/Caixas e o "N cx" ficavam na embalagem; uma execução em lotes de 1000 é barata, e o simulador agora roda a INTEGRATION (SQLite por padrão, plataforma com env) |

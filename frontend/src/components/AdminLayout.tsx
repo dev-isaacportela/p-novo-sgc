@@ -9,9 +9,7 @@
 import * as React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, BarChart3, Bell, CalendarClock, ClipboardList, FileText, Gauge,
-  KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, PlusCircle, Receipt,
-  ShieldCheck, Truck, X, type LucideIcon,
+  AlertTriangle, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, CalendarClock, ClipboardList, FileText, Gauge, Gavel, Handshake, KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Receipt, ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -25,12 +23,20 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 // O que cada pessoa vê é regra de permissão (P-03, spec 002 T-040): vem de
 // menuParaPersona; aqui só o ícone de cada rota. Comercial fica com zero itens.
 const ICONES: Record<string, LucideIcon> = {
-  '/quadro': KanbanSquare, '/pedidos/novo': PlusCircle, '/agenda': CalendarClock, '/notificacoes': Bell,
+  '/quadro': KanbanSquare, '/agenda': CalendarClock, '/notificacoes': Bell,
   '/fornecedores': Truck, '/coberturas': Gauge, '/seguranca': ShieldCheck,
   // Onda 2 (005-007):
   '/notas-fiscais': FileText, '/faturamentos-pendentes': Receipt, '/nfs-em-atraso': AlertTriangle, '/bo': PackageX,
   // Onda 3 (008-009; /relatorios adiado, R-114):
   '/solicitacoes': ClipboardList, '/analises': BarChart3,
+  // Onda 4 (011):
+  '/compras-inteligentes': ShoppingCart,
+  // Onda 5 (014):
+  '/galderma': Handshake,
+  // Onda 5 (013):
+  '/movimentacao': ArrowLeftRight,
+  // Onda 5 (015):
+  '/empenhos': BriefcaseBusiness, '/empenhos/pregoes': Gavel, '/empenhos/indicadores': BarChart3,
 };
 
 function agruparMenu(itens: ItemDeMenu[]) {
@@ -116,6 +122,8 @@ export default function AdminLayout({ usuario }: { usuario: Sessao }) {
               <NavLink
                 key={to}
                 to={to}
+                // /empenhos não acende junto com /empenhos/pregoes: item que é prefixo de outro casa exato.
+                end={grupo.itens.some((outro) => outro.to.startsWith(`${to}/`))}
                 title={label}
                 onClick={() => setGaveta(false)}
                 className={({ isActive }) =>
@@ -241,7 +249,7 @@ export default function AdminLayout({ usuario }: { usuario: Sessao }) {
             </span>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 lg:[@media(max-height:760px)]:p-4">
             <Outlet />
           </main>
         </div>

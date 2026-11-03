@@ -141,6 +141,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** a verificação automática roda
 - **Então** o primeiro e o terceiro geram pedido, o segundo continua pendente (sem pedido e sem marcação) e o resultado informa 2 processados e 1 erro
 
+**C-022 — Visão de calendário** *(2026-10-30, R-121)*
+- **Dado que** a agenda tem um agendamento sem recorrência em 05/11 e um semanal que começou em 29/10
+- **Quando** a pessoa alterna a agenda para "Calendário" e abre novembro
+- **Então** vê a grade do mês com o agendamento de 05/11 e as quatro ocorrências do semanal (5, 12, 19 e 26), estas marcadas como recorrência; a situação aparece com ponto e texto, como na lista; clicar num agendamento pendente ou atrasado abre a edição; as setas mudam o mês e "Hoje" volta ao mês atual
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -238,6 +243,7 @@ automática e com que números; **como** (arquivo, ferramenta) é do `plan.md`.
 | C-019 | O pedido criado tem criador = id da analista, responsável = id da analista, título "BENENUTRI MATRIZ · FRESENIUS KABI BRASIL LTDA" (filial e fornecedor em maiúsculas, como todo pedido), origem "agenda" e o registro de entrada na fase Análise com origem "sistema" | regra de negócio |
 | C-020 | Rodada com 3 vencidos, o do meio inválido, devolve 2 processados e 1 erro; o inválido continua sem pedido e sem marcação | regra de negócio |
 | C-021 | Com 3 fornecedores, um inativado: a escolha do agendamento devolve 2; gravar agendamento novo para o inativo não grava nada; o agendamento que ele já tinha continua na lista e é processado na rodada seguinte | regra de negócio |
+| C-022 | `ocorrenciasNoMes`: sem recorrência só a base; semanal de 29/10 cai em 5, 12, 19 e 26/11; quinzenal com limite 10/11 só em 5/11; mensal de 31/10 cai em 30/11; fora do mês nada; `agruparPorDia` marca a projetada como recorrente | regra de tela |
 | RN-001 | 31/01/2026 mensal → 28/02/2026; 30/03/2026 mensal → 30/04/2026 | regra de tela |
 | RN-002 | 20/10/2026 semanal → 27/10/2026; quinzenal → 03/11/2026 | regra de tela |
 | RN-003 | Semanal 20/10/2026 com limite 25/10/2026 → vazio (27/10 passa do limite) | regra de tela |

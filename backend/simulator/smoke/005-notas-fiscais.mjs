@@ -11,10 +11,12 @@
 import { assert } from './base.mjs';
 import { CARDS_005, DATAS_005 } from '../seed/005-notas-fiscais.mjs';
 import { toSqlite } from '../mysql-dialect.mjs';
+import { createRunner } from '../runtime.mjs';
+import { ehWinthor } from '../winthor-oracle.mjs';
 import { diasUteisEntre } from '../../lib/dias-uteis.mjs';
 
 export async function suite(ctx) {
-  const { db, chamar, teste, U, emails } = ctx;
+  const { db, byName, byId, chamar, teste, U, emails } = ctx;
 
   /* ── atalhos ── */
 
@@ -567,6 +569,15 @@ export async function suite(ctx) {
       }, U.ana);
       assert.equal(decidida.ok, true, decidida.erro);
     }
+    // R-144 (P-6): decididas as conferencias, o que ainda trava e o saldo nao
+    // faturado — a frase passa a ser a do faturado. Daqui em diante o teste e
+    // so das conferencias: o saldo fica coberto (a trava do faturado tem o
+    // C-033 proprio, logo abaixo) e volta ao fim.
+    const soFaturado = await podeMover(U.gil, card, 'concluido');
+    assert.equal(Number(soFaturado.PODE), 0);
+    assert.match(soFaturado.MOTIVO, /^Falta faturar R\$ /);
+    const faturadoAntes = um('SELECT VL_FATURADO FROM SGC_PEDIDO WHERE ID_CARD = ?', card).VL_FATURADO;
+    db.prepare('UPDATE SGC_PEDIDO SET VL_FATURADO = VL_TOTAL WHERE ID_CARD = ?').run(card);
     const livre = await podeMover(U.gil, card, 'concluido');
     assert.equal(Number(livre.PODE), 1, livre.MOTIVO);
     assert.equal(livre.MOTIVO, '');
@@ -584,6 +595,85 @@ export async function suite(ctx) {
     const recusaBo = await podeMover(U.gil, outro, 'concluido');
     assert.equal(Number(recusaBo.PODE), 0);
     assert.match(recusaBo.MOTIVO, /confer/);
+    db.prepare('UPDATE SGC_PEDIDO SET VL_FATURADO = ? WHERE ID_CARD = ?').run(faturadoAntes, card);
+  });
+
+  await teste('C-033 / RN-016 (R-144, P-6): so conclui com 99,5 % do valor coberto — a recusa diz quanto falta, 99,5 % ja libera, e o saldo marcado em B.O. como "nao vem mais" conta como coberto', async () => {
+    const card = CARDS_005.enviadoComPedido;
+    emFase(card, faseIdDe('faturamento'));
+    assert.equal(ocorrenciasDe(card).filter((o) => o.DECISAO === 'pendente').length, 0, 'C-018 decidiu tudo');
+    const total = Number(um('SELECT VL_TOTAL FROM SGC_PEDIDO WHERE ID_CARD = ?', card).VL_TOTAL);
+    assert.ok(total > 0);
+    const faturar = (valor) => db.prepare('UPDATE SGC_PEDIDO SET VL_FATURADO = ? WHERE ID_CARD = ?').run(valor, card);
+    const antes = um('SELECT VL_FATURADO FROM SGC_PEDIDO WHERE ID_CARD = ?', card).VL_FATURADO;
+    try {
+      faturar(total * 0.6);
+      const recusa = await podeMover(U.gil, card, 'concluido');
+      assert.equal(Number(recusa.PODE), 0);
+      const falta = (total * 0.4).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      assert.equal(recusa.MOTIVO, `Falta faturar R$ ${falta} (60,0 % coberto; o mínimo para concluir é 99,5 %). Registre a nota complementar ou marque o saldo em B.O. como "não vem mais".`);
+      // a mesma trava saindo de Produtos em B.O.
+      emFase(card, faseIdDe('bo'));
+      assert.equal(Number((await podeMover(U.gil, card, 'concluido')).PODE), 0);
+      emFase(card, faseIdDe('faturamento'));
+
+      faturar(total * 0.994);
+      assert.equal(Number((await podeMover(U.gil, card, 'concluido')).PODE), 0, '99,4 % ainda trava');
+      faturar(total * 0.995);
+      const livre = await podeMover(U.gil, card, 'concluido');
+      assert.equal(Number(livre.PODE), 1, livre.MOTIVO);
+      assert.equal(livre.MOTIVO, '');
+
+      // O que falta, todo em B.O. cancelado ("nao vem mais"), conta como coberto.
+      const item = um("SELECT CODPROD, QT_PEDIDA, PRECO_CUSTO FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND STATUS <> 'removido' AND PRECO_CUSTO > 0 AND QT_PEDIDA > 0 AND CODPROD NOT IN (SELECT CODPROD FROM SGC_BO_ITEM WHERE ID_CARD = ?) ORDER BY QT_PEDIDA * PRECO_CUSTO DESC LIMIT 1", card, card);
+      assert.ok(item, 'um item do pedido sem B.O.');
+      const valorBo = Number(item.QT_PEDIDA) * Number(item.PRECO_CUSTO);
+      assert.ok(valorBo / total > 0.005, 'o item pesa mais que a folga de 0,5 %');
+      faturar(total - valorBo);
+      assert.equal(Number((await podeMover(U.gil, card, 'concluido')).PODE), 0, 'sem o B.O., falta o valor do item');
+      db.prepare("INSERT INTO SGC_BO_ITEM (ID_CARD, CODPROD, DESCRICAO, QT_PENDENTE, OBSERVACAO, STATUS, CRIADO_POR, CRIADO_EM) VALUES (?, ?, '', ?, 'C-033', 'cancelado', ?, '2026-11-03T08:00:00')")
+        .run(card, item.CODPROD, item.QT_PEDIDA, U.ana);
+      const comBo = await podeMover(U.gil, card, 'concluido');
+      assert.equal(Number(comBo.PODE), 1, comBo.MOTIVO);
+      // liberado volta a esperar nota: nao cobre.
+      db.prepare("UPDATE SGC_BO_ITEM SET STATUS = 'liberado' WHERE ID_CARD = ? AND OBSERVACAO = 'C-033'").run(card);
+      assert.equal(Number((await podeMover(U.gil, card, 'concluido')).PODE), 0, 'B.O. liberado nao cobre o saldo');
+      db.prepare("DELETE FROM SGC_BO_ITEM WHERE ID_CARD = ? AND OBSERVACAO = 'C-033'").run(card);
+    } finally {
+      faturar(antes);
+    }
+  });
+
+  await teste('C-034 / RN-017 (R-146, P-3): "Notificar gestor" a partir de 5 dias uteis — quem opera a nota avisa UM gestor escolhido, uma vez por dia, e ele recebe no feed; abaixo de 5 dias, 100 % faturado, alvo que nao e gestor ou quem nao opera a nota nao gravam nada', async () => {
+    const card = CARDS_005.atrasadoNove;
+    const avisosDe = (c) => todos("SELECT * FROM SGC_AVISO WHERE ID_CARD = ? AND TIPO = 'faturamento_gestor'", c);
+    const notificar = (c, gestorId, usuarioId, texto = 'Pedido sem faturamento completo ha 9 dias uteis.') =>
+      chamar('sgcEscGestorNotificar', { cardId: c, gestorId, texto, criadoEm: '2026-11-03T09:00:00' }, usuarioId);
+    assert.equal(avisosDe(card).length, 0);
+
+    await notificar(card, U.gil, U.ana);
+    const gravados = avisosDe(card);
+    assert.equal(gravados.length, 1);
+    assert.equal(Number(gravados[0].PARA_USUARIO_ID), U.gil);
+    await notificar(card, U.gil, U.ana);
+    assert.equal(avisosDe(card).length, 1, 'um aviso por gestor por dia');
+
+    // o gestor ve o aviso no feed dele
+    const feed = (await chamar('sgcNotificacoesListar', { limite: 50, offset: 0 }, U.gil)).rows ?? [];
+    assert.ok(feed.some((linha) => Number(linha.CARD_ID) === card && /9 dias uteis/.test(String(linha.TEXTO))), 'aviso no feed do gil');
+
+    await notificar(card, U.ana, U.gil);
+    assert.equal(avisosDe(card).length, 1, 'o alvo precisa ter persona gestor');
+    await notificar(card, U.gil, U.leo);
+    await notificar(card, U.gil, U.dora);
+    assert.equal(avisosDe(card).length, 1, 'comercial e diretoria nao operam a nota');
+
+    const cedo = CARDS_005.enviadoComPedido; // seed: 3 dias uteis desde o envio
+    await notificar(cedo, U.gil, U.ana);
+    assert.equal(avisosDe(cedo).length, 0, 'abaixo de 5 dias uteis');
+    const completo = CARDS_005.cemPorCento;
+    await notificar(completo, U.gil, U.ana);
+    assert.equal(avisosDe(completo).length, 0, '100 % faturado nao escala');
   });
 
   /* ─────────── T-089 — permissões e dias úteis no servidor ─────────── */
@@ -634,6 +724,51 @@ export async function suite(ctx) {
 
     assert.deepEqual(ocorrenciasDe(card).filter((o) => o.DECISAO === 'pendente').map((o) => Number(o.ID)),
       pendentesAntes, 'nenhuma linha foi decidida');
+  });
+
+  await teste('D-016: nenhuma SQL com tabela PC* vai ao banco do projeto — com as sgcWint* desviadas para um executor externo (como no WinThor real), sgcNfDetectar e sgcNfVincular (7005 no faturamentoParcial) terminam ok, os codigos de fabrica/EAN dos itens do pedido chegam por sgcWintProdutosCodigos (UMA leitura por rodada, UMA por vinculo, fora da conta de RNF-002) e tudo o que passou por runQueryMitra e livre de PC*', async () => {
+    const aoOracle = [];
+    const aoProjeto = [];
+    const codigosWinthor = new Set([...byName.values()].filter(ehWinthor).map((d) => d.code));
+    const execute = createRunner(db, {
+      resolveById: (id) => byId.get(id) ?? null,
+      // O mesmo SQLite, mas por FORA de runQueryMitra: e o que o Oracle receberia.
+      externo: {
+        aceita: ehWinthor,
+        query: async (sql) => { aoOracle.push(sql); return db.prepare(toSqlite(sql)).all().map((linha) => ({ ...linha })); },
+      },
+      // onQuery recebe toda consulta: no desvio externo o segundo argumento e o
+      // code da definition sgcWint*; em tudo o mais e o SQL que foi ao banco do projeto.
+      onQuery: (sql, origem) => { if (!codigosWinthor.has(origem)) aoProjeto.push(sql); },
+    });
+    const TABELA_PC = /\b(FROM|JOIN|INTO|UPDATE)\s+PC[A-Z_]+\b/i;
+    const LEITURA_DE_CODIGOS = /FROM PCPRODUT P\s+WHERE P\.CODPROD IN \(/;
+
+    db.exec('BEGIN');
+    try {
+      const rodada = await execute(byName.get('sgcNfDetectar'), {}, 0);
+      assert.equal(rodada.ok, true);
+      assert.deepEqual(rodada.erros, [], 'a leitura de codigos no Oracle nao pode ter falhado');
+      assert.equal(rodada.consultasErp, rodada.grupos, 'RNF-002 continua: uma busca de notas por grupo');
+
+      const card = CARDS_005.faturamentoParcial;
+      const vinculo = await execute(byName.get('sgcNfVincular'), {
+        cardId: card, idSugestao: 0, numnota: 7005, serie: '', codfornec: 1015, codfilial: '1', origem: 'hibrida', itensJson: '',
+      }, U.ana);
+      assert.equal(vinculo.ok, true, vinculo.erro);
+      assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_NF WHERE ID_CARD = ? AND NUMNOTA = 7005', card), 1);
+
+      assert.ok(aoProjeto.length > 0, 'as duas JAVASCRIPT consultam o banco do projeto');
+      const vazou = aoProjeto.filter((sql) => TABELA_PC.test(sql));
+      assert.deepEqual(vazou, [], 'SQL com PC* foi por runQueryMitra ao banco do projeto, onde a tabela nao existe em producao');
+
+      const leiturasDeCodigos = aoOracle.filter((sql) => LEITURA_DE_CODIGOS.test(sql));
+      assert.equal(leiturasDeCodigos.length, 2, 'uma leitura de codigos na rodada e uma no vinculo');
+      assert.match(leiturasDeCodigos[1], /IN \(5006, 5007\)/, 'os itens do pedido faturamentoParcial, nao os da nota');
+    } finally {
+      db.exec('ROLLBACK');
+    }
+    assert.equal(conta('SELECT COUNT(*) AS N FROM SGC_NF WHERE NUMNOTA = 7005'), 0, 'o banco volta ao que era para as suites seguintes');
   });
 
   await teste('RN-001 / RF-018: o fragmento SQL de dias uteis conta 15 dias uteis entre 24/08/2026 e 14/09/2026 — a mesma conferencia do R-025, agora dentro da SQL desta spec', async () => {

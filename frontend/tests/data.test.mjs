@@ -3,9 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseIso, isoValido, textoParaIso, isoParaTexto, isoPorExtenso, aplicarMascaraData,
-  somarDias, diaDaSemana, inicioDaSemana, fimDaSemana, mesAdjacente, comMesmoDia,
-  dentroDoLimite, gradeDoMes, diasNoMes, nomeMes, nomeDiaSemanaAbrev,
+  aplicarMascaraData, comMesmoDia, dentroDoLimite, diaDaSemana, diasEntre, diasNoMes, diasRelativos, fimDaSemana, gradeDoMes, inicioDaSemana, isoParaTexto, isoPorExtenso, isoValido, mesAdjacente, nomeDiaSemanaAbrev, nomeMes, parseIso, resolverRelativo, somarDias, textoParaIso,
 } from '../src/lib/data.ts';
 
 test('parseIso/isoValido: data impossível (31/02) e ano bissexto (29/02)', () => {
@@ -91,4 +89,33 @@ test('diasNoMes/nomeMes/nomeDiaSemanaAbrev', () => {
   assert.equal(diasNoMes(2028, 2), 29);
   assert.equal(nomeMes(10), 'outubro');
   assert.equal(nomeDiaSemanaAbrev(0), 'dom');
+});
+
+test('C-045 / R-119: diasRelativos aceita "45", "45d", "45 dia", "45 dias" e " 45 DIAS " (1 a 3 dígitos); "1234", "abc" e "15/09" não são dias', () => {
+  for (const texto of ['45', '45d', '45 dia', '45 dias', ' 45 DIAS ', '45D']) assert.equal(diasRelativos(texto), 45, texto);
+  assert.equal(diasRelativos('0'), 0);
+  assert.equal(diasRelativos('999'), 999);
+  for (const texto of ['1234', 'abc', '15/09', '15/09/2026', '', '45 semanas', 'd45']) assert.equal(diasRelativos(texto), null, texto);
+});
+
+test('C-045: resolverRelativo — "45" no início com fim 30/10/2026 dá 15/09/2026 (a mesma conta do periodoPadrao); "30" no fim a partir de 01/10 dá 31/10; "0" é a própria base; vira mês e ano (10/01/2027 − 45 = 26/11/2026); texto que não é dias ou base inválida dá null', () => {
+  assert.equal(resolverRelativo('45', '2026-10-30', -1), '2026-09-15');
+  assert.equal(resolverRelativo('45 dias', '2026-10-30', -1), '2026-09-15');
+  assert.equal(resolverRelativo('30', '2026-10-01', 1), '2026-10-31');
+  assert.equal(resolverRelativo('0', '2026-10-30', -1), '2026-10-30');
+  assert.equal(resolverRelativo('45', '2027-01-10', -1), '2026-11-26');
+  // O campo "Dias" da janela: Dias 30 com fim 30/10/2026 → início 30/09/2026; início em 01/10 → Dias 29.
+  assert.equal(resolverRelativo('30', '2026-10-30', -1), '2026-09-30');
+  assert.equal(diasEntre('2026-10-01', '2026-10-30'), 29);
+  assert.equal(resolverRelativo('15/09/2026', '2026-10-30', -1), null);
+  assert.equal(resolverRelativo('abc', '2026-10-30', -1), null);
+  assert.equal(resolverRelativo('45', '', -1), null);
+  assert.equal(resolverRelativo('45', '2026-02-30', -1), null, 'base impossível');
+});
+
+test('diasEntre: 15/09 a 30/10/2026 são 45 dias; invertido é negativo; data inválida não dá número', () => {
+  assert.equal(diasEntre('2026-09-15', '2026-10-30'), 45);
+  assert.equal(diasEntre('2026-10-30', '2026-09-15'), -45);
+  assert.equal(diasEntre('2026-12-31', '2027-01-01'), 1);
+  assert.equal(diasEntre('', '2026-10-30'), null);
 });

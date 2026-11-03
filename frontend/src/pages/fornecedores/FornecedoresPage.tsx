@@ -1,16 +1,19 @@
 // Spec 001 (fornecedores) — RF-001..RF-004: listagem paginada, busca, filtro
 // por filial e situação, seletor do ERP para iniciar uma parametrização nova.
+// Spec 018 — RF-001/RF-004: "Exportar planilha" baixa a parametrização de
+// todos os parametrizados, sem olhar o filtro (P-02).
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Truck } from 'lucide-react';
+import { Download, Eye, Truck } from 'lucide-react';
 import { linhas, linha, comPadrao } from '@/lib/mitra-api';
 import {
   PageHeader, Panel, Toolbar, SearchInput, SelectMenu, FilterChip, Table, Th, Td, Tr,
   RowTitle, RowMeta, Code, Status, Dash, IconButton, Pagination, EmptyState, Button,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, Alert,
 } from '@/components/page';
 import { formatarCnpj, rotuloPrazoEntrega } from '@/lib/fornecedor';
 import { moeda, fmtData } from '@/lib/formato';
+import { exportarParametrizacao } from './exportar-excluir';
 
 const LIMITE = 20;
 
@@ -42,6 +45,8 @@ export default function FornecedoresPage() {
   const [filiaisErp, setFiliaisErp] = useState<ErpFilial[]>([]);
   const [seletorAberto, setSeletorAberto] = useState(false);
   const [fornecedoresErp, setFornecedoresErp] = useState<ErpFornecedor[] | null>(null);
+  const [exportando, setExportando] = useState(false);
+  const [aviso, setAviso] = useState<{ tone: 'info' | 'error'; texto: string } | null>(null);
 
   // Filiais do filtro, buscadas uma vez na montagem (RNF-004).
   useEffect(() => {
@@ -79,6 +84,19 @@ export default function FornecedoresPage() {
   const filialSelecionada = filiaisErp.find((f) => f.CODFILIAL === codfilial);
   const situacaoSelecionada = OPCOES_SITUACAO.find((o) => o.value === ativo && o.value !== '0');
 
+  async function exportar() {
+    setExportando(true);
+    setAviso(null);
+    try {
+      const quantos = await exportarParametrizacao();
+      if (!quantos) setAviso({ tone: 'info', texto: 'Nenhuma parametrização de fornecedor cadastrada para exportar.' });
+    } catch {
+      setAviso({ tone: 'error', texto: 'Não foi possível exportar a parametrização.' });
+    } finally {
+      setExportando(false);
+    }
+  }
+
   function abrirSeletor() {
     setFornecedoresErp(null);
     setSeletorAberto(true);
@@ -93,8 +111,15 @@ export default function FornecedoresPage() {
         meta={<>
           <span><strong>{total.toLocaleString('pt-BR')}</strong> fornecedores</span>
         </>}
-        actions={<Button variant="primary" onClick={abrirSeletor}>Parametrizar fornecedor</Button>}
+        actions={<>
+          <Button onClick={exportar} disabled={exportando} title="Parametrização de todos os fornecedores, num arquivo para o Excel">
+            <Download aria-hidden />{exportando ? 'Exportando…' : 'Exportar planilha'}
+          </Button>
+          <Button variant="primary" onClick={abrirSeletor}>Parametrizar fornecedor</Button>
+        </>}
       />
+
+      {aviso ? <Alert tone={aviso.tone}>{aviso.texto}</Alert> : null}
 
       <Panel>
         <Toolbar>

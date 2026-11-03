@@ -72,6 +72,23 @@ export async function suite(ctx) {
     assert.equal(Number(p5001.VENDA_LICITACAO), 6);
   });
 
+  await teste('C-026 / RN-016 (R-133): a analise divide a venda valida do 5002 em privado 6, PF 8 e publico 3; a venda para a propria rede (5) e a remessa de entrega futura (4) ficam fora das tres e da venda valida (17, publica 3) — R-134', async () => {
+    const rows = await linhas(ctx, 'sgcWintAnaliseMontagem', ANALISE);
+    const p5002 = rows.find((r) => Number(r.CODPROD) === 5002);
+    assert.equal(Number(p5002.VENDA_PRIVADO), 6);
+    assert.equal(Number(p5002.VENDA_PF), 8);
+    assert.equal(Number(p5002.VENDA_PUBLICO), 3);
+    // R-134: a venda do periodo e a valida (17) e a licitacao e a parte publica dela (3, so o ramo 12).
+    assert.equal(Number(p5002.VENDA_PERIODO), 17, 'propria rede (5) e remessa (4) fora da venda valida');
+    assert.equal(Number(p5002.VENDA_LICITACAO), 3, 'o ramo 20 (filial) deixou de ser licitacao');
+    const p5001 = rows.find((r) => Number(r.CODPROD) === 5001);
+    assert.equal(Number(p5001.VENDA_PRIVADO) + Number(p5001.VENDA_PF) + Number(p5001.VENDA_PUBLICO), 18);
+    // Em toda linha a divisão fecha com a venda do período (a venda válida, R-134).
+    const naoFecham = rows.filter((r) => Number(r.VENDA_PRIVADO) + Number(r.VENDA_PF) + Number(r.VENDA_PUBLICO) !== Number(r.VENDA_PERIODO));
+    assert.deepEqual(naoFecham.map((r) => Number(r.CODPROD)), []);
+    assert.ok(rows.filter((r) => Number(r.VENDA_PERIODO) > 0).length > 0, 'vazio nao e verde');
+  });
+
   await teste('C-009: sgcWintBuscarProduto por nome devolve entre 1 e 20 linhas, nenhuma inativa nem do departamento 4; por codigo devolve exatamente 1', async () => {
     const porNome = await linhas(ctx, 'sgcWintBuscarProduto', { codprod: 0, busca: 'creme', codfilial: FILIAL });
     assert.ok(porNome.length >= 1 && porNome.length <= 20, `busca devolveu ${porNome.length} linhas`);
@@ -170,6 +187,21 @@ export async function suite(ctx) {
     const padroes = db.prepare("SELECT CODPROD FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND TIPO_PRECO = 'padrao'").all(CARDS_003.gravacao);
     assert.deepEqual(especiais.map((r) => Number(r.CODPROD)), [5007]);
     assert.equal(padroes.length, 8);
+  });
+
+  await teste('C-027 (R-133): o tipo de preco manual fica gravado; valor desconhecido cai em padrao', async () => {
+    const saida = await chamar('sgcItensGravar', {
+      cardId: CARDS_003.gravacao,
+      itensJson: JSON.stringify([umItem(5008, 7, 3.25, { tipoPreco: 'manual' }), umItem(5009, 3, 2, { tipoPreco: 'qualquer' })]),
+    }, U.ana);
+    assert.equal(saida.ok, true);
+    const tipo = (codprod) => db.prepare('SELECT TIPO_PRECO FROM SGC_PEDIDO_ITEM WHERE ID_CARD = ? AND CODPROD = ?').get(CARDS_003.gravacao, codprod).TIPO_PRECO;
+    assert.equal(tipo(5008), 'manual');
+    assert.equal(tipo(5009), 'padrao');
+    // Devolve os dois itens ao estado do C-010: os cenários seguintes leem este card.
+    await chamar('sgcItensGravar', {
+      cardId: CARDS_003.gravacao, itensJson: JSON.stringify([umItem(5008, 2, 50.0), umItem(5009, 1, 34.5)]),
+    }, U.ana);
   });
 
   await teste('RNF-004: sgcItensGravar recusa quem nao monta pedido (Leo, comercial) e pedido fora da fase Analise', async () => {
@@ -342,23 +374,30 @@ export async function suite(ctx) {
     assert.equal(paraCancelado.MOTIVO, '');
   });
 
-  await teste('C-020: o gestor grava limite de cobertura e o analista nao; sgcCoberturaListar devolve o limite resolvido', async () => {
-    const entrada = { nivel: 'secao', codigo: '21', descricao: 'SUPLEMENTOS ORAIS', limiteDias: 45, atualizadoEm: '2026-09-15T09:40:00' };
+  await teste('C-020: o gestor grava a cobertura por curva e o analista nao; sgcCoberturaListar devolve os tres pares alvo/tolerancia', async () => {
+    const entrada = {
+      nivel: 'secao', codigo: '21', descricao: 'SUPLEMENTOS ORAIS',
+      alvoADias: 35, toleranciaAPct: 20, alvoBDias: 45, toleranciaBPct: 10,
+      alvoCDias: 60, toleranciaCPct: 5, atualizadoEm: '2026-09-15T09:40:00',
+    };
     await chamar('sgcEscCoberturaGravar', entrada, U.ana);
     const depoisDaAna = db.prepare("SELECT COUNT(*) AS N FROM SGC_COBERTURA WHERE NIVEL = 'secao' AND CODIGO = '21'").get();
-    assert.equal(Number(depoisDaAna.N), 0, 'analista nao mantem limite de cobertura');
+    assert.equal(Number(depoisDaAna.N), 0, 'analista nao mantem cobertura');
 
     await chamar('sgcEscCoberturaGravar', entrada, U.gil);
-    const lista = await linhas(ctx, 'sgcCoberturaListar', { nivel: '', limite: 200, offset: 0 }, U.gil);
+    const lista = await linhas(ctx, 'sgcCoberturaListar', { nivel: '', situacao: '', limite: 200, offset: 0 }, U.gil);
     const secao = lista.find((r) => r.NIVEL === 'secao' && String(r.CODIGO) === '21');
-    assert.ok(secao, 'o limite gravado pelo gestor deveria aparecer na listagem');
-    assert.equal(Number(secao.LIMITE_DIAS), 45);
+    assert.ok(secao, 'a cobertura gravada pelo gestor deveria aparecer na listagem');
+    assert.equal(Number(secao.ALVO_B_DIAS), 45);
+    assert.equal(Number(secao.TOLERANCIA_B_PCT), 10);
     const sku = lista.find((r) => r.NIVEL === 'sku' && String(r.CODIGO) === '5001');
-    assert.equal(Number(sku.LIMITE_DIAS), 20);
+    assert.equal(Number(sku.ALVO_A_DIAS), 20);
 
     await chamar('sgcEscCoberturaExcluir', { id: Number(secao.ID), atualizadoEm: '2026-09-15T09:50:00' }, U.gil);
-    const depoisDaExclusao = await linhas(ctx, 'sgcCoberturaListar', { nivel: 'secao', limite: 200, offset: 0 }, U.gil);
-    assert.equal(depoisDaExclusao.length, 0, 'exclusao e desativacao: o limite sai da resolucao');
+    // Sem o `WHERE ATIVO = 1` fixo (R-109), `situacao: ''` traria a desativada
+    // de volta: a listagem que prova a exclusao pede explicitamente as ativas.
+    const depoisDaExclusao = await linhas(ctx, 'sgcCoberturaListar', { nivel: 'secao', situacao: 'ativa', limite: 200, offset: 0 }, U.gil);
+    assert.equal(depoisDaExclusao.length, 0, 'exclusao e desativacao: a cobertura sai da resolucao');
   });
 
   /* ── A1/A2 — a guarda das escritas internas (revisao adversarial) ────── */

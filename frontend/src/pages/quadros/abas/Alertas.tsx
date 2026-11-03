@@ -9,11 +9,13 @@ import { CheckCheck, PencilLine } from 'lucide-react';
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import {
   Alert, Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, IconButton, LabelledField, Panel, PanelHeader, Status, Table, Td, Textarea, Th, Tr,
+  EmptyState, IconButton, LabelledField, Panel, PanelHeader, Status, Table, Td, TextLink, Textarea, Th, Tr,
 } from '@/components/page';
 import { acao } from '@/lib/mitra-api';
 import { fmtDataHora } from '@/lib/formato';
 import { usePedido } from './pedido-contexto';
+import { filialDaChave } from '@/lib/vendas-filial';
+import { VendasNaFilial } from '@/pages/compras-inteligentes/vendas-filial-ui';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 
 const ROTULO_TIPO: Record<string, string> = {
@@ -27,6 +29,7 @@ export default function AbaAlertas(ctx: ExtensaoContexto) {
   const pedido = usePedido(ctx.card.id, ctx.card.criadoPor);
   const [erro, setErro] = React.useState('');
   const [salvando, setSalvando] = React.useState(false);
+  const [vendasDe, setVendasDe] = React.useState(0);
   const [justificando, setJustificando] = React.useState<{ codprod: number; texto: string } | null>(null);
 
   const bloqueado = ctx.travado || !pedido.podeEditar || salvando;
@@ -120,15 +123,28 @@ export default function AbaAlertas(ctx: ExtensaoContexto) {
               {pedido.alertas.map((alerta) => {
                 const item = pedido.itens.find((linha) => linha.codprod === alerta.codprod);
                 const exigeJustificativa = (item?.qtPedida ?? 0) > 0 && !alerta.justificativa.trim();
+                // R-139: o excesso numa filial abre as vendas do produto nela (o mesmo componente da 011).
+                const filialExcesso = alerta.tipo === 'excesso' ? filialDaChave(alerta.chave) : '';
+                const vendasAbertas = filialExcesso !== '' && vendasDe === alerta.id;
                 return (
-                  <Tr key={alerta.id}>
+                  <React.Fragment key={alerta.id}>
+                  <Tr>
                     <Td>
                       <span className="font-semibold text-ink">{item?.descricao || `Produto ${alerta.codprod}`}</span>
                       <span className="block text-[12px] text-ink-secondary">
                         {ROTULO_TIPO[alerta.tipo] ?? alerta.tipo}
                       </span>
                     </Td>
-                    <Td>{alerta.mensagem}</Td>
+                    <Td>
+                      {alerta.mensagem}
+                      {filialExcesso ? (
+                        <span className="block">
+                          <TextLink className="text-[12px]" aria-pressed={vendasAbertas} onClick={() => setVendasDe((atual) => (atual === alerta.id ? 0 : alerta.id))}>
+                            {vendasAbertas ? 'Ocultar as vendas na filial' : `Ver as vendas na filial ${filialExcesso}`}
+                          </TextLink>
+                        </span>
+                      ) : null}
+                    </Td>
                     <Td>
                       {alerta.lido
                         ? <Status tone="live">Lido {alerta.lidoEm ? `em ${fmtDataHora(alerta.lidoEm)}` : ''}</Status>
@@ -161,6 +177,14 @@ export default function AbaAlertas(ctx: ExtensaoContexto) {
                       </span>
                     </Td>
                   </Tr>
+                  {vendasAbertas ? (
+                    <tr>
+                      <td colSpan={5} className="border-b border-rule-row px-4 pb-3">
+                        <VendasNaFilial codprod={alerta.codprod} codfilial={filialExcesso} filial={`filial ${filialExcesso}`} estoque={null} semPublico />
+                      </td>
+                    </tr>
+                  ) : null}
+                  </React.Fragment>
                 );
               })}
             </tbody>
