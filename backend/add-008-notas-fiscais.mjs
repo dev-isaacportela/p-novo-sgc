@@ -354,6 +354,27 @@ WHERE {{cardId}} > 0 AND TRIM('{{resumo}}') <> ''
   AND ${guarda(NF)}`,
   },
   {
+    name: 'sgcEscGestorNotificar',
+    resumo: 'R-155 (P-3, C-034/RN-017) - o botao do legado "Notificar gestor": a partir de 5 dias uteis sem faturamento completo, quem opera a nota avisa UM gestor escolhido (aviso PARA_USUARIO_ID, um por gestor por dia). Escrita de TELA (:VAR_USER); a tela poe o gestor nos responsaveis pelo kbCardAtualizar. Params: cardId, gestorId, texto, criadoEm',
+    code: `INSERT INTO SGC_AVISO (ID_CARD, TIPO, CHAVE, PARA_USUARIO_ID, PARA_PERSONA, TEXTO, CRIADO_EM)
+SELECT P.ID_CARD, 'faturamento_gestor',
+  CONCAT('faturamento_gestor:', P.ID_CARD, ':', {{gestorId}}, ':', DATE_FORMAT(CURDATE(), '%Y-%m-%d')),
+  {{gestorId}}, '', '{{texto}}', '{{criadoEm}}'
+FROM SGC_PEDIDO P
+JOIN KB_CARD C ON C.ID = P.ID_CARD AND C.EXCLUIDO_EM IS NULL
+JOIN SGC_FASE F ON F.BOARD_ID = C.BOARD_ID AND F.FASE_ID = C.FASE_ID
+WHERE P.ID_CARD = {{cardId}} AND TRIM('{{texto}}') <> ''
+  AND F.CHAVE IN ('enviado', 'transito', 'faturamento')
+  AND TRIM(COALESCE(P.DT_ENVIO, '')) <> ''
+  AND COALESCE(P.PERC_FATURADO_VALOR, 0) < 100
+  AND ${diasUteisEntre('P.DT_ENVIO', 'CURDATE()')} >= 5
+  AND EXISTS (SELECT 1 FROM INT_USER G JOIN SGC_USUARIO_PERSONA GP ON GP.USUARIO_ID = G.ID
+              WHERE G.ID = {{gestorId}} AND G.ATIVO = TRUE AND GP.PERSONA = 'gestor')
+  AND NOT EXISTS (SELECT 1 FROM SGC_AVISO A
+                  WHERE A.CHAVE = CONCAT('faturamento_gestor:', P.ID_CARD, ':', {{gestorId}}, ':', DATE_FORMAT(CURDATE(), '%Y-%m-%d')))
+  AND ${guarda(NF)}`,
+  },
+  {
     name: 'sgcEscPedidoFaturamento',
     interna: true,
     resumo: 'RF-016/RN-008 - as quatro medidas do faturamento somadas no PROPRIO banco (nunca por parametro): capa, SGC_PEDIDO e listagem nao podem divergir. Params: idCard int, usuarioId int, agora string',

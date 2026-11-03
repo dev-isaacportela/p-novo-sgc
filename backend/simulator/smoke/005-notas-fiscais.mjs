@@ -644,6 +644,38 @@ export async function suite(ctx) {
     }
   });
 
+  await teste('C-034 / RN-017 (R-155, P-3): "Notificar gestor" a partir de 5 dias uteis — quem opera a nota avisa UM gestor escolhido, uma vez por dia, e ele recebe no feed; abaixo de 5 dias, 100 % faturado, alvo que nao e gestor ou quem nao opera a nota nao gravam nada', async () => {
+    const card = CARDS_005.atrasadoNove;
+    const avisosDe = (c) => todos("SELECT * FROM SGC_AVISO WHERE ID_CARD = ? AND TIPO = 'faturamento_gestor'", c);
+    const notificar = (c, gestorId, usuarioId, texto = 'Pedido sem faturamento completo ha 9 dias uteis.') =>
+      chamar('sgcEscGestorNotificar', { cardId: c, gestorId, texto, criadoEm: '2026-11-03T09:00:00' }, usuarioId);
+    assert.equal(avisosDe(card).length, 0);
+
+    await notificar(card, U.gil, U.ana);
+    const gravados = avisosDe(card);
+    assert.equal(gravados.length, 1);
+    assert.equal(Number(gravados[0].PARA_USUARIO_ID), U.gil);
+    await notificar(card, U.gil, U.ana);
+    assert.equal(avisosDe(card).length, 1, 'um aviso por gestor por dia');
+
+    // o gestor ve o aviso no feed dele
+    const feed = (await chamar('sgcNotificacoesListar', { limite: 50, offset: 0 }, U.gil)).rows ?? [];
+    assert.ok(feed.some((linha) => Number(linha.CARD_ID) === card && /9 dias uteis/.test(String(linha.TEXTO))), 'aviso no feed do gil');
+
+    await notificar(card, U.ana, U.gil);
+    assert.equal(avisosDe(card).length, 1, 'o alvo precisa ter persona gestor');
+    await notificar(card, U.gil, U.leo);
+    await notificar(card, U.gil, U.dora);
+    assert.equal(avisosDe(card).length, 1, 'comercial e diretoria nao operam a nota');
+
+    const cedo = CARDS_005.enviadoComPedido; // seed: 3 dias uteis desde o envio
+    await notificar(cedo, U.gil, U.ana);
+    assert.equal(avisosDe(cedo).length, 0, 'abaixo de 5 dias uteis');
+    const completo = CARDS_005.cemPorCento;
+    await notificar(completo, U.gil, U.ana);
+    assert.equal(avisosDe(completo).length, 0, '100 % faturado nao escala');
+  });
+
   /* ─────────── T-089 — permissões e dias úteis no servidor ─────────── */
 
   await teste('C-027 / RF-026: o comercial e a diretoria nao vinculam nota nem registram contato; a escrita de tela chamada pelo comercial nao grava linha nenhuma', async () => {

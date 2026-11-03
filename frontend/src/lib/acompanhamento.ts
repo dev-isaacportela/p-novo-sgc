@@ -40,3 +40,37 @@ export function acompanhamentoDoFaturamento(entrada: { dtEnvio: string; hoje: st
   if (pct > 0) return { diasUteis, nivel, selo: 'Faturamento parcial', tom: 'live' };
   return { diasUteis, nivel, selo: 'Aguardando faturamento', tom: 'off' };
 }
+
+/* ── R-155 (P-3, C-034 da 005): "Notificar gestor" do legado (PW:11003-11116) ──
+ * A escalada automática do cron continua; o botão aparece no mesmo limiar
+ * (nível 5: 5 dias úteis sem faturamento completo) e quem opera a nota
+ * escolhe UM gestor, que vira responsável do card e recebe o aviso. A guarda
+ * de verdade é a do `sgcEscGestorNotificar`. */
+
+export interface GestorDaLista { id: number; nome: string; email: string }
+
+export function podeNotificarGestor(acompanhamento: Acompanhamento): boolean {
+  return acompanhamento.nivel === 5;
+}
+
+/** Só quem tem a persona gestor, em ordem de nome (a lista vem de `sgcPersonasListar`). */
+export function gestoresDe(linhas: readonly Record<string, unknown>[]): GestorDaLista[] {
+  return (linhas ?? [])
+    .filter((linha) => String(linha.PERSONA ?? '') === 'gestor')
+    .map((linha) => ({ id: Number(linha.USUARIO_ID), nome: String(linha.NOME ?? ''), email: String(linha.EMAIL ?? '') }))
+    .filter((gestor) => gestor.id > 0)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+/** Os responsáveis com o gestor no fim; já estando, a lista não muda (e o `kbCardAtualizar` não precisa rodar). */
+export function responsaveisComGestor(atuais: readonly number[], gestorId: number): { lista: number[]; mudou: boolean } {
+  const lista = [...(atuais ?? [])].map(Number).filter((id) => id > 0);
+  if (lista.includes(gestorId)) return { lista, mudou: false };
+  return { lista: [...lista, gestorId], mudou: true };
+}
+
+/** O texto do aviso que o gestor recebe (até 500 caracteres, como o aviso do cron). */
+export function textoNotificacaoGestor(e: { fornecedor: string; diasUteis: number; saldo: number; quem: string }): string {
+  const saldo = (Number(e.saldo) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\u00a0/g, ' ');
+  return `Pedido de ${e.fornecedor} sem faturamento completo há ${rotuloDiasUteis(e.diasUteis)} (saldo ${saldo}). ${e.quem} indicou você como gestor para cobrar a indústria.`.slice(0, 500);
+}

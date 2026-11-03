@@ -17,10 +17,11 @@ import { motivoDeDestino } from '@/lib/transicoes';
 import type { SessaoPersona } from '@/lib/persona';
 import type { MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
-import { acompanhamentoDoFaturamento } from '@/lib/acompanhamento';
+import { acompanhamentoDoFaturamento, podeNotificarGestor } from '@/lib/acompanhamento';
 import { totaisDoEnvio } from '@/lib/envio-industria';
 import { usePedido } from './pedido-contexto';
 import ItensEnviados from './ItensEnviados';
+import NotificarGestor from './NotificarGestor';
 
 type Props = ExtensaoContexto & { fases: MapaDeFases; sessao: SessaoPersona };
 
@@ -80,6 +81,15 @@ export default function BlocoAcompanhamento({ fases, sessao, ...ctx }: Props) {
             Produto faturado — ir para Faturamento
           </Button>
         </div>
+        {podeNotificarGestor(acompanhamento) ? (
+          <NotificarGestor
+            {...ctx}
+            sessao={sessao}
+            fornecedor={capa.fornecedor}
+            diasUteis={acompanhamento.diasUteis}
+            saldo={Math.max(0, capa.vlTotal - capa.vlFaturado)}
+          />
+        ) : null}
       </Panel>
 
       <SecaoRecolhivel

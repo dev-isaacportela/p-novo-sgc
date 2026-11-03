@@ -21,3 +21,28 @@ test('C-024: antes de 3 dias aguarda (ou diz parcial); 100 % sai do escalonament
   assert.deepEqual(acompanhamentoDoFaturamento({ dtEnvio: '', hoje: '2026-08-24', percFaturado: 0 }), { diasUteis: 0, nivel: 0, selo: 'Envio não registrado', tom: 'off' });
   assert.equal(rotuloDiasUteis(1), '1 dia útil');
 });
+
+import { podeNotificarGestor, gestoresDe, responsaveisComGestor, textoNotificacaoGestor } from '../src/lib/acompanhamento.ts';
+
+test('C-034 / RN-017 (P-3): "Notificar gestor" só a partir de 5 dias úteis sem faturamento completo, para quem tem a persona gestor, que entra nos responsáveis uma vez só', () => {
+  const quatro = acompanhamentoDoFaturamento({ dtEnvio: '2026-08-17', hoje: '2026-08-21', percFaturado: 0 });
+  const cinco = acompanhamentoDoFaturamento({ dtEnvio: '2026-08-17', hoje: '2026-08-24', percFaturado: 40 });
+  const completo = acompanhamentoDoFaturamento({ dtEnvio: '2026-08-03', hoje: '2026-08-24', percFaturado: 100 });
+  assert.deepEqual([podeNotificarGestor(quatro), podeNotificarGestor(cinco), podeNotificarGestor(completo)], [false, true, false]);
+
+  assert.deepEqual(gestoresDe([
+    { USUARIO_ID: 3, NOME: 'Gil Gestor', EMAIL: 'gil@sgc.local', PERSONA: 'gestor' },
+    { USUARIO_ID: 2, NOME: 'Ana Analista', EMAIL: 'ana@sgc.local', PERSONA: 'analista' },
+    { USUARIO_ID: 7, NOME: 'Bia Gerente', EMAIL: 'bia@sgc.local', PERSONA: 'gestor' },
+  ]), [
+    { id: 7, nome: 'Bia Gerente', email: 'bia@sgc.local' },
+    { id: 3, nome: 'Gil Gestor', email: 'gil@sgc.local' },
+  ]);
+
+  assert.deepEqual(responsaveisComGestor([2], 3), { lista: [2, 3], mudou: true });
+  assert.deepEqual(responsaveisComGestor([2, 3], 3), { lista: [2, 3], mudou: false });
+  assert.equal(
+    textoNotificacaoGestor({ fornecedor: 'Fresenius Kabi', diasUteis: 9, saldo: 48000, quem: 'Ana Analista' }),
+    'Pedido de Fresenius Kabi sem faturamento completo há 9 dias úteis (saldo R$ 48.000,00). Ana Analista indicou você como gestor para cobrar a indústria.',
+  );
+});
