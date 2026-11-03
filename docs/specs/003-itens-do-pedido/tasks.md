@@ -71,6 +71,7 @@
 - [x] **T-052** — R-135: Clientes que compraram no drill-in — logo depois do gráfico, aberta, meses em pílulas, por cliente (top 10, notas ao expandir) ou cliente × mês, sem o público; uma consulta ao abrir; `test('C-029 …')` → `lib/clientes-produto.ts`, `pages/compras-inteligentes/clientes-ui.tsx`, `analise-produto.tsx` (slot `depoisDoGrafico`), `pages/quadros/abas/DrillProduto.tsx`; os clientes da aba Vendas (R-133) saíram
 - [x] **T-053** — R-136: Caixa cheia arredonda a sugestão e a compra; venda e posição sempre em unidades; quantidade editada preservada; rodapé un. · cx; abre em Caixa cheia; `test('RN-018 / C-030 …')` e `test('C-030 …')` → `lib/analise-pedido.ts`, `pages/quadros/abas/tela-ampla-analise.tsx`
 - [x] **T-054** — R-137: linhas de altura fixa na tela ampla (44 px compacta, 56 px confortável) e na aba Itens (56 px), nome em uma linha, selos na linha da meta; medido em 79 produtos nos dois temas e nas duas densidades → `pages/quadros/abas/tela-ampla-analise.tsx`, `TelaAmpla.tsx`, `SeletorDeCusto.tsx`, `NomeDoProduto.tsx`
+- [x] **T-055** — R-138: o bloco Item no pedido numa linha alinhada pela base, nos dois estados, com Unidades/Caixas e o link "usar sugestão"; conferido a 1600 e 560 px nos dois temas → `pages/quadros/abas/DrillProduto.tsx`
 - [x] **T-049** — Uma carga do pedido por card aberto, qualquer que seja o número de blocos → `pages/quadros/abas/PedidoProvider.tsx`
 
 ## Testes

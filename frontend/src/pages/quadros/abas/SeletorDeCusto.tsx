@@ -3,6 +3,7 @@
 // quando é manual. A regra (opções, escolha, o que grava) é de
 // `lib/custo-do-item.ts`; aqui só se desenha.
 import { Input, SelectMenu } from '@/components/page';
+import { cn } from '@/lib/utils';
 import type { CustoPadrao, TipoPreco } from '@/lib/compras';
 import { custoDaEscolha, escolhaDoItem, opcoesDeCusto, type TabelaVigente } from '@/lib/custo-do-item';
 
@@ -14,6 +15,7 @@ export function SeletorDeCusto({
   tabelas,
   disabled,
   compacto,
+  altura,
   onEscolher,
 }: {
   rotulo: string;
@@ -24,6 +26,8 @@ export function SeletorDeCusto({
   disabled?: boolean;
   /** R-137: a altura da linha compacta da tela ampla (28 px). */
   compacto?: boolean;
+  /** A altura dos controles quando precisa casar com os campos ao lado (R-138: h-9, a do Input). */
+  altura?: 'h-7' | 'h-8' | 'h-9';
   onEscolher: (custo: { precoCusto: number; tipoPreco: TipoPreco }) => void;
 }) {
   const atual = { tipoPreco, precoCusto };
@@ -36,7 +40,7 @@ export function SeletorDeCusto({
         value={escolhaDoItem(atual, tabelas)}
         options={opcoes}
         disabled={disabled}
-        className={compacto ? 'h-7 min-w-0 flex-1' : 'h-8 min-w-0 flex-1'}
+        className={cn(altura ?? (compacto ? 'h-7' : 'h-8'), 'min-w-0 flex-1')}
         onChange={(escolha) => onEscolher(custoDaEscolha(escolha, padrao, precoCusto))}
       />
       {tipoPreco === 'manual' ? (
@@ -44,7 +48,7 @@ export function SeletorDeCusto({
           type="number"
           min={0}
           step="0.0001"
-          className={compacto ? 'h-7 w-24 shrink-0 text-right' : 'h-8 w-24 shrink-0 text-right'}
+          className={cn(altura ?? (compacto ? 'h-7' : 'h-8'), 'w-24 shrink-0 text-right')}
           aria-label={`Custo manual de ${rotulo}`}
           value={String(precoCusto)}
           disabled={disabled}
