@@ -16,16 +16,17 @@ import * as React from 'react';
 import { PackageOpen } from 'lucide-react';
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import {
-  Alert, Badge, Button, Code, Dash, EmptyState, Panel, PanelHeader, RowMeta, RowTitle,
-  Status, Table, Td, TextLink, Th, Toolbar, Tr,
+  Alert, Badge, Button, CartaoLinha, Dash, EmptyState, GradeMini, ListaCartoes, MetaDot,
+  MiniCartao, Panel, PanelHeader, RodapeTotal, Status, TextLink, Toolbar,
 } from '@/components/page';
 import { acao } from '@/lib/mitra-api';
 import { fmtData, fmtDataHora, moeda } from '@/lib/formato.ts';
-import { rotuloSituacaoPrevisao, type SituacaoPrevisao, type StatusBoItem } from '@/lib/bo.ts';
+import { rotuloSituacaoPrevisao, topoDoBo, type SituacaoPrevisao, type StatusBoItem } from '@/lib/bo.ts';
 import type { SessaoPersona } from '@/lib/persona.ts';
 import type { MapaDeFases } from '@/pages/quadros/AcoesDoPedido';
 import { usePedido } from './pedido-contexto';
 import { MarcarItensDialogo, PrevisaoDialogo, DocumentoBoDialogo } from './bo-dialogos';
+import { lerCarga } from './carga-do-card';
 
 interface BoItemLinha {
   ID: number; CODPROD: number; DESCRICAO: string; EMBALAGEM: string; UNIDADE: string;
@@ -46,9 +47,12 @@ const VAZIO: BoCarregado = { itens: [], previsoes: [], documentos: [], resumo: {
 const horaCurta = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const agora = () => new Date().toISOString().slice(0, 19);
 const hojeIso = () => new Date().toISOString().slice(0, 10);
-const diasEntre = (aIso: string, bIso: string) => Math.round(
-  (Date.UTC(...(bIso.split('-').map(Number) as [number, number, number])) - Date.UTC(...(aIso.split('-').map(Number) as [number, number, number]))) / 86400000,
-);
+// R-150: o mês do `Date.UTC` começa em 0 — sem o `- 1` a conta errava quando
+// a previsão e hoje caem em meses de tamanhos diferentes (30/10 → 03/11 dava 3).
+const diasEntre = (aIso: string, bIso: string) => {
+  const [a, b] = [aIso, bIso].map((iso) => iso.split('-').map(Number));
+  return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+};
 const quantidade = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 
 const STATUS_TONE = { aberto: 'attention', liberado: 'live', cancelado: 'off' } as const;
@@ -70,8 +74,9 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
   const dados = resposta && resposta.cardId === ctx.card.id ? resposta.dados : VAZIO;
   const carregando = !resposta || resposta.cardId !== ctx.card.id;
 
-  const buscar = React.useCallback(async (): Promise<BoCarregado> => {
-    const r = await acao('sgcBoCarregar', { cardId: ctx.card.id });
+  // R-150: a mesma execução serve a conclusão do Faturamento (`carga-do-card.ts`).
+  const buscar = React.useCallback(async (forcar = false): Promise<BoCarregado> => {
+    const r = await lerCarga('sgcBoCarregar', ctx.card.id, forcar);
     if (r.ok === false) throw new Error(String(r.erro ?? 'Não foi possível carregar os produtos em B.O.'));
     return {
       itens: (r.itens ?? []) as BoItemLinha[],
@@ -106,7 +111,7 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
     setErro('');
     try {
       await passos();
-      setResposta({ cardId: ctx.card.id, dados: await buscar() });
+      setResposta({ cardId: ctx.card.id, dados: await buscar(true) });
       setSalvoEm(horaCurta());
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : 'Não foi possível concluir a ação.');
@@ -163,19 +168,46 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
     return <p className="px-4 py-8 text-center text-[13px] text-ink-secondary">Carregando os produtos em B.O...</p>;
   }
 
+  // Concluído sem item em B.O.: não há o que mostrar (o legado só lista B.O. quando existe).
+  if (chaveFase === 'concluido' && dados.itens.length === 0) return null;
+
+  const topo = topoDoBo({ itens: dados.itens, documentos: dados.documentos, dtPrevisao: dados.resumo.previsao, hoje });
+  const dtEnvio = pedido.capa?.idCard === ctx.card.id ? pedido.capa.dtEnvio : '';
+
   return (
     <div className="flex flex-col gap-4">
       {erro ? <Alert tone="error">{erro}</Alert> : null}
+      {/* RN-006 / legado BoFasePanel:253-267 — fica até registrarem previsão nova. */}
+      {topo.avisoVencida ? <Alert tone="warn">{topo.avisoVencida}</Alert> : null}
 
       <Panel>
         <PanelHeader
-          title="Itens em B.O."
+          title="Produtos em B.O."
           hint={salvoEm
             ? `Salvo às ${salvoEm}. ${dados.resumo.abertos} em aberto, ${dados.resumo.liberados} liberados.`
             : `${dados.resumo.abertos} em aberto, ${dados.resumo.liberados} liberados.`}
         >
           <Status tone={SITUACAO_TONE[dados.resumo.situacao]}>{rotuloSituacaoPrevisao(dados.resumo.situacao, diasPrevisao)}</Status>
         </PanelHeader>
+
+        {/* As datas da fase (legado BoFasePanel:269-302). */}
+        <div className="border-b border-rule-row p-4">
+          <GradeMini colunas={3}>
+            <MiniCartao rotulo="Envio à indústria" valor={dtEnvio ? fmtData(dtEnvio) : <Dash />} />
+            <MiniCartao
+              rotulo="Previsão da indústria"
+              valor={dados.resumo.previsao ? fmtData(dados.resumo.previsao) : <Dash />}
+              tone={dados.resumo.situacao === 'vencida' ? 'attention' : 'neutral'}
+              hint={rotuloSituacaoPrevisao(dados.resumo.situacao, diasPrevisao)}
+            />
+            <MiniCartao
+              rotulo="Carta de falta"
+              valor={topo.cartaEm ? fmtData(topo.cartaEm) : dados.resumo.abertos > 0 ? 'Pendente' : <Dash />}
+              tone={topo.cartaEm || dados.resumo.abertos === 0 ? 'neutral' : 'attention'}
+              hint={topo.cartaEm ? 'a mais recente' : dados.resumo.abertos > 0 ? 'anexe o documento da indústria' : 'só com item em B.O.'}
+            />
+          </GradeMini>
+        </div>
 
         <Toolbar>
           <Button size="sm" onClick={() => setDialogoMarcar(true)} disabled={bloqueado} title={bloqueado ? motivoBloqueio : undefined}>
@@ -204,89 +236,68 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
         {dados.itens.length === 0 ? (
           <EmptyState title="Nenhum item em B.O." hint="Marque os produtos que a indústria não confirmou nesta compra." />
         ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Produto</Th>
-                <Th numeric>Pendente</Th>
-                <Th numeric>Valor</Th>
-                <Th numeric>Clientes</Th>
-                <Th numeric>Vendido (60d)</Th>
-                <Th>Situação</Th>
-                <Th aria-hidden />
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <ListaCartoes rotulo="Itens em B.O.">
               {dados.itens.map((item) => (
-                <Tr key={item.ID}>
-                  <Td>
-                    <RowTitle>{item.DESCRICAO}</RowTitle>
-                    <RowMeta><Code prefix="cód.">{item.CODPROD}</Code> · {item.EMBALAGEM || '—'} · {item.UNIDADE || '—'}</RowMeta>
-                    {item.OBSERVACAO ? <RowMeta>{item.OBSERVACAO}</RowMeta> : null}
-                  </Td>
-                  <Td numeric>{quantidade(item.QT_PENDENTE)}</Td>
-                  <Td numeric>{moeda(item.VL_PENDENTE)}</Td>
-                  <Td numeric>{item.CLIENTES_IMPACTADOS > 0 ? item.CLIENTES_IMPACTADOS : <Dash />}</Td>
-                  <Td numeric>{item.QT_VENDIDA_60D > 0 ? quantidade(item.QT_VENDIDA_60D) : <Dash />}</Td>
-                  <Td>
-                    <Status tone={STATUS_TONE[item.STATUS] ?? 'off'}>
-                      {item.STATUS === 'aberto' ? 'Em aberto' : item.STATUS === 'liberado' ? 'Liberado' : 'Cancelado'}
-                    </Status>
-                    {item.STATUS === 'liberado' && item.RESOLVIDO_POR_NOME ? (
-                      <RowMeta>{item.RESOLVIDO_POR_NOME} em {fmtDataHora(item.RESOLVIDO_EM)}</RowMeta>
-                    ) : null}
-                  </Td>
-                  <Td className="text-right">
-                    {item.STATUS === 'aberto' ? (
-                      <Button size="sm" onClick={() => void liberar(item.CODPROD)} disabled={bloqueado} title={bloqueado ? motivoBloqueio : undefined}>
-                        Liberar
-                      </Button>
-                    ) : null}
-                  </Td>
-                </Tr>
+                <CartaoLinha
+                  key={item.ID}
+                  titulo={item.DESCRICAO}
+                  meta={<>Código {item.CODPROD} <MetaDot /> {item.EMBALAGEM || '—'} <MetaDot /> pedida {quantidade(item.QT_PEDIDA)}</>}
+                  valor={moeda(item.VL_PENDENTE)}
+                  valorMeta={`${quantidade(item.QT_PENDENTE)} pendente`}
+                  acoes={item.STATUS === 'aberto' ? (
+                    <Button size="sm" onClick={() => void liberar(item.CODPROD)} disabled={bloqueado} title={bloqueado ? motivoBloqueio : undefined}>
+                      Liberar
+                    </Button>
+                  ) : undefined}
+                >
+                  <Status tone={STATUS_TONE[item.STATUS] ?? 'off'}>
+                    {item.STATUS === 'aberto' ? 'Em aberto' : item.STATUS === 'liberado' ? 'Liberado' : 'Cancelado'}
+                  </Status>
+                  {item.STATUS === 'liberado' && item.RESOLVIDO_POR_NOME ? (
+                    <span>{item.RESOLVIDO_POR_NOME} em {fmtDataHora(item.RESOLVIDO_EM)}</span>
+                  ) : null}
+                  {item.CLIENTES_IMPACTADOS > 0 ? <span>{item.CLIENTES_IMPACTADOS} clientes impactados</span> : null}
+                  {item.QT_VENDIDA_60D > 0 ? <span>{quantidade(item.QT_VENDIDA_60D)} vendidos em 60 dias</span> : null}
+                  {item.OBSERVACAO ? <span className="w-full">{item.OBSERVACAO}</span> : null}
+                </CartaoLinha>
               ))}
-            </tbody>
-          </Table>
+            </ListaCartoes>
+            <RodapeTotal rotulo="Total pendente em B.O. (itens em aberto)" valor={moeda(topo.totalPendente)} />
+          </>
         )}
       </Panel>
 
       <Panel>
         <PanelHeader title="Histórico de previsões" hint={dados.previsoes.length === 0 ? 'Nenhuma previsão registrada ainda.' : undefined} />
         {dados.previsoes.length > 0 ? (
-          <Table>
-            <thead>
-              <tr><Th>Previsão</Th><Th>Observação</Th><Th>Registrado por</Th></tr>
-            </thead>
-            <tbody>
-              {dados.previsoes.map((p) => (
-                <Tr key={p.ID}>
-                  <Td>{fmtData(p.DT_PREVISAO)}</Td>
-                  <Td>{p.OBSERVACAO || <Dash />}</Td>
-                  <Td><RowMeta>{p.REGISTRADO_POR_NOME} · {fmtDataHora(p.REGISTRADO_EM)}</RowMeta></Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
+          <ListaCartoes rotulo="Histórico de previsões">
+            {dados.previsoes.map((p) => (
+              <CartaoLinha
+                key={p.ID}
+                titulo={p.OBSERVACAO || 'Sem observação'}
+                meta={`${p.REGISTRADO_POR_NOME} · ${fmtDataHora(p.REGISTRADO_EM)}`}
+                valor={fmtData(p.DT_PREVISAO)}
+              />
+            ))}
+          </ListaCartoes>
         ) : null}
       </Panel>
 
       <Panel>
-        <PanelHeader title="Documentos" hint={dados.documentos.length === 0 ? 'Nenhum documento anexado ainda.' : undefined} />
+        <PanelHeader title="Carta de falta e documentos" hint={dados.documentos.length === 0 ? 'Nenhum documento anexado ainda.' : undefined} />
         {dados.documentos.length > 0 ? (
-          <Table>
-            <thead>
-              <tr><Th>Arquivo</Th><Th>Tipo</Th><Th>Enviado por</Th></tr>
-            </thead>
-            <tbody>
-              {dados.documentos.map((d) => (
-                <Tr key={d.ID}>
-                  <Td><TextLink onClick={() => window.open(d.ENDERECO, '_blank', 'noopener')} title={d.ENDERECO}>{d.NOME_ARQUIVO}</TextLink></Td>
-                  <Td><Badge tone={d.TIPO === 'carta_falta' ? 'accent' : 'neutral'}>{d.TIPO === 'carta_falta' ? 'Carta de falta' : 'Outro'}</Badge></Td>
-                  <Td><RowMeta>{d.ENVIADO_POR_NOME} · {fmtDataHora(d.ENVIADO_EM)}</RowMeta></Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
+          <ListaCartoes rotulo="Documentos">
+            {dados.documentos.map((d) => (
+              <CartaoLinha
+                key={d.ID}
+                titulo={<TextLink onClick={() => window.open(d.ENDERECO, '_blank', 'noopener')} title={d.ENDERECO}>{d.NOME_ARQUIVO}</TextLink>}
+                meta={`${d.ENVIADO_POR_NOME} · ${fmtDataHora(d.ENVIADO_EM)}`}
+              >
+                <Badge tone={d.TIPO === 'carta_falta' ? 'accent' : 'neutral'}>{d.TIPO === 'carta_falta' ? 'Carta de falta' : 'Outro'}</Badge>
+              </CartaoLinha>
+            ))}
+          </ListaCartoes>
         ) : null}
       </Panel>
 

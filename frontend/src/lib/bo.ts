@@ -87,6 +87,34 @@ export function resumoBo(itens: { STATUS: string }[]): { abertos: number; libera
   };
 }
 
+/**
+ * O topo da fase B.O. no card (R-150, C-018), no molde do `BoFasePanel` do
+ * legado: o total pendente dos itens em aberto, a carta de falta (a mais
+ * recente, ou "pendente" quando não há) e o aviso de previsão vencida, que
+ * fica até registrarem previsão nova — o mesmo critério de `situacaoDaPrevisao`.
+ */
+export function topoDoBo(e: {
+  itens: { STATUS: string; VL_PENDENTE: number }[];
+  documentos: { TIPO: string; ENVIADO_EM: string }[];
+  dtPrevisao: string;
+  hoje: string;
+}): { totalPendente: number; cartaEm: string; avisoVencida: string } {
+  const totalPendente = e.itens
+    .filter((item) => item.STATUS === 'aberto')
+    .reduce((soma, item) => soma + (Number(item.VL_PENDENTE) || 0), 0);
+  const cartaEm = e.documentos
+    .filter((d) => d.TIPO === 'carta_falta')
+    .map((d) => String(d.ENVIADO_EM ?? ''))
+    .sort()
+    .at(-1) ?? '';
+  const situacao = situacaoDaPrevisao(e.dtPrevisao, e.hoje);
+  const dias = situacao === 'vencida' ? diasEntre(e.dtPrevisao, e.hoje) : 0;
+  const avisoVencida = situacao === 'vencida'
+    ? `Previsão de liberação vencida há ${dias} ${dias === 1 ? 'dia' : 'dias'}. Reavalie com o fornecedor e registre uma previsão nova.`
+    : '';
+  return { totalPendente, cartaEm, avisoVencida };
+}
+
 /* ── CSV de /bo (A-15, R-037): as MESMAS colunas da tabela do painel, sobre
  *    as linhas já carregadas do filtro atual — zero execução nova. ── */
 
