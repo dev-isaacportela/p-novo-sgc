@@ -106,10 +106,11 @@ export default function AbaItens(ctx: ExtensaoContexto) {
           <Table>
             <thead>
               <tr>
-                <Th>Produto</Th>
-                <Th numeric>Pedido</Th>
-                <Th numeric>Custo</Th>
-                <Th numeric>Total</Th>
+                {/* Lista enxuta: padding menor nas colunas de número, para caber no card estreito sem rolar. */}
+                <Th className="pr-2 pl-3">Produto</Th>
+                <Th numeric className="px-2">Pedido</Th>
+                <Th numeric className="px-2">Custo</Th>
+                <Th numeric className="pr-3 pl-2">Total</Th>
               </tr>
             </thead>
             <tbody>
@@ -117,7 +118,7 @@ export default function AbaItens(ctx: ExtensaoContexto) {
                 const selo = seloDoCusto(item.tipoPreco);
                 return (
                   <Tr key={item.codprod}>
-                    <Td className="min-w-0">
+                    <Td className="min-w-0 pr-2 pl-3">
                       <NomeDoProduto codprod={item.codprod} descricao={item.descricao} />
                       <RowMeta>
                         <Code prefix="cód.">{item.codprod}</Code> · {item.embalagem || '—'}
@@ -129,12 +130,12 @@ export default function AbaItens(ctx: ExtensaoContexto) {
                         </span>
                       ) : null}
                     </Td>
-                    <Td numeric className="whitespace-nowrap">{quantidade(item.qtPedida)}</Td>
-                    <Td numeric className="whitespace-nowrap">
+                    <Td numeric className="px-2 whitespace-nowrap">{quantidade(item.qtPedida)}</Td>
+                    <Td numeric className="px-2 whitespace-nowrap">
                       {item.precoCusto > 0 ? moeda(item.precoCusto) : <Dash />}
                       {selo ? <span className="block text-[11px] font-semibold text-attention">{selo}</span> : null}
                     </Td>
-                    <Td numeric className="whitespace-nowrap">{moeda(item.qtPedida * item.precoCusto)}</Td>
+                    <Td numeric className="pr-3 pl-2 whitespace-nowrap">{moeda(item.qtPedida * item.precoCusto)}</Td>
                   </Tr>
                 );
               })}
