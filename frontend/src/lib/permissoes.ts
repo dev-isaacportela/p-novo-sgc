@@ -89,6 +89,11 @@ export interface Permissoes {
   verComprasInteligentes: boolean;
   operarComprasInteligentes: boolean;
   parametrizarCompras: boolean;
+  // Onda 5 (R-150): pedido Galderma (014). `verGalderma` não zera com
+  // READ_ONLY; `operarGalderma` zera. A diretoria lê e não opera (P-10: ela
+  // não cria pedido de compra no SGC 2); o comercial não vê (P-03 de regras.md).
+  verGalderma: boolean;
+  operarGalderma: boolean;
 }
 
 /** Quem faz o quê, por persona (a tabela do plan.md § Regras puras). */
@@ -102,6 +107,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verSolicitacoes: true, criarSolicitacao: true, avaliarSolicitacao: true,
     verAnalises: true,
     verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: true,
+    verGalderma: true, operarGalderma: true,
   },
   analista: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: false, aprovarDiretoria: false,
@@ -112,6 +118,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: true,
     verAnalises: true,
     verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: false,
+    verGalderma: true, operarGalderma: true,
   },
   gestor: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: false,
@@ -122,6 +129,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verSolicitacoes: true, criarSolicitacao: false, avaliarSolicitacao: true,
     verAnalises: true,
     verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: true,
+    verGalderma: true, operarGalderma: true,
   },
   diretoria: {
     // CA-01 + P-07: a diretoria cancela, mas só na fase dela — quem cobra a
@@ -136,6 +144,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verAnalises: true,
     // A diretoria vê a tela, mas não opera o carrinho nem parametriza (R-095).
     verComprasInteligentes: true, operarComprasInteligentes: false, parametrizarCompras: false,
+    verGalderma: true, operarGalderma: false,
   },
   comercial: {
     // D-017: a única persona sem acesso ao quadro — fora do menu, fora da rota
@@ -149,6 +158,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verSolicitacoes: true, criarSolicitacao: true, avaliarSolicitacao: false,
     verAnalises: false,
     verComprasInteligentes: false, operarComprasInteligentes: false, parametrizarCompras: false,
+    verGalderma: false, operarGalderma: false,
   },
 };
 
@@ -190,6 +200,9 @@ export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes 
     verComprasInteligentes: base.verComprasInteligentes,
     operarComprasInteligentes: operar(base.operarComprasInteligentes),
     parametrizarCompras: operar(base.parametrizarCompras),
+    // Onda 5: mesma divisão.
+    verGalderma: base.verGalderma,
+    operarGalderma: operar(base.operarGalderma),
     somenteProprios: acesso === 'RESTRICTED',
     somenteLeitura,
   };
@@ -207,6 +220,8 @@ const MENU: readonly (ItemDeMenu & { exige: keyof Permissoes })[] = [
   // botão do quadro, numa janela sobre ele.
   // Onda 4 (R-095): logo depois do quadro; o comercial continua fora.
   { grupo: 'Compras', to: '/compras-inteligentes', label: 'Compras inteligentes', exige: 'verComprasInteligentes' },
+  // Onda 5 (R-150): a mesa Galderma, depois das compras inteligentes.
+  { grupo: 'Compras', to: '/galderma', label: 'Pedido Galderma', exige: 'verGalderma' },
   // Onda 3 (R-056/R-063): com este item o comercial passa a ter DOIS de menu
   // — Solicitações e Produtos em B.O.
   { grupo: 'Compras', to: '/solicitacoes', label: 'Solicitações', exige: 'verSolicitacoes' },
