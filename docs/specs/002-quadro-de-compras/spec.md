@@ -302,6 +302,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** o comprador abre o card
 - **Então** vê data, método, contato e número do pedido do envio, a observação, e "Próximo movimento: Em Trânsito para BN — Vincule a nota fiscal para liberar"; com 1 nota, "1 nota vinculada"
 
+**C-050 — Compras × vendas do fornecedor na aprovação** *(R-156, P-1)*
+- **Dado que** o pedido da Fresenius na filial 1 analisou as vendas de 19/09 a 02/11 e soma R$ 328.859,14
+- **Quando** quem aprova abre "Compras × vendas do fornecedor" no card
+- **Então** o card consulta o WinThor só nesse momento e mostra o comprado e o vendido do fornecedor na filial no período, o % compras × vendas de hoje e o de depois deste pedido; sem meta de compras (decisão do usuário), e com "sem compra nem venda no período" quando o fornecedor não aparece
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -457,6 +462,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-047 | `aprovacao.test.mjs`: total, cobertura média atual → após, preço especial e os 9 indicadores com a lista de produtos (limite de cobertura do item, não 60 fixo) | regra de tela |
 | C-048 | `envio-industria.test.mjs`: só vai o que tem quantidade, totais, texto do "Copiar itens" com cabeçalho e número pt-BR | regra de tela |
 | C-049 | `envio-industria.test.mjs`: próximo movimento travado sem nota e liberado com 1 ou mais | regra de tela |
+| C-050 | `aprovacao.test.mjs`: acha o fornecedor no ranking da `sgcWintComprasVsVendas` (009), % hoje e depois do pedido, `null` sem venda | regra de tela |
 
 Verificação manual (só olho humano verifica):
 

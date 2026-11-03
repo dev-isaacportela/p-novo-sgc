@@ -57,6 +57,9 @@
 - [ ] **T-049** — **Pedir ao integrador**: ligar a aba no `/quadro` (`abasExtras` com "Notas fiscais"), as rotas `/notas-fiscais` e `/faturamentos-pendentes`, os dois itens de menu **no `MENU` de `frontend/src/lib/permissoes.ts`** (é lá que mora o menu, com a chave de permissão de cada item; o `AdminLayout` só fornece o ícone — G-7) e a linha de faturamento + etiqueta na capa do cartão (a partir do campo `faturamento`) → `frontend/src/pages/quadros/QuadroPage.tsx`, `frontend/src/App.tsx`, `frontend/src/lib/permissoes.ts`, `frontend/src/components/AdminLayout.tsx`
 - [x] **T-100** — R-150: bloco Notas fiscais em cartões (`abas/nf-cartoes.tsx`): números em cima e ações embaixo; nota recolhida com divergências e conferências sem decisão no cabeçalho; aberta, só o que diverge, com "Mostrar os N itens conformes" → `frontend/src/pages/quadros/abas/NotasFiscais.tsx`
 - [x] **T-101** — R-150: blocos Conclusão (saldo por item + pendências) e Concluído (itens faturados), lendo o MESMO `sgcNfListar`/`sgcBoCarregar` pela carga compartilhada (`abas/carga-do-card.ts`) → `frontend/src/pages/quadros/abas/`
+- [x] **T-102** — R-152 (P-5): `seloDeValidade`/`contagemDeValidade` em `lib/nf.ts`; selo no item da nota, faixa no resumo de faturamento e no concluído → `frontend/src/pages/quadros/abas/nf-cartoes.tsx`, `NotasFiscais.tsx`, `Concluido.tsx`
+- [x] **T-103** — R-153 (P-6): `pendencias-conclusao-faturado.sql` no `sgcPodeMover` (add-005) com `FORMAT(..., 'pt_BR')` (shim novo no dialeto do simulador); `coberturaDoFaturamento`/`textoFaltaFaturar` em `lib/conclusao.ts`; "Não vem mais" no B.O. → `backend/sql/`, `backend/add-005-quadro-compras.mjs`, `frontend/src/pages/quadros/abas/Conclusao.tsx`, `Bo.tsx`
+- [x] **T-104** — R-155 (P-3): `sgcEscGestorNotificar` (add-008, id local 8501) e o painel "Notificar gestor" no acompanhamento do Trânsito → `backend/add-008-notas-fiscais.mjs`, `frontend/src/pages/quadros/abas/NotificarGestor.tsx`
 
 ## Testes
 

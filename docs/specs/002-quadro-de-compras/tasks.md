@@ -46,6 +46,7 @@
 - [x] **T-095** — R-150: "Análise para aprovação" nas fases Técnica e Diretoria (`lib/aprovacao.ts`, `abas/Aprovacao.tsx`), antes do bloco Itens → `frontend/src/pages/quadros/abas/Aprovacao.tsx`
 - [x] **T-096** — R-150: bloco Envio (resumo para a indústria, Copiar itens, Arquivo WinThor, itens em cartões, Registrar envio) e bloco Enviado (envio registrado, próximo movimento, itens recolhidos); `registrarEnvio` sai do `AcoesDoPedido` para `registrar-envio.ts`, usado pelos dois → `frontend/src/pages/quadros/`
 - [x] **T-097** — R-150: Cancelado mostra os itens só de consulta (`abas/ItensDoPedido.tsx`) em vez do bloco Itens editável da Análise → `frontend/src/lib/conteudo-da-fase.ts`
+- [x] **T-098** — R-156 (P-1): seção "Compras × vendas do fornecedor" na aprovação, recolhida, que lê `sgcWintComprasVsVendas` (009) só ao abrir → `frontend/src/pages/quadros/abas/Aprovacao.tsx`, `frontend/src/lib/aprovacao.ts`
 
 ## Testes
 

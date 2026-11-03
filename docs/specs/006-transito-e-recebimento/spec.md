@@ -161,6 +161,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** o comprador abre o card em Em Trânsito para BN na quinta 20/08
 - **Então** vê "Acompanhamento do faturamento" com 3 dias úteis desde o envio e o selo "Faturamento pendente — 3 dias úteis — contate a indústria"; com 5, "gerência avisada"; 100 % faturado, "Faturado por completo"; os itens do pedido ficam recolhidos logo abaixo, e as notas do recebimento em cartões
 
+**C-025 — "Produto faturado — ir para Faturamento"** *(R-154, P-4)*
+- **Dado que** o pedido está em Em Trânsito para BN
+- **Quando** o comprador clica "Produto faturado — ir para Faturamento" no acompanhamento
+- **Então** o pedido vai para Faturamento em Andamento e a passagem fica no histórico; o movimento automático do recebimento (RF-015) continua; a diretoria fora da fase dela continua sem mover
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -225,6 +230,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **RN-011 — Alcance do monitoramento.** Só notas de pedidos nas fases Enviado e Em Trânsito são verificadas e só elas entram na lista de vencidas. Pedido cancelado ou excluído sai do monitoramento.
 - **RN-012 — Perfis.** Acompanhar e ver a lista: admin, analista, gestor, diretoria. Verificar a entrada e sincronizar: admin, analista, gestor. Comercial não vê. Somente-leitura não opera. Acesso restrito opera apenas os pedidos que criou.
 - **RN-013 — Conclusão do pedido.** Concluir exige zero comparação de nota fiscal sem decisão e zero item pendente de B.O. — as duas condições são verificadas no servidor e a recusa diz qual falhou.
+- **RN-014 — Movimento manual Trânsito → Faturamento (R-154, P-4).** Além do automático, quem move pedido pode levar o pedido de Trânsito para Faturamento à mão, pelo botão do acompanhamento ou pela coluna da direita. O par `transito>faturamento` não tem pendência no `sgcPodeMover`: vale só a matriz de persona da 002.
 
 ## Testes
 
@@ -267,6 +273,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-012 | matriz de perfis: os quatro que veem, os três que operam, comercial fora, somente-leitura sem operação | regra de tela |
 | RN-013 | com uma validação pendente o servidor recusa concluir; sem nenhuma, libera | regra de negócio |
 | C-024 | `acompanhamento.test.mjs`: dias úteis desde o envio, níveis 3 e 5 do `nivelDeAlerta`, parcial, completo e sem envio | regra de tela |
+| C-025 / RN-014 | smoke `006-transito.mjs`: o gancho libera o analista com motivo vazio, recusa a diretoria com a frase da 002, o `kbCardMover` move e grava 1 passagem | regra de negócio |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-001 — a tabela de notas do pedido nos dois temas, com as situações legíveis por texto e não só por cor
