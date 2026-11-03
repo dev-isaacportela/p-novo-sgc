@@ -83,6 +83,9 @@ function blocoFaturamento(modelo: ModeloExtrato): string {
       <thead><tr><th>Nota fiscal</th><th>Emissão</th><th>Valor</th></tr></thead>
       <tbody>${linhas}</tbody>
     </table>
+    ${modelo.faturamento.falta > 0
+      ? `<p>Saldo a faturar: ${esc(moeda(modelo.faturamento.falta))}. A conclusão exige 99,5 % do valor coberto (notas fiscais e saldo em B.O. que não vem mais).</p>`
+      : ''}
   `;
 }
 
