@@ -84,10 +84,11 @@ try {
   const soma = (col) => analise.reduce((t, l) => t + Number(l[col] || 0), 0);
   const [privado, pf, publico, total] = ['VENDA_PRIVADO', 'VENDA_PF', 'VENDA_PUBLICO', 'VENDA_PERIODO'].map(soma);
   const conta = (col) => analise.filter((l) => Number(l[col]) > 0).length;
-  console.log(`Análise de montagem (119, filial 1): ${analise.length} produtos · privado ${privado} un. em ${conta('VENDA_PRIVADO')} · PF ${pf} em ${conta('VENDA_PF')} · público ${publico} em ${conta('VENDA_PUBLICO')} · venda total (base da sugestão) ${total}`);
+  console.log(`Análise de montagem (119, filial 1): ${analise.length} produtos · privado ${privado} un. em ${conta('VENDA_PRIVADO')} · PF ${pf} em ${conta('VENDA_PF')} · público ${publico} em ${conta('VENDA_PUBLICO')} · venda válida ${total} (base da sugestão sem o público: ${privado + pf})`);
   if (!(analise.length > 0)) { console.error('FALHOU: sgcWintAnaliseMontagem com contagem zero.'); falhou = true; }
   if (!(conta('VENDA_PRIVADO') > 0)) { console.error('FALHOU: nenhuma venda privada na análise.'); falhou = true; }
-  if (privado + pf + publico > total) { console.error('FALHOU: a divisão passou da venda total.'); falhou = true; }
+  // R-134: a venda do período é a válida — as três somam exatamente ela.
+  if (privado + pf + publico !== total) { console.error('FALHOU: a divisão não soma a venda válida.'); falhou = true; }
 } finally {
   await winthor.fechar();
 }

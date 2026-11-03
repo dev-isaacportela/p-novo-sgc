@@ -2,14 +2,16 @@
 // caixa, curva ABC, cobertura futura e total do pedido (spec 003, RN-001 a
 // RN-004 e RN-008).
 //
-// Portada de `p-45547/frontend/src/features/kanban/compras.ts` sem mudança de
-// comportamento. Módulo puro — sem React, sem SDK: é o que
+// R-134: a sugestão, a cobertura futura e os meses do período seguem a
+// fórmula do legado (`p-60523/features/kanban/compras.ts`), sobre a venda
+// válida sem o público — o mesmo recorte das Compras inteligentes. Módulo puro — sem React, sem SDK: é o que
 // `frontend/tests/compras.test.mjs` exercita.
 
 // Extensão explícita: `allowImportingTsExtensions` está ligado e é assim que o
 // `node --test` de frontend/tests/ resolve o módulo sem passo de build.
-import type { AlvoCobertura, Cobertura } from './cobertura.ts';
-import { limiteDeCobertura } from './cobertura.ts';
+import type { Cobertura } from './cobertura.ts';
+import { ALVO_COBERTURA_PADRAO_DIAS, ROTULO_NIVEL, limiteDeCobertura } from './cobertura.ts';
+import type { ResolucaoCobertura } from './cobertura.ts';
 
 /** Uma linha de `sgcWintAnaliseMontagem` (colunas UPPERCASE do ERP). */
 export interface LinhaAnalise {
@@ -56,6 +58,9 @@ export interface ItemPedido {
   curvaAbc: CurvaAbc;
   coberturaDias: number;
   coberturaLimite: number;
+  /** R-134: a cobertura-alvo resolvida (012) e de onde veio — o `title` da coluna Dias; só na análise carregada. */
+  coberturaAlvo?: number;
+  coberturaOrigem?: string;
   coberturaJustificativa: string;
   observacao: string;
   status: string;
@@ -70,41 +75,50 @@ const numero = (valor: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/** Dias do período (inclusive) divididos por 30, nunca menos de 1 mês. */
+/** R-134: o mês médio do legado (365,25 ÷ 12). */
+export const DIAS_POR_MES = 30.44;
+/** R-134: período ausente ou inválido vale 3 meses, como no legado. */
+export const MESES_SEM_PERIODO = 3;
+
+/**
+ * R-134 (fórmula do legado): (fim − início) ÷ 30,44 dias, com duas casas e no
+ * mínimo 1 mês; período ausente ou invertido vale 3 meses.
+ */
 export function mesesDoPeriodo(inicio: string, fim: string): number {
   const de = Date.parse(`${String(inicio).slice(0, 10)}T00:00:00Z`);
   const ate = Date.parse(`${String(fim).slice(0, 10)}T00:00:00Z`);
-  if (!Number.isFinite(de) || !Number.isFinite(ate) || ate < de) return 1;
-  const dias = (ate - de) / 86400000 + 1;
-  return Math.max(1, dias / 30);
+  if (!Number.isFinite(de) || !Number.isFinite(ate) || ate < de) return MESES_SEM_PERIODO;
+  const meses = Math.round(((ate - de) / 86400000 / DIAS_POR_MES) * 100) / 100;
+  return Math.max(1, meses);
+}
+
+/** Venda diária da base da sugestão: a venda válida sem o público ÷ meses ÷ 30. */
+export function vendaDiaria(vendaBase: number, meses: number): number {
+  return Math.max(0, numero(vendaBase)) / Math.max(1, numero(meses)) / 30;
 }
 
 /**
- * RN-001. Cobertura alvo de 2 meses (2,5 no giro lento, abaixo de 5 por mês),
- * menos a posição de estoque. A base é a venda TOTAL, licitação inclusive
- * (AN-04 A): o público compra do mesmo estoque.
+ * RN-001 (R-134, fórmula do legado). Necessidade = venda diária × alvo de
+ * cobertura (a cobertura-alvo resolvida do item; sem regra, 35 dias),
+ * arredondada para cima — com o produto arredondado a 6 casas antes, para que
+ * 4/dia × 35 dê 140 e não 141 por resíduo de ponto flutuante. Posição =
+ * estoque + trânsito (que SOMA: pedido ao ERP mais o trânsito do WinThor).
+ * Sugestão = necessidade − posição, nunca negativa. A base é a venda VÁLIDA da
+ * R-131 SEM o público — o mesmo recorte das Compras inteligentes.
  */
 export function sugestaoDeCompra(
-  vendaTotal: number,
+  vendaBase: number,
   estoque: number,
   transito: number,
   meses: number,
+  alvoDias: number = ALVO_COBERTURA_PADRAO_DIAS,
 ): number {
-  const venda = numero(vendaTotal);
-  if (venda <= 0) return 0;
-
-  const vendaMensal = venda / Math.max(1, numero(meses));
-  const alvoMeses = vendaMensal < 5 ? 2.5 : 2;
-  const necessidade = Math.ceil(vendaMensal * alvoMeses);
-  const posicao = Math.max(0, numero(estoque) - numero(transito));
-  const sugestao = Math.max(0, necessidade - posicao);
-
-  // RN-001, última frase: há demanda e a posição não cobre nem um mês, comprar
-  // zero seria ruptura. Guarda-corpo herdado do p-45547 — com alvo de 2 ou 2,5
-  // meses ele nunca dispara (a necessidade já é maior que a venda mensal); se
-  // algum dia o alvo cair abaixo de 1 mês, é ele que segura a ruptura.
-  if (sugestao === 0 && posicao < vendaMensal) return 1;
-  return sugestao;
+  const diaria = vendaDiaria(vendaBase, meses);
+  if (diaria <= 0) return 0;
+  const alvo = numero(alvoDias) > 0 ? numero(alvoDias) : ALVO_COBERTURA_PADRAO_DIAS;
+  const necessidade = Math.ceil(Math.round(diaria * alvo * 1e6) / 1e6);
+  const posicao = Math.max(0, numero(estoque) + Math.max(0, numero(transito)));
+  return Math.max(0, necessidade - posicao);
 }
 
 // "CX 12", "CAIXA COM 24", "C/ 6", "20 UN" — o que o cadastro do ERP escreve.
@@ -208,18 +222,24 @@ export function piorCurva(a: CurvaAbc, b: CurvaAbc): CurvaAbc {
   return ORDEM_CURVA[a] >= ORDEM_CURVA[b] ? a : b;
 }
 
-/** RN-004. Sem venda diária não há cobertura a calcular — é `null`, não zero. */
+/**
+ * RN-004 (R-134). Cobertura futura com a MESMA base da sugestão (a venda
+ * válida sem o público): estoque futuro = estoque + trânsito + quantidade
+ * pedida; dias = estoque futuro ÷ venda diária. Sem venda não há cobertura a
+ * calcular — é `null`, não zero. Com a mesma base dos dois lados, comprar a
+ * sugestão leva exatamente ao alvo.
+ */
 export function coberturaFuturaDias(
-  vendaTotal: number,
+  vendaBase: number,
   estoque: number,
   transito: number,
   qtPedida: number,
   meses: number,
 ): number | null {
-  const vendaDiaria = numero(vendaTotal) / Math.max(1, numero(meses)) / 30;
-  if (vendaDiaria <= 0) return null;
-  const estoqueFuturo = Math.max(0, numero(estoque) - numero(transito) + numero(qtPedida));
-  return estoqueFuturo / vendaDiaria;
+  const diaria = vendaDiaria(vendaBase, meses);
+  if (diaria <= 0) return null;
+  const estoqueFuturo = Math.max(0, numero(estoque) + Math.max(0, numero(transito)) + numero(qtPedida));
+  return estoqueFuturo / diaria;
 }
 
 /** RN-008: soma de quantidade × custo dos itens que ainda estão na lista. */
@@ -228,9 +248,19 @@ export function totalDoPedido(itens: { qtPedida: number; precoCusto: number }[])
   return Math.round(total * 100) / 100;
 }
 
+/** R-134: a base da sugestão e da cobertura do item — a venda válida menos a parte pública. */
+export function vendaBaseDoItem(item: Pick<ItemPedido, 'qtVendaTotal' | 'qtVendaLicitacao'>): number {
+  return Math.max(0, numero(item.qtVendaTotal) - numero(item.qtVendaLicitacao));
+}
+
 /** Cobertura do item com a quantidade que ele tem agora (recalculada a cada edição). */
 export function coberturaDoItem(item: ItemPedido, meses: number): number | null {
-  return coberturaFuturaDias(item.qtVendaTotal, item.qtEstoque, item.qtTransito, item.qtPedida, meses);
+  return coberturaFuturaDias(vendaBaseDoItem(item), item.qtEstoque, item.qtTransito, item.qtPedida, meses);
+}
+
+/** "Fornecedor · curva B", "Produto · curva A", "padrão do sistema" — o `title` da coluna Dias. */
+export function origemDaCobertura(r: Pick<ResolucaoCobertura, 'nivel' | 'curva'>): string {
+  return r.nivel === 'padrao' ? 'padrão do sistema' : `${ROTULO_NIVEL[r.nivel]} · curva ${r.curva}`;
 }
 
 /**
@@ -249,19 +279,22 @@ export function montarItens(
 ): ItemPedido[] {
   const meses = mesesDoPeriodo(periodo.inicio, periodo.fim);
   const custoDe = (linha: LinhaAnalise) => (custos === undefined ? numero(linha.CUSTO_ULT_ENTRADA) : custoPadraoDe(custos, Number(linha.CODPROD)).valor);
-  // A curva pesa venda × custo: com o mapa, o custo padrão (R-128).
-  const curvas = curvaAbc((linhas ?? []).map((l) => ({ ...l, CUSTO_ULT_ENTRADA: custoDe(l) })));
+  // R-134: a base é a venda válida sem o público (VENDA_LICITACAO é a parte pública dela).
+  const baseDe = (linha: LinhaAnalise) => Math.max(0, numero(linha.VENDA_PERIODO) - numero(linha.VENDA_LICITACAO));
+  // A curva pesa venda × custo: com o mapa, o custo padrão (R-128); a venda é a mesma base da sugestão.
+  const curvas = curvaAbc((linhas ?? []).map((l) => ({ ...l, VENDA_PERIODO: baseDe(l), CUSTO_ULT_ENTRADA: custoDe(l) })));
 
   return (linhas ?? []).map((linha) => {
     const codprod = Number(linha.CODPROD);
     const unPorCaixa = unidadesPorCaixa(linha, unidadesPorCaixaPorProduto?.get(codprod));
-    const sugerida = arredondarPorCaixa(
-      sugestaoDeCompra(numero(linha.VENDA_PERIODO), numero(linha.ESTOQUE), numero(linha.TRANSITO), meses),
-      unPorCaixa,
-    );
-    const alvo: AlvoCobertura = {
+    const curva = curvas.get(codprod) ?? 'C';
+    const resolucao = limiteDeCobertura(coberturas, {
       codprod, codsec: numero(linha.CODSEC), codepto: numero(linha.CODEPTO), codfornec,
-    };
+    }, curva);
+    // R-134: o trânsito SOMA — o pedido ao ERP e o trânsito do WinThor, como nas Compras inteligentes.
+    const transito = Math.max(0, numero(linha.TRANSITO)) + Math.max(0, numero(linha.QT_PEDIDA_ERP));
+    // Em unidades (Embalagem mínima): a caixa cheia arredonda na tela (`sugestaoNaUnidade`).
+    const sugerida = sugestaoDeCompra(baseDe(linha), numero(linha.ESTOQUE), transito, meses, resolucao.alvoDias);
     return {
       codprod,
       descricao: String(linha.DESCRICAO ?? ''),
@@ -273,14 +306,16 @@ export function montarItens(
       qtVendaTotal: numero(linha.VENDA_PERIODO),
       qtVendaLicitacao: numero(linha.VENDA_LICITACAO),
       qtEstoque: numero(linha.ESTOQUE),
-      qtTransito: numero(linha.TRANSITO),
+      qtTransito: transito,
       qtSugerida: sugerida,
       qtPedida: 0,
       precoCusto: custoDe(linha),
       tipoPreco: 'padrao',
-      curvaAbc: curvas.get(codprod) ?? 'C',
-      coberturaDias: coberturaFuturaDias(numero(linha.VENDA_PERIODO), numero(linha.ESTOQUE), numero(linha.TRANSITO), 0, meses) ?? 0,
-      coberturaLimite: limiteDeCobertura(coberturas, alvo, curvas.get(codprod) ?? 'C').limiteDias,
+      curvaAbc: curva,
+      coberturaDias: coberturaFuturaDias(baseDe(linha), numero(linha.ESTOQUE), transito, 0, meses) ?? 0,
+      coberturaLimite: resolucao.limiteDias,
+      coberturaAlvo: resolucao.alvoDias,
+      coberturaOrigem: origemDaCobertura(resolucao),
       coberturaJustificativa: '',
       observacao: '',
       status: 'montagem',

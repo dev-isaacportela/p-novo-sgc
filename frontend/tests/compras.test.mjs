@@ -8,8 +8,9 @@ import assert from 'node:assert/strict';
 import {
   mesesDoPeriodo, sugestaoDeCompra, unidadesPorCaixa, arredondarPorCaixa, origemUnidadesPorCaixa,
   curvaAbc, coberturaFuturaDias, totalDoPedido, montarItens, itemDeLinha, itemDeProdutoBuscado,
-  curvaPorValor, piorCurva, custoPadraoDe, mapaDeCustoPadrao, rotuloSemCusto,
+  curvaPorValor, piorCurva, custoPadraoDe, mapaDeCustoPadrao, rotuloSemCusto, vendaBaseDoItem,
 } from '../src/lib/compras.ts';
+import { sugestaoNaUnidade } from '../src/lib/analise-pedido.ts';
 
 const linha = (codprod, vendaPeriodo, custo, extra = {}) => ({
   CODPROD: codprod, DESCRICAO: `PRODUTO ${codprod}`, EMBALAGEM: 'CX 12', UNIDADE: 'UN',
@@ -17,21 +18,24 @@ const linha = (codprod, vendaPeriodo, custo, extra = {}) => ({
   VENDA_PERIODO: vendaPeriodo, VENDA_LICITACAO: 0, CUSTO_ULT_ENTRADA: custo, ...extra,
 });
 
-test('mesesDoPeriodo: 01/08 a 14/09/2026 são 45 dias, ou 1,5 mês; período inválido não quebra a tela', () => {
-  assert.equal(mesesDoPeriodo('2026-08-01', '2026-09-14'), 1.5);
-  assert.equal(mesesDoPeriodo('2026-09-14', '2026-08-01'), 1, 'fim antes do início cai no mínimo');
-  assert.equal(mesesDoPeriodo('', ''), 1);
+test('R-134: mesesDoPeriodo — (fim − início) ÷ 30,44 com duas casas, no mínimo 1; período ausente ou inválido vale 3', () => {
+  assert.equal(mesesDoPeriodo('2026-08-01', '2026-09-14'), 1.45, '44 dias');
+  assert.equal(mesesDoPeriodo('2026-01-01', '2026-07-01'), 5.95, '181 dias');
+  assert.equal(mesesDoPeriodo('2026-09-01', '2026-09-10'), 1, 'menos de um mês vale 1');
+  assert.equal(mesesDoPeriodo('2026-09-14', '2026-08-01'), 3, 'fim antes do início');
+  assert.equal(mesesDoPeriodo('', ''), 3, 'sem período');
 });
 
-test('C-002: produto que vendeu 18 em 45 dias (12 por mês), com 5 em estoque e 2 em trânsito, sugere 21', () => {
-  assert.equal(sugestaoDeCompra(18, 5, 2, 1.5), 21);
+test('C-002 (R-134): vendeu 18 em 1,5 mês (0,4 por dia), com 5 em estoque e 2 em trânsito — alvo 35: necessidade 14, posição 7, sugere 7', () => {
+  assert.equal(sugestaoDeCompra(18, 5, 2, 1.5), 7);
 });
 
-test('C-003: giro lento (6 em 45 dias, 4 por mês) compra 2,5 meses e sugere 10', () => {
-  assert.equal(sugestaoDeCompra(6, 0, 0, 1.5), 10);
+test('C-003 (R-134): o giro lento compra pelo mesmo alvo — 6 em 1,5 mês, alvo 35, sugere 5; com alvo 60, 8 (saiu o alvo de 2,5 meses)', () => {
+  assert.equal(sugestaoDeCompra(6, 0, 0, 1.5), 5);
+  assert.equal(sugestaoDeCompra(6, 0, 0, 1.5, 60), 8);
 });
 
-test('C-005: estoque de 30 já cobre a necessidade de 24 — a sugestão é 0, não 1', () => {
+test('C-005 (R-134): estoque de 30 já cobre a necessidade de 14 — a sugestão é 0', () => {
   assert.equal(sugestaoDeCompra(18, 30, 0, 1.5), 0);
 });
 
@@ -53,18 +57,35 @@ test('C-007: venda 45 em 1,5 mês, 10 em estoque e 30 pedidos dão 40 dias de co
   assert.equal(coberturaFuturaDias(45, 10, 0, 30, 1.5), 40);
 });
 
-test('RN-001: a tabela de sugestão da spec — (0,0,0,6)→0; (120,10,0,6)→30; (12,0,0,6)→5; (120,50,20,6)→10; (120,500,0,6)→0', () => {
-  assert.equal(sugestaoDeCompra(0, 0, 0, 6), 0);
-  assert.equal(sugestaoDeCompra(120, 10, 0, 6), 30);
-  assert.equal(sugestaoDeCompra(12, 0, 0, 6), 5);
-  assert.equal(sugestaoDeCompra(120, 50, 20, 6), 10);
-  assert.equal(sugestaoDeCompra(120, 500, 0, 6), 0);
+test('RN-001 (R-134): fórmula do legado — venda 120 em 6 meses, estoque 10, alvo 35: necessidade ceil(120/6/30 × 35) = 24, sugere 14; alvo 60 → 30; sem venda → 0', () => {
+  assert.equal(sugestaoDeCompra(120, 10, 0, 6, 35), 14);
+  assert.equal(sugestaoDeCompra(120, 10, 0, 6), 14, 'sem regra, alvo 35');
+  assert.equal(sugestaoDeCompra(120, 10, 0, 6, 60), 30);
+  assert.equal(sugestaoDeCompra(0, 0, 0, 6, 35), 0);
+  assert.equal(sugestaoDeCompra(120, 500, 0, 6, 35), 0, 'nunca negativa');
 });
 
-test('RN-001: o trânsito reduz a posição de estoque, e posição maior que a necessidade nunca vira sugestão negativa', () => {
-  assert.equal(sugestaoDeCompra(18, 5, 2, 1.5), 21, 'posição 3, não 5');
-  assert.equal(sugestaoDeCompra(18, 5, 50, 1.5), 24, 'trânsito maior que o estoque zera a posição, não a torna negativa');
+test('RN-001 (R-134): a base é a venda válida SEM o público — com 60 dos 120 para órgão público, sugere 2', () => {
+  assert.equal(vendaBaseDoItem({ qtVendaTotal: 120, qtVendaLicitacao: 60 }), 60);
+  assert.equal(sugestaoDeCompra(vendaBaseDoItem({ qtVendaTotal: 120, qtVendaLicitacao: 60 }), 10, 0, 6, 35), 2);
+  assert.equal(vendaBaseDoItem({ qtVendaTotal: 10, qtVendaLicitacao: 30 }), 0, 'nunca negativa');
+});
+
+test('RN-001 (R-134): o trânsito SOMA à posição — 10 em estoque e 5 em trânsito sugerem 9; trânsito negativo não desconta', () => {
+  assert.equal(sugestaoDeCompra(120, 10, 5, 6, 35), 9);
+  assert.equal(sugestaoDeCompra(120, 10, -5, 6, 35), 14);
   assert.equal(sugestaoDeCompra(18, 1000, 0, 1.5), 0);
+});
+
+test('RN-001 (R-134): 4 por dia × 35 dá 140, não 141 — o produto é arredondado a 6 casas antes do teto', () => {
+  // 136,8 em 1,14 mês: 4 por dia, mas 136,8/1,14/30 × 35 = 140,00000000000003 em ponto flutuante.
+  assert.equal(sugestaoDeCompra(136.8, 0, 0, 1.14, 35), 140);
+});
+
+test('RN-002 (R-134): em Caixa cheia a sugestão sobe ao múltiplo da caixa de 12 (14 → 24); em Embalagem mínima, não sobe', () => {
+  assert.equal(sugestaoNaUnidade(14, 12, 'caixa'), 24);
+  assert.equal(sugestaoNaUnidade(14, 12, 'embalagem'), 14);
+  assert.equal(sugestaoNaUnidade(0, 12, 'caixa'), 0);
 });
 
 test('RN-002: "CX 12" dá 12; "FRASCO 100 ML" dá 1; a gestão de custos vence a embalagem', () => {
@@ -81,9 +102,15 @@ test('RN-003: lista vazia dá mapa vazio; todos com valor zero são C', () => {
   assert.deepEqual([...semValor.values()], ['C', 'C']);
 });
 
-test('RN-004: venda 180 em 6 meses com 10 de estoque, 5 em trânsito e 20 pedidos dá 25 dias; sem venda, não há cobertura', () => {
-  assert.equal(coberturaFuturaDias(180, 10, 5, 20, 6), 25);
+test('RN-004 (R-134): venda 180 em 6 meses (1 por dia) com 10 de estoque, 5 em trânsito e 20 pedidos dá 35 dias — o trânsito soma; sem venda, não há cobertura', () => {
+  assert.equal(coberturaFuturaDias(180, 10, 5, 20, 6), 35);
   assert.equal(coberturaFuturaDias(0, 100, 0, 50, 6), null);
+});
+
+test('RN-004 (R-134): a mesma base dos dois lados — comprar a sugestão leva ao alvo, uma unidade a menos fica abaixo dele', () => {
+  const sugestao = sugestaoDeCompra(120, 10, 0, 6, 35);
+  assert.ok(coberturaFuturaDias(120, 10, 0, sugestao, 6) >= 35);
+  assert.ok(coberturaFuturaDias(120, 10, 0, sugestao - 1, 6) < 35);
 });
 
 test('RN-008: três itens (10 × 2,50; 4 × 10,00; 0 × 8,00) totalizam 65,00', () => {
@@ -95,10 +122,11 @@ test('RN-008: três itens (10 × 2,50; 4 × 10,00; 0 × 8,00) totalizam 65,00', 
   assert.equal(totalDoPedido([]), 0);
 });
 
-test('C-001/C-004 e RN-009 (012): montarItens junta sugestão, arredondamento, curva e o teto DA CURVA do item numa passada só', () => {
+test('C-001 e RN-009 (012) (R-134): montarItens junta sugestão pelo alvo da curva, curva, teto e a origem da cobertura numa passada só', () => {
   const linhas = [
-    linha(5001, 18, 10, { ESTOQUE: 5, TRANSITO: 2, EMBALAGEM: 'CX 12' }),
+    linha(5001, 18, 10, { ESTOQUE: 5, TRANSITO: 2, QT_PEDIDA_ERP: 1, EMBALAGEM: 'CX 12' }),
     linha(5002, 6, 10, { EMBALAGEM: 'FRASCO 100 ML' }),
+    linha(5003, 30, 10, { VENDA_LICITACAO: 30 }),
   ];
   // A parametrização de referência do seed (R-089): departamento 2 = A 35/20 %,
   // B 45/10 %, C 60/5 %; sku 5001 = A 20/0, B 25/0, C 30/0.
@@ -113,14 +141,22 @@ test('C-001/C-004 e RN-009 (012): montarItens junta sugestão, arredondamento, c
   ];
   const itens = montarItens(linhas, coberturas, new Map([[5001, 12]]), { inicio: '2026-08-01', fim: '2026-09-14' }, 1015);
 
-  assert.equal(itens.length, 2);
-  assert.equal(itens[0].qtSugerida, 24, 'sugestão 21 arredondada para 2 caixas de 12');
+  assert.equal(itens.length, 3);
+  // 1,45 mês: 18/1,45/30 = 0,414 por dia × alvo 20 (curva A do SKU) = 8,28 → 9; posição 5 + 2 + 1 = 8 → 1.
+  assert.equal(itens[0].qtTransito, 3, 'o trânsito soma o pedido ao ERP');
+  assert.equal(itens[0].qtSugerida, 1, 'em unidades: a caixa cheia arredonda só na tela');
   assert.equal(itens[0].curvaAbc, 'A');
+  assert.equal(itens[0].coberturaAlvo, 20);
   assert.equal(itens[0].coberturaLimite, 20, 'curva A do SKU (20 + 0 %) vence o departamento');
+  assert.equal(itens[0].coberturaOrigem, 'Produto · curva A');
   assert.equal(itens[0].qtPedida, 0, 'abrir a análise não decide quantidade nenhuma (D-014)');
-  assert.equal(itens[1].qtSugerida, 10, 'giro lento, sem caixa: a sugestão não é arredondada');
+  // 6/1,45/30 = 0,138 por dia × alvo 60 (curva C do departamento) = 8,28 → 9.
+  assert.equal(itens[1].qtSugerida, 9);
   assert.equal(itens[1].curvaAbc, 'C');
   assert.equal(itens[1].coberturaLimite, 63, 'sem linha de SKU, vale a curva C do departamento: 60 + 5 %');
+  assert.equal(itens[1].coberturaOrigem, 'Departamento · curva C');
+  assert.equal(itens[2].qtSugerida, 0, 'toda a venda foi pública: sem base, sem sugestão');
+  assert.equal(itens[2].coberturaDias, 0);
 });
 
 // 003 / D-32 (R-104, integração da onda 4): o produto adicionado por busca herda

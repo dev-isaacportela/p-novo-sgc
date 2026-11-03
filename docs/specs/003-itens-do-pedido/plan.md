@@ -690,8 +690,8 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 | Cenário / regra | Arquivo | O que o `assert` verifica |
 |---|---|---|
 | C-001 | `smoke/003-itens.mjs` | `sgcWintAnaliseMontagem` com 1015/1/01-08–14-09 devolve **18** linhas (> 0), nenhuma com `CODEPTO` 4 ou 7 |
-| C-002 | `tests/compras.test.mjs` | `sugestaoDeCompra(18, 5, 2, 1.5)` → 21 |
-| C-003 | `tests/compras.test.mjs` | `sugestaoDeCompra(6, 0, 0, 1.5)` → 10 |
+| C-002 | `tests/compras.test.mjs` | (R-134) `sugestaoDeCompra(18, 5, 2, 1.5)` → 7 |
+| C-003 | `tests/compras.test.mjs` | (R-134) `sugestaoDeCompra(6, 0, 0, 1.5)` → 5; com alvo 60 → 8 |
 | C-004 | `tests/compras.test.mjs` | `arredondarPorCaixa(21, 12)` → 24; `arredondarPorCaixa(21, 1)` → 21 |
 | C-005 | `tests/compras.test.mjs` | `sugestaoDeCompra(18, 30, 0, 1.5)` → 0 |
 | C-006 | `tests/compras.test.mjs` | 5 linhas com valores 500/250/150/70/30 → `['A','A','B','C','C']` |
@@ -711,10 +711,10 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 | C-020 | `smoke/003-itens.mjs` | `sgcEscCoberturaGravar` como `gil` (gestor) grava e `sgcCoberturaListar` devolve o limite 20 do 5001; como `ana` (analista) não grava nada |
 | C-021 | `smoke/003-itens.mjs` | gravar `TIPO_PRECO` `especial` em 1 de 3 itens → `SELECT` conta 1 especial e 2 `padrao` |
 | C-022 | `smoke/003-itens.mjs` | card reprovado com 3 itens zerados → depois de `sgcAnaliseSair`, 0 itens zerados vivos e `TEC_MOTIVO` vazio |
-| RN-001 | `tests/compras.test.mjs` | (0,0,0,6)→0; (120,10,0,6)→30; (12,0,0,6)→5; (120,50,20,6)→10; (120,500,0,6)→0 |
+| RN-001 | `tests/compras.test.mjs` | (R-134) `sugestaoDeCompra(120,10,0,6,35)` → 14; alvo 60 → 30; base `vendaBaseDoItem({120, 60})` → 60 e sugestão 2; trânsito 5 → 9; `(136.8,0,0,1.14,35)` → 140; `sugestaoNaUnidade(14,12,'caixa')` → 24; `mesesDoPeriodo` 44 dias → 1,45, inválido → 3 |
 | RN-002 | `tests/compras.test.mjs` | "CX 12"→12; "FRASCO 100 ML"→1; gestão de custos 6 com embalagem "CX 12" → 6 |
 | RN-003 | `tests/compras.test.mjs` | lista vazia → mapa vazio; todos com custo 0 → todos `C` |
-| RN-004 | `tests/compras.test.mjs` | `coberturaFuturaDias(180,10,5,20,6)` → 25; `(0,100,0,50,6)` → `null` |
+| RN-004 | `tests/compras.test.mjs` | (R-134) `coberturaFuturaDias(180,10,5,20,6)` → 35; `(0,100,0,50,6)` → `null`; com a sugestão ≥ alvo, com uma a menos < alvo |
 | RN-005 | `tests/cobertura.test.mjs` | fornecedor 90 / departamento 60 / seção 45 / sku 20 → 20; sem o sku → 45; sem nenhum → 35 |
 | RN-006 | `tests/prazo-pagamento.test.mjs` | `'28/35/42 dias'`→[28,35,42]; `'à vista'`→[0]; `'conforme contrato'`→[]; `'30/60'` × `'30/60 dias'` → iguais |
 | RN-007 | `tests/prazo-pagamento.test.mjs` | divergente com 9 caracteres → mensagem; com 10 → `null`; padrão vazio → mensagem citando "padrão" |
@@ -802,7 +802,7 @@ que a 002 usa no envio. `PCFORNEC`/`PCFILIAL` no simulador são compartilhadas c
 | D-012 | "Ao menos um item com quantidade" entra como quinta condição de saída, **nova** em relação ao p-45547 | Manter as quatro do legado | Sem ela, um pedido com tudo zerado sairia da Análise e chegaria à indústria com a tabela vazia (EN-02 remove os zerados) |
 | D-013 | `sgcAnaliseSair` é uma SF JavaScript nova e é **o** passo do `antesDeMover` em `analise → tecnica`: verifica, arruma e só então a tela move | A tela chamar as escritas em sequência, ou arrumar depois do movimento | Verificação e limpeza precisam acontecer juntas e antes do movimento: o motor só move o que já está arrumado, e uma aba fechada no meio não deixa o pedido pela metade (revisão do coordenador, R-011) |
 | D-014 | A análise não é gravada sozinha: montar a lista só grava quando a compradora salva | Persistir a análise ao abrir | Abrir o card não pode escrever (RNF-002) nem sujar o pedido de quem só foi olhar |
-| D-015 | R-133: a divisão Privado / PF / Público é só leitura na tela; a sugestão e a cobertura seguem sobre `VENDA_PERIODO` (RN-001/RN-004) | Passar a sugestão para a venda válida sem público, como no legado | O usuário ainda decide entre a fórmula atual e a do legado (35 dias, sem público, estoque + trânsito); mudar a base agora mudaria a sugestão de todo pedido |
+| D-015 | ~~R-133: a sugestão e a cobertura seguem sobre `VENDA_PERIODO`~~ **Revogada pela R-134**: o usuário decidiu "usar formula do legado" — RN-001 e RN-004 reescritas, `VENDA_PERIODO` passa a ser a venda válida e `VENDA_LICITACAO` a parte pública dela | — | — |
 | D-016 | R-133: a análise deixa de pôr os produtos na lista; o produto vira item ao ser adicionado (tela ampla, lote, drill-in, solicitação) | Manter a lista com todos os produtos a 0 | É o carrinho do legado: a lista do pedido mostra o que se compra; os zerados continuavam a ser gravados e removidos na saída |
 | D-017 | R-133: o rascunho dos itens é um contexto da fase, não estado da aba | Cada bloco com a sua cópia | O resumo, os itens, a tela ampla, os cartões e o drill-in mexem na mesma lista; uma cópia por bloco faria "Aceitar sugestão" e "Atualizar p/ N" discordarem do que vai ser salvo |
 | D-018 | R-133: o drill-in reaproveita a Análise do Produto da 011 e a carga dela (`carga-ressuprimento.ts`), tirada da página; a simulação dentro da janela segue a fórmula da 011 e o bloco "Item no pedido" mostra a sugestão da 003 | Uma janela própria do pedido | O pedido pediu a mesma janela; duas sugestões aparecem lado a lado até a decisão sobre a fórmula (D-015) |

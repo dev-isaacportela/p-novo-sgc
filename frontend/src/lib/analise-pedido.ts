@@ -4,11 +4,13 @@
 // a alternância Embalagem mínima / Caixa cheia, a coluna Dias e o rodapé.
 // Regra pura, exercitada por `frontend/tests/analise-pedido.test.mjs`.
 //
-// A sugestão e a cobertura são as da 003 (RN-001 e RN-004, `compras.ts`):
-// esta tela só mostra e ordena, não recalcula a fórmula.
+// A sugestão e a cobertura são as da 003 (RN-001 e RN-004, `compras.ts`, na
+// fórmula do legado da R-134): esta tela só mostra e ordena, não recalcula a
+// fórmula — salvo o arredondamento à caixa cheia, que depende da unidade
+// exibida (`sugestaoNaUnidade`).
 
 import type { CurvaAbc, ItemPedido } from './compras.ts';
-import { coberturaFuturaDias } from './compras.ts';
+import { arredondarPorCaixa, coberturaFuturaDias, vendaBaseDoItem } from './compras.ts';
 
 const numero = (valor: unknown): number => {
   const n = Number(valor);
@@ -28,7 +30,7 @@ export interface LinhaDaAnalise {
   /** O item do pedido (com quantidade), ou `null` quando ainda não entrou. */
   noPedido: ItemPedido | null;
   divisao: DivisaoVenda | null;
-  /** Pedido ao ERP (PCEST.QTPEDIDA): informação, fora da conta da sugestão. */
+  /** Pedido ao ERP (PCEST.QTPEDIDA): já somado ao trânsito da conta (R-134); aqui, para o `title` separar. */
   pedidoErp: number;
   kanban: TransitoKanban[];
   /** Há solicitação do comercial deste produto (no pedido ou na fila). */
@@ -146,9 +148,24 @@ export function rotuloDias(dias: number | null, limite: number): { texto: string
   return { texto, tom: 'neutral' };
 }
 
-/** A cobertura futura com a quantidade da coluna Comprar (RN-004, a mesma conta). */
+/** A cobertura futura com a quantidade da coluna Comprar (RN-004, a mesma conta e a mesma base da sugestão). */
 export function diasComCompra(base: ItemPedido, quantidade: number, meses: number): number | null {
-  return coberturaFuturaDias(base.qtVendaTotal, base.qtEstoque, base.qtTransito, quantidade, meses);
+  return coberturaFuturaDias(vendaBaseDoItem(base), base.qtEstoque, base.qtTransito, quantidade, meses);
+}
+
+/** R-134: em Caixa cheia a sugestão sobe ao múltiplo da caixa; em Embalagem mínima, não. */
+export function sugestaoNaUnidade(sugerida: number, unPorCaixa: number, unidade: UnidadeExibida): number {
+  return unidade === 'caixa' ? arredondarPorCaixa(numero(sugerida), numero(unPorCaixa)) : numero(sugerida);
+}
+
+/** O `title` da coluna Dias: alvo, teto e de onde vieram (R-134). */
+export function textoDosDias(base: Pick<ItemPedido, 'coberturaAlvo' | 'coberturaLimite' | 'coberturaOrigem'>): string {
+  const alvo = numero(base.coberturaAlvo);
+  const partes = [];
+  if (alvo > 0) partes.push(`alvo ${fmt(alvo)} d`);
+  if (numero(base.coberturaLimite) > 0) partes.push(`limite ${fmt(numero(base.coberturaLimite))} d`);
+  if (base.coberturaOrigem) partes.push(base.coberturaOrigem);
+  return partes.length > 0 ? `Cobertura futura · ${partes.join(' · ')}` : 'Cobertura futura';
 }
 
 /* ─────────────── ordenação por coluna ─────────────── */
@@ -257,14 +274,19 @@ export function rodapeDosItens(itens: Pick<ItemPedido, 'qtPedida' | 'precoCusto'
   };
 }
 
-/** O Trâns. separado por origem, para o `title` da coluna. */
+/**
+ * O Trâns. separado por origem, para o `title` da coluna. R-134: o trânsito da
+ * conta é o do WinThor — o em trânsito mais o pedido ao ERP —; os outros
+ * pedidos abertos do Kanban só informam, fora da conta.
+ */
 export function textoDoTransito(l: Pick<LinhaDaAnalise, 'base' | 'pedidoErp' | 'kanban'>): string {
-  const partes = [`WinThor: ${fmt(numero(l.base.qtTransito))} un. em trânsito`];
-  if (numero(l.pedidoErp) > 0) partes.push(`pedido ao ERP ${fmt(numero(l.pedidoErp))} un. (fora da conta)`);
+  const pedidoErp = Math.min(numero(l.pedidoErp), numero(l.base.qtTransito));
+  const partes = [`WinThor: ${fmt(numero(l.base.qtTransito) - pedidoErp)} un. em trânsito`];
+  if (pedidoErp > 0) partes.push(`+ ${fmt(pedidoErp)} un. pedidas ao ERP`);
   if (l.kanban.length === 0) partes.push('Kanban: nenhum outro pedido aberto');
   else {
     const soma = l.kanban.reduce((t, k) => t + numero(k.quantidade), 0);
-    partes.push(`Kanban: ${fmt(soma)} un. em ${l.kanban.length === 1 ? '1 pedido' : `${l.kanban.length} pedidos`} (${l.kanban.map((k) => `${k.titulo} · ${fmt(numero(k.quantidade))}`).join('; ')})`);
+    partes.push(`Kanban (fora da conta): ${fmt(soma)} un. em ${l.kanban.length === 1 ? '1 pedido' : `${l.kanban.length} pedidos`} (${l.kanban.map((k) => `${k.titulo} · ${fmt(numero(k.quantidade))}`).join('; ')})`);
   }
   return partes.join(' · ');
 }

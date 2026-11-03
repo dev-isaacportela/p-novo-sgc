@@ -66,6 +66,7 @@
 - [x] **T-046** — Bloco resumo (banner, números, aderência, faixas) → `pages/quadros/abas/ResumoDoPedido.tsx`, `pedido-contexto.ts`
 - [x] **T-047** — Bloco itens enxuto e a tela ampla com as duas abas → `pages/quadros/abas/Itens.tsx`, `TelaAmpla.tsx`, `tela-ampla-analise.tsx`, `SeletorDeCusto.tsx`; `CaixaSelecao` e o tom `alert` do `MiniCartao` em `components/page.tsx`
 - [x] **T-048** — Drill-in com a Análise do Produto da 011: carga e conta do SKU tiradas da página da 011, bloco "Item no pedido", Clientes que compraram → `pages/compras-inteligentes/{carga-ressuprimento,use-analise-produto}.ts`, `lib/analise-sku.ts`, `pages/quadros/abas/DrillProduto.tsx`, `NomeDoProduto.tsx`
+- [x] **T-050** — R-134: a fórmula do legado na sugestão, na cobertura e nos meses do período, sobre a venda válida sem o público; trânsito somado (em trânsito + pedido ao ERP); caixa cheia só na tela; alvo e origem da cobertura no `title` de Dias → `frontend/src/lib/compras.ts`, `analise-pedido.ts`, `pages/quadros/abas/tela-ampla-analise.tsx`, `backend/add-006-itens.mjs`; testes C-002, C-003, C-005, RN-001, RN-004 reescritos em `frontend/tests/compras.test.mjs`
 - [x] **T-049** — Uma carga do pedido por card aberto, qualquer que seja o número de blocos → `pages/quadros/abas/PedidoProvider.tsx`
 
 ## Testes

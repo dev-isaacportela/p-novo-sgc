@@ -85,9 +85,11 @@ const RECORTE_PRODUTO = `NVL(LENGTH(TRIM(P.OBS2)), 0) = 0
 // R-133: a divisão da venda do legado — Privado (pessoa jurídica fora dos
 // ramos públicos), PF (TIPOFJ 'F') e Público (ramos 11 a 15) — sai no recorte
 // de venda válida da R-131 (`venda-valida.mjs`): venda para a própria rede e
-// remessa de entrega futura ficam fora das três. VENDA_PERIODO e
-// VENDA_LICITACAO seguem como estão: são a base da sugestão (RN-001) e da
-// cobertura (RN-004), e mudar a base é decisão do usuário, não desta tela.
+// remessa de entrega futura ficam fora das três.
+// R-134 (fórmula do legado): VENDA_PERIODO passa a ser a venda VÁLIDA (as três
+// somadas) e VENDA_LICITACAO a parte pública dela — a tela tira o público e
+// usa o resto como base da sugestão (RN-001) e da cobertura (RN-004), o mesmo
+// recorte das Compras inteligentes. O ramo 20 (filial) deixou de ser licitação.
 const SQL_ANALISE_MONTAGEM = `SELECT
   P.CODPROD, P.DESCRICAO, P.EMBALAGEM, P.UNIDADE, P.CODEPTO, P.CODSEC,
   NVL(P.QTUNITCX, 0)        AS UN_POR_CAIXA_ERP,
@@ -113,8 +115,8 @@ LEFT JOIN (
 ) T ON T.CODPROD = P.CODPROD AND T.CODFILIAL = '{{codfilial}}'
 LEFT JOIN (
   SELECT X.CODPROD,
-    SUM(X.QT) AS QT_TOTAL,
-    SUM(CASE WHEN X.RAMO IN (11,12,13,14,15,20) THEN X.QT ELSE 0 END) AS QT_LICIT,
+    SUM(CASE WHEN X.VALIDA = 1 THEN X.QT ELSE 0 END) AS QT_TOTAL,
+    SUM(CASE WHEN X.VALIDA = 1 AND X.EH_PUBLICO = 1 THEN X.QT ELSE 0 END) AS QT_LICIT,
     SUM(CASE WHEN X.VALIDA = 1 AND X.EH_PUBLICO = 0 AND X.TIPOFJ <> 'F' THEN X.QT ELSE 0 END) AS QT_PRIVADO,
     SUM(CASE WHEN X.VALIDA = 1 AND X.EH_PUBLICO = 0 AND X.TIPOFJ = 'F' THEN X.QT ELSE 0 END) AS QT_PF,
     SUM(CASE WHEN X.VALIDA = 1 AND X.EH_PUBLICO = 1 THEN X.QT ELSE 0 END) AS QT_PUBLICO

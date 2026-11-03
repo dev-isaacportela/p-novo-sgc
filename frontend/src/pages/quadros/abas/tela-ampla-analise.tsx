@@ -16,7 +16,7 @@ import { moeda, hojeIso } from '@/lib/formato';
 import { custoPadraoDe, type TipoPreco } from '@/lib/compras';
 import {
   FILTROS_ANALISE, contagemDeSaida, daUnidade, diasComCompra, filtrarAnalise, linhasDaAnalise, naUnidade, ordenarAnalise,
-  proximaOrdem, rodapeDaAnalise, rotuloDias, segundaLinhaComprar, textoDoTransito,
+  proximaOrdem, rodapeDaAnalise, rotuloDias, segundaLinhaComprar, sugestaoNaUnidade, textoDosDias, textoDoTransito,
   type ColunaAnalise, type FiltrosAnalise, type LinhaDaAnalise, type OrdemAnalise, type UnidadeExibida,
 } from '@/lib/analise-pedido';
 import { tabelasVigentes } from '@/lib/custo-do-item';
@@ -66,8 +66,8 @@ export function AnaliseAmpla({
   }), [analise, r.itens, comercial, especial]);
 
   const quantidadeDe = React.useCallback(
-    (l: LinhaDaAnalise) => (l.noPedido ? l.noPedido.qtPedida : qtRascunho[l.codprod] ?? l.base.qtSugerida),
-    [qtRascunho],
+    (l: LinhaDaAnalise) => (l.noPedido ? l.noPedido.qtPedida : qtRascunho[l.codprod] ?? sugestaoNaUnidade(l.base.qtSugerida, l.base.unPorCaixa, unidade)),
+    [qtRascunho, unidade],
   );
   const custoDe = (l: LinhaDaAnalise): Custo => l.noPedido ?? custoRascunho[l.codprod] ?? l.base;
   const visiveis = React.useMemo(
@@ -216,7 +216,7 @@ export function AnaliseAmpla({
             ) : visiveis.map((l) => {
               const b = l.base;
               const qt = quantidadeDe(l);
-              const segunda = segundaLinhaComprar(qt, b.qtSugerida, b.unPorCaixa, unidade);
+              const segunda = segundaLinhaComprar(qt, sugestaoNaUnidade(b.qtSugerida, b.unPorCaixa, unidade), b.unPorCaixa, unidade);
               const dias = rotuloDias(diasComCompra(b, qt, r.meses), b.coberturaLimite);
               const custo = custoDe(l);
               const celula = cn('border-b border-rule-row px-3 align-top', densa);
@@ -262,7 +262,7 @@ export function AnaliseAmpla({
                     />
                     {segunda ? <span className="block text-[11px] text-ink-secondary">{segunda}</span> : null}
                   </td>
-                  <td className={cn(celula, 'text-right whitespace-nowrap')}>
+                  <td className={cn(celula, 'text-right whitespace-nowrap')} title={textoDosDias(b)}>
                     {dias.tom === 'neutral' ? dias.texto : <Status tone={TOM_DIAS[dias.tom]}>{dias.texto}</Status>}
                   </td>
                   <td className={cn(celula, 'w-48 min-w-48')}>

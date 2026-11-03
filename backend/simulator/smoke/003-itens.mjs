@@ -72,14 +72,15 @@ export async function suite(ctx) {
     assert.equal(Number(p5001.VENDA_LICITACAO), 6);
   });
 
-  await teste('C-026 / RN-016 (R-133): a analise divide a venda valida do 5002 em privado 6, PF 8 e publico 3; a venda para a propria rede (5) e a remessa de entrega futura (4) ficam fora das tres e dentro da venda total (26)', async () => {
+  await teste('C-026 / RN-016 (R-133): a analise divide a venda valida do 5002 em privado 6, PF 8 e publico 3; a venda para a propria rede (5) e a remessa de entrega futura (4) ficam fora das tres e da venda valida (17, publica 3) — R-134', async () => {
     const rows = await linhas(ctx, 'sgcWintAnaliseMontagem', ANALISE);
     const p5002 = rows.find((r) => Number(r.CODPROD) === 5002);
     assert.equal(Number(p5002.VENDA_PRIVADO), 6);
     assert.equal(Number(p5002.VENDA_PF), 8);
     assert.equal(Number(p5002.VENDA_PUBLICO), 3);
-    assert.equal(Number(p5002.VENDA_PERIODO), 26, 'a base da sugestao (RN-001) nao muda');
-    assert.equal(Number(p5002.VENDA_LICITACAO), 8, 'ramo 12 + ramo 20, como antes');
+    // R-134: a venda do periodo e a valida (17) e a licitacao e a parte publica dela (3, so o ramo 12).
+    assert.equal(Number(p5002.VENDA_PERIODO), 17, 'propria rede (5) e remessa (4) fora da venda valida');
+    assert.equal(Number(p5002.VENDA_LICITACAO), 3, 'o ramo 20 (filial) deixou de ser licitacao');
     const p5001 = rows.find((r) => Number(r.CODPROD) === 5001);
     assert.equal(Number(p5001.VENDA_PRIVADO) + Number(p5001.VENDA_PF) + Number(p5001.VENDA_PUBLICO), 18);
   });

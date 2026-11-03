@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   linhasDaAnalise, contagemDeSaida, filtrarAnalise, FILTROS_ANALISE, naUnidade, daUnidade, segundaLinhaComprar,
-  rotuloDias, proximaOrdem, ordenarAnalise, rodapeDaAnalise, diferencaDoItem, rodapeDosItens, textoDoTransito,
+  rotuloDias, proximaOrdem, ordenarAnalise, rodapeDaAnalise, diferencaDoItem, rodapeDosItens, textoDoTransito, textoDosDias,
 } from '../src/lib/analise-pedido.ts';
 
 const base = (codprod, descricao, venda, sugerida, extra = {}) => ({
@@ -109,7 +109,10 @@ test('C-025 (R-133): o título do Trâns. separa o WinThor dos outros pedidos ab
   const [l] = linhasDaAnalise([base(1, 'Água', 30, 24, { qtTransito: 12 })], [], {
     pedidoErp: new Map([[1, 6]]), kanban: new Map([[1, [{ idCard: 7, titulo: 'Fresenius · Filial 1', fase: 'tecnica', quantidade: 24 }]]]),
   });
-  assert.equal(textoDoTransito(l), 'WinThor: 12 un. em trânsito · pedido ao ERP 6 un. (fora da conta) · Kanban: 24 un. em 1 pedido (Fresenius · Filial 1 · 24)');
+  // R-134: o trânsito da conta (12) já soma o pedido ao ERP (6); o Kanban só informa.
+  assert.equal(textoDoTransito(l), 'WinThor: 6 un. em trânsito · + 6 un. pedidas ao ERP · Kanban (fora da conta): 24 un. em 1 pedido (Fresenius · Filial 1 · 24)');
   const [sem] = linhasDaAnalise([base(1, 'Água', 30, 24)], []);
   assert.equal(textoDoTransito(sem), 'WinThor: 0 un. em trânsito · Kanban: nenhum outro pedido aberto');
+  assert.equal(textoDosDias({ coberturaAlvo: 35, coberturaLimite: 90, coberturaOrigem: 'padrão do sistema' }), 'Cobertura futura · alvo 35 d · limite 90 d · padrão do sistema');
+  assert.equal(textoDosDias({ coberturaLimite: 0 }), 'Cobertura futura');
 });
