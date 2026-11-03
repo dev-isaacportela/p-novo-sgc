@@ -21,6 +21,7 @@ import AbaRecebimento from './Recebimento';
 import AbaBo from './Bo';
 import BlocoSolicitacoes from './Solicitacoes';
 import ResumoDoPedido from './ResumoDoPedido';
+import BlocoAprovacao from './Aprovacao';
 
 type Props = ExtensaoContexto & { fases: MapaDeFases; sessao: SessaoPersona };
 
@@ -37,6 +38,7 @@ export default function ConteudoDaFase({ fases, sessao, ...ctx }: Props) {
       case 'bo': return <AbaBo {...ctx} fases={fases} sessao={sessao} />;
       // No Enviado o painel "Pedido enviado" já conta o envio: o selo sairia repetido.
       case 'resumo': return <ResumoDoPedido {...ctx} semEnvio={fases.chaveDe(ctx.card.faseId) === 'enviado'} />;
+      case 'aprovacao': return <BlocoAprovacao {...ctx} />;
     }
   };
 
