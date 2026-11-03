@@ -224,6 +224,9 @@ export function seed011(db, cenario) {
 
   const inserirCliente = db.prepare('INSERT INTO PCCLIENT (CODCLI, CLIENTE, TIPOFJ, CODATV1) VALUES (?, ?, ?, ?)');
   for (const c of CLIENTES) inserirCliente.run(c[0], c[1], 'J', c[2]);
+  // R-135: o nome do ramo (PCATIVI.RAMO), a coluna Ramo de Clientes que compraram.
+  const inserirRamo = db.prepare('INSERT OR IGNORE INTO PCATIVI (CODATIV, RAMO) VALUES (?, ?)');
+  for (const [codativ, ramo] of [[1, 'HOSPITAL PUBLICO'], [12, 'ORGAO PUBLICO SUDESTE'], [13, 'ORGAO PUBLICO NORTE'], [20, 'FILIAL']]) inserirRamo.run(codativ, ramo);
 
   // Preço 20 e custo financeiro 12 em toda venda: faturamento = 20 × qt e
   // rentabilidade = 8 × qt (C-040); a ordem das duas curvas é a mesma aqui, e

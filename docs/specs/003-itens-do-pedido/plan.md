@@ -497,6 +497,8 @@ em paralelo, depois `sgcCustoUnidadesPorCaixa`, `sgcCustoPadraoAtual` e
 (`carga-ressuprimento.ts`, uma vez por pedido aberto) e as 3 do SKU (uma vez por produto).
 Salvar continua sendo três chamadas.
 
+R-135: o drill-in carrega `sgcWintProdutoVendasNotas` (8117, add-013) UMA vez ao abrir — as vendas válidas do produto na filial por nota, do dia 1 do primeiro dos 6 meses do gráfico até hoje, sem o público — e desenha `ClientesQueCompraram` (`pages/compras-inteligentes/clientes-ui.tsx`, regra em `lib/clientes-produto.ts`) no slot `depoisDoGrafico` da Análise do Produto.
+
 Regras puras: `lib/resumo-pedido.ts` (números, aderência, aceitar, faixas, banner),
 `lib/analise-pedido.ts` (linhas, chips, busca, unidade exibida, Dias, ordenação, rodapés,
 diferença, título do trânsito), `lib/custo-do-item.ts` (tabelas vigentes, opções, escolha),
@@ -730,7 +732,8 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 | C-025 | `tests/analise-pedido.test.mjs` | `linhasDaAnalise`, `filtrarAnalise`, `rodapeDaAnalise`, `diferencaDoItem`, `rodapeDosItens` e `textoDoTransito` com os números da spec |
 | C-026 | `smoke/003-itens.mjs` + `simulator/winthor-checar.mjs` | 5002: `VENDA_PRIVADO` 6, `VENDA_PF` 8, `VENDA_PUBLICO` 3, `VENDA_PERIODO` 26, `VENDA_LICITACAO` 8; no WinThor real (119, filial 1) privado em > 0 produtos e a soma das três ≤ a venda total |
 | C-027 | `smoke/003-itens.mjs` + `tests/custo-do-item.test.mjs` | `TIPO_PRECO` `manual` lido de volta, `qualquer` vira `padrao`; `custoDaEscolha('esp:2:8.5')` → 8,5 especial |
-| C-028 | `tests/analise-sku.test.mjs` + `tests/ressuprimento-detalhe.test.mjs` | `previsaoDoSku` sem dado pronto → `null`; `clientesQueCompraram` de outubro → 9 (45), 12 (30), 0 (1), vendas da mais recente |
+| C-028 | `tests/analise-sku.test.mjs` | `previsaoDoSku` sem dado pronto → `null` |
+| C-029 | `tests/clientes-produto.test.mjs` + `smoke/011-compras-inteligentes.mjs` (C-056) | `janelaDosClientes`, `semPublico`, `clientesDoMes`, `topClientes`, `matrizClienteMes`; `somaPorMes` = `serieComprasVendas(historicoSemPublico(...))`; `sgcWintProdutoVendasNotas` 12/18 e a soma por mês = o histórico |
 | RN-015 | `tests/resumo-pedido.test.mjs` | `tomDaAderencia` 80 → `live`, 79 e 50 → `attention`, 49 → `alert` |
 | RN-016 | `smoke/003-itens.mjs` | ver C-026 |
 | RN-017 | `tests/analise-pedido.test.mjs` | `proximaOrdem` padrão → invertida → `null`; `ordenarAnalise` por venda, produto, curva e dias |

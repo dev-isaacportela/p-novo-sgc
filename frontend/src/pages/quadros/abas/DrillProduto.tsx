@@ -20,6 +20,9 @@ import { tabelasVigentes } from '@/lib/custo-do-item';
 import { estaNoPedido } from '@/lib/resumo-pedido';
 import { AnaliseProdutoDialogo } from '@/pages/compras-inteligentes/analise-produto';
 import { useAnaliseProduto } from '@/pages/compras-inteligentes/use-analise-produto';
+import { ClientesQueCompraram } from '@/pages/compras-inteligentes/clientes-ui';
+import { linhas } from '@/lib/mitra-api';
+import { janelaDosClientes, type NotaDoProduto } from '@/lib/clientes-produto';
 import { useRascunho } from './rascunho-contexto';
 import { SeletorDeCusto } from './SeletorDeCusto';
 
@@ -31,6 +34,22 @@ export function DrillProduto({ codprod, onFechar }: { codprod: number; onFechar:
   const capa = r.capa;
   const analise = useAnaliseProduto({ codfornec: capa?.codfornec ?? 0, codfilial: capa?.codfilial ?? '', codprod, modelo });
   const fornecedor = capa?.fornecedor ?? '';
+
+  // R-135: as notas de venda válida do produto nos 6 meses do gráfico, sem o público — uma consulta ao abrir.
+  const codfilial = capa?.codfilial ?? '';
+  const [notas, setNotas] = React.useState<{ chave: string; linhas: NotaDoProduto[] | null; erro: string } | null>(null);
+  const chaveNotas = `${codprod}|${codfilial}`;
+  React.useEffect(() => {
+    if (!codprod || !codfilial) return;
+    let vivo = true;
+    const janela = janelaDosClientes(hojeIso());
+    linhas('sgcWintProdutoVendasNotas', { codprod, codfilial, dataInicio: janela.inicio, dataFim: janela.fim, incluirPublico: 0 }).then(
+      (rows) => { if (vivo) setNotas({ chave: chaveNotas, linhas: rows as unknown as NotaDoProduto[], erro: '' }); },
+      () => { if (vivo) setNotas({ chave: chaveNotas, linhas: [], erro: 'Não foi possível carregar os clientes deste produto.' }); },
+    );
+    return () => { vivo = false; };
+  }, [codprod, codfilial, chaveNotas]);
+  const notasDoProduto = notas && notas.chave === chaveNotas ? notas : null;
 
   // A sugestão do pedido (003) vem da análise do card: sem ela, o drill-in a pede ao abrir.
   const { analise: daAnalise, carregandoAnalise, montarAnalise } = r;
@@ -82,6 +101,14 @@ export function DrillProduto({ codprod, onFechar }: { codprod: number; onFechar:
       onAdicionarEspecial={(tabela, quantidade) => r.adicionar(codprod, quantidade, { precoCusto: tabela.custoEspecial, tipoPreco: 'especial' })}
       lotesBloqueados={analise.lotes}
       excessosLista={analise.excessos}
+      depoisDoGrafico={(
+        <ClientesQueCompraram
+          notas={notasDoProduto?.linhas ?? null}
+          erro={notasDoProduto?.erro}
+          hoje={analise.hoje}
+          unidadesPorCaixa={analise.linha.unidadesPorCaixa}
+        />
+      )}
       rotuloAdicionar="Adicionar ao pedido"
       topo={<ItemNoPedido codprod={codprod} />}
     />

@@ -83,6 +83,7 @@ export function AnaliseProdutoDialogo({
   excessosLista,
   semPublico = false,
   topo,
+  depoisDoGrafico,
   rotuloAdicionar = 'Adicionar ao carrinho',
 }: {
   linha: LinhaRessuprimento | null;
@@ -118,6 +119,8 @@ export function AnaliseProdutoDialogo({
   semPublico?: boolean;
   /** R-133: o bloco do topo quando a janela abre de um pedido ("Item no pedido"). */
   topo?: React.ReactNode;
+  /** R-135: o bloco logo depois do gráfico, na aba Análise (Clientes que compraram, no pedido). */
+  depoisDoGrafico?: React.ReactNode;
   /** R-133: aberta de um pedido, a simulação adiciona ao pedido, não ao carrinho. */
   rotuloAdicionar?: string;
 }) {
@@ -255,6 +258,8 @@ export function AnaliseProdutoDialogo({
                     projecaoMes={projetada && resultadoModelo ? resultadoModelo.previsao : null}
                   />
                 )}
+
+                {depoisDoGrafico}
 
                 {/* 2. Simulação de compra — depois do gráfico (R-127) */}
                 <SecaoRecolhivel

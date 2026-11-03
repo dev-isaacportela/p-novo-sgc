@@ -181,7 +181,12 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 **C-028 — Drill-in do produto (R-133)**
 - **Dado que** a compradora está na tela ampla, na lista dos itens ou num cartão de solicitação
 - **Quando** clica no nome do produto
-- **Então** abre a mesma Análise do Produto das Compras inteligentes, com o bloco "Item no pedido" no topo (quantidade, custo, total e observação editáveis) ou "Qtd. + Observação + Adicionar" quando o produto ainda não está no pedido, e a aba Vendas mostra os clientes que compraram (os 10 que mais levaram no mês, com as vendas de cada um)
+- **Então** abre a mesma Análise do Produto das Compras inteligentes, com o bloco "Item no pedido" no topo (quantidade, custo, total e observação editáveis) ou "Qtd. + Observação + Adicionar" quando o produto ainda não está no pedido, e a aba Vendas mostra os clientes que compraram (os 10 que mais levaram no mês, com as vendas de cada um). *Emendado pela C-029 (R-135): os clientes saíram da aba Vendas e vão para a aba Análise, logo depois do gráfico.*
+
+**C-029 — Clientes que compraram no drill-in, sem o público (R-135)**
+- **Dado que** o produto 23 vendeu, nos 6 meses do gráfico na filial 1, 39 unidades ao Viventi Home Care e 177 a um órgão público
+- **Quando** a compradora abre a Análise do Produto pelo pedido
+- **Então** logo depois do gráfico, aberta, vem "Clientes que compraram": os meses em pílulas (os 6 do gráfico, o corrente parcial, e "Todos"), a tabela do mês por cliente — Cliente (código · nome), Ramo, Qtd. (un. · cx), Valor, Notas e Última compra —, do que mais levou, top 10 com "Ver todos" e as notas de cada cliente ao expandir (data, número, quantidade e valor); e a alternativa "Cliente × mês", com os clientes nas linhas, os meses nas colunas, o total e o total por mês no rodapé. O órgão público (ramos 11 a 15) nunca aparece, sem seletor; a filial e a remessa de entrega futura também não. A soma de cada mês é a barra de Vendas do gráfico; a aba Vendas, aberta do pedido, segue o mesmo recorte
 
 ## Requisitos funcionais
 
@@ -219,7 +224,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RF-030 | A análise de produtos DEVE abrir em tela ampla, com as abas Análise e Itens do pedido; o card estreito DEVE mostrar só o cabeçalho da análise e a lista enxuta dos itens, sem rolagem horizontal (R-133) | C-025 | must |
 | RF-031 | A análise DEVE mostrar a venda válida dividida em privado, pessoa física e órgão público (R-133); a base da sugestão é a venda válida sem o público (R-134) | C-026 | must |
 | RF-032 | O custo de cada item DEVE ser escolhido entre o padrão, uma tabela especial vigente do produto e um valor manual (R-133) | C-027 | must |
-| RF-033 | O nome do produto DEVE abrir a Análise do Produto das Compras inteligentes com o item do pedido no topo (R-133) | C-028 | must |
+| RF-033 | O nome do produto DEVE abrir a Análise do Produto das Compras inteligentes com o item do pedido no topo (R-133) e os clientes que compraram, por mês e sem o público, logo depois do gráfico (R-135) | C-028, C-029 | must |
 | RF-034 | Montar ou recalcular a análise NÃO DEVE pôr produto nenhum no pedido: entra só o que a compradora adiciona (R-133) | C-025 | must |
 
 ## Requisitos não-funcionais
@@ -308,7 +313,8 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | C-025 | linhas = montados + itens da busca no fim, item zerado fora do pedido; chips somam e a busca casa nome sem acento ou código; rodapé com 3 produtos, 2 a comprar, A/B/C e somas; diferença −2 perigo, +2 atenção; rodapé dos itens "1 esp. · 1 man."; título do trânsito separa WinThor e Kanban | regra de tela |
 | C-026 | a análise do 1015 na filial 1 devolve o 5002 com privado 6, PF 8, público 3, venda válida 17 e licitação 3 (R-134); o 5001 com as três somando 18; no WinThor real (Fresenius 119, filial 1), privado > 0 e as três somando a venda válida; em toda linha Privado + PF + Público = Venda; o item que a análise não trouxe fica sem divisão (traço), nunca 0 / 0 / 0 | regra de negócio + regra de tela |
 | C-027 | gravar o item com tipo de preço manual lê de volta manual; valor desconhecido lê padrão; a escolha "esp:2:8.5" grava 8,50 especial, "padrao" grava o custo do Gestão de Custos | regra de negócio + regra de tela |
-| C-028 | sem o detalhe do SKU pronto não há previsão nem projeção; clientes que compraram em outubro = [9: 45 un., 12: 30 un., 0: 1 un.], cada um com as vendas da mais recente para a mais antiga | regra de tela |
+| C-028 | sem o detalhe do SKU pronto não há previsão nem projeção | regra de tela |
+| C-029 | a janela são os 6 meses até o corrente (jun a nov/26 em 03/11/2026, do dia 01/06); o público sai; outubro: 9 (45 un., 2 notas, última 20/10), 12 (30); top 10 de 14; a matriz 9 = [10,0,0,0,45,0], 12 = [0,0,0,0,30,3] e o total por mês = as barras do gráfico sem o público; a SF devolve 12 sem o público e 18 com, por nota, com ramo, e a soma por mês = SAIDAS − SAIDAS_PUBLICAS (C-056 da 011); no WinThor real os produtos 23, 39, 2 e 54 da Fresenius na filial 1 batem mês a mês | regra de tela + regra de negócio |
 | RN-015 | ver C-024; verde a partir de 80, âmbar a partir de 50, vermelho abaixo; sem item da análise no pedido → "Nenhum item da análise no pedido" | regra de tela |
 | RN-016 | ver C-026 | regra de negócio |
 | RN-017 | Venda: 1º clique do maior para o menor, 2º invertido, 3º sem ordem; Produto A a Z sem acento; curva A antes de C; Dias do menor para o maior com sem venda por último | regra de tela |

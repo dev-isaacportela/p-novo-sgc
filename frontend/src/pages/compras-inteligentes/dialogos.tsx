@@ -12,7 +12,7 @@
 import * as React from 'react';
 
 import {
-  Alert, Button, ChipContagem, Code, Dash, Dialog, Disclosure, DialogBody, DialogContent, DialogFooter, DialogHeader,
+  Alert, Button, ChipContagem, Code, Dash, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader,
   DialogTitle, EmptyState, GradeMini, Input, LabelledField, MiniCartao, RowMeta, Status, Table, Td,
   Textarea, Th, Tr,
 } from '@/components/page';
@@ -21,7 +21,7 @@ import { linhas } from '@/lib/mitra-api';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
 import { dataDeSilencio } from '@/lib/ressuprimento';
 import type { LinhaRessuprimento } from '@/lib/ressuprimento';
-import { clientesQueCompraram, mesesDeVendas, resumoDeVendas, vendasDoMes } from '@/lib/ressuprimento-detalhe';
+import { mesesDeVendas, resumoDeVendas, vendasDoMes } from '@/lib/ressuprimento-detalhe';
 import type { VendaDoProduto } from '@/lib/ressuprimento-detalhe';
 
 const quantidade = (valor: unknown) => Number(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
@@ -240,7 +240,6 @@ export function VendasDoProduto({
   const [motivo, setMotivo] = React.useState('');
   const [erro, setErro] = React.useState('');
   const [ocupado, setOcupado] = React.useState(false);
-  const [clientesAbertos, setClientesAbertos] = React.useState<Set<number>>(() => new Set());
 
   const codprod = Number(linha.medida.CODPROD);
 
@@ -295,7 +294,6 @@ export function VendasDoProduto({
   const resumo = resumoDeVendas(vendas, desconsideradas);
   const meses = mesesDeVendas(vendas);
   const visiveis = vendasDoMes(vendas, mes);
-  const clientes = clientesQueCompraram(vendas, mes);
 
   return (
     <div className="flex flex-col gap-4">
@@ -315,40 +313,6 @@ export function VendasDoProduto({
             <ChipContagem key={m.mes} ativo={mes === m.mes} onClick={() => setMes(m.mes)}>
               {`${m.rotulo} · ${m.vendas} ${m.vendas === 1 ? 'venda' : 'vendas'} · ${moeda(m.valor)}`}
             </ChipContagem>
-          ))}
-        </div>
-      ) : null}
-
-      {/* R-133: os clientes que compraram (top 10, no mês escolhido), cada um com as vendas dele. */}
-      {pronto && clientes.length > 0 ? (
-        <div className="rounded-xl border border-rule-row">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5">
-            <span className="font-title text-[13px] font-bold text-ink">{`Clientes que compraram · ${clientes.length}`}</span>
-            <span className="text-[12px] text-ink-secondary">{`${mes ? 'no mês escolhido' : 'no período'} · entre as ${vendas.length} maiores vendas`}</span>
-          </div>
-          {clientes.map((c) => (
-            <Disclosure
-              key={c.codcli}
-              titulo={c.cliente}
-              resumo={`${quantidade(c.quantidade)} un. · ${moeda(c.valor)} · ${c.vendas.length} ${c.vendas.length === 1 ? 'venda' : 'vendas'}`}
-              aberta={clientesAbertos.has(c.codcli)}
-              onToggle={() => setClientesAbertos((atual) => {
-                const proximo = new Set(atual);
-                if (proximo.has(c.codcli)) proximo.delete(c.codcli); else proximo.add(c.codcli);
-                return proximo;
-              })}
-            >
-              <ul className="flex flex-col gap-1 text-[12px] text-ink-secondary">
-                {c.vendas.map((v) => (
-                  <li key={Number(v.NUMTRANSITEM)} className="flex flex-wrap gap-x-3">
-                    <span>{fmtData(String(v.DTMOV))}</span>
-                    <span className="font-semibold text-ink">{`${quantidade(v.QUANTIDADE)} un.`}</span>
-                    <span>{moeda(Number(v.VALOR_TOTAL))}</span>
-                    {v.VENDEDOR ? <span>{String(v.VENDEDOR)}</span> : null}
-                  </li>
-                ))}
-              </ul>
-            </Disclosure>
           ))}
         </div>
       ) : null}

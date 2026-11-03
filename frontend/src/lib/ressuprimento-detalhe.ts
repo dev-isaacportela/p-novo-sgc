@@ -251,36 +251,6 @@ export function vendasDoMes(vendas: VendaDoProduto[], mes: string): VendaDoProdu
   return (vendas ?? []).filter((v) => String(v.DTMOV ?? '').slice(0, 7) === mes);
 }
 
-export interface ClienteQueComprou {
-  codcli: number;
-  cliente: string;
-  quantidade: number;
-  valor: number;
-  /** As vendas do cliente no recorte, da mais recente para a mais antiga. */
-  vendas: VendaDoProduto[];
-}
-
-/**
- * R-133: os clientes que compraram o produto no mês (`''` = no período), do
- * que mais levou para o que menos — os 10 primeiros, cada um com as vendas
- * dele. É sobre as vendas que a aba lista (as 50 maiores do período).
- */
-export function clientesQueCompraram(vendas: VendaDoProduto[], mes: string, limite = 10): ClienteQueComprou[] {
-  const porCliente = new Map<number, ClienteQueComprou>();
-  for (const v of vendasDoMes(vendas, mes)) {
-    const codcli = numero(v.CODCLI);
-    const atual = porCliente.get(codcli) ?? { codcli, cliente: String(v.CLIENTE || (codcli > 0 ? `Cliente ${codcli}` : 'Sem cliente')), quantidade: 0, valor: 0, vendas: [] };
-    atual.quantidade += numero(v.QUANTIDADE);
-    atual.valor = Math.round((atual.valor + numero(v.VALOR_TOTAL)) * 100) / 100;
-    atual.vendas.push(v);
-    porCliente.set(codcli, atual);
-  }
-  return [...porCliente.values()]
-    .map((c) => ({ ...c, vendas: [...c.vendas].sort((a, b) => String(b.DTMOV).localeCompare(String(a.DTMOV))) }))
-    .sort((a, b) => b.quantidade - a.quantidade || b.valor - a.valor || a.codcli - b.codcli)
-    .slice(0, Math.max(0, limite));
-}
-
 export interface ResumoVendas { listadas: number; quantidadeDesconsiderada: number; valorDesconsiderado: number }
 
 /** As três métricas da aba Vendas: quantas listadas, e quanto (un. e R$) está fora da demanda. */

@@ -39,7 +39,7 @@ import { jdbcIdWinthor } from './add-003-jdbc-winthor.mjs';
 import { PUBLICO, VENDA_VALIDA } from './venda-valida.mjs';
 
 /** Nomes que falam com o WinThor: recebem o jdbcId resolvido por nome na publicação. */
-export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico',
+export const WINTHOR = ['sgcWintRessuprimento', 'sgcWintProdutoHistorico', 'sgcWintProdutoVendasNotas',
   'sgcWintProdutoUltimasCompras', 'sgcWintProdutoEstoqueFiliais', 'sgcWintProdutoVendas',
   'sgcWintResumoFornecedores', 'sgcWintVendasClientesProdutos', 'sgcWintEstoqueFiliaisProdutos',
   'sgcWintBloqueiosProduto'];
@@ -320,6 +320,38 @@ const SQL_PRODUTO_VENDAS = `SELECT * FROM (
     AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
   ORDER BY M.QT DESC, M.DTMOV DESC
 ) WHERE ROWNUM <= 50`;
+
+// R-135: "Clientes que compraram" na Análise do Produto aberta do pedido —
+// as vendas válidas do produto na filial, uma linha por nota (cliente, ramo,
+// data, número, quantidade e valor), só ao abrir a janela. O público
+// (ramos 11 a 15) sai quando `incluirPublico` = 0 — é o padrão no kanban. As
+// somas por mês batem com as barras de Vendas do gráfico (SAIDAS −
+// SAIDAS_PUBLICAS do `sgcWintProdutoHistorico`), porque o recorte é o mesmo
+// `VENDA_VALIDA`. Teto de 3000 notas por janela.
+const SQL_PRODUTO_VENDAS_NOTAS = `SELECT * FROM (
+  SELECT
+    TO_CHAR(M.DTMOV, 'YYYY-MM') AS MES,
+    TO_CHAR(MAX(M.DTMOV), 'YYYY-MM-DD') AS DTMOV,
+    NVL(M.NUMNOTA, 0) AS NUMNOTA,
+    NVL(M.NUMTRANSVENDA, 0) AS NUMTRANSVENDA,
+    NVL(M.CODCLI, 0) AS CODCLI,
+    MAX(NVL(C.CLIENTE, '')) AS CLIENTE,
+    MAX(NVL(C.CODATV1, 0)) AS CODATV1,
+    MAX(NVL(A.RAMO, '')) AS RAMO,
+    SUM(NVL(M.QT, 0)) AS QUANTIDADE,
+    SUM(NVL(M.QT, 0) * NVL(M.PUNIT, 0)) AS VALOR_TOTAL,
+    MAX(CASE WHEN ${PUBLICO} THEN 1 ELSE 0 END) AS PUBLICO
+  FROM PCMOV M
+  LEFT JOIN PCCLIENT C ON C.CODCLI = M.CODCLI
+  LEFT JOIN PCATIVI A ON A.CODATIV = C.CODATV1
+  WHERE M.CODPROD = {{codprod}}
+    AND M.CODFILIAL = '{{codfilial}}'
+    AND ${VENDA_VALIDA}
+    AND (NOT (${PUBLICO}) OR {{incluirPublico}} = 1)
+    AND M.DTMOV BETWEEN TO_DATE('{{dataInicio}}', 'YYYY-MM-DD') AND TO_DATE('{{dataFim}}', 'YYYY-MM-DD')
+  GROUP BY TO_CHAR(M.DTMOV, 'YYYY-MM'), NVL(M.NUMNOTA, 0), NVL(M.NUMTRANSVENDA, 0), NVL(M.CODCLI, 0)
+  ORDER BY 1, 2
+) WHERE ROWNUM <= 3000`;
 
 // Layout legado (R-117 / RN-026): o rótulo do seletor de fornecedor traz
 // "N itens · sugestão R$ X" ANTES de a compradora escolher. É uma ESTIMATIVA
@@ -673,6 +705,11 @@ const LEITURAS = [
     name: 'sgcWintProdutoEstoqueFiliais',
     code: SQL_PRODUTO_ESTOQUE_FILIAIS,
     resumo: 'RF-020 - a posicao do produto em todas as filiais, com o mesmo estoque liquido de R-085. Params: codprod int',
+  },
+  {
+    name: 'sgcWintProdutoVendasNotas',
+    code: SQL_PRODUTO_VENDAS_NOTAS,
+    resumo: 'R-135 - as vendas válidas do produto na filial, uma linha por nota com cliente, ramo, data, número, quantidade e valor, para Clientes que compraram (por cliente e cliente × mês); público fora com incluirPublico 0. Teto 3000. Params: codprod int, codfilial string, dataInicio string, dataFim string, incluirPublico int',
   },
   {
     name: 'sgcWintProdutoVendas',
