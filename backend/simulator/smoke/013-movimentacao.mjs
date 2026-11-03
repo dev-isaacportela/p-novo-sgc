@@ -23,7 +23,7 @@ function haDias(dias) {
   return data.toISOString().slice(0, 10);
 }
 
-const FILTROS = { codfilial: '1', codfornec: FORNECEDOR_013, codepto: 0, busca: '', limite: 50, offset: 0 };
+const FILTROS = { codfilial: '1', codfornec: FORNECEDOR_013, codepto: 0, busca: '', incluirPublico: 0, limite: 50, offset: 0 };
 const SEM_VENDA = { ...FILTROS, diasSemVenda: 90, somenteComEstoque: 1, janelaDias: 720 };
 const EXCEDENTES = { ...FILTROS, diasPeriodo: 90, limite: 3000 };
 const A_VENCER = { ...FILTROS, situacao: 'TODOS', diasHorizonte: 90, bloqueio: 'TODOS' };
@@ -72,12 +72,19 @@ export async function suite(ctx) {
     assert.equal(linha.DT_ULT_VENDA, haDias(200));
   });
 
-  await teste('RN-002: a venda da 013 é o fragmento único da R-131 importado do add-013 (não uma cópia), sem o público e não cancelada', async () => {
-    for (const nome of ['sgcWintMovSemVenda', 'sgcWintMovExcedentes', 'sgcWintMovRuptura', 'sgcWintMovPerdas']) {
+  await teste('RN-002: a venda da 013 é o fragmento único da R-131 importado do add-013 (não uma cópia), não cancelada e com o público fora salvo incluirPublico', async () => {
+    for (const nome of ['sgcWintMovSemVenda', 'sgcWintMovExcedentes', 'sgcWintMovRuptura', 'sgcWintMovRupturaFiliais', 'sgcWintMovPerdas', 'sgcWintMovPerdasFiliais']) {
       const code = definitions.find((d) => d.name === nome).code;
-      assert.ok(code.includes(`(M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND NOT ${PUBLICO})`), `${nome} não usa a venda válida`);
+      assert.ok(code.includes(`(M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND ({{incluirPublico}} = 1 OR NOT ${PUBLICO}))`), `${nome} não usa a venda válida`);
     }
     assert.deepEqual(WINTHOR, definitions.filter((d) => d.name.startsWith('sgcWint')).map((d) => d.name));
+  });
+
+  await teste('C-038 (P-08): com "venda a órgão público conta", a venda de ontem do 5704 ao órgão público vale — ele sai do corte de 90 dias; a venda para a rede e a remessa continuam fora', async () => {
+    const comPublico = await linhas('sgcWintMovSemVenda', { ...SEM_VENDA, incluirPublico: 1 });
+    assert.equal(porCodigo(comPublico, P013.dAlho).length, 0);
+    const corte0 = await linhas('sgcWintMovSemVenda', { ...SEM_VENDA, incluirPublico: 1, diasSemVenda: 0, busca: String(P013.dAlho) });
+    assert.equal(Number(um(corte0, P013.dAlho).DIAS_SEM_VENDA), 1);
   });
 
   await teste('C-009: o 5705 (sem venda e estoque zero) fica fora com "somente com estoque" e entra com "todos"', async () => {
@@ -421,7 +428,7 @@ export async function suite(ctx) {
       SELECT L.CODFILIAL, COUNT(*) AS LOTES FROM PCLOTE L
       WHERE NVL(L.QT, 0) > 0 AND L.DTEXCLUSAO IS NULL AND L.DTVALIDADE IS NOT NULL
       GROUP BY L.CODFILIAL ORDER BY COUNT(*) DESC) WHERE ROWNUM <= 1`);
-    const real = { codfilial: String(alvo.CODFILIAL), codfornec: 0, codepto: 0, busca: '', limite: 50, offset: 0 };
+    const real = { codfilial: String(alvo.CODFILIAL), codfornec: 0, codepto: 0, busca: '', incluirPublico: 0, limite: 50, offset: 0 };
     const medidas = [];
     const provar = async (titulo, nome, input) => {
       const inicio = Date.now();

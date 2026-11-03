@@ -20,25 +20,25 @@ com `npm test` verde no lado que ela toca.
 ## Simulador
 
 - [x] T-020 `schema-winthor.mjs`: `PCLOTE.DTEXCLUSAO`, `PCMOV.CUSTOREAL`, `PCMOV.CODFORNEC`
-- [x] T-021 `seed/013-movimentacao.mjs` (produtos 5701–5730 do fornecedor 1088, clientes 9401–9405, `NUMTRANSITEM`/`NUMTRANSVENDA` ≥ 985001) e registro em `seed.mjs`
+- [x] T-021 `seed/013-movimentacao.mjs` (produtos 5701–5734 do fornecedor 1088, clientes 9401–9405, `NUMTRANSITEM`/`NUMTRANSVENDA` ≥ 985001) e registro em `seed.mjs`
 - [x] T-022 `smoke/013-movimentacao.mjs`: os cenários de regra de negócio e o bloco do WinThor real; registro em `smoke.mjs`
 
 ## Regra pura
 
-- [ ] T-030 `frontend/src/lib/movimentacao.ts` (tabela do plan)
-- [ ] T-031 `frontend/tests/movimentacao.test.mjs`, um `test()` por cenário/regra de tela
+- [x] T-030 `frontend/src/lib/movimentacao.ts` (tabela do plan)
+- [x] T-031 `frontend/tests/movimentacao.test.mjs`, um `test()` por cenário/regra de tela
 
 ## Telas
 
-- [ ] T-040 bloco 83xx em `server-functions.ts` (nomes e ids locais)
-- [ ] T-041 `permissoes.ts`: `verMovimentacao`, `registrarPlanoAcao`, item de menu; teste de permissões atualizado
-- [ ] T-042 `pages/movimentacao/*` (casca, cinco abas, plano, linha do tempo, gráfico por filial)
-- [ ] T-043 rota no `App.tsx` e ícone no `AdminLayout.tsx`
+- [x] T-040 bloco 83xx em `server-functions.ts` (nomes e ids locais)
+- [x] T-041 `permissoes.ts`: `verMovimentacao`, `registrarPlanoAcao`, item de menu; teste de permissões atualizado
+- [x] T-042 `pages/movimentacao/*` (casca, cinco abas, plano, linha do tempo, gráfico por filial)
+- [x] T-043 rota no `App.tsx` e ícone no `AdminLayout.tsx`
 
 ## Verificação
 
-- [ ] T-050 `npm test` nos dois lados; `npm run build` e `npm run lint` no frontend
-- [ ] T-051 simulador com o WinThor real (porta 3112, front 5182): as cinco abas nos dois temas, screenshots
+- [x] T-050 `npm test` nos dois lados; `npm run build` e `npm run lint` no frontend
+- [x] T-051 simulador com o WinThor real (porta 3112, front 5182): as cinco abas nos dois temas, screenshots
 - [ ] T-052 relatório: arquivos do integrador, perguntas P-01..P-07, commits, testes
 
 ## Rastreabilidade
@@ -48,3 +48,13 @@ com `npm test` verde no lado que ela toca.
 | C-001..C-003, C-012, C-015, C-032, RN-004..RN-006, RN-008, RN-010, RN-017, RN-018, RN-020 | `frontend/tests/movimentacao.test.mjs` |
 | C-004..C-011, C-013, C-014, C-016..C-031, C-033..C-037, RN-001..RN-003, RN-007, RN-011..RN-016, RN-019 | `backend/simulator/smoke/013-movimentacao.mjs` |
 | contagem > 0 no WinThor real | bloco "WinThor real" do mesmo smoke |
+
+## Resultado (2026-11-03)
+
+- Backend: 335 verificações (`npm test`: check + smoke), 36 novas da 013, entre elas a das nove
+  `sgcWint*` no WinThor real (filial 1): departamentos 9 linhas, sem venda 50, excedentes 187, a
+  vencer 50, ruptura 50, ruptura por filial 5, perdas 14, perdas por filial 3, linha do tempo 89 —
+  a mais lenta, o resumo de perdas, em 1,3 s.
+- Frontend: 345 testes (22 novos em `movimentacao.test.mjs`), `tsc -b`, `vite build` e `eslint` limpos.
+- Telas conferidas no simulador com o WinThor real nos dois temas; a pergunta P-08 nasceu daí
+  (Saxenda e Novorapid "sem venda" pelo recorte sem público).

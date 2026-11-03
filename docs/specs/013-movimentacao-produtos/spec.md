@@ -1,6 +1,6 @@
 # Spec: Movimentação de produtos — sem venda, excedentes, a vencer, ruptura e perdas
 
-**ID:** 013-movimentacao-produtos · **Status:** rascunho (perguntas P-01..P-07 com proposta adotada até a resposta) · **Data:** 2026-11-03 · **Onda:** 5 (mapa das ondas do 000) · **Origem:** p-60523, tela `/movimentacao-produtos` (regras 14, 15 e 17)
+**ID:** 013-movimentacao-produtos · **Status:** rascunho (perguntas P-01..P-08 com proposta adotada até a resposta) · **Data:** 2026-11-03 · **Onda:** 5 (mapa das ondas do 000) · **Origem:** p-60523, tela `/movimentacao-produtos` (regras 14, 15 e 17)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -17,8 +17,8 @@ comprador descobre a ruptura quando o cliente reclama.
 ## Resultado esperado
 
 Uma tela, **Movimentação de produtos**, com cinco recortes do estoque lidos do ERP, cada
-um numa aba, todos com os mesmos filtros no topo (filial, departamento, fornecedor e
-busca):
+um numa aba, todos com os mesmos filtros no topo (filial, departamento, fornecedor, venda a
+órgão público e busca):
 
 1. **Sem venda** — produto com estoque e sem venda válida há N dias, com o valor parado.
 2. **Excedentes** — produto cuja cobertura passou do teto da sua curva, com a quantidade e
@@ -51,7 +51,8 @@ vê tudo e não grava plano.
 Formato Dado/Quando/Então — cada cenário é verificável por uma pessoa. "Venda válida" é o
 recorte de venda do sistema (R-131): venda de saída, quantidade positiva, não cancelada,
 **sem** cliente de órgão público (ramos 11 a 15), **sem** venda para a própria rede (ramo
-20 ou cliente que é filial) e **sem** remessa de entrega futura.
+20 ou cliente que é filial) e **sem** remessa de entrega futura. A venda a órgão público
+fica fora **por padrão**, e o filtro do topo "Venda a órgão público" a faz contar (P-08).
 
 ### A tela
 
@@ -247,6 +248,11 @@ recorte de venda do sistema (R-131): venda de saída, quantidade positiva, não 
 - **Quando** a aba abre no universo padrão "Produtos de venda"
 - **Então** ele não aparece; em "Inclui bonificação e silenciados", aparece
 
+**C-038 — Venda a órgão público conta, se a pessoa pedir** *(P-08)*
+- **Dado que** o produto D vendeu ontem a um órgão público (e a última venda a cliente comum foi há 200 dias)
+- **Quando** a pessoa escolhe "Venda a órgão público: conta como venda"
+- **Então** D sai de Sem venda no corte de 90 dias (vendeu ontem); a venda para a rede e a remessa continuam sem contar
+
 **C-037 — A linha do tempo do lote**
 - **Dado que** a pessoa abre o rastro do lote P1
 - **Quando** a janela carrega
@@ -260,7 +266,7 @@ recorte de venda do sistema (R-131): venda de saída, quantidade positiva, não 
 | RF-002 | A tela DEVE ser vista por admin, analista, gestor e diretoria e recusada ao comercial, inclusive por endereço direto | C-001 | must |
 | RF-003 | Filial, departamento, fornecedor e busca DEVEM valer para todas as abas; trocar qualquer filtro DEVE voltar à página 1 | C-003, C-004, C-005 | must |
 | RF-004 | Sem venda, Excedentes e A vencer DEVEM exigir filial (a primeira, se ninguém escolheu); Ruptura e Perdas DEVEM aceitar todas as filiais | C-003 | must |
-| RF-005 | Toda conta de venda DEVE usar a venda válida | C-008, C-011, C-026 | must |
+| RF-005 | Toda conta de venda DEVE usar a venda válida; a venda a órgão público DEVE ficar fora por padrão e contar quando o filtro pedir | C-008, C-011, C-026, C-038 | must |
 | RF-006 | Sem venda DEVE listar produto ativo com dias desde a última venda válida maior ou igual ao corte (30, 60, 90 padrão, 180, 365), com o valor parado, na ordem de C-007 | C-006, C-007, C-009, C-010 | must |
 | RF-007 | Excedentes DEVE classificar cada produto com giro pela curva e pelo teto da curva, mostrar a quantidade e o valor acima do alvo e alternar entre só excedentes e todos com giro | C-011..C-015 | must |
 | RF-008 | A vencer DEVE listar os lotes com saldo por situação (todos, a vencer, vencidos), horizonte (30, 60, 90 padrão, 180, 365) e bloqueio (todos, bloqueados, livres) | C-016, C-017, C-019, C-020 | must |
@@ -297,7 +303,7 @@ recorte de venda do sistema (R-131): venda de saída, quantidade positiva, não 
 ## Regras de negócio
 
 - **RN-001 — Produto ativo.** Todas as abas olham só o produto ativo. Ruptura e Perdas têm o universo "Inclui bonificação e silenciados", que abre a foto completa.
-- **RN-002 — Venda válida.** Só a venda válida conta, em toda aba e toda conta (última venda, consumo, curva, janela e base da ruptura, última venda do lote). O público, a venda para a rede e a remessa ficam fora sempre — não há seletor nesta tela.
+- **RN-002 — Venda válida.** Só a venda válida conta, em toda aba e toda conta (última venda, consumo, curva, janela e base da ruptura, última venda do lote). A venda para a rede e a remessa ficam fora sempre; a venda a órgão público fica fora por padrão e conta quando o filtro do topo pedir (P-08).
 - **RN-003 — Última venda e última entrada.** Saem dos movimentos do ERP dos últimos 720 dias, nunca do campo de "última saída" do cadastro de estoque (que conta transferência e devolução). Sem venda válida na janela, a linha diz "Sem venda em 720 dias".
 - **RN-004 — Cobertura do excedente.** Consumo diário = venda válida do período ÷ dias do período (30, 60, 90 padrão, 180). Cobertura = (estoque disponível + trânsito) ÷ consumo diário. Estoque disponível e trânsito são os mesmos da tela de compras inteligentes: o estoque sem bloqueado, indenizado e reservado; o trânsito somado por produto e filial *(P-03)*.
 - **RN-005 — Curva e teto do excedente.** A curva sai do faturamento da venda válida do período sobre todos os produtos com giro da filial (80 % A, 95 % B, resto C) *(P-04)*. O alvo e o teto são os da régua única de cobertura do sistema: produto, seção, departamento, fornecedor, padrão 35 dias sem tolerância *(P-03)*.
@@ -330,10 +336,11 @@ propostas foram escolhidas para serem trocáveis num ponto só (um fragmento ou 
 | P-04 | Curva ABC do excedente por venda × custo da última entrada | **Faturamento da venda válida** (quantidade × preço), a régua de curva das compras inteligentes | Uma régua de curva só no sistema |
 | P-05 | Ruptura reconstrói o estoque inicial só com compra; transferência recebida na janela não entra (div. 51) | **Compra e transferência recebida entram** | Sem isso o estoque inicial do produto reposto por transferência fica subestimado e o alerta dispara à toa |
 | P-06 | Perdas: a spec dizia "venceu antes de agora"; o código, "antes de hoje" (div. 49) | **Antes de hoje**: o lote que vence hoje é "Vence hoje" em A vencer | Ainda pode ser vendido hoje |
+| P-08 | Sem venda contava toda venda a cliente (inclusive órgão público); a sessão pediu a venda válida **sem** público | **Público fora por padrão, com o filtro "Venda a órgão público: conta como venda"** no topo (como o seletor da 011) | No WinThor real o recorte sem público marca como parado o que gira: Saxenda (cód. 1377) vendeu 9.378 un. a órgão público até 15/10/2026 e aparece "Sem venda em 720 dias"; Novorapid (1370) vendeu 68.180 un. só a ramos 11–13. Pergunta: nesta tela o padrão deveria ser **contar** o público? |
 | P-07 | Valor parado, em risco, excedente e bloqueado pelo custo da última entrada do ERP | **Custo da última entrada do ERP**; perda pelo custo da entrada do lote | A R-128 trata do custo de **compra**; aqui é o valor do que já está em estoque. Se a resposta for "custo padrão do Gestão de Custos", a troca é na carga da tela |
 
 Decisões que **não** são pergunta (vêm do pedido ou de regra fechada): venda válida em todas
-as contas, sem seletor de público (R-131 + pedido da sessão); comercial fora da tela
+as contas (R-131 + pedido da sessão); comercial fora da tela
 (o legado só lhe mostrava Promocionais, que ficam fora); a tela conferir a gravação do plano
 relendo (corrige a div. 46, padrão D-03 do SGC 2); exportação em CSV, não planilha de
 escritório (R-094); diretoria grava plano, como o código do legado (a spec antiga dizia
@@ -379,9 +386,10 @@ escritório (R-094); diretoria grava plano, como o código do legado (a spec ant
 | C-034 | P1: VALOR_PERDA 96,00 pelo custo do lote, FILIAL_ENTRADA 2, QT_TRANSFERENCIAS 1, DIAS_SEM_VENDA 40; TOTAL_COM_TRANSFERENCIA e TOTAL_NUNCA_VENDIDOS | regra de negócio |
 | C-035 | resumo por filial de perdas com as filiais 1 e 3 e VALOR_PERDA de cada; ignora codfilial | regra de negócio |
 | C-036 | produto de bonificação (departamento 4) fora no universo 0, dentro no 1 | regra de negócio |
+| C-038 | com incluirPublico 1 o 5704 sai do corte de 90 (vendeu ontem ao público) e, com corte 0, mostra 1 dia; a rede e a remessa continuam fora | regra de negócio |
 | C-037 | linha do tempo de P1 em ordem, com FILIAL_ORIGEM da entrada por transferência e a remessa marcada; rótulos e rota puros | regra de negócio + regra de tela |
 | RN-001 | produto inativo (OBS2) fora de Sem venda, A vencer e Excedentes | regra de negócio |
-| RN-002 | a venda válida é o fragmento único da R-131 (importado, não copiado) — conferido pelo texto da definition | regra de negócio |
+| RN-002 | a venda válida é o fragmento único da R-131 (importado, não copiado), com o público condicionado a `incluirPublico` — conferido pelo texto das seis definitions que contam venda | regra de negócio |
 | RN-003 | DT_ULT_VENDA vem do movimento, não de PCEST.DTULTSAIDA (seed com DTULTSAIDA diferente) | regra de negócio |
 | RN-004..RN-006 | casos numéricos de `classificarExcedentes` (cobertura, teto, quantidade, valor, dias acima, curva) | regra de tela |
 | RN-007 | o mesmo lote vencido tem o mesmo saldo em A vencer (VENCIDOS) e em Perdas | regra de negócio |
@@ -396,10 +404,10 @@ escritório (R-094); diretoria grava plano, como o código do legado (a spec ant
 | WinThor real | com o WinThor real ligado, cada consulta da tela devolve contagem > 0 numa filial com dados | regra de negócio (Oracle) |
 
 - O que só olho humano verifica fica em **Verificação manual**:
-  - [ ] As cinco abas no simulador com o WinThor real, nos dois temas
-  - [ ] Os gráficos por filial com o valor escrito em cada barra
-  - [ ] Plano de ação desabilitado (não escondido) para quem só lê, com o motivo
-  - [ ] Severidade, bloqueio e prazo sinalizados por texto, nunca só por cor
+  - [x] As cinco abas no simulador com o WinThor real, nos dois temas *(2026-11-03)*
+  - [x] Os gráficos por filial com o valor escrito em cada barra *(2026-11-03)*
+  - [x] Plano de ação desabilitado (não escondido) para quem só lê, com o motivo *(2026-11-03, gestor somente-leitura)*
+  - [x] Severidade, bloqueio e prazo sinalizados por texto, nunca só por cor *(2026-11-03)*
 
 ## Fora de escopo
 
@@ -409,12 +417,11 @@ escritório (R-094); diretoria grava plano, como o código do legado (a spec ant
 - [ ] **Plano de ação em Excedentes, Ruptura e Perdas** — como no legado.
 - [ ] **Bloquear, desbloquear ou baixar lote** — o ERP é a fonte; a tela só lê.
 - [ ] **Exportação em planilha de escritório** — o arquivo é o CSV das outras telas (R-094).
-- [ ] **Seletor de venda pública** — a venda válida é fixa nesta tela (RN-002).
 - [ ] **Redirecionar os endereços antigos** (`/perdas-produtos`, `/alerta-ruptura`) — o SGC 2 nasce sem eles.
 
 ## Pendências
 
-As perguntas P-01..P-07 não bloqueiam: cada uma tem proposta implementada e troca num
+As perguntas P-01..P-08 não bloqueiam: cada uma tem proposta implementada e troca num
 ponto só. A resposta do usuário confirma ou vira emenda.
 
 ## Checklist de revisão

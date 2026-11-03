@@ -61,10 +61,12 @@ const PLANO = ['admin', 'analista', 'gestor', 'diretoria'];
 
 /**
  * RN-002: a venda que conta nesta tela — a VENDA_VALIDA da R-131 (sem venda
- * entre filiais e sem remessa de entrega futura), sem o público (ramos 11-15)
- * e não cancelada. Exige `PCMOV M` com `LEFT JOIN PCCLIENT C`.
+ * entre filiais e sem remessa de entrega futura) e não cancelada; o público
+ * (ramos 11-15) fica fora POR PADRÃO, como na 011, e `{{incluirPublico}}` = 1
+ * o devolve (P-08: no WinThor real, produto vendido só a órgão público aparecia
+ * "sem venda"). Exige `PCMOV M` com `LEFT JOIN PCCLIENT C`.
  */
-const VENDA_MOV = `(M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND NOT ${PUBLICO})`;
+const VENDA_MOV = `(M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND ({{incluirPublico}} = 1 OR NOT ${PUBLICO}))`;
 
 /** RN-001: produto de venda — sem marca de inativo e fora dos departamentos 4 e 7. */
 const PRODUTO_ATIVO = `(NVL(LENGTH(TRIM(P.OBS2)), 0) = 0 AND NVL(P.CODEPTO, 0) NOT IN (4, 7))`;
@@ -617,7 +619,7 @@ const SQL_PLANO_EXCLUIR = `DELETE FROM SGC_MOV_PLANO
 WHERE ID = {{id}}
   AND ${guarda(PLANO)}`;
 
-const FILTROS = 'codfilial string, codfornec int (0 = todos), codepto int (0 = todos), busca string';
+const FILTROS = 'codfilial string, codfornec int (0 = todos), codepto int (0 = todos), busca string, incluirPublico int (0 = publico fora, o padrao)';
 
 const LEITURAS = [
   { name: 'sgcWintDepartamentos', code: SQL_DEPARTAMENTOS, resumo: 'R-133 - departamentos do ERP para o filtro do topo (CODEPTO > 0 e diferente de 9999), por nome' },

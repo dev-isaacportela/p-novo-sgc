@@ -54,6 +54,7 @@ RN-010: a chave única é o "um plano por aba + produto + filial"; o upsert atua
 
 Filtros comuns às leituras do ERP: `codfilial` string (`''` = todas, onde a aba aceita),
 `codfornec` int (0 = todos), `codepto` int (0 = todos), `busca` string (`''` = nada),
+`incluirPublico` int (0 = venda a órgão público fora, o padrão; 1 = conta — P-08),
 `limite` int, `offset` int.
 
 | Id | Nome | Tipo | O que devolve | Parâmetros próprios |
@@ -83,7 +84,7 @@ situação `ativa`, limite 500).
 ### A venda válida — importada, não copiada (RN-002)
 
 `add-013-compras-inteligentes.mjs` passa a **exportar** `VENDA_VALIDA`, `PUBLICO` e `REMESSA_FUTURA`
-(a única mudança nele; a terceira marca a remessa na linha do tempo do lote). O `add-015` monta `VENDA_MOV = (M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND NOT ${PUBLICO})`
+(a única mudança nele; a terceira marca a remessa na linha do tempo do lote). O `add-015` monta `VENDA_MOV = (M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND ({{incluirPublico}} = 1 OR NOT ${PUBLICO}))`
 — `PCMOV M` com `LEFT JOIN PCCLIENT C`, como o fragmento exige. Toda soma de venda, última
 venda, curva, janela e base da ruptura e a última venda do lote usam `VENDA_MOV`. O smoke
 confere pelo texto da definition que o fragmento é o mesmo objeto (RN-002).
@@ -154,7 +155,7 @@ g. **Divisão** com `1.0 *` no numerador quando os dois lados podem ser inteiros
 
 | Arquivo | Conteúdo |
 |---|---|
-| `MovimentacaoPage.tsx` | porteiro `verMovimentacao`; cabeçalho; filtros do topo (filial, departamento, fornecedor, busca com espera de 500 ms); `Tabs` com a aba no endereço (`?aba=`); cada aba monta o seu efeito |
+| `MovimentacaoPage.tsx` | porteiro `verMovimentacao`; cabeçalho; filtros do topo (filial, departamento, fornecedor, venda a órgão público, busca com espera de 500 ms); `Tabs` com a aba no endereço (`?aba=`); cada aba monta o seu efeito |
 | `SemVendaTab.tsx` | corte, estoque; KPIs; tabela; botão do plano por linha |
 | `ExcedentesTab.tsx` | período, visão; KPIs; aviso de teto; tabela paginada em memória |
 | `AVencerTab.tsx` | situação, horizonte, bloqueio; KPIs; tabela com prazo, bloqueio e divergência; plano por produto |

@@ -227,12 +227,18 @@ export function rotuloBloqueio(l: Linha): { tom: TomMov; texto: string } | null 
   return null;
 }
 
+/** O PROGRAMA do log vem como "[PCSIS266 - 37.00.00.42]": a tela mostra só o nome, sem a versão (RN-MOV-30 do legado). */
+export function nomeDaRotina(programa: unknown): string {
+  const texto = String(programa ?? '').trim().replace(/^\[/, '').replace(/\]$/, '');
+  return texto.split(/\s+-\s+/)[0].trim();
+}
+
 /** Quem, quando e por qual rotina — o que o log do lote diz. Vazio quando não há o que dizer. */
 export function textoResponsavelBloqueio(l: Linha, fmtData: (iso: string) => string): string {
   const partes = [
     l.BLOQUEIO_RESPONSAVEL ? String(l.BLOQUEIO_RESPONSAVEL) : l.BLOQUEIO_MATRICULA ? `matrícula ${l.BLOQUEIO_MATRICULA}` : '',
     l.BLOQUEIO_DATA ? fmtData(String(l.BLOQUEIO_DATA)) : '',
-    l.BLOQUEIO_ROTINA ? `rotina ${String(l.BLOQUEIO_ROTINA).trim()}` : '',
+    l.BLOQUEIO_ROTINA ? `rotina ${nomeDaRotina(l.BLOQUEIO_ROTINA)}` : '',
   ].filter(Boolean);
   return partes.join(' · ');
 }
