@@ -148,3 +148,18 @@ test('R-124: com a projeção do modelo, a última barra e o rodapé usam ela no
   assert.equal(totaisDoRodape(historico, '2026-09-16', 2, 123.4).projecaoMes, 123);
   assert.equal(totaisDoRodape(historico, '2026-09-16', 2).projecaoMes, 62);
 });
+
+test('R-133: clientes que compraram — os 10 que mais levaram no mês, cada um com as vendas dele, da mais recente', async () => {
+  const { clientesQueCompraram } = await import('../src/lib/ressuprimento-detalhe.ts');
+  const venda = (n, dtmov, codcli, qt, valor) => ({ NUMTRANSITEM: n, DTMOV: dtmov, QUANTIDADE: qt, PRECO_VENDA: 0, VALOR_TOTAL: valor, CODCLI: codcli, CLIENTE: `C${codcli}`, PUBLICO: 0 });
+  const vendas = [
+    venda(1, '2026-09-10', 9, 10, 100), venda(2, '2026-10-02', 9, 5, 50), venda(3, '2026-10-05', 12, 30, 300),
+    venda(4, '2026-10-20', 9, 40, 400), venda(5, '2026-10-21', 0, 1, 10),
+  ];
+  const outubro = clientesQueCompraram(vendas, '2026-10');
+  assert.deepEqual(outubro.map((c) => [c.codcli, c.quantidade, c.valor]), [[9, 45, 450], [12, 30, 300], [0, 1, 10]]);
+  assert.deepEqual(outubro[0].vendas.map((v) => v.NUMTRANSITEM), [4, 2], 'a mais recente primeiro');
+  assert.equal(outubro[2].cliente, 'C0');
+  assert.deepEqual(clientesQueCompraram(vendas, '').map((c) => c.codcli), [9, 12, 0], 'sem mês: o período todo');
+  assert.equal(clientesQueCompraram(vendas, '', 2).length, 2);
+});

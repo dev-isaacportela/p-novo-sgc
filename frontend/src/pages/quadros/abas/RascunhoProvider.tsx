@@ -25,6 +25,7 @@ import { usePedido } from './pedido-contexto';
 import { atualizarCapaDoQuadro, capaMudou } from './capa-do-quadro';
 import { devolverSolicitacoes } from './verificar-saida';
 import { RascunhoContexto } from './rascunho-contexto';
+import { DrillProduto } from './DrillProduto';
 import type { AnaliseCarregada, CampoDeTexto, ContextoRascunho, SolicitacaoDaMontagem } from './rascunho-contexto';
 
 const agora = () => new Date().toISOString().slice(0, 19);
@@ -58,6 +59,7 @@ export function RascunhoProvider({
   const [analise, setAnalise] = React.useState<{ cardId: number; dados: AnaliseCarregada } | null>(null);
   const [carregandoAnalise, setCarregandoAnalise] = React.useState(false);
   const [texto, setTexto] = React.useState<{ codprod: number; campo: CampoDeTexto; valor: string } | null>(null);
+  const [produtoAberto, setProdutoAberto] = React.useState(0);
 
   // Recarregou o pedido: a lista volta a ser a do servidor, com as edições
   // ainda não salvas por cima (incluir uma solicitação recarrega o pedido e
@@ -297,7 +299,7 @@ export function RascunhoProvider({
     solicitacoes: fila && fila.cardId === ctx.card.id ? fila.linhas : null,
     erroSolicitacoes,
     alterar, adicionar, adicionarItem, remover, montarAnalise, aceitarSugestao, salvar,
-    recarregarSolicitacoes, comRecarga, agendar, abrirTexto, setErro,
+    recarregarSolicitacoes, comRecarga, agendar, abrirTexto, abrirProduto: setProdutoAberto, setErro,
   }), [
     ctx.card.id, capa, pedido.carregando, pedido.podeEditar, itens, alterados, salvos, meses, total, bloqueado, ocupado, erro, avisoCusto,
     salvoEm, dadosDaAnalise, carregandoAnalise, fila, erroSolicitacoes, alterar, adicionar, adicionarItem, remover, montarAnalise,
@@ -308,6 +310,7 @@ export function RascunhoProvider({
   return (
     <RascunhoContexto.Provider value={valor}>
       {children}
+      {produtoAberto > 0 ? <DrillProduto codprod={produtoAberto} onFechar={() => setProdutoAberto(0)} /> : null}
       <Dialog open={texto !== null} onOpenChange={(aberto) => !aberto && setTexto(null)}>
         <DialogContent>
           <DialogHeader>

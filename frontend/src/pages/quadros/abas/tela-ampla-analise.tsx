@@ -22,6 +22,7 @@ import {
 import { tabelasVigentes } from '@/lib/custo-do-item';
 import { useRascunho } from './rascunho-contexto';
 import { SeletorDeCusto } from './SeletorDeCusto';
+import { NomeDoProduto } from './NomeDoProduto';
 
 const fmt = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 type Densidade = 'compacta' | 'confortavel';
@@ -226,7 +227,7 @@ export function AnaliseAmpla({
                     <span className="flex items-start gap-2">
                       <CaixaSelecao marcado={selecionados.has(l.codprod)} label={`Selecionar ${b.descricao}`} onToggle={() => alternarSelecao(l.codprod)} />
                       <span className="min-w-0">
-                        <span className="block font-semibold break-words text-ink">{b.descricao}</span>
+                        <NomeDoProduto codprod={l.codprod} descricao={b.descricao} />
                         {l.comercial || l.especial ? (
                           <span className="flex flex-wrap gap-x-3 text-[11px]">
                             {l.comercial ? <Status tone="live">COMERCIAL</Status> : null}

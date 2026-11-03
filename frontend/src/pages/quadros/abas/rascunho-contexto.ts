@@ -78,6 +78,8 @@ export interface ContextoRascunho {
   /** Uma edição a aplicar no item quando o pedido recarregar (o custo escolhido antes de incluir a solicitação). */
   agendar: (codprod: number, mudanca: Partial<ItemPedido>) => void;
   abrirTexto: (codprod: number, campo: CampoDeTexto) => void;
+  /** O drill-in: a Análise do Produto da 011, com o item do pedido no topo. */
+  abrirProduto: (codprod: number) => void;
   setErro: (erro: string) => void;
 }
 

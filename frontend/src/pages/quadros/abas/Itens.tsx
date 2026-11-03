@@ -26,6 +26,7 @@ import { useRascunho } from './rascunho-contexto';
 import BuscarProduto from './BuscarProduto';
 import PrazoPagamento from './PrazoPagamento';
 import TelaAmpla from './TelaAmpla';
+import { NomeDoProduto } from './NomeDoProduto';
 
 const quantidade = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 
@@ -117,7 +118,7 @@ export default function AbaItens(ctx: ExtensaoContexto) {
                 return (
                   <Tr key={item.codprod}>
                     <Td className="min-w-0">
-                      <span className="font-semibold break-words text-ink">{item.descricao}</span>
+                      <NomeDoProduto codprod={item.codprod} descricao={item.descricao} />
                       <RowMeta>
                         <Code prefix="cód.">{item.codprod}</Code> · {item.embalagem || '—'}
                       </RowMeta>

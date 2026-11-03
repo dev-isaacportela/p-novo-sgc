@@ -82,6 +82,8 @@ export function AnaliseProdutoDialogo({
   lotesBloqueados,
   excessosLista,
   semPublico = false,
+  topo,
+  rotuloAdicionar = 'Adicionar ao carrinho',
 }: {
   linha: LinhaRessuprimento | null;
   codfilial: string;
@@ -114,6 +116,10 @@ export function AnaliseProdutoDialogo({
   excessosLista: FilialComExcesso[];
   /** R-131: o seletor de órgão público (marcado por padrão) — a aba Vendas segue a lista. */
   semPublico?: boolean;
+  /** R-133: o bloco do topo quando a janela abre de um pedido ("Item no pedido"). */
+  topo?: React.ReactNode;
+  /** R-133: aberta de um pedido, a simulação adiciona ao pedido, não ao carrinho. */
+  rotuloAdicionar?: string;
 }) {
   const [aba, setAba] = React.useState<Aba>('analise');
   const [abaGrafico, setAbaGrafico] = React.useState<AbaGrafico>('vendas');
@@ -188,6 +194,7 @@ export function AnaliseProdutoDialogo({
         <DialogBody>
           <div className="flex flex-col gap-3">
             {dados.erro ? <Alert tone="error">{dados.erro}</Alert> : null}
+            {topo}
             {/* R-130: os avisos logo abaixo do cabeçalho do produto, antes dos números e do gráfico. */}
             <AvisosProduto qtBloqueada={Number(m.QT_BLOQUEADA)} lotes={lotesBloqueados} excessos={excessos} amplo />
 
@@ -264,7 +271,7 @@ export function AnaliseProdutoDialogo({
                       onClick={() => onAdicionar(linha, simulacao.quantidade)}
                     >
                       <ShoppingCart aria-hidden />
-                      Adicionar ao carrinho
+                      {rotuloAdicionar}
                     </Button>
                   )}
                 >

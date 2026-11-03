@@ -21,6 +21,7 @@ import { estaNoPedido, plural } from '@/lib/resumo-pedido';
 import { useRascunho } from './rascunho-contexto';
 import { AnaliseAmpla } from './tela-ampla-analise';
 import { SeletorDeCusto } from './SeletorDeCusto';
+import { NomeDoProduto } from './NomeDoProduto';
 
 type Aba = 'analise' | 'itens';
 const fmt = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
@@ -119,7 +120,7 @@ function ItensDoPedido() {
             return (
               <tr key={item.codprod} className={cn('transition-colors hover:bg-accent', item.tipoPreco === 'especial' && 'bg-attention-bg')}>
                 <td className={celula}>
-                  <span className="block font-semibold break-words text-ink">{item.descricao}</span>
+                  <NomeDoProduto codprod={item.codprod} descricao={item.descricao} />
                   <span className="block text-[12px] text-ink-secondary">
                     <Code>{item.codprod}</Code>{` · ${item.embalagem || '—'}${item.solicitacaoDe ? ` · solicitação de ${item.solicitacaoDe}` : ''}`}
                   </span>

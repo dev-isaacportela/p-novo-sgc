@@ -32,6 +32,7 @@ import { AvaliarDialogo } from '@/pages/solicitacoes/solicitacoes-dialogos';
 import { usePedido } from './pedido-contexto';
 import { useRascunho, type SolicitacaoDaMontagem } from './rascunho-contexto';
 import { SeletorDeCusto } from './SeletorDeCusto';
+import { NomeDoProduto } from './NomeDoProduto';
 
 const quantidade = (valor: number) => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 type Custo = { precoCusto: number; tipoPreco: TipoPreco };
@@ -115,7 +116,7 @@ export default function BlocoSolicitacoes(
                 )}
               >
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate font-semibold text-ink" title={s.DESCRICAO}>{s.DESCRICAO}</span>
+                  <span className="flex min-w-0 flex-1"><NomeDoProduto codprod={codprod} descricao={s.DESCRICAO} truncar /></span>
                   <Badge tone={TOM_PRIORIDADE_CARTAO[prioridade]}>{ROTULO_PRIORIDADE[prioridade]}</Badge>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-secondary">
