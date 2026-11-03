@@ -82,8 +82,8 @@ situação `ativa`, limite 500).
 
 ### A venda válida — importada, não copiada (RN-002)
 
-`add-013-compras-inteligentes.mjs` passa a **exportar** `VENDA_VALIDA` e `PUBLICO` (a única
-mudança nele). O `add-015` monta `VENDA_MOV = (M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND NOT ${PUBLICO})`
+`add-013-compras-inteligentes.mjs` passa a **exportar** `VENDA_VALIDA`, `PUBLICO` e `REMESSA_FUTURA`
+(a única mudança nele; a terceira marca a remessa na linha do tempo do lote). O `add-015` monta `VENDA_MOV = (M.DTCANCEL IS NULL AND ${VENDA_VALIDA} AND NOT ${PUBLICO})`
 — `PCMOV M` com `LEFT JOIN PCCLIENT C`, como o fragmento exige. Toda soma de venda, última
 venda, curva, janela e base da ruptura e a última venda do lote usam `VENDA_MOV`. O smoke
 confere pelo texto da definition que o fragmento é o mesmo objeto (RN-002).
@@ -188,7 +188,7 @@ já semeado pela 011 ou aqui), `NUMTRANSITEM` ≥ 985001, `NUMTRANSVENDA` ≥ 98
 
 ## Dependências entre specs
 
-- 011 (`add-013`): exporta `VENDA_VALIDA` e `PUBLICO` — mudança de uma palavra cada.
+- 011 (`add-013`): exporta `VENDA_VALIDA`, `PUBLICO` e `REMESSA_FUTURA` — mudança de uma palavra cada.
 - 012/003: `sgcCoberturaListar`, `lib/cobertura.ts` (`limiteDeCobertura`), `lib/compras.ts` (`curvaPorValor`).
 - 001: `sgcWintFiliais`, `sgcWintFornecedores`.
 
@@ -197,7 +197,7 @@ já semeado pela 011 ou aqui), `NUMTRANSITEM` ≥ 985001, `NUMTRANSVENDA` ≥ 98
 `backend/setup-backend.mjs` (DDL_013), `backend/simulator/schema-winthor.mjs` (3 colunas),
 `backend/simulator/config.mjs` (`PUBLISH_ORDER` + `CHECK_INPUT`), `backend/simulator/seed.mjs`
 (`seed013`), `backend/simulator/smoke.mjs` (suíte), `backend/package.json` (`publish:015`),
-`backend/add-013-compras-inteligentes.mjs` (dois `export`), `frontend/src/lib/permissoes.ts`
+`backend/add-013-compras-inteligentes.mjs` (três `export`), `frontend/src/lib/permissoes.ts`
 (duas chaves + item de menu), `frontend/src/components/AdminLayout.tsx` (ícone),
 `frontend/src/App.tsx` (rota), `frontend/src/lib/server-functions.ts` (bloco 83xx),
 `frontend/tests/permissoes.test.mjs` (se enumerar as chaves).

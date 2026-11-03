@@ -76,7 +76,7 @@ const OPERAR = ['admin', 'analista', 'gestor'];
  * pública segregada. O ramo 20 é "FILIAL" (venda para a própria rede): saiu
  * daqui e entrou em ENTRE_FILIAIS, que fica fora sempre.
  */
-const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15)';
+export const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15)';
 
 /**
  * R-131: venda para a própria rede — o ramo 20 (FILIAL) ou o cliente que é uma
@@ -89,7 +89,7 @@ const PUBLICO = 'NVL(C.CODATV1, 0) IN (11, 12, 13, 14, 15)';
 const ENTRE_FILIAIS = `(NVL(C.CODATV1, 0) = 20 OR NVL(M.CODCLI, 0) IN (SELECT FX.CODCLI FROM PCFILIAL FX WHERE NVL(FX.CODCLI, 0) > 0))`;
 
 /** R-131 (RN-CI-07 e RN-EST-11 do legado): remessa de entrega futura — a venda já contou na nota de venda (CONDVENDA 7). */
-const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA = M.NUMTRANSVENDA AND NF.CONDVENDA = 8)`;
+export const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA = M.NUMTRANSVENDA AND NF.CONDVENDA = 8)`;
 
 /**
  * RN-001 (R-131): a venda que conta na 011 — UM recorte só, para lista,
@@ -97,7 +97,7 @@ const REMESSA_FUTURA = `EXISTS (SELECT 1 FROM PCNFSAID NF WHERE NF.NUMTRANSVENDA
  * baterem. Exige PCMOV como `M` e `LEFT JOIN PCCLIENT C`. O público fica de
  * fora à parte (PUBLICO), porque a tela decide.
  */
-const VENDA_VALIDA = `(M.CODOPER = 'S' AND M.QT > 0 AND NOT ${ENTRE_FILIAIS} AND NOT ${REMESSA_FUTURA})`;
+export const VENDA_VALIDA = `(M.CODOPER = 'S' AND M.QT > 0 AND NOT ${ENTRE_FILIAIS} AND NOT ${REMESSA_FUTURA})`;
 
 /* ─────────────── leituras — WinThor (Oracle) ─────────────── */
 

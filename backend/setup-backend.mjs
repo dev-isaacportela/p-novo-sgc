@@ -592,8 +592,33 @@ const DDL_012 = [
   )`,
 ];
 
+// spec 013 — movimentação de produtos (onda 5, R-133). Plano de ação por aba
+// (sem_venda | a_vencer) + produto + filial; a chave única é o "um plano por
+// aba, produto e filial" (RN-010) e o alvo do upsert de sgcEscMovPlanoSalvar.
+const DDL_013 = [
+  `CREATE TABLE IF NOT EXISTS SGC_MOV_PLANO (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ORIGEM VARCHAR(20) NOT NULL,
+    CODPROD INT NOT NULL,
+    CODFILIAL VARCHAR(10) NOT NULL,
+    DESCRICAO VARCHAR(200),
+    FATO TEXT,
+    CAUSA TEXT,
+    ACAO TEXT,
+    RESPONSAVEL_ID INT NOT NULL DEFAULT 0,
+    DATA_ACOMPANHAMENTO VARCHAR(10),
+    STATUS VARCHAR(20) NOT NULL DEFAULT 'aberto',
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_POR INT,
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_MOV_PLANO (ORIGEM, CODPROD, CODFILIAL),
+    INDEX IX_SGC_MOV_PLANO_FILIAL (ORIGEM, CODFILIAL)
+  )`,
+];
+
 export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007,
-  ...DDL_008, ...DDL_011, ...DDL_012];
+  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

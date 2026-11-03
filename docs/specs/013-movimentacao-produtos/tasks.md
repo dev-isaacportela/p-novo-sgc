@@ -11,17 +11,17 @@ com `npm test` verde no lado que ela toca.
 
 ## Backend
 
-- [ ] T-010 `add-013`: `export` em `VENDA_VALIDA` e `PUBLICO` (nada mais)
-- [ ] T-011 `add-015-movimentacao.mjs`: as nove `sgcWint*` (8301–8309), lista `WINTHOR`, `isEntrypoint` como o `add-013`
-- [ ] T-012 `add-015`: `sgcMovPlanosListar`, `sgcMovPlanosResumo` (8310–8311) e as escritas guardadas `sgcEscMovPlanoSalvar`, `sgcEscMovPlanoExcluir` (8350–8351)
-- [ ] T-013 `setup-backend.mjs`: `DDL_013` com `SGC_MOV_PLANO` (integrador — escrito, não executado)
-- [ ] T-014 `PUBLISH_ORDER` (`add-015` depois do `add-014`), `publish:015` no `package.json`, `CHECK_INPUT` só com chaves novas
+- [x] T-010 `add-013`: `export` em `VENDA_VALIDA`, `PUBLICO` e `REMESSA_FUTURA` (nada mais)
+- [x] T-011 `add-015-movimentacao.mjs`: as nove `sgcWint*` (8301–8309), lista `WINTHOR`, `isEntrypoint` como o `add-013`
+- [x] T-012 `add-015`: `sgcMovPlanosListar`, `sgcMovPlanosResumo` (8310–8311) e as escritas guardadas `sgcEscMovPlanoSalvar`, `sgcEscMovPlanoExcluir` (8350–8351)
+- [x] T-013 `setup-backend.mjs`: `DDL_013` com `SGC_MOV_PLANO` (integrador — escrito, não executado)
+- [x] T-014 `PUBLISH_ORDER` (`add-015` depois do `add-014`), `publish:015` no `package.json`, `CHECK_INPUT` só com chaves novas
 
 ## Simulador
 
-- [ ] T-020 `schema-winthor.mjs`: `PCLOTE.DTEXCLUSAO`, `PCMOV.CUSTOREAL`, `PCMOV.CODFORNEC`
-- [ ] T-021 `seed/013-movimentacao.mjs` (produtos 5701–5730 do fornecedor 1088, clientes 9401–9405, `NUMTRANSITEM`/`NUMTRANSVENDA` ≥ 985001) e registro em `seed.mjs`
-- [ ] T-022 `smoke/013-movimentacao.mjs`: os cenários de regra de negócio e o bloco do WinThor real; registro em `smoke.mjs`
+- [x] T-020 `schema-winthor.mjs`: `PCLOTE.DTEXCLUSAO`, `PCMOV.CUSTOREAL`, `PCMOV.CODFORNEC`
+- [x] T-021 `seed/013-movimentacao.mjs` (produtos 5701–5730 do fornecedor 1088, clientes 9401–9405, `NUMTRANSITEM`/`NUMTRANSVENDA` ≥ 985001) e registro em `seed.mjs`
+- [x] T-022 `smoke/013-movimentacao.mjs`: os cenários de regra de negócio e o bloco do WinThor real; registro em `smoke.mjs`
 
 ## Regra pura
 

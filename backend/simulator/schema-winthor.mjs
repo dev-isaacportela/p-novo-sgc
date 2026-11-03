@@ -92,6 +92,7 @@ export const DDL = [
   // Movimento de venda (sgcWintAnaliseMontagem soma por CODOPER = 'S') e de
   // entrada (CODOPER = 'E', 005/R-027): NUMTRANSENT/NUMNOTA/SERIE ligam à NF
   // de PCNFENT; NUMLOTE/DATAVALIDADE casam o lote da 005 com o da 003 (PCLOTE).
+  // 013 (R-133): CUSTOREAL (custo da entrada do lote) e CODFORNEC, para o rastro da perda.
   `CREATE TABLE IF NOT EXISTS PCMOV (
     NUMTRANSITEM INT,
     CODPROD INT,
@@ -113,7 +114,9 @@ export const DDL = [
     CODDEVOL INT,
     QTBLOQUEADA DECIMAL(15,3),
     ROTINALANC VARCHAR(20),
-    NUMTRANSVENDA INT
+    NUMTRANSVENDA INT,
+    CUSTOREAL DECIMAL(15,4),
+    CODFORNEC INT
   )`,
 
   // Vendedor (RCA) da venda: PCMOV.CODUSUR -> PCUSUARI.NOME, para a aba Vendas
@@ -177,6 +180,7 @@ export const DDL = [
 
   // sgcWintLotesAVencer (003): lote, endereço do lote e saldo por endereço.
   // R-130 (sgcWintBloqueiosProduto, 011): saldo, bloqueio e observações do lote.
+  // 013 (R-133): DTEXCLUSAO — lote excluído não é saldo (a vencer e perdas).
   `CREATE TABLE IF NOT EXISTS PCLOTE (
     ID INT AUTO_INCREMENT PRIMARY KEY,
     CODPROD INT,
@@ -197,7 +201,8 @@ export const DDL = [
     DTBLOQUEIO2 VARCHAR(10),
     CODFUNCRM INT,
     DTULTMOVENT VARCHAR(10),
-    DTULTMOVSAI VARCHAR(10)
+    DTULTMOVSAI VARCHAR(10),
+    DTEXCLUSAO VARCHAR(10)
   )`,
 
   // R-130: motivo de devolução/bloqueio, funcionário e os três históricos de

@@ -19,6 +19,8 @@
 // (R-081): 011 compras inteligentes (8101–8109, 8150–8154), 012 coberturas por
 // curva (8201, 8250) — sgcCoberturaListar (7307), sgcEscCoberturaGravar (7358)
 // e sgcEscCoberturaExcluir (7359) continuam no bloco 73xx, com os ids delas.
+// 83xx pela 013 movimentação de produtos (onda 5, R-133): leituras 8301–8311,
+// escritas 8350–8351.
 
 
 export const SERVER_FUNCTION_NAMES = {
@@ -270,6 +272,20 @@ export const SERVER_FUNCTION_NAMES = {
 
   sgcCoberturaLogListar: 'sgcCoberturaLogListar',
   sgcEscCoberturaLogInserir: 'sgcEscCoberturaLogInserir',
+
+  sgcWintDepartamentos: 'sgcWintDepartamentos',
+  sgcWintMovSemVenda: 'sgcWintMovSemVenda',
+  sgcWintMovExcedentes: 'sgcWintMovExcedentes',
+  sgcWintMovAVencer: 'sgcWintMovAVencer',
+  sgcWintMovRuptura: 'sgcWintMovRuptura',
+  sgcWintMovRupturaFiliais: 'sgcWintMovRupturaFiliais',
+  sgcWintMovPerdas: 'sgcWintMovPerdas',
+  sgcWintMovPerdasFiliais: 'sgcWintMovPerdasFiliais',
+  sgcWintMovLoteHistorico: 'sgcWintMovLoteHistorico',
+  sgcMovPlanosListar: 'sgcMovPlanosListar',
+  sgcMovPlanosResumo: 'sgcMovPlanosResumo',
+  sgcEscMovPlanoSalvar: 'sgcEscMovPlanoSalvar',
+  sgcEscMovPlanoExcluir: 'sgcEscMovPlanoExcluir',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -519,4 +535,18 @@ export const SERVER_FUNCTIONS = {
 
   sgcCoberturaLogListar: '8201',
   sgcEscCoberturaLogInserir: '8250',
+
+  sgcWintDepartamentos: '8301',
+  sgcWintMovSemVenda: '8302',
+  sgcWintMovExcedentes: '8303',
+  sgcWintMovAVencer: '8304',
+  sgcWintMovRuptura: '8305',
+  sgcWintMovRupturaFiliais: '8306',
+  sgcWintMovPerdas: '8307',
+  sgcWintMovPerdasFiliais: '8308',
+  sgcWintMovLoteHistorico: '8309',
+  sgcMovPlanosListar: '8310',
+  sgcMovPlanosResumo: '8311',
+  sgcEscMovPlanoSalvar: '8350',
+  sgcEscMovPlanoExcluir: '8351',
 };
