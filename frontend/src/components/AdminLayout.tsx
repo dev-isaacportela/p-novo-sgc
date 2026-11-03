@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowLeftRight, BarChart3, Bell, CalendarClock, ClipboardList, FileText, Gauge, Handshake, KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Receipt, ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
+  AlertTriangle, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, CalendarClock, ClipboardList, FileText, Gauge, Gavel, Handshake, KanbanSquare, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Receipt, ShieldCheck, ShoppingCart, Truck, X, type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -35,6 +35,8 @@ const ICONES: Record<string, LucideIcon> = {
   '/galderma': Handshake,
   // Onda 5 (013):
   '/movimentacao': ArrowLeftRight,
+  // Onda 5 (015):
+  '/empenhos': BriefcaseBusiness, '/empenhos/pregoes': Gavel, '/empenhos/indicadores': BarChart3,
 };
 
 function agruparMenu(itens: ItemDeMenu[]) {
@@ -120,6 +122,8 @@ export default function AdminLayout({ usuario }: { usuario: Sessao }) {
               <NavLink
                 key={to}
                 to={to}
+                // /empenhos não acende junto com /empenhos/pregoes: item que é prefixo de outro casa exato.
+                end={grupo.itens.some((outro) => outro.to.startsWith(`${to}/`))}
                 title={label}
                 onClick={() => setGaveta(false)}
                 className={({ isActive }) =>

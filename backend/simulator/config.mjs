@@ -70,6 +70,8 @@ export const PUBLISH_ORDER = [
   'add-015-movimentacao.mjs',
   // Onda 5 (R-150): 014 -> add-016-galderma.mjs (o add-015 é da 013).
   'add-016-galderma.mjs',
+  // Onda 5 (R-160): 015 -> add-017-empenhos.mjs (o add-005 importa dele o ramo do gancho, R-161).
+  'add-017-empenhos.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -158,4 +160,7 @@ export const CHECK_INPUT = {
   limiarPerc: '50', fatorMinimo: '1.5', prazoReposicao: '15', vendaMinima: '5',
   incluirSemHistorico: '1', incluirExcecoes: '0', diasCoberturaAlvo: '30', severidade: '',
   diasVencidos: '0', numlote: 'L-1',
+  // spec 015 (quadro de empenhos): só as chaves NOVAS (D-17). busca, limite, offset,
+  // dataInicio/dataFim, codfilial, hoje, codprod, codcli e codprods já servem.
+  idPregao: '1',
 };

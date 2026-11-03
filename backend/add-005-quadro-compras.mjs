@@ -30,6 +30,8 @@ import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { idsDoMapa } from './ids-do-mapa.mjs';
 import { fragmento } from './lib/fragmentos.mjs';
+// R-161: o gancho é um por projeto; o quadro de empenhos (015) traz o próprio ramo.
+import { FORA_DOS_EMPENHOS, RAMO_PODE_EXCLUIR_EMPENHOS, RAMO_PODE_MOVER_EMPENHOS } from './add-017-empenhos.mjs';
 
 const MAPA = fileURLToPath(new URL('../frontend/src/lib/server-functions.ts', import.meta.url));
 
@@ -822,12 +824,18 @@ function sqlPodeMover() {
       THEN T.PENDENCIAS_FATURADO_MOTIVO
     ELSE ''
   END END`;
+  // R-161: exatamente uma das duas metades devolve linha — compras para todo
+  // quadro que não é o de empenhos (o texto de compras é o de antes), e o ramo
+  // da 015 para o de empenhos.
   return `SELECT
   ${pode} AS PODE,
   ${motivo} AS MOTIVO
 FROM (
   ${contextoDoCard()}
-) T`;
+) T
+WHERE ${FORA_DOS_EMPENHOS}
+UNION ALL
+${RAMO_PODE_MOVER_EMPENHOS}`;
 }
 
 function sqlPodeExcluir() {
@@ -855,7 +863,10 @@ function sqlPodeExcluir() {
   ${motivo} AS MOTIVO
 FROM (
   ${contextoDoCard({ comDestino: false, comPendencias: false })}
-) T`;
+) T
+WHERE ${FORA_DOS_EMPENHOS}
+UNION ALL
+${RAMO_PODE_EXCLUIR_EMPENHOS}`;
 }
 
 /* ─────────────── definitions (ids locais do mapa) ─────────────── */

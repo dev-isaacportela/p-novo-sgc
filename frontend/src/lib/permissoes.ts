@@ -99,6 +99,12 @@ export interface Permissoes {
   // O comercial não vê: no legado só via a aba Promocionais, que fica fora.
   verMovimentacao: boolean;
   registrarPlanoAcao: boolean;
+  // Onda 5 (R-160): quadro de empenhos (015). `verEmpenhos` não zera com
+  // READ_ONLY; `operarEmpenhos` (criar pregão e empenho, analisar, operar os
+  // pedidos) zera. As aprovações seguem `aprovarTecnica`/`aprovarDiretoria`
+  // (P-12). O comercial não vê.
+  verEmpenhos: boolean;
+  operarEmpenhos: boolean;
 }
 
 /** Quem faz o quê, por persona (a tabela do plan.md § Regras puras). */
@@ -114,6 +120,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: true,
     verGalderma: true, operarGalderma: true,
     verMovimentacao: true, registrarPlanoAcao: true,
+    verEmpenhos: true, operarEmpenhos: true,
   },
   analista: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: false, aprovarDiretoria: false,
@@ -126,6 +133,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: false,
     verGalderma: true, operarGalderma: true,
     verMovimentacao: true, registrarPlanoAcao: true,
+    verEmpenhos: true, operarEmpenhos: true,
   },
   gestor: {
     verQuadro: true, criarPedido: true, editarPedido: true, aprovarTecnica: true, aprovarDiretoria: false,
@@ -138,6 +146,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verComprasInteligentes: true, operarComprasInteligentes: true, parametrizarCompras: true,
     verGalderma: true, operarGalderma: true,
     verMovimentacao: true, registrarPlanoAcao: true,
+    verEmpenhos: true, operarEmpenhos: true,
   },
   diretoria: {
     // CA-01 + P-07: a diretoria cancela, mas só na fase dela — quem cobra a
@@ -154,6 +163,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verComprasInteligentes: true, operarComprasInteligentes: false, parametrizarCompras: false,
     verGalderma: true, operarGalderma: false,
     verMovimentacao: true, registrarPlanoAcao: true,
+    verEmpenhos: true, operarEmpenhos: false,
   },
   comercial: {
     // D-017: a única persona sem acesso ao quadro — fora do menu, fora da rota
@@ -169,6 +179,7 @@ const MATRIZ: Record<Persona, Omit<Permissoes, 'somenteProprios' | 'somenteLeitu
     verComprasInteligentes: false, operarComprasInteligentes: false, parametrizarCompras: false,
     verGalderma: false, operarGalderma: false,
     verMovimentacao: false, registrarPlanoAcao: false,
+    verEmpenhos: false, operarEmpenhos: false,
   },
 };
 
@@ -216,6 +227,8 @@ export function permissoesDe(persona: Persona, acesso: NivelAcesso): Permissoes 
     // Onda 5: mesma divisão — ver* atravessa READ_ONLY, o resto zera.
     verMovimentacao: base.verMovimentacao,
     registrarPlanoAcao: operar(base.registrarPlanoAcao),
+    verEmpenhos: base.verEmpenhos,
+    operarEmpenhos: operar(base.operarEmpenhos),
     somenteProprios: acesso === 'RESTRICTED',
     somenteLeitura,
   };
@@ -245,6 +258,10 @@ const MENU: readonly (ItemDeMenu & { exige: keyof Permissoes })[] = [
   // Onda 2 (R-028): visível a todas as personas, inclusive comercial (único
   // item de menu que ela recebe, C-013 do plan da 007).
   { grupo: 'Compras', to: '/bo', label: 'Produtos em B.O.', exige: 'verBo' },
+  // Onda 5 (R-160): grupo próprio, depois de Compras; o comercial fica fora.
+  { grupo: 'Empenhos', to: '/empenhos', label: 'Quadro de empenhos', exige: 'verEmpenhos' },
+  { grupo: 'Empenhos', to: '/empenhos/pregoes', label: 'Pregões', exige: 'verEmpenhos' },
+  { grupo: 'Empenhos', to: '/empenhos/indicadores', label: 'Indicadores', exige: 'verEmpenhos' },
   { grupo: 'Cadastros', to: '/fornecedores', label: 'Fornecedores', exige: 'verQuadro' },
   { grupo: 'Cadastros', to: '/coberturas', label: 'Coberturas', exige: 'verCoberturas' },
   // Onda 2 (R-028): NF/faturamento/atraso — diretoria lê, comercial não vê nada.
