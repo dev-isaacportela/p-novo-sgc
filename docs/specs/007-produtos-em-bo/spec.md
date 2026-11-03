@@ -133,6 +133,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém tenta marcar itens dele em B.O.
 - **Então** a marcação é recusada informando que o pedido não está em Faturamento nem em Produtos em B.O., e nada é gravado
 
+**C-018 — A fase B.O. abre com as datas e o que está pendente** *(R-150)*
+- **Dado que** o pedido tem 2 itens em aberto, a previsão da indústria era 30/10 e hoje é 03/11, sem carta de falta
+- **Quando** o comprador abre o card
+- **Então** vê o aviso "Previsão de liberação vencida há 4 dias", as datas da fase (envio, previsão, carta de falta "Pendente"), os itens em cartões e o total pendente dos itens em aberto; no Concluído sem item em B.O., o bloco não aparece
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -227,6 +232,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-010 | coberto por C-012 (ordem e ausência de recorte por persona) | regra de negócio |
 | RN-011 | coberto por C-006 | regra de negócio |
 | RN-012 | pedido em B.O. com 2 itens em aberto: a verificação do movimento para Canceladas devolve "pode" | regra de negócio |
+| C-018 | `bo.test.mjs`: total pendente só dos abertos, a carta de falta mais recente e o aviso de previsão vencida com a conta de dias certa entre meses | regra de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-012 — o painel nos dois temas, com a situação da previsão sinalizada por ponto **e** texto, e a coluna de clientes impactados alinhada à direita

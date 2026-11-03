@@ -481,6 +481,32 @@ Os diálogos seguem §9.5: `max-h-[90vh]`, `flex-col`, só o miolo rola, rodapé
 `flex-col-reverse sm:flex-row sm:justify-end`. Sem toast (UI-02 A): o
 resultado aparece pelo `ctx.avisar()` da lib, na faixa de aviso do card.
 
+### O card depois da Análise (R-150)
+
+`lib/conteudo-da-fase.ts` monta cada fase depois da Análise como o legado:
+`resumo` primeiro, depois o bloco de assunto da fase e os blocos de trabalho.
+
+| Fase | Blocos |
+|---|---|
+| Técnica, Diretoria | resumo · aprovacao · itens · alertas |
+| Envio | resumo · envio |
+| Enviado | resumo · enviado · notas-fiscais · recebimento |
+| Trânsito | resumo · acompanhamento · recebimento · notas-fiscais |
+| Faturamento | resumo · notas-fiscais · conclusao · bo |
+| B.O. | resumo · bo · conclusao · notas-fiscais |
+| Concluído | resumo · concluido · bo (só com item) |
+| Cancelado | resumo · itens-pedido |
+
+Custo por abertura (RNF-001, teto de 300/min): continua `kbCardDetalhe` +
+`sgcPedidoCarregar`; o resumo, a aprovação, o envio, o enviado e o
+acompanhamento não chamam nada. Conclusão e concluído leem o mesmo
+`sgcNfListar`/`sgcBoCarregar` dos blocos Notas fiscais e B.O. por
+`abas/carga-do-card.ts` (promessa única por card durante 15 s; quem grava pede
+`forcar` e avisa os outros). O resumo só volta ao `sgcPedidoCarregar` quando o
+card muda de fase aberto. Regra pura: `resumo-do-pedido.ts`, `aprovacao.ts`,
+`envio-industria.ts`, `acompanhamento.ts`, `conclusao.ts` e `topoDoBo` em
+`bo.ts`, com teste em `frontend/tests/`.
+
 ## Regras puras (`frontend/src/lib/`)
 
 Nenhuma delas conhece React nem o transporte — é o que `node --test` executa.

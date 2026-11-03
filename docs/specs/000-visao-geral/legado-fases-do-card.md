@@ -143,9 +143,11 @@ resto vem das SFs que os blocos já chamam (`sgcNfListar`,
 - **P-1 — Meta de compras e venda projetada por fornecedor.** A faixa de
   decisão do legado (compras do mês, saldo sobre a meta, compras × vendas, e o
   histórico consolidado de 3 meses) depende de uma meta de compras
-  parametrizada e da venda projetada do mês. O SGC 2 não tem nenhum dos dois.
-  Criar o parâmetro e a consulta, ou deixar a aprovação só com o que os itens
-  dão?
+  parametrizada e da venda projetada do mês. O SGC 2 não tem meta de compras;
+  comprado × vendido por fornecedor já existe na 009 (`sgcWintComprasVsVendas`,
+  WinThor), que daria a faixa "compras × vendas" sob demanda. Criar a meta
+  (parâmetro por fornecedor/filial) e ligar os dois, só o compras × vendas, ou
+  deixar a aprovação com o que os itens dão (o que está entregue)?
 - **P-2 — B.O. como card filho.** No legado, item recusado na validade gera um
   card novo em Produtos em B.O. e o pedido segue para a conclusão com o que foi
   aceito (RN-BO-03/04). No SGC 2 o B.O. é a fase do próprio pedido (spec 007).

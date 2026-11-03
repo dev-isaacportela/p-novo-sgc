@@ -280,6 +280,28 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** alguém abre o histórico do pedido
 - **Então** encontra as 4 decisões em ordem, cada uma com quem decidiu, quando e o motivo quando houver, além das passagens por etapa
 
+### O card depois da Análise (R-150)
+
+**C-046 — O card abre com o resumo do pedido e os selos do que aconteceu**
+- **Dado que** o pedido foi aprovado tecnicamente pelo Gil, aprovado pela diretoria e enviado por e-mail com o número 8372
+- **Quando** alguém abre o card em qualquer fase depois da Análise
+- **Então** o topo mostra fornecedor, filial, valor do pedido, o % faturado com a barra (depois do envio; antes, o prazo de pagamento) e os selos "Aprovação técnica por Gil em…", "Aprovado pela diretoria por… em…" e "Enviado à indústria"; num pedido cancelado, o selo "Compra cancelada" traz motivo, quem e quando
+
+**C-047 — A aprovação lê a análise do pedido antes dos itens**
+- **Dado que** o pedido em Aprovação Técnica ou da Diretoria tem 12 itens, 2 em preço especial e 2 com cobertura acima do limite da curva
+- **Quando** quem aprova abre o card
+- **Então** vê "Análise para aprovação" com itens, cobertura média hoje → depois da compra, os itens acima do limite com o valor e o preço especial com o % do pedido; e "Indicadores do pedido", recolhido, com cada indicador abrindo os produtos que o compõem
+
+**C-048 — O envio mostra o que vai ao fornecedor**
+- **Dado que** o pedido está em Envio para Indústria
+- **Quando** o comprador abre o card
+- **Então** vê produtos, unidades e valor total, "Copiar itens" (código, produto, embalagem, quantidade e custo, sem a marca Comercial), "Arquivo WinThor" no formato da RN-023 da 011, os itens em cartões com o total e "Registrar envio" no fim — o mesmo diálogo da coluna da direita
+
+**C-049 — O enviado diz como saiu e o que falta para o trânsito**
+- **Dado que** o pedido está em Enviado para Indústria, sem nota vinculada
+- **Quando** o comprador abre o card
+- **Então** vê data, método, contato e número do pedido do envio, a observação, e "Próximo movimento: Em Trânsito para BN — Vincule a nota fiscal para liberar"; com 1 nota, "1 nota vinculada"
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -431,6 +453,10 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-018 | prioridade aceita normal/alta/urgente e nasce normal | regra de negócio |
 | RN-019 | as 7 ações da lista geram 7 linhas de histórico, cada uma com autor e instante | regra de negócio |
 | RN-020 | nas etapas 5, 6, 7 e 8 a única recusa possível é de persona | regra de negócio |
+| C-046 | `resumo-do-pedido.test.mjs`: selos na ordem (técnica, diretoria, envio), reprovação como alerta com a da diretoria primeiro, cancelamento com motivo/quem/quando, faturado satura em 100 e diz quanto falta | regra de tela |
+| C-047 | `aprovacao.test.mjs`: total, cobertura média atual → após, preço especial e os 9 indicadores com a lista de produtos (limite de cobertura do item, não 60 fixo) | regra de tela |
+| C-048 | `envio-industria.test.mjs`: só vai o que tem quantidade, totais, texto do "Copiar itens" com cabeçalho e número pt-BR | regra de tela |
+| C-049 | `envio-industria.test.mjs`: próximo movimento travado sem nota e liberado com 1 ou mais | regra de tela |
 
 Verificação manual (só olho humano verifica):
 

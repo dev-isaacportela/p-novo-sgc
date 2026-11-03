@@ -191,6 +191,23 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** a rotina diária de faturamento roda
 - **Então** nenhum aviso de faturamento é criado para ele — mas ele **continua** na lista de faturamentos pendentes, mostrando a previsão de liberação registrada no B.O. e quantos itens ainda estão em aberto
 
+### O card no Faturamento e no Concluído (R-150)
+
+**C-029 — Saldo por item que a indústria ainda não faturou**
+- **Dado que** o pedido 8372 tem 28 produtos e a nota 1954868 faturou menos do que o pedido em 4 deles
+- **Quando** o comprador abre o card em Faturamento
+- **Então** "Itens pendentes de faturamento", recolhido, diz "4 produtos com saldo"; aberto, cada um traz pedida, faturada, pendente e a barra do %
+
+**C-030 — O que falta para concluir, com a mesma trava do servidor**
+- **Dado que** o pedido tem conferências sem decisão, item em B.O. em aberto e saldo a faturar
+- **Quando** o comprador abre o card em Faturamento ou em Produtos em B.O.
+- **Então** vê "Pendências para concluir o pedido" com as conferências e o B.O. marcados como trava e o saldo como aviso; sem conferência pendente e sem B.O. em aberto, "Pedido pronto para conclusão" (o saldo não trava — P-6 do levantamento)
+
+**C-031 — O pedido concluído lista o que chegou**
+- **Dado que** o pedido 8401 foi concluído com 4 notas
+- **Quando** alguém abre o card em Compras Concluídas
+- **Então** vê valor faturado, itens faturados e recusados, e cada item com a nota, lote, validade, quantidade × preço, subtotal e a decisão das conferências daquele item naquela nota
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -307,6 +324,9 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-013 | sem nota e 2 dias úteis → texto vazio; com nota → `R$ 72.000,00 (60 %) · saldo R$ 48.000,00`; sem nota e 4 dias úteis → `Faturamento pendente · 4 dias úteis` | regra de tela |
 | RN-014 | a rotina diária de cobrança não envia nenhum e-mail; a cobrança manual envia 1, com a cópia fixa | regra de negócio |
 | RN-015 | nota com cancelamento no ERP não aparece nas candidatas nem no valor faturado | regra de negócio |
+| C-029 | `conclusao.test.mjs`: saldo soma todas as notas, ignora quantidade zero, não fica negativo e ordena pelo maior pendente | regra de tela |
+| C-030 | `conclusao.test.mjs`: conferência pendente e B.O. em aberto travam; saldo só avisa; sem nada, pronto | regra de tela |
+| C-031 | `conclusao.test.mjs`: item faturado com nota, subtotal, lote e decisão (recusa vence pendente, pendente vence aceito) | regra de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-007 — a aba de notas fiscais com 3 notas e 40 conferências, agrupadas por item, legível nos dois temas

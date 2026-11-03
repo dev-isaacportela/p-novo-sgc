@@ -156,6 +156,11 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 - **Quando** a verificação roda
 - **Então** o pedido é movido para Faturamento em Andamento do mesmo jeito — a verificação não olha só o que mudou na rodada, olha todo pedido em trânsito com nota
 
+**C-024 — O trânsito abre com o acompanhamento do faturamento** *(R-150)*
+- **Dado que** o pedido foi enviado na segunda 17/08 e nada foi faturado
+- **Quando** o comprador abre o card em Em Trânsito para BN na quinta 20/08
+- **Então** vê "Acompanhamento do faturamento" com 3 dias úteis desde o envio e o selo "Faturamento pendente — 3 dias úteis — contate a indústria"; com 5, "gerência avisada"; 100 % faturado, "Faturado por completo"; os itens do pedido ficam recolhidos logo abaixo, e as notas do recebimento em cartões
+
 ## Requisitos funcionais
 
 | ID | Requisito | Critério de aceite | Prioridade |
@@ -261,6 +266,7 @@ Formato Given/When/Then — cada cenário é verificável por uma pessoa.
 | RN-011 | nota de pedido em `faturamento` não é verificada nem listada; nota de pedido excluído idem | regra de negócio |
 | RN-012 | matriz de perfis: os quatro que veem, os três que operam, comercial fora, somente-leitura sem operação | regra de tela |
 | RN-013 | com uma validação pendente o servidor recusa concluir; sem nenhuma, libera | regra de negócio |
+| C-024 | `acompanhamento.test.mjs`: dias úteis desde o envio, níveis 3 e 5 do `nivelDeAlerta`, parcial, completo e sem envio | regra de tela |
 
 - O que só olho humano verifica fica em **Verificação manual**:
   - [ ] C-001 — a tabela de notas do pedido nos dois temas, com as situações legíveis por texto e não só por cor
