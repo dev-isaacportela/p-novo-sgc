@@ -25,6 +25,7 @@ import { suite as coberturas } from './smoke/012-coberturas.mjs';
 import { suite as galderma } from './smoke/014-galderma.mjs';
 import { suite as movimentacao } from './smoke/013-movimentacao.mjs';
 import { suite as empenhos } from './smoke/015-empenhos.mjs';
+import { suite as filaEmail } from './smoke/016-fila-email.mjs';
 
 const ctx = await abrirContexto();
 
@@ -52,6 +53,9 @@ await galderma(ctx);
 await empenhos(ctx);
 // Onda 5 (R-140): por último — a suíte cria um usuário somente-leitura próprio.
 await movimentacao(ctx);
+// Onda 5 (R-170): fila de e-mail e aviso de pronto — depois de todas: a rotina
+// das 08h10 avisa qualquer card pronto do banco compartilhado.
+await filaEmail(ctx);
 
 console.log(`\n  ${ctx.contagem()} verificacoes passaram.`);
 ctx.fechar();

@@ -850,8 +850,30 @@ const DDL_015 = [
   )`,
 ];
 
+// spec 016 — fila de e-mail com novas tentativas (R-170). A fila NÃO guarda o
+// e-mail: destinatário, cópia, assunto e corpo são os da SGC_COMUNICACAO que o
+// envio já gravava (uma entrada por comunicação, UK). O aviso de pedido pronto
+// para concluir vai para a SGC_AVISO da 005 e não tem tabela.
+const DDL_016 = [
+  `CREATE TABLE IF NOT EXISTS SGC_EMAIL_FILA (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    ID_COMUNICACAO INT NOT NULL,
+    ID_CARD INT NOT NULL,
+    STATUS VARCHAR(10) NOT NULL DEFAULT 'pendente',
+    TENTATIVAS INT NOT NULL DEFAULT 0,
+    ULTIMO_ERRO VARCHAR(2000),
+    LOTE VARCHAR(40),
+    CRIADO_POR INT,
+    CRIADO_EM VARCHAR(19),
+    ATUALIZADO_EM VARCHAR(19),
+    ENVIADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_EMAIL_FILA_COMUNICACAO (ID_COMUNICACAO),
+    INDEX IX_SGC_EMAIL_FILA_STATUS (STATUS, ID)
+  )`,
+];
+
 export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007,
-  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015];
+  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_016];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

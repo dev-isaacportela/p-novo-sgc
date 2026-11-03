@@ -576,7 +576,7 @@ ORDER BY ID`);
     {
       name: 'sgcEnvioIndustriaRegistrar',
       type: 'JAVASCRIPT',
-      description: 'RF-020/RF-021/RF-023/RF-024 (EN-01..EN-06) - confere persona e fase, envia o e-mail com a copia fixa, grava a comunicacao e o envio, sincroniza a agenda de origem e registra a nota. Params: cardId, canal, para, assunto, corpo, dtEnvio, numped, obs.',
+      description: 'RF-020/RF-021/RF-023/RF-024 (EN-01..EN-06) - confere persona e fase, envia o e-mail com a copia fixa (se falhar, entra na fila de nova tentativa da 016: emailNaFila), grava a comunicacao e o envio, sincroniza a agenda de origem e registra a nota. Params: cardId, canal, para, assunto, corpo, dtEnvio, numped, obs.',
       code: corpo(async function sgcEnvioIndustriaRegistrar() {
         const cardId = inteiro(event.cardId);
         const canal = limpar(event.canal, 20);
@@ -613,13 +613,22 @@ WHERE IU.ID = :VAR_USER LIMIT 1`);
         const destinatarios = canal === 'email'
           ? [para, 'compras@benenutri.com'].filter((email, indice, lista) => lista.indexOf(email) === indice)
           : [];
+        // Spec 016 (R-171, P-01): o e-mail sai na hora; se falhar, o envio é
+        // registrado do mesmo jeito e o e-mail entra na fila de nova tentativa.
+        // Sem a fila publicada (add-018), vale o de antes: a falha derruba tudo.
+        let erroEmail = '';
         if (destinatarios.length) {
-          await sendEmailMitra({
-            projectId,
-            to: destinatarios,
-            subject: limpar(event.assunto, 255) || ('Pedido de compra ' + numped),
-            body: String(event.corpo ?? ''),
-          });
+          try {
+            await sendEmailMitra({
+              projectId,
+              to: destinatarios,
+              subject: limpar(event.assunto, 255) || ('Pedido de compra ' + numped),
+              body: String(event.corpo ?? ''),
+            });
+          } catch (erro) {
+            if (!IDS.sgcEscEmailFilaInserir) throw erro;
+            erroEmail = String(erro?.message || erro || 'falha sem detalhe');
+          }
         }
 
         // 3 e 4. Comunicação e capa do envio — escritas por id, já conferidas.
@@ -635,6 +644,13 @@ WHERE IU.ID = :VAR_USER LIMIT 1`);
           obs: limpar(event.obs, 1000), enviadoPor: inteiro(ctx.USUARIO_ID), agora: enviadoEm,
         });
         const [ultima] = await query(`SELECT MAX(ID) AS ID FROM SGC_COMUNICACAO WHERE ID_CARD = ${cardId}`);
+        const emailNaFila = Boolean(erroEmail);
+        if (emailNaFila) {
+          const idComunicacao = inteiro(ultima && ultima.ID);
+          await escrever('sgcEscEmailFilaInserir', { idComunicacao, erro: limpar(erroEmail, 1900), agora: enviadoEm });
+          const [fila] = await query(`SELECT ID FROM SGC_EMAIL_FILA WHERE ID_COMUNICACAO = ${idComunicacao}`);
+          if (!fila) throw new Error('O e-mail não saiu e não entrou na fila de nova tentativa: ' + erroEmail);
+        }
 
         // 5. EN-05 A / R-012: a agenda de origem guarda planejado x real. O passo
         // é opcional — sem a spec 004 publicada, o envio fecha do mesmo jeito.
@@ -650,9 +666,11 @@ WHERE IU.ID = :VAR_USER LIMIT 1`);
 
         // 6. RF-031: a decisão vira linha no histórico do pedido.
         if (IDS.kbNotaRegistrar) {
-          const nota = canal === 'email'
-            ? 'Pedido enviado por e-mail para ' + para
-            : 'Pedido enviado pela plataforma do fornecedor';
+          const nota = canal !== 'email'
+            ? 'Pedido enviado pela plataforma do fornecedor'
+            : emailNaFila
+              ? 'Envio registrado; o e-mail para ' + para + ' não saiu agora e entrou na fila de nova tentativa'
+              : 'Pedido enviado por e-mail para ' + para;
           try {
             // `usuarioId` só vale sem sessão (contrato da lib); com sessão, quem
             // assina é quem está logado — o mesmo usuário nos dois casos.
@@ -667,6 +685,7 @@ WHERE IU.ID = :VAR_USER LIMIT 1`);
           comunicacaoId: inteiro(ultima && ultima.ID),
           destinatarios,
           agendaSincronizada,
+          emailNaFila,
         };
       }),
     },

@@ -4,6 +4,7 @@
 // fim do painel, o SGC 2 já o tinha à direita, e as duas portas ficam.
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import { acao } from '@/lib/mitra-api';
+import { textoDoEnvioRegistrado } from '@/lib/fila-email';
 import { marcarItensDaFase, type PedidoCapa } from '@/lib/pedido';
 import { COPIA_COMPRAS } from '@/lib/quadro';
 import type { DadosDoEnvio } from './DialogoEnvio';
@@ -27,5 +28,6 @@ export async function registrarEnvio(ctx: ExtensaoContexto, pedido: PedidoCapa |
   if (!resposta?.ok) throw new Error(String(resposta?.error ?? 'O envio não foi registrado.'));
   await marcarItensDaFase(ctx.card.id, 'enviado');
   await ctx.recarregar();
-  ctx.avisar('success', 'Envio registrado no pedido.');
+  // Spec 016: o e-mail que não saiu no clique está na fila de nova tentativa.
+  ctx.avisar('success', textoDoEnvioRegistrado(resposta.emailNaFila));
 }

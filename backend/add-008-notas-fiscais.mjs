@@ -1228,7 +1228,14 @@ const assunto = String(event.assunto || '').trim()
 
 // EM-02: a copia fixa entra aqui e nunca duplica o destinatario.
 const destinatarios = [para, COPIA_FIXA].filter(function (email, indice, lista) { return lista.indexOf(email) === indice; });
-await sendEmailMitra({ projectId, to: destinatarios, subject: assunto, body: corpo });
+// Spec 016 (R-171, P-01): sai na hora; se falhar, a cobranca e registrada do
+// mesmo jeito e o e-mail entra na fila de nova tentativa (add-018).
+let erroEmail = '';
+try {
+  await sendEmailMitra({ projectId, to: destinatarios, subject: assunto, body: corpo });
+} catch (erro) {
+  erroEmail = String((erro && erro.message) || erro || 'falha sem detalhe');
+}
 
 const enviadoEm = agora();
 // R-033 ajustada (D-005): o JS grava SO a comunicacao; o contato e da tela.
@@ -1238,14 +1245,24 @@ await chamar('sgcEscComunicacaoInserir', {
   enviadoPor: quem.id, enviadoEm: enviadoEm,
 });
 const ultima = (await consultar('SELECT MAX(ID) AS ID FROM SGC_COMUNICACAO WHERE ID_CARD = ' + cardId))[0];
+const emailNaFila = Boolean(erroEmail);
+if (emailNaFila) {
+  const idComunicacao = inteiro(ultima && ultima.ID);
+  await chamar('sgcEscEmailFilaInserir', { idComunicacao: idComunicacao, erro: texto(erroEmail, 1900), agora: enviadoEm });
+  const fila = (await consultar('SELECT ID FROM SGC_EMAIL_FILA WHERE ID_COMUNICACAO = ' + idComunicacao))[0];
+  if (!fila) throw new Error('O e-mail nao saiu e nao entrou na fila de nova tentativa: ' + erroEmail);
+}
 
 try {
   await chamar('kbNotaRegistrar', {
-    cardId: cardId, usuarioId: quem.id, texto: 'Cobranca de faturamento enviada para ' + para + '.',
+    cardId: cardId, usuarioId: quem.id,
+    texto: emailNaFila
+      ? 'Cobranca de faturamento registrada; o e-mail para ' + para + ' nao saiu agora e entrou na fila de nova tentativa.'
+      : 'Cobranca de faturamento enviada para ' + para + '.',
   });
 } catch (e) { /* nota e acessoria */ }
 
-return { ok: true, destinatarios: destinatarios, comunicacaoId: inteiro(ultima && ultima.ID) };`;
+return { ok: true, destinatarios: destinatarios, comunicacaoId: inteiro(ultima && ultima.ID), emailNaFila: emailNaFila };`;
 
 /* ─────────────── a lista publicada ─────────────── */
 
@@ -1268,7 +1285,7 @@ const JAVASCRIPT = [
   { name: 'sgcNfVincular', code: JS_NF_VINCULAR, resumo: 'RF-005 a RF-013/RF-016 - grava a nota, os itens e as sete conferencias e recalcula o faturamento. Params: cardId, idSugestao, numnota, serie, codfornec, codfilial, origem, itensJson' },
   { name: 'sgcOcorrenciaDecidir', code: JS_OCORRENCIA_DECIDIR, resumo: 'RF-011/RF-012 - aceita ou recusa conferencia (individual ou todas as conformes numa execucao); recusa exige 10 caracteres. Params: cardId, idOcorrencia, modo, decisao, justificativa' },
   { name: 'sgcFaturamentoMonitorar', code: JS_FATURAMENTO_MONITORAR, cron: '0 2 11 * * *', resumo: 'RF-018 a RF-021/RNF-003 - rotina diaria de cobranca: niveis 3/5/diario em dias uteis, aviso e espelho da capa; pula a fase bo (R-041); nao envia e-mail nem consulta o ERP. Sem parametros' },
-  { name: 'sgcCobrancaEnviar', code: JS_COBRANCA_ENVIAR, resumo: 'RF-023/RN-014 - cobranca MANUAL por e-mail, com copia fixa compras@benenutri.com; grava so SGC_COMUNICACAO (o contato e da tela, D-005). Params: cardId, para, assunto, corpo' },
+  { name: 'sgcCobrancaEnviar', code: JS_COBRANCA_ENVIAR, resumo: 'RF-023/RN-014 - cobranca MANUAL por e-mail, com copia fixa compras@benenutri.com; grava so SGC_COMUNICACAO (o contato e da tela, D-005); e-mail que falha entra na fila de nova tentativa (016, emailNaFila). Params: cardId, para, assunto, corpo' },
 ];
 
 /** Materializa `definitions` com o mapa nome -> id injetado nos corpos JAVASCRIPT. */
