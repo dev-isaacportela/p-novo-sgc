@@ -884,12 +884,30 @@ const DDL_018 = [
     EXCLUIDO_EM VARCHAR(19),
     UNIQUE KEY UK_SGC_FORNECEDOR_EXCLUSAO (FORNECEDOR_ID),
     INDEX IX_SGC_FORNECEDOR_EXCLUSAO_COD (CODFORNEC)
+// spec 019 — projecao manual (R-200). Ajuste percentual da venda projetada por
+// fornecedor + filial + produto, com validade e motivo. Tabela propria (e nao
+// colunas em SGC_PARAMETRO_COMPRA): CREATE TABLE IF NOT EXISTS nao acrescenta
+// coluna em tabela que ja existe. PERCENTUAL 0 = sem ajuste (removido); a
+// validade vencida nao apaga nada, a tela so deixa de aplicar (RN-001, RN-005).
+const DDL_019 = [
+  `CREATE TABLE IF NOT EXISTS SGC_PROJECAO_MANUAL (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    CODFORNEC INT NOT NULL,
+    CODFILIAL VARCHAR(10) NOT NULL,
+    CODPROD INT NOT NULL,
+    PERCENTUAL DECIMAL(6,1) NOT NULL DEFAULT 0,
+    VALIDA_ATE VARCHAR(10),
+    MOTIVO VARCHAR(500),
+    ATUALIZADO_POR INT,
+    ATUALIZADO_EM VARCHAR(19),
+    UNIQUE KEY UK_SGC_PROJECAO_MANUAL (CODFORNEC, CODFILIAL, CODPROD)
   )`,
 ];
 
 export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007,
   ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_016];
   ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_018];
+  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_019];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

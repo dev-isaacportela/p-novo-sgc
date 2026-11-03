@@ -79,6 +79,8 @@ export const PUBLISH_ORDER = [
   'add-019-solicitacoes-apoio.mjs',
   // R-190: 018 -> add-020-fornecedores-exportar-excluir.mjs (lê e apaga as tabelas da 001).
   'add-020-fornecedores-exportar-excluir.mjs',
+  // Onda 5 (R-200): 019 -> add-021-projecao-manual.mjs (estende a 011; só SQL do banco interno).
+  'add-021-projecao-manual.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');

@@ -10,20 +10,25 @@ import type { ModeloPrevisao, Previsao, SugestaoProjetada } from './previsao.ts'
 import { oportunidadesDoItem, sugestaoPorCliente } from './custo-especial.ts';
 import type { CustoEspecial, Oportunidade, SugestaoCliente, VendaCliente } from './custo-especial.ts';
 
-/** A previsão do SKU sobre os meses fechados, sem as vendas desconsideradas (e sem o público, com o seletor marcado — R-131). */
+/**
+ * A previsão do SKU sobre os meses fechados, sem as vendas desconsideradas (e
+ * sem o público, com o seletor marcado — R-131). `fatorProjecao` é o da linha
+ * (spec 019: 1 sem projeção manual).
+ */
 export function previsaoDoSku(
   dados: DadosDoSku | undefined,
   codprod: number,
   hoje: string,
   desconsideradas: VendaDesconsiderada[],
   semPublico: boolean,
+  fatorProjecao = 1,
 ): Previsao | null {
   if (!codprod || !dados?.pronto) return null;
   return preverVendas(serieFechada(
     historicoSemPublico(dados.historico, semPublico),
     hoje,
     desconsideradasPorMes((desconsideradas ?? []).filter((v) => v.codprod === codprod)),
-  ));
+  ), fatorProjecao);
 }
 
 /** A sugestão com a projeção do modelo escolhido. */

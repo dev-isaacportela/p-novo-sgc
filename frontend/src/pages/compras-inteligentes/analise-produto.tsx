@@ -31,6 +31,7 @@ import { AvisosProduto } from './avisos-ui';
 import type { EstadoLotes } from './use-lotes-bloqueados';
 import { GraficoComprasVendas } from './grafico';
 import { BlocoSilenciado } from './painel-detalhe';
+import { BlocoProjecaoManual, BotaoProjecaoManual } from './projecao-manual-ui';
 import { AnaliseVendaFutura } from './previsao-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
 import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
@@ -70,6 +71,7 @@ export function AnaliseProdutoDialogo({
   onFechar,
   onAdicionar,
   onParametros,
+  onProjecao = () => undefined,
   onRestaurar,
   onDesconsiderar,
   onReconsiderar,
@@ -102,6 +104,8 @@ export function AnaliseProdutoDialogo({
   onFechar: () => void;
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onParametros: (linha: LinhaRessuprimento) => void;
+  /** Spec 019: abre a janela de projeção manual (no pedido não há: o botão fica desabilitado com o motivo). */
+  onProjecao?: (linha: LinhaRessuprimento) => void;
   onRestaurar: (linha: LinhaRessuprimento) => void;
   onDesconsiderar: VendasDoProdutoProps['onDesconsiderar'];
   onReconsiderar: VendasDoProdutoProps['onReconsiderar'];
@@ -213,6 +217,7 @@ export function AnaliseProdutoDialogo({
             </GradeMini>
 
             <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
+            <BlocoProjecaoManual linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onAlterar={onProjecao} />
 
             {aba === 'vendas' ? (
               <VendasDoProduto
@@ -299,6 +304,7 @@ export function AnaliseProdutoDialogo({
                           <SlidersHorizontal aria-hidden />
                           Parâmetros
                         </Button>
+                        <BotaoProjecaoManual linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onProjecao={onProjecao} />
                       </div>
                     </div>
                     <GradeMini colunas={3}>

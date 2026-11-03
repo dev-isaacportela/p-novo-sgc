@@ -1,6 +1,7 @@
 // A carga de um fornecedor numa filial da 011 (R-133: tirada da página para a
 // Análise do Produto do pedido usar a MESMA carga, sem cópia). As mesmas
-// execuções de antes (RNF-001 da 011): cinco leituras em paralelo, UMA
+// execuções de antes (RNF-001 da 011): seis leituras em paralelo (a sexta é
+// a da projeção manual, spec 019 RNF-001), UMA
 // `sgcWintRessuprimento` com as vendas desconsideradas em mãos e, com os
 // produtos em mãos, as unidades por caixa (lotes de 1000), o custo padrão e a
 // posição das outras filiais (lotes de 500) e as políticas de preço especial
@@ -17,6 +18,7 @@ import { lotesDeCodigos, type CustoEspecial, type VendaCliente } from '@/lib/cus
 import { carregarCustoPadrao } from '@/lib/custo-padrao-carga';
 import { carregarPosicoesFiliais } from '@/lib/avisos-carga';
 import type { PosicaoOutraFilial } from '@/lib/avisos-produto';
+import { projecaoDeLinha, type ProjecaoManual } from '@/lib/projecao-manual';
 
 /** Lote de códigos por chamada ao Gestão de Custos (R-120). */
 const LOTE_CAIXAS = 1000;
@@ -25,6 +27,8 @@ export interface PedidoAbertoDoFornecedor { idCard: number; titulo: string; fase
 
 export interface CargaRessuprimento {
   parametros: ParametroCompra[];
+  /** Spec 019: os ajustes de projeção manual do fornecedor na filial (vencidos inclusive; a regra decide). */
+  projecoes: ProjecaoManual[];
   coberturas: Cobertura[];
   desconsideradas: VendaDesconsiderada[];
   pedidoAberto: PedidoAbertoDoFornecedor | null;
@@ -44,12 +48,13 @@ export async function carregarRessuprimento(
   vivo: () => boolean = () => true,
 ): Promise<void> {
   const { codfilial } = recorte;
-  const [linhasParametro, linhasVenda, linhasCobertura, abertos, itensAbertos] = await Promise.all([
+  const [linhasParametro, linhasVenda, linhasCobertura, abertos, itensAbertos, linhasProjecao] = await Promise.all([
     linhas('sgcParametrosCompraListar', { ...recorte, limite: 600, offset: 0 }),
     linhas('sgcVendasDesconsideradasListar', { codfilial, codprod: 0, limite: 500, offset: 0 }),
     linhas('sgcCoberturaListar', { nivel: '', limite: 500, offset: 0 }),
     linhas('sgcPedidoAbertoDoFornecedor', { ...recorte, limite: 5, offset: 0 }),
     linhas('sgcItensEmPedidoAberto', { ...recorte, limite: 2000, offset: 0 }),
+    linhas('sgcProjecaoManualListar', { ...recorte, limite: 600, offset: 0 }),
   ]);
   // D-03: o `{{excluir}}` é montado do que VOLTOU do banco, nunca do que
   // a tela achou que gravou — escrita guardada recusada devolve 0 linhas.
@@ -60,6 +65,7 @@ export async function carregarRessuprimento(
   if (!vivo()) return;
   etapa({
     parametros: linhasParametro.map(parametroDeLinha),
+    projecoes: linhasProjecao.map(projecaoDeLinha),
     coberturas: linhasCobertura.map(coberturaDeLinha),
     desconsideradas: vendas,
     pedidoAberto: abertos.length > 0

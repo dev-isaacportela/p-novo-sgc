@@ -11,6 +11,7 @@ import { numeroPt } from '@/lib/formato';
 import { LIMITE_TS, MODELOS, PONTOS_MINIMOS, modeloEscolhido, textoDosParametros } from '@/lib/previsao';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 import { textoDaSugestao } from '@/lib/ressuprimento';
+import { textoDoPercentual } from '@/lib/projecao-manual';
 import type { LinhaRessuprimento, ReferenciaSugestao } from '@/lib/ressuprimento';
 import { diasDoMes, somarMeses } from '@/lib/ressuprimento-detalhe';
 
@@ -89,8 +90,12 @@ export function AnaliseVendaFutura({
               <MiniCartao
                 rotulo="Projeção mensal"
                 valor={`${numeroPt(Math.round(escolhido.previsao))} un.`}
-                hint={`${escolhido.rotulo}${textoDosParametros(escolhido) ? ` · ${textoDosParametros(escolhido)}` : ''}`}
-                title="A previsão do próximo mês pelo modelo escolhido, sobre os meses fechados"
+                hint={escolhido.previsaoBase !== undefined && linha.projecao
+                  ? `${numeroPt(Math.round(escolhido.previsaoBase))} pelo modelo · ${textoDoPercentual(linha.projecao.percentual)} manual`
+                  : `${escolhido.rotulo}${textoDosParametros(escolhido) ? ` · ${textoDosParametros(escolhido)}` : ''}`}
+                title={escolhido.previsaoBase !== undefined
+                  ? `${escolhido.rotulo}: a previsão do próximo mês sobre os meses fechados, ajustada pela projeção manual`
+                  : 'A previsão do próximo mês pelo modelo escolhido, sobre os meses fechados'}
               />
               <MiniCartao rotulo="MAD" valor={numeroPt(escolhido.mad)} hint={`MAPE ${numeroPt(escolhido.mape, 1)} %`} title="Erro médio absoluto dos passos de um mês; MAPE é o mesmo erro em % do real" />
               <MiniCartao
@@ -121,7 +126,7 @@ export function AnaliseVendaFutura({
 
       <Bloco rotulo="Regra de ressuprimento (consumo ponderado)">
         <GradeMini colunas={compacto ? 1 : 6}>
-          <MiniCartao rotulo="Consumo diário" valor={linha.consumoDiario > 0 && linha.consumoDiario < 0.05 ? '< 0,1 un.' : `${numeroPt(linha.consumoDiario, 1)} un.`} hint="ponderado por recência" title="Média da venda diária na janela, cada dia pesando 0,85 elevado aos dias até o fim" />
+          <MiniCartao rotulo="Consumo diário" valor={linha.consumoDiario > 0 && linha.consumoDiario < 0.05 ? '< 0,1 un.' : `${numeroPt(linha.consumoDiario, 1)} un.`} hint={linha.projecao ? `medido ${numeroPt(linha.consumoMedido, 1)} · ${textoDoPercentual(linha.projecao.percentual)} manual` : 'ponderado por recência'} title="Média da venda diária na janela, cada dia pesando 0,85 elevado aos dias até o fim" />
           <MiniCartao rotulo="Projeção do mês" valor={`${numeroPt(projecaoRegra)} un.`} hint="consumo × dias" title="Consumo diário × dias do mês seguinte" />
           <MiniCartao rotulo="Estoque de segurança" valor={`${numeroPt(Math.ceil(linha.estoqueSeguranca))} un.`} hint="lead × consumo" title="Lead time × consumo diário" />
           <MiniCartao rotulo="Ponto de pedido" valor={`${numeroPt(Math.ceil(linha.pontoDePedido))} un.`} hint="2 × lead × consumo" title="2 × lead time × consumo diário" />

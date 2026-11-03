@@ -29,12 +29,14 @@ import { AvisosProduto } from './avisos-ui';
 import type { EstadoLotes } from './use-lotes-bloqueados';
 import { GraficoComprasVendas } from './grafico';
 import { AnaliseVendaFutura } from './previsao-ui';
+import { BlocoProjecaoManual, BotaoProjecaoManual } from './projecao-manual-ui';
 import { OportunidadeEspecial } from './custo-especial-ui';
 import { abaDoGrafico, temAbaEspecial } from '@/lib/custo-especial';
 import type { AbaGrafico, SugestaoCliente, TabelaEspecial } from '@/lib/custo-especial';
 import { rolagemDoPainel } from '@/lib/largura-painel';
 import type { LarguraPainel } from '@/lib/largura-painel';
 import { modeloEscolhido, resumoVendaFutura } from '@/lib/previsao';
+import { textoDoPercentual } from '@/lib/projecao-manual';
 import type { ModeloPrevisao, Previsao, SugestaoProjetada } from '@/lib/previsao';
 
 const TOM_STATUS: Record<StatusRessuprimento, 'alert' | 'attention' | 'live'> = {
@@ -107,6 +109,7 @@ export function PainelDetalhe({
   onVerVendas,
   onAdicionar,
   onParametros,
+  onProjecao = () => undefined,
   onRestaurar,
   previsao,
   modelo,
@@ -137,6 +140,8 @@ export function PainelDetalhe({
   onVerVendas: (linha: LinhaRessuprimento) => void;
   onAdicionar: (linha: LinhaRessuprimento, quantidade: number) => void;
   onParametros: (linha: LinhaRessuprimento) => void;
+  /** Spec 019: abre a janela de projeção manual do produto. */
+  onProjecao?: (linha: LinhaRessuprimento) => void;
   onRestaurar: (linha: LinhaRessuprimento) => void;
   /** R-124: a previsão por modelo do produto aberto, a escolha e a sugestão projetada. */
   previsao: Previsao | null;
@@ -277,6 +282,7 @@ export function PainelDetalhe({
       </Panel>
 
       <BlocoSilenciado linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onRestaurar={onRestaurar} />
+      <BlocoProjecaoManual linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onAlterar={onProjecao} />
 
       {/* C-048: abas em pílula no topo do card; a especial só com oportunidade, e nunca os dois gráficos juntos. */}
       {temAbaEspecial(sugestoesEspeciais) ? (
@@ -440,7 +446,8 @@ export function PainelDetalhe({
         >
           <Table>
             <tbody>
-              <Tr><Td>Consumo diário ponderado</Td><Td numeric>{linha.consumoDiario.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</Td></Tr>
+              <Tr><Td>Consumo diário ponderado</Td><Td numeric>{linha.consumoMedido.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</Td></Tr>
+              {linha.projecao ? <Tr><Td>{`Com a projeção manual (${textoDoPercentual(linha.projecao.percentual)})`}</Td><Td numeric>{linha.consumoDiario.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</Td></Tr> : null}
               <Tr><Td>Volatilidade diária</Td><Td numeric>{Number(m.VOLATILIDADE_DIARIA ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</Td></Tr>
               <Tr><Td>{`Lead time (${ORIGEM_LEAD[linha.parametros.origemLeadTime]})`}</Td><Td numeric>{`${linha.leadTimeDias} d`}</Td></Tr>
               <Tr><Td>{`Cobertura (${ORIGEM_COBERTURA[linha.parametros.origemCobertura]})`}</Td><Td numeric>{`${linha.coberturaDias} d`}</Td></Tr>
@@ -452,7 +459,7 @@ export function PainelDetalhe({
               <Tr><Td>Janela de venda</Td><Td numeric>{`${JANELA_DIAS} dias`}</Td></Tr>
             </tbody>
           </Table>
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button
               size="sm"
               disabled={!podeParametrizar}
@@ -461,6 +468,7 @@ export function PainelDetalhe({
             >
               Parâmetros deste produto
             </Button>
+            <BotaoProjecaoManual linha={linha} podeParametrizar={podeParametrizar} motivoBloqueio={motivoBloqueio} onProjecao={onProjecao} />
           </div>
         </Disclosure>
       </Panel>

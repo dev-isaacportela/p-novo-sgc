@@ -19,6 +19,8 @@ import { arredondarPorCaixa, curvaPorValor, custoPadraoDe, origemUnidadesPorCaix
 import type { CurvaAbc, ItemPedido, OrigemUnidadesPorCaixa, CustoPadrao, MapaCustoPadrao } from './compras.ts';
 import { chegadaDoTransito } from './transito.ts';
 import type { ChegadaTransito } from './transito.ts';
+import { fatorDaProjecao, projecaoAtiva, textoDoPercentual } from './projecao-manual.ts';
+import type { ProjecaoManual } from './projecao-manual.ts';
 
 export type StatusRessuprimento =
   'ruptura' | 'excesso' | 'elevada_exposicao' | 'baixa_exposicao' | 'adequado';
@@ -137,7 +139,11 @@ export function dataDeSilencio(hoje: string, dias = SILENCIO_PADRAO_DIAS): strin
 }
 
 export interface Ressuprimento {
-  consumoDiario: number; estoqueAtual: number; emTransito: number;
+  /** Spec 019: o consumo que a régua usa — o medido vezes o fator da projeção manual. */
+  consumoDiario: number;
+  /** Spec 019: o consumo de antes do ajuste (depois do seletor de licitação) e o fator aplicado (1 sem ajuste). */
+  consumoMedido: number; fatorProjecao: number;
+  estoqueAtual: number; emTransito: number;
   leadTimeDias: number; coberturaDias: number; gatilhoDias: number;
   estoqueSeguranca: number; pontoDePedido: number; estoqueMaximo: number;
   sugerida: number;
@@ -153,13 +159,18 @@ export interface Ressuprimento {
 export function calcularRessuprimento(
   medida: MedidaRessuprimento,
   parametros: ParametrosResolvidos,
-  opcoes: { unidadesPorCaixa: number; desconsiderarLicitacao: boolean },
+  opcoes: { unidadesPorCaixa: number; desconsiderarLicitacao: boolean; fatorProjecao?: number },
 ): Ressuprimento {
   const total = numero(medida?.CONSUMO_DIARIO);
   const publico = numero(medida?.CONSUMO_DIARIO_PUBLICO);
   // RN-011: nunca negativo — medida pública maior que a total é dado sujo, não
   // demanda negativa.
-  const consumoDiario = opcoes.desconsiderarLicitacao ? Math.max(0, total - publico) : total;
+  const consumoMedido = opcoes.desconsiderarLicitacao ? Math.max(0, total - publico) : total;
+  // Spec 019 (RN-002, P-01): a projeção manual multiplica a venda projetada
+  // DEPOIS do seletor de licitação e ANTES de toda a régua; o que é passado
+  // (venda da janela, curvas) não muda.
+  const fatorProjecao = opcoes.fatorProjecao !== undefined && numero(opcoes.fatorProjecao) > 0 ? numero(opcoes.fatorProjecao) : 1;
+  const consumoDiario = consumoMedido * fatorProjecao;
 
   const estoqueAtual = Math.max(0, numero(medida?.ESTOQUE_ATUAL));
   const emTransito = Math.max(0, numero(medida?.ESTOQUE_EM_TRANSITO));
@@ -201,7 +212,7 @@ export function calcularRessuprimento(
   const urgente = diasDeGatilho !== null && diasDeGatilho <= gatilhoDias;
 
   return {
-    consumoDiario, estoqueAtual, emTransito,
+    consumoDiario, consumoMedido, fatorProjecao, estoqueAtual, emTransito,
     leadTimeDias, coberturaDias, gatilhoDias,
     estoqueSeguranca, pontoDePedido, estoqueMaximo,
     sugerida, coberturaAtualDias, diasDeGatilho, status, urgente,
@@ -251,6 +262,8 @@ export interface LinhaRessuprimento extends Ressuprimento {
   origemCaixa: OrigemUnidadesPorCaixa;
   /** R-132: quando chega o que está a caminho e a cobertura ao chegar; null sem trânsito. */
   chegada?: ChegadaTransito | null;
+  /** Spec 019: o ajuste de projeção manual que VALE hoje (null sem ajuste ou vencido). */
+  projecao?: ProjecaoManual | null;
 }
 
 export interface CurvasDaLinha { faturamento: CurvaAbc; rentabilidade: CurvaAbc; curva: CurvaAbc }
@@ -300,7 +313,11 @@ export function montarRessuprimento(
   parametros: ParametroCompra[],
   alvoDaCurvaDias: AlvoDaCurva,
   unidadesPorCaixaPorProduto: Map<number, number>,
-  opcoes: { codfornec: number; hoje: string; desconsiderarLicitacao: boolean },
+  opcoes: {
+    codfornec: number; hoje: string; desconsiderarLicitacao: boolean;
+    /** Spec 019: os ajustes de projeção manual por produto (os vencidos são ignorados aqui). */
+    projecoes?: Map<number, ProjecaoManual>;
+  },
   /** R-128: o custo padrão do Gestão de Custos; `null` = a consulta falhou; ausente = ainda não veio. */
   custos?: MapaCustoPadrao | null,
 ): LinhaRessuprimento[] {
@@ -321,9 +338,12 @@ export function montarRessuprimento(
     const resolvidos = resolverParametros(doSku, doFornecedor, numero(medida.LEAD_TIME_MEDIDO), alvo);
     const daGestao = unidadesPorCaixaPorProduto?.get(codprod);
     const porCaixa = unidadesPorCaixa(medida, daGestao);
+    const doAjuste = opcoes.projecoes?.get(codprod) ?? null;
+    const projecao = projecaoAtiva(doAjuste, opcoes.hoje) ? doAjuste : null;
     const calculo = calcularRessuprimento(medida, resolvidos, {
       unidadesPorCaixa: porCaixa,
       desconsiderarLicitacao: opcoes.desconsiderarLicitacao,
+      fatorProjecao: fatorDaProjecao(projecao, opcoes.hoje),
     });
     return {
       ...calculo,
@@ -339,6 +359,7 @@ export function montarRessuprimento(
       silenciado: estaSilenciado(doSku?.silenciadoAte ?? '', opcoes.hoje),
       silenciadoAte: doSku?.silenciadoAte ?? '',
       motivoSilencio: doSku?.motivoSilencio ?? '',
+      projecao,
     };
   });
 }
@@ -558,7 +579,7 @@ export function ordenarLinhas(linhas: LinhaRessuprimento[], ordem: OrdemLista): 
 }
 
 /** C-038: os filtros de movimentação do legado que a medida já responde sem nova consulta. */
-export type FiltroMovimentacao = '' | 'com_venda' | 'sem_venda' | 'com_estoque' | 'sem_estoque' | 'com_transito';
+export type FiltroMovimentacao = '' | 'com_venda' | 'sem_venda' | 'com_estoque' | 'sem_estoque' | 'com_transito' | 'projecao';
 
 export const OPCOES_MOVIMENTACAO: { value: FiltroMovimentacao; label: string }[] = [
   { value: '', label: 'Qualquer movimentação' },
@@ -567,6 +588,8 @@ export const OPCOES_MOVIMENTACAO: { value: FiltroMovimentacao; label: string }[]
   { value: 'com_estoque', label: 'Com estoque disponível' },
   { value: 'sem_estoque', label: 'Sem estoque disponível' },
   { value: 'com_transito', label: 'Com trânsito' },
+  // Spec 019 (P-09): o "Projeção ativa" do legado, no mesmo filtro.
+  { value: 'projecao', label: 'Com projeção manual' },
 ];
 
 export function filtrarMovimentacao(linhas: LinhaRessuprimento[], filtro: FiltroMovimentacao): LinhaRessuprimento[] {
@@ -576,6 +599,7 @@ export function filtrarMovimentacao(linhas: LinhaRessuprimento[], filtro: Filtro
   if (filtro === 'com_estoque') return lista.filter((l) => l.estoqueAtual > 0);
   if (filtro === 'sem_estoque') return lista.filter((l) => l.estoqueAtual <= 0);
   if (filtro === 'com_transito') return lista.filter((l) => l.emTransito > 0);
+  if (filtro === 'projecao') return lista.filter((l) => Boolean(l.projecao));
   return lista;
 }
 
@@ -661,7 +685,7 @@ export function escolherVisao(_recorte: RecorteLista, visao: VisaoRessuprimento)
 
 export const COLUNAS_CSV: string[] = [
   'Produto', 'Situação', 'Curva', 'Curva fat.', 'Curva rent.', 'Consumo diário', 'Estoque disponível',
-  'Trânsito', 'Cobertura atual', 'Dias de gatilho', 'Sugestão', 'Custo',
+  'Trânsito', 'Cobertura atual', 'Dias de gatilho', 'Sugestão', 'Custo', 'Projeção manual',
 ];
 
 export const ROTULO_STATUS: Record<StatusRessuprimento, string> = {
@@ -689,5 +713,7 @@ export function linhaCsv(l: LinhaRessuprimento): (string | number)[] {
     l.diasDeGatilho === null ? 'sem giro' : l.diasDeGatilho,
     decimal(l.sugerida, 3),
     decimal(custoDaLinha(l), 2),
+    // Spec 019 (RF-009): o ajuste que vale, com sinal; vazio sem ajuste.
+    l.projecao ? textoDoPercentual(l.projecao.percentual) : '',
   ];
 }

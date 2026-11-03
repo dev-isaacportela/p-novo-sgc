@@ -19,6 +19,7 @@ import {
   OPCOES_MOVIMENTACAO, OPCOES_ORDEM, ROTULO_STATUS, precoDeCompra, quantidadeNaReferencia, quantidadeParaCompletar,
   rotuloDaQuantidade, textoDaSugestao, unidadesDaDigitada,
 } from '@/lib/ressuprimento';
+import { textoDoSelo } from '@/lib/projecao-manual';
 import { resumoExcesso, seloBloqueado, seloExcesso } from '@/lib/avisos-produto';
 import type { FilialComExcesso } from '@/lib/ressuprimento-detalhe';
 import { listaCompacta, listaMinima } from '@/lib/largura-painel';
@@ -311,6 +312,7 @@ export function ListaProdutos({
                     if (bloqueado) avisos.push({ chave: 'bloq', tom: 'attention', texto: bloqueado });
                     if (excessos.has(codprod)) avisos.push({ chave: 'exc', tom: 'attention', texto: seloExcesso(excessos.get(codprod)?.length ?? 0) ?? '', titulo: resumoExcesso(excessos.get(codprod) ?? []) ?? '' });
                     if (selo) avisos.push({ chave: 'esp', tom: selo.tone === 'accent' ? 'live' : 'attention', texto: selo.texto });
+                    if (linha.projecao) avisos.push({ chave: 'proj', tom: 'live', texto: textoDoSelo(linha.projecao.percentual), titulo: `até ${fmtData(linha.projecao.validaAte)} · ${linha.projecao.motivo}` });
                     if (linha.silenciado) avisos.push({ chave: 'sil', tom: 'attention', texto: `Silenciado até ${fmtData(linha.silenciadoAte)}${linha.motivoSilencio ? ` · ${linha.motivoSilencio}` : ''}`, titulo: linha.motivoSilencio || 'Silenciado' });
                     if (aberto && linha.emTransito <= 0) avisos.push({ chave: 'ped', tom: 'alert', texto: `Pedido #${aberto.idCard} aberto, ainda sem trânsito`, titulo: aberto.titulo });
                     if (avisos.length === 0) return null;

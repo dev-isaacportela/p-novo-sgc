@@ -7,8 +7,9 @@
 // Custo de execução (RNF-001, emendada em R-117 e R-120): abrir a tela custa 4
 // chamadas (fornecedores, eficiência, quadro e o resumo por fornecedor);
 // escolher o fornecedor custa 1 (filiais e pedido mínimo); escolher a filial
-// custa 8 — cinco em paralelo (parâmetros, vendas desconsideradas, coberturas,
-// pedido aberto e itens em pedido aberto), UMA `sgcWintRessuprimento` com a
+// custa 9 — seis em paralelo (parâmetros, vendas desconsideradas, coberturas,
+// pedido aberto, itens em pedido aberto e, spec 019, os ajustes de projeção
+// manual), UMA `sgcWintRessuprimento` com a
 // lista de vendas desconsideradas em mãos e, com os produtos em mãos, UMA
 // `sgcCustoUnidadesPorCaixa` (lotes de 1000 códigos: 300 produtos = 1
 // execução). Selecionar um produto custa 3, uma vez por produto (cache). Nada
@@ -62,6 +63,10 @@ import { CarrinhoDialogo } from './Carrinho';
 import type { PedidoAberto } from './Carrinho';
 import { PainelDetalhe } from './painel-detalhe';
 import { ParametrosDialogo, SilenciarDialogo, VendasDialogo } from './dialogos';
+import { ProjecaoManualDialogo } from './projecao-manual-ui';
+import type { ValoresProjecao } from './projecao-manual-ui';
+import { projecaoDeLinha, projecoesAtivas } from '@/lib/projecao-manual';
+import type { ProjecaoManual } from '@/lib/projecao-manual';
 import { AnaliseProdutoDialogo } from './analise-produto';
 import type { AlvoParametro } from './dialogos';
 
@@ -128,6 +133,9 @@ export default function ComprasInteligentesPage() {
   const [custosEspeciais, setCustosEspeciais] = React.useState<CustoEspecial[]>([]);
   const [vendasClientes, setVendasClientes] = React.useState<VendaCliente[]>([]);
   const [parametros, setParametros] = React.useState<ParametroCompra[]>([]);
+  // Spec 019: os ajustes de projeção manual (uma leitura por carga) e o produto da janela de ajuste.
+  const [projecoes, setProjecoes] = React.useState<ProjecaoManual[]>([]);
+  const [ajustando, setAjustando] = React.useState<LinhaRessuprimento | null>(null);
   const [coberturas, setCoberturas] = React.useState<Cobertura[]>([]);
   const [desconsideradas, setDesconsideradas] = React.useState<VendaDesconsiderada[]>([]);
   const [pedidoAberto, setPedidoAberto] = React.useState<PedidoAberto | null>(null);
@@ -236,6 +244,7 @@ export default function ComprasInteligentesPage() {
     // R-133: a carga mora em `carga-ressuprimento.ts` (a Análise do Produto do pedido usa a mesma).
     carregarRessuprimento(recorte, { inicio: periodo.inicio, fim: periodo.fim }, (parte) => {
       if (parte.parametros) setParametros(parte.parametros);
+      if (parte.projecoes) setProjecoes(parte.projecoes);
       if (parte.coberturas) setCoberturas(parte.coberturas);
       if (parte.desconsideradas) setDesconsideradas(parte.desconsideradas);
       if ('pedidoAberto' in parte) setPedidoAberto(parte.pedidoAberto ?? null);
@@ -342,8 +351,8 @@ export default function ComprasInteligentesPage() {
   // cadeia de RN-002 da 003, e a origem fica na linha para o painel mostrar.
   const todas = React.useMemo(() => montarRessuprimento(
     medidas, parametros, alvoDaCurvaDias, porCaixa,
-    { codfornec: Number(codfornec), hoje, desconsiderarLicitacao }, custosPadrao,
-  ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao, custosPadrao]);
+    { codfornec: Number(codfornec), hoje, desconsiderarLicitacao, projecoes: projecoesAtivas(projecoes, hoje) }, custosPadrao,
+  ), [medidas, parametros, alvoDaCurvaDias, porCaixa, codfornec, hoje, desconsiderarLicitacao, custosPadrao, projecoes]);
 
   const contagens = React.useMemo(() => contarVisoes(todas), [todas]);
   // R-130 (RN-037): o excesso de cada produto pela regra da seção, com a cobertura alvo dele.
@@ -380,9 +389,11 @@ export default function ComprasInteligentesPage() {
 
   /* ── R-124: a previsão por modelo, só para o produto aberto (painel e janela) ── */
   const [modeloPrevisao, setModeloPrevisao] = React.useState<ModeloPrevisao>('bestfit');
+  // Spec 019: o fator da projeção manual de cada produto entra na previsão dele (RN-003).
+  const fatores = React.useMemo(() => new Map(todas.map((l) => [Number(l.medida.CODPROD), l.fatorProjecao])), [todas]);
   const previsaoDe = React.useCallback(
-    (codprod: number): Previsao | null => previsaoDoSku(cacheSku.get(codprod), codprod, hoje, desconsideradas, desconsiderarLicitacao),
-    [cacheSku, hoje, desconsideradas, desconsiderarLicitacao],
+    (codprod: number): Previsao | null => previsaoDoSku(cacheSku.get(codprod), codprod, hoje, desconsideradas, desconsiderarLicitacao, fatores.get(codprod) ?? 1),
+    [cacheSku, hoje, desconsideradas, desconsiderarLicitacao, fatores],
   );
   // R-131: o gráfico e os totais do painel e da janela contam a mesma venda da lista.
   const dadosDe = React.useCallback((codprod: number): DadosDoSku => {
@@ -490,6 +501,18 @@ export default function ComprasInteligentesPage() {
     comRecarga(linhas('sgcEscParametroCompraRestaurar', {
       codfornec: Number(codfornec), codfilial, codprod: Number(l.medida.CODPROD), atualizadoEm: instante(),
     }));
+
+  // Spec 019 (RNF-003): uma escrita e a releitura dos ajustes; a medida do ERP não é refeita.
+  async function comProjecoes(chamada: Promise<unknown>) {
+    await chamada;
+    const rows = await linhas('sgcProjecaoManualListar', { codfornec: Number(codfornec), codfilial, limite: 600, offset: 0 });
+    setProjecoes(rows.map(projecaoDeLinha));
+    setSalvoEm(agoraCurto());
+  }
+  const salvarProjecao = (valores: ValoresProjecao) =>
+    comProjecoes(linhas('sgcEscProjecaoManualSalvar', { codfornec: Number(codfornec), codfilial, ...valores, atualizadoEm: instante() }));
+  const removerProjecao = (codprod: number) =>
+    comProjecoes(linhas('sgcEscProjecaoManualRemover', { codfornec: Number(codfornec), codfilial, codprod, atualizadoEm: instante() }));
 
   const desconsiderarVenda = (venda: { numtransitem: number; codprod: number; dtmov: string; quantidade: number; motivo: string }) =>
     comRecarga(linhas('sgcEscVendaDesconsiderar', { ...venda, codfilial, em: instante() }), true);
@@ -771,6 +794,7 @@ export default function ComprasInteligentesPage() {
             onVerVendas={setVendasDe}
             onAdicionar={adicionar}
             onParametros={abrirParametros}
+            onProjecao={setAjustando}
             onRestaurar={(l) => void restaurar(l)}
             previsao={previsaoSelecionada}
             modelo={modeloPrevisao}
@@ -828,6 +852,7 @@ export default function ComprasInteligentesPage() {
         onFechar={() => setDetalheCompleto(null)}
         onAdicionar={adicionar}
         onParametros={abrirParametros}
+        onProjecao={setAjustando}
         onRestaurar={(l) => void restaurar(l)}
         onDesconsiderar={desconsiderarVenda}
         onReconsiderar={reconsiderarVenda}
@@ -842,6 +867,7 @@ export default function ComprasInteligentesPage() {
       />
       <ParametrosDialogo alvo={parametroAlvo} onFechar={() => setParametroAlvo(null)} onSalvar={salvarParametro} />
       <SilenciarDialogo linha={silenciando} onFechar={() => setSilenciando(null)} onSilenciar={silenciar} />
+      <ProjecaoManualDialogo linha={ajustando} onFechar={() => setAjustando(null)} onSalvar={salvarProjecao} onRemover={removerProjecao} />
       <VendasDialogo
         linha={vendasDe}
         semPublico={desconsiderarLicitacao}

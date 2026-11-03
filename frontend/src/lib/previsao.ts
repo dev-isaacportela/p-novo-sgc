@@ -108,8 +108,10 @@ export function metricas(erros: number[], reais: number[]): Metricas {
 export interface ResultadoModelo extends Metricas {
   modelo: ModeloCalculado;
   rotulo: string;
-  /** A previsão do próximo mês, ≥ 0, com 2 casas. */
+  /** A previsão do próximo mês, ≥ 0, com 2 casas — já com a projeção manual (spec 019), quando há. */
   previsao: number;
+  /** Spec 019: a previsão do modelo antes do ajuste manual; ausente quando não há ajuste. */
+  previsaoBase?: number;
   /** Os erros de um passo, real − previsto, na ordem da série. */
   erros: number[];
   parametros: { alpha?: number; beta?: number; gamma?: number };
@@ -260,14 +262,20 @@ export function mediasDaSerie(valores: number[]): Previsao['medias'] {
   return { m3: ultimos(3), m6: ultimos(6), m12: ultimos(12) };
 }
 
-/** Série fechada → cap → os cinco modelos → Best Fit. */
-export function preverVendas(pontos: PontoPrevisao[]): Previsao {
+/**
+ * Série fechada → cap → os cinco modelos → Best Fit. Spec 019 (RN-003): a
+ * série e os erros são da venda real — o Best Fit não muda —, e só a previsão
+ * do próximo mês de cada modelo é multiplicada pelo fator da projeção manual.
+ */
+export function preverVendas(pontos: PontoPrevisao[], fatorProjecao = 1): Previsao {
   const serie = ajustarOutliers(pontos);
   const valores = serie.pontos.map((p) => p.valor);
   const medias = mediasDaSerie(valores);
   if (valores.length < PONTOS_MINIMOS) return { serie, modelos: [], bestFit: null, suficiente: false, medias };
-  const modelos = [mms(valores), mmp(valores), se(valores), holt(valores), holtWinters(valores)];
-  const melhor = modelos.reduce((acc, atual) => (atual.mad < acc.mad ? atual : acc));
+  const ajustados = [mms(valores), mmp(valores), se(valores), holt(valores), holtWinters(valores)];
+  const melhor = ajustados.reduce((acc, atual) => (atual.mad < acc.mad ? atual : acc));
+  const fator = numero(fatorProjecao) > 0 ? numero(fatorProjecao) : 1;
+  const modelos = fator === 1 ? ajustados : ajustados.map((m) => ({ ...m, previsaoBase: m.previsao, previsao: round2(m.previsao * fator) }));
   return { serie, modelos, bestFit: melhor.modelo, suficiente: true, medias };
 }
 
