@@ -115,6 +115,20 @@ test('C-007: simular muda o saldo, a cobertura futura e os valores sem tocar o g
   assert.equal(resumoDaMesa(simulado).valores.pedidoListaDesc, 144 * 12);
 });
 
+test('C-007 / topo da mesa: o resumo conta os produtos, a compra do mês e a sugestão em caixa fechada, somadas filial a filial', () => {
+  const mesa = montarMesa({
+    negociacao: { filiais: ['1', '2'], coberturaAlvoDias: 35, transitoComoCompra: false },
+    itens: [item({ propostaSellin: 300 })], pedidos: new Map([['10|1', 120]]),
+    posicoes: [posicao({ COMPRA_MES: 60 }), posicao({ CODFILIAL: '2', QTEST: 340 })], caixas: new Map([[1, 12]]),
+  });
+  const r = resumoDaMesa(mesa);
+  assert.equal(r.produtos, 1);
+  assert.equal(r.compraMes, 60);
+  assert.equal(r.sugestao, 218 + 10, 'sugestão crua: 218 na filial 1 e 10 na filial 2');
+  assert.equal(r.sugestaoEmCaixa, 228 + 12, 'em caixa fechada de 12: 228 e 12');
+  assert.equal(r.pedido, 120);
+});
+
 test('C-008 / P-04: usar a sugestão 218 com caixa de 12 grava 228, a caixa fechada logo acima', () => {
   assert.equal(sugestaoEmCaixa(218, 12), 228);
   assert.equal(sugestaoEmCaixa(216, 12), 216);
@@ -391,4 +405,12 @@ test('C-031 / RN-015: ver Galderma — admin, analista, gestor e diretoria; oper
   assert.equal(permissoesDe('gestor', 'READ_ONLY').operarGalderma, false);
   assert.ok(menuParaPersona(permissoesDe('analista', 'MEMBER')).some((i) => i.to === '/galderma' && i.grupo === 'Compras'));
   assert.equal(menuParaPersona(permissoesDe('comercial', 'MEMBER')).some((i) => i.to === '/galderma'), false);
+});
+
+test('topo da mesa: o nome curto da filial é a UF do fim da razão social, senão "filial N"', async () => {
+  const { nomeCurtoDaFilial } = await import('../src/lib/galderma.ts');
+  const nomes = new Map([['1', 'BENENUTRI COMERCIAL LTDA - DF'], ['6', 'BN EXPRESS I COMERCIO E SERVICOS LTDA']]);
+  assert.equal(nomeCurtoDaFilial('1', nomes), 'DF');
+  assert.equal(nomeCurtoDaFilial('6', nomes), 'filial 6');
+  assert.equal(nomeCurtoDaFilial('9', nomes), 'filial 9');
 });

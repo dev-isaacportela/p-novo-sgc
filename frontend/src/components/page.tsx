@@ -591,6 +591,51 @@ export function CaixaSelecao({
   );
 }
 
+export interface AcaoDoMenu {
+  label: string;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  tone?: 'neutral' | 'danger';
+}
+
+/**
+ * "Mais ▾": as ações secundárias de uma barra num menu só (spec 014, topo da
+ * mesa Galderma) — a barra fica com a ação principal e uma ou duas
+ * secundárias. Item desabilitado continua visível, nunca escondido.
+ */
+export function MenuAcoes({ label = 'Mais', itens }: { label?: string; itens: AcaoDoMenu[] }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <ButtonPrimitive type="button" variant="outline" size="sm" aria-expanded={open}>
+          {label}
+          <ChevronDown aria-hidden />
+        </ButtonPrimitive>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-1">
+        {itens.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            disabled={item.disabled}
+            onClick={() => { setOpen(false); item.onClick(); }}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors [&_svg]:size-4',
+              'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:text-ink-muted',
+              item.tone === 'danger' ? 'text-destructive' : 'text-ink',
+            )}
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /**
  * Ação terciária que se lê como link, não como botão: "Esqueci minha senha",
  * "Criar conta", "Voltar". É `<button>` e não `<a>` porque não navega — troca

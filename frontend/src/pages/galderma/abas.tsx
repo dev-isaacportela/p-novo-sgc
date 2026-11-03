@@ -6,9 +6,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { AlternaOpcoes, EmptyState, Panel } from '@/components/page';
 
 const TELAS = [
-  { value: '/galderma', label: 'Mesa de negociação' },
+  { value: '/galderma', label: 'Mesa' },
   { value: '/galderma/acompanhamento', label: 'Acompanhamento' },
-  { value: '/galderma/composicao', label: 'Composição por filial' },
+  { value: '/galderma/composicao', label: 'Composição' },
 ];
 
 export function NavegacaoGalderma() {
