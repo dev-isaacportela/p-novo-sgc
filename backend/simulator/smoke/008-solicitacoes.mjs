@@ -447,7 +447,7 @@ export async function suite(ctx) {
 
   /* ─────────── T-083 — incluir no pedido ─────────── */
 
-  await teste('C-008 / RNF-002: incluir a pendente cria o item com quantidade 24 e a origem, aprova, grava as duas linhas do histórico e a nota com "Leo"', async () => {
+  await teste('C-008 / C-024 / RNF-002: incluir a pendente cria o item com quantidade 24 e a origem, aprova, grava as duas linhas do histórico e a nota com "Leo", e a incluída fica no bloco do próprio pedido como adicionada (R-133)', async () => {
     const id = SOLICITACOES_008.pendenteAlta;
     const card = CARDS_008.montagem;
     const notasAntes = conta("SELECT COUNT(*) AS N FROM KB_LOG WHERE CARD_ID = ? AND EVENTO = 'nota'", card);

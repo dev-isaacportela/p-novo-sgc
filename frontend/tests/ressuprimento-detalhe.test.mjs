@@ -149,7 +149,7 @@ test('R-124: com a projeção do modelo, a última barra e o rodapé usam ela no
   assert.equal(totaisDoRodape(historico, '2026-09-16', 2).projecaoMes, 62);
 });
 
-test('R-133: clientes que compraram — os 10 que mais levaram no mês, cada um com as vendas dele, da mais recente', async () => {
+test('C-028 (R-133): clientes que compraram — os 10 que mais levaram no mês, cada um com as vendas dele, da mais recente', async () => {
   const { clientesQueCompraram } = await import('../src/lib/ressuprimento-detalhe.ts');
   const venda = (n, dtmov, codcli, qt, valor) => ({ NUMTRANSITEM: n, DTMOV: dtmov, QUANTIDADE: qt, PRECO_VENDA: 0, VALOR_TOTAL: valor, CODCLI: codcli, CLIENTE: `C${codcli}`, PUBLICO: 0 });
   const vendas = [

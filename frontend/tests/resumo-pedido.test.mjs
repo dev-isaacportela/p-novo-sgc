@@ -14,13 +14,13 @@ const item = (codprod, qtPedida, qtSugerida, extra = {}) => ({
   codprod, qtPedida, qtSugerida, precoCusto: 10, tipoPreco: 'padrao', idSolicitacao: 0, ...extra,
 });
 
-test('R-133: os quatro números contam só o que está no pedido — 3 itens e 30 un., R$ 300, 1 especial, 2 alertas não lidos', () => {
+test('C-024 (R-133): os quatro números contam só o que está no pedido — 3 itens e 30 un., R$ 300, 1 especial, 2 alertas não lidos', () => {
   const itens = [item(1, 10, 10), item(2, 15, 12, { tipoPreco: 'especial' }), item(3, 5, 0), item(4, 0, 24)];
   const alertas = [{ tipo: 'vencimento', lido: false }, { tipo: 'excesso', lido: false }, { tipo: 'excesso', lido: true }];
   assert.deepEqual(numerosDoPedido(itens, alertas), { itens: 3, unidades: 30, valor: 300, especiais: 1, alertas: 2 });
 });
 
-test('R-133: aderência — segue quem pediu ≥ a sugerida (> 0); sugestão 0 no pedido é alterado; solicitação do comercial fica fora', () => {
+test('RN-015 / C-024 (R-133): aderência — segue quem pediu ≥ a sugerida (> 0); sugestão 0 no pedido é alterado; solicitação do comercial fica fora', () => {
   const itens = [
     item(1, 12, 12), item(2, 24, 12), item(3, 6, 12), item(4, 5, 0),
     item(5, 3, 12, { idSolicitacao: 9 }), item(6, 0, 12),
@@ -34,7 +34,7 @@ test('R-133: aderência — segue quem pediu ≥ a sugerida (> 0); sugestão 0 n
   assert.equal(textoDaAderencia(a), '2 de 4 seguem · 2 alterados');
 });
 
-test('R-133: o tom da aderência é verde a partir de 80, âmbar a partir de 50 e vermelho abaixo', () => {
+test('RN-015 (R-133): o tom da aderência é verde a partir de 80, âmbar a partir de 50 e vermelho abaixo', () => {
   assert.equal(tomDaAderencia(80), 'live');
   assert.equal(tomDaAderencia(79), 'attention');
   assert.equal(tomDaAderencia(50), 'attention');
@@ -43,14 +43,14 @@ test('R-133: o tom da aderência é verde a partir de 80, âmbar a partir de 50 
   assert.equal(textoDaAderencia(aderenciaASugestao([])), 'Nenhum item da análise no pedido');
 });
 
-test('R-133: aceitar sugestão grava a sugerida nos alterados e zera (tira do pedido) quem tem sugestão 0', () => {
+test('C-024 (R-133): aceitar sugestão grava a sugerida nos alterados e zera (tira do pedido) quem tem sugestão 0', () => {
   const itens = [item(1, 12, 12), item(3, 6, 12), item(4, 5, 0), item(5, 3, 12, { idSolicitacao: 9 })];
   assert.deepEqual(aceitarSugestao(itens), [{ codprod: 3, qtPedida: 12 }, { codprod: 4, qtPedida: 0 }]);
   const depois = itens.map((i) => ({ ...i, ...(aceitarSugestao(itens).find((m) => m.codprod === i.codprod) ?? {}) }));
   assert.equal(aderenciaASugestao(depois).pct, 100);
 });
 
-test('R-133: as faixas — 1 vencimento / 2 excesso, 1 item especial e 2 de solicitação comercial (8 un.)', () => {
+test('C-024 (R-133): as faixas — 1 vencimento / 2 excesso, 1 item especial e 2 de solicitação comercial (8 un.)', () => {
   const itens = [item(1, 5, 0, { idSolicitacao: 3 }), item(2, 3, 0, { idSolicitacao: 4, tipoPreco: 'especial' }), item(3, 0, 0, { idSolicitacao: 5 })];
   const alertas = [{ tipo: 'vencimento', lido: true }, { tipo: 'excesso', lido: false }, { tipo: 'excesso', lido: false }];
   const f = faixasDoResumo(itens, alertas);
@@ -59,7 +59,7 @@ test('R-133: as faixas — 1 vencimento / 2 excesso, 1 item especial e 2 de soli
   assert.equal(textoDosAlertas({ vencimento: 0, excesso: 0 }), '');
 });
 
-test('R-133: o banner de reprovação — a diretoria antes da técnica, com os códigos citados no texto livre', () => {
+test('C-023 (R-133): o banner de reprovação — a diretoria antes da técnica, com os códigos citados no texto livre', () => {
   assert.deepEqual(codigosCitados('5001, 5002 e 5010; 5001'), [5001, 5002, 5010]);
   assert.deepEqual(reprovacoesDoPedido({ TEC_MOTIVO: '', DIR_MOTIVO: '  ' }), []);
   const lista = reprovacoesDoPedido({ TEC_MOTIVO: 'Custo acima da tabela', TEC_PRODUTOS_REPROVADOS: '5001 5002', DIR_MOTIVO: 'Prazo longo' });

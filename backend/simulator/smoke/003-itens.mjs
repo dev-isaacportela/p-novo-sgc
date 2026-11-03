@@ -72,7 +72,7 @@ export async function suite(ctx) {
     assert.equal(Number(p5001.VENDA_LICITACAO), 6);
   });
 
-  await teste('R-133: a analise divide a venda valida do 5002 em privado 6, PF 8 e publico 3; a venda para a propria rede (5) e a remessa de entrega futura (4) ficam fora das tres e dentro da venda total (26)', async () => {
+  await teste('C-026 / RN-016 (R-133): a analise divide a venda valida do 5002 em privado 6, PF 8 e publico 3; a venda para a propria rede (5) e a remessa de entrega futura (4) ficam fora das tres e dentro da venda total (26)', async () => {
     const rows = await linhas(ctx, 'sgcWintAnaliseMontagem', ANALISE);
     const p5002 = rows.find((r) => Number(r.CODPROD) === 5002);
     assert.equal(Number(p5002.VENDA_PRIVADO), 6);
@@ -184,7 +184,7 @@ export async function suite(ctx) {
     assert.equal(padroes.length, 8);
   });
 
-  await teste('R-133: o tipo de preco manual fica gravado; valor desconhecido cai em padrao', async () => {
+  await teste('C-027 (R-133): o tipo de preco manual fica gravado; valor desconhecido cai em padrao', async () => {
     const saida = await chamar('sgcItensGravar', {
       cardId: CARDS_003.gravacao,
       itensJson: JSON.stringify([umItem(5008, 7, 3.25, { tipoPreco: 'manual' }), umItem(5009, 3, 2, { tipoPreco: 'qualquer' })]),

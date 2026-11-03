@@ -468,6 +468,41 @@ Desenho (design.md §8, §9.1, §9.5):
   escrita **desabilitados**, nunca escondidos — é a regra do anti-padrão "botão escondido por
   falta de permissão".
 
+### R-133 — a Análise no desenho do legado
+
+| Tela / bloco | Responsabilidade | Arquivo |
+|---|---|---|
+| Bloco **resumo** (novo em `BLOCOS_POR_FASE.analise`, no topo) | banner de reprovação (técnica e diretoria), Itens / Valor total / Preço especial / Alertas, aderência à sugestão com "Aceitar sugestão", faixas | `pages/quadros/abas/ResumoDoPedido.tsx` |
+| Bloco **itens** | cabeçalho da análise ("N com saída · M sem saída", Abrir tela ampla, Recalcular, Adicionar produto), lista enxuta (Produto, Pedido, Custo, Total), Salvar, prazo | `pages/quadros/abas/Itens.tsx` |
+| **Tela ampla** (diálogo até 1600 px) | abas Análise e Itens do pedido; Salvar no rodapé | `pages/quadros/abas/TelaAmpla.tsx`, `tela-ampla-analise.tsx`, `SeletorDeCusto.tsx` |
+| **Drill-in** | a Análise do Produto da 011 com "Item no pedido" no topo | `pages/quadros/abas/DrillProduto.tsx`, `NomeDoProduto.tsx` |
+| **Rascunho** | a lista editada, a análise carregada e a fila do comercial, compartilhadas pelos blocos da fase; edições não salvas sobrevivem a recarregar o pedido (incluir solicitação) | `pages/quadros/abas/rascunho-contexto.ts`, `RascunhoProvider.tsx` |
+
+Contratos que mudam:
+
+- `sgcWintAnaliseMontagem` devolve também `VENDA_PRIVADO`, `VENDA_PF` e `VENDA_PUBLICO`, no
+  recorte `VENDA_VALIDA` de `backend/venda-valida.mjs` (o mesmo da 011, agora importado pelas
+  duas). `VENDA_PERIODO` e `VENDA_LICITACAO` não mudam (D-015).
+- `sgcItensGravar` aceita `tipoPreco` `manual` além de `padrao` e `especial`; valor desconhecido
+  vira `padrao`. Nenhuma coluna nova: `TIPO_PRECO VARCHAR(10)` e `OBSERVACAO` já existiam.
+- `sgcSolicitacoesDaMontagem` (008) devolve também a solicitação já incluída **neste** pedido,
+  com `VINCULADA = 1`.
+
+Execuções (RNF-001/RNF-002 mantidos): abrir o card = `kbCardDetalhe` + `sgcPedidoCarregar`
+(+ a fila do comercial na Análise) — a carga em voo do mesmo card é uma só, qualquer que seja o
+número de blocos (antes, uma por bloco). A análise só consulta quando é montada, recalculada ou
+a tela ampla abre: `sgcWintAnaliseMontagem` + `sgcCoberturaListar` + `sgcItensEmPedidoAberto`
+em paralelo, depois `sgcCustoUnidadesPorCaixa`, `sgcCustoPadraoAtual` e
+`sgcCustoEspeciaisProdutos` em lotes de 500. O drill-in consulta ao abrir: a carga da 011
+(`carga-ressuprimento.ts`, uma vez por pedido aberto) e as 3 do SKU (uma vez por produto).
+Salvar continua sendo três chamadas.
+
+Regras puras: `lib/resumo-pedido.ts` (números, aderência, aceitar, faixas, banner),
+`lib/analise-pedido.ts` (linhas, chips, busca, unidade exibida, Dias, ordenação, rodapés,
+diferença, título do trânsito), `lib/custo-do-item.ts` (tabelas vigentes, opções, escolha),
+`lib/analise-sku.ts` (previsão, projeção e sugestões de preço especial do SKU, tiradas da página
+da 011) e `clientesQueCompraram` em `lib/ressuprimento-detalhe.ts`.
+
 ## Fluxo
 
 1. A compradora abre o card no `/quadro`. A página carrega `kbCardDetalhe` (lib) e
@@ -690,6 +725,18 @@ consultas de lote, e `CONCAT` na `sgcAnaliseSaidaVerificar`. Se algum faltar, en
 | RN-012 | `smoke/003-itens.mjs` | cinco chamadas de `sgcAnaliseSaidaVerificar`, cada uma com só uma condição quebrada, devolvem `PODE = 0` com a sua mensagem; tudo satisfeito → `PODE = 1` e `MOTIVO` vazio |
 | RN-013 | `smoke/003-itens.mjs` | `sgcEscItemStatusFase` com `aprovado` e depois `enviado` muda os itens vivos e não toca nos `removido` |
 | RN-014 | `smoke/003-itens.mjs` | `sgcEscItemRemoverZerados` num card com 20 itens deixa 8 vivos |
+| C-023 | `tests/resumo-pedido.test.mjs` | `reprovacoesDoPedido` com técnica e diretoria → `['diretoria','tecnica']`; `codigosCitados('5001, 5002 e 5010; 5001')` → `[5001, 5002, 5010]` |
+| C-024 | `tests/resumo-pedido.test.mjs` | `numerosDoPedido`, `aderenciaASugestao` (base 4, seguem 2, 50 %, `attention`), `aceitarSugestao` (→ 12 e 0) e `faixasDoResumo` com os números da spec |
+| C-025 | `tests/analise-pedido.test.mjs` | `linhasDaAnalise`, `filtrarAnalise`, `rodapeDaAnalise`, `diferencaDoItem`, `rodapeDosItens` e `textoDoTransito` com os números da spec |
+| C-026 | `smoke/003-itens.mjs` + `simulator/winthor-checar.mjs` | 5002: `VENDA_PRIVADO` 6, `VENDA_PF` 8, `VENDA_PUBLICO` 3, `VENDA_PERIODO` 26, `VENDA_LICITACAO` 8; no WinThor real (119, filial 1) privado em > 0 produtos e a soma das três ≤ a venda total |
+| C-027 | `smoke/003-itens.mjs` + `tests/custo-do-item.test.mjs` | `TIPO_PRECO` `manual` lido de volta, `qualquer` vira `padrao`; `custoDaEscolha('esp:2:8.5')` → 8,5 especial |
+| C-028 | `tests/analise-sku.test.mjs` + `tests/ressuprimento-detalhe.test.mjs` | `previsaoDoSku` sem dado pronto → `null`; `clientesQueCompraram` de outubro → 9 (45), 12 (30), 0 (1), vendas da mais recente |
+| RN-015 | `tests/resumo-pedido.test.mjs` | `tomDaAderencia` 80 → `live`, 79 e 50 → `attention`, 49 → `alert` |
+| RN-016 | `smoke/003-itens.mjs` | ver C-026 |
+| RN-017 | `tests/analise-pedido.test.mjs` | `proximaOrdem` padrão → invertida → `null`; `ordenarAnalise` por venda, produto, curva e dias |
+| RN-018 | `tests/analise-pedido.test.mjs` | `naUnidade`, `daUnidade`, `segundaLinhaComprar` |
+| RN-019 | `tests/analise-pedido.test.mjs` | `rotuloDias` nos cinco casos |
+| RN-020 | `tests/custo-do-item.test.mjs` | `tabelasVigentes` → 2 de 6; `opcoesDeCusto` → padrão, tabela, especial fora da vigência, manual |
 
 - **Backend:** `backend/simulator/smoke/003-itens.mjs`, um `teste()` por linha, título começando
   pelo id. Toda consulta ao WinThor assere **contagem > 0** (vazio não é verde).
@@ -755,6 +802,10 @@ que a 002 usa no envio. `PCFORNEC`/`PCFILIAL` no simulador são compartilhadas c
 | D-012 | "Ao menos um item com quantidade" entra como quinta condição de saída, **nova** em relação ao p-45547 | Manter as quatro do legado | Sem ela, um pedido com tudo zerado sairia da Análise e chegaria à indústria com a tabela vazia (EN-02 remove os zerados) |
 | D-013 | `sgcAnaliseSair` é uma SF JavaScript nova e é **o** passo do `antesDeMover` em `analise → tecnica`: verifica, arruma e só então a tela move | A tela chamar as escritas em sequência, ou arrumar depois do movimento | Verificação e limpeza precisam acontecer juntas e antes do movimento: o motor só move o que já está arrumado, e uma aba fechada no meio não deixa o pedido pela metade (revisão do coordenador, R-011) |
 | D-014 | A análise não é gravada sozinha: montar a lista só grava quando a compradora salva | Persistir a análise ao abrir | Abrir o card não pode escrever (RNF-002) nem sujar o pedido de quem só foi olhar |
+| D-015 | R-133: a divisão Privado / PF / Público é só leitura na tela; a sugestão e a cobertura seguem sobre `VENDA_PERIODO` (RN-001/RN-004) | Passar a sugestão para a venda válida sem público, como no legado | O usuário ainda decide entre a fórmula atual e a do legado (35 dias, sem público, estoque + trânsito); mudar a base agora mudaria a sugestão de todo pedido |
+| D-016 | R-133: a análise deixa de pôr os produtos na lista; o produto vira item ao ser adicionado (tela ampla, lote, drill-in, solicitação) | Manter a lista com todos os produtos a 0 | É o carrinho do legado: a lista do pedido mostra o que se compra; os zerados continuavam a ser gravados e removidos na saída |
+| D-017 | R-133: o rascunho dos itens é um contexto da fase, não estado da aba | Cada bloco com a sua cópia | O resumo, os itens, a tela ampla, os cartões e o drill-in mexem na mesma lista; uma cópia por bloco faria "Aceitar sugestão" e "Atualizar p/ N" discordarem do que vai ser salvo |
+| D-018 | R-133: o drill-in reaproveita a Análise do Produto da 011 e a carga dela (`carga-ressuprimento.ts`), tirada da página; a simulação dentro da janela segue a fórmula da 011 e o bloco "Item no pedido" mostra a sugestão da 003 | Uma janela própria do pedido | O pedido pediu a mesma janela; duas sugestões aparecem lado a lado até a decisão sobre a fórmula (D-015) |
 
 ## Riscos
 

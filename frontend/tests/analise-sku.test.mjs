@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { previsaoDoSku, projetadaDoSku, oportunidadesDaLinha, sugestoesDaLinha } from '../src/lib/analise-sku.ts';
 
-test('R-133: sem o detalhe do SKU pronto não há previsão; sem previsão nem linha, sem projeção; sem política, sem oportunidade', () => {
+test('C-028 (R-133): sem o detalhe do SKU pronto não há previsão; sem previsão nem linha, sem projeção; sem política, sem oportunidade', () => {
   assert.equal(previsaoDoSku(undefined, 54, '2026-11-03', [], true), null);
   assert.equal(previsaoDoSku({ historico: [], compras: [], filiais: [], pronto: false, erro: '' }, 54, '2026-11-03', [], true), null);
   assert.equal(previsaoDoSku({ historico: [], compras: [], filiais: [], pronto: true, erro: '' }, 0, '2026-11-03', [], true), null);

@@ -326,7 +326,7 @@ test('C-021 / RN-018: o menu do comercial tem exatamente dois itens — Solicita
   }
 });
 
-test('R-133: o cartão da solicitação — fora, completa ou menor no pedido, e o texto "No pedido: X — comercial pediu Y"', async () => {
+test('C-024 / RN-019 (R-133): o cartão da solicitação — fora, completa ou menor no pedido, e o texto "No pedido: X — comercial pediu Y"', async () => {
   const { estadoNoPedido, textoNoPedido, metaDaSolicitacao, TOM_PRIORIDADE_CARTAO } = await import('../src/lib/solicitacoes.ts');
   assert.equal(estadoNoPedido(10, 0), 'fora');
   assert.equal(estadoNoPedido(10, 10), 'completa');

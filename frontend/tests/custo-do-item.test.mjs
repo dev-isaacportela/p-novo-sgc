@@ -11,7 +11,7 @@ const especial = (codprod, politica, custo, fim, codcli = 1) => ({
 });
 const padrao = { valor: 10, dataRef: '2026-01-01', origem: 'gestao' };
 
-test('R-133: tabelas vigentes — uma por política e custo, só do produto, sem as vencidas, da mais barata', () => {
+test('RN-020 (R-133): tabelas vigentes — uma por política e custo, só do produto, sem as vencidas, da mais barata', () => {
   const custos = [
     especial(5, 2, 8.5, null), especial(5, 2, 8.5, null, 2), especial(5, 1, 9, '2026-12-31'),
     especial(5, 3, 7, '2026-10-01'), especial(6, 1, 1, null), especial(5, 4, 0, null),
@@ -20,7 +20,7 @@ test('R-133: tabelas vigentes — uma por política e custo, só do produto, sem
   assert.deepEqual(t.map((x) => [x.politicaId, x.custo]), [[2, 8.5], [1, 9]]);
 });
 
-test('R-133: as opções — padrão, cada tabela, a especial fora da vigência do item, e manual', () => {
+test('RN-020 (R-133): as opções — padrão, cada tabela, a especial fora da vigência do item, e manual', () => {
   const t = [{ politicaId: 2, politicaNome: 'Tabela 2', custo: 8.5, dataFim: '' }];
   const opcoes = opcoesDeCusto(padrao, t, { tipoPreco: 'especial', precoCusto: 7.25 });
   assert.deepEqual(opcoes.map((o) => o.value), ['padrao', 'esp:2:8.5', 'esp:0:7.25', 'manual']);
@@ -30,7 +30,7 @@ test('R-133: as opções — padrão, cada tabela, a especial fora da vigência 
   assert.equal(opcoesDeCusto({ valor: 0, dataRef: '', origem: 'carregando' }, [])[0].label, 'Padrão');
 });
 
-test('R-133: a escolha do item e o que cada escolha grava', () => {
+test('C-027 / RN-020 (R-133): a escolha do item e o que cada escolha grava', () => {
   const t = [{ politicaId: 2, politicaNome: 'Tabela 2', custo: 8.5, dataFim: '' }];
   assert.equal(escolhaDoItem({ tipoPreco: 'padrao', precoCusto: 10 }, t), 'padrao');
   assert.equal(escolhaDoItem({ tipoPreco: 'especial', precoCusto: 8.5 }, t), chaveDaTabela(t[0]));

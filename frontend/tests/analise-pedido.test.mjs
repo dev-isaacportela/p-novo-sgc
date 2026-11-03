@@ -23,7 +23,7 @@ const montados = [
   base(3, 'Café', 90, 36, { curvaAbc: 'B', qtEstoque: 50 }),
 ];
 
-test('R-133: as linhas — o produto montado com o item do pedido por cima, e o item da busca que a análise não trouxe no fim', () => {
+test('C-025 (R-133): as linhas — o produto montado com o item do pedido por cima, e o item da busca que a análise não trouxe no fim', () => {
   const itens = [base(3, 'Café', 90, 36, { qtPedida: 48, precoCusto: 3 }), base(9, 'Extra da busca', 0, 0, { qtPedida: 6 }), base(2, 'Bolacha', 0, 0, { qtPedida: 0 })];
   const linhas = linhasDaAnalise(montados, itens, { divisao: new Map([[1, { privado: 20, pf: 7, publico: 3 }]]), comercial: new Set([2]) });
   assert.deepEqual(linhas.map((l) => l.codprod), [1, 2, 3, 9]);
@@ -35,7 +35,7 @@ test('R-133: as linhas — o produto montado com o item do pedido por cima, e o 
   assert.deepEqual(contagemDeSaida(linhas), { com: 2, sem: 2 });
 });
 
-test('R-133: chips somam e a busca casa nome sem acento ou código', () => {
+test('C-025 (R-133): chips somam e a busca casa nome sem acento ou código', () => {
   const linhas = linhasDaAnalise(montados, [base(3, 'Café', 90, 36, { qtPedida: 48 })]);
   assert.deepEqual(filtrarAnalise(linhas, { ...FILTROS_ANALISE, saida: 'com' }).map((l) => l.codprod), [1, 3]);
   assert.deepEqual(filtrarAnalise(linhas, { ...FILTROS_ANALISE, saida: 'sem' }).map((l) => l.codprod), [2]);
@@ -44,7 +44,7 @@ test('R-133: chips somam e a busca casa nome sem acento ou código', () => {
   assert.deepEqual(filtrarAnalise(linhas, FILTROS_ANALISE, '3').map((l) => l.codprod), [3]);
 });
 
-test('R-133: Embalagem mínima / Caixa cheia — 36 un. são 3 cx; 2 cx digitadas são 24 un.; a 2ª linha só quando foge da sugestão', () => {
+test('RN-018 (R-133): Embalagem mínima / Caixa cheia — 36 un. são 3 cx; 2 cx digitadas são 24 un.; a 2ª linha só quando foge da sugestão', () => {
   assert.equal(naUnidade(36, 12, 'caixa'), 3);
   assert.equal(naUnidade(36, 12, 'embalagem'), 36);
   assert.equal(naUnidade(5, 1, 'caixa'), 5, 'avulso: a caixa é 1');
@@ -56,7 +56,7 @@ test('R-133: Embalagem mínima / Caixa cheia — 36 un. são 3 cx; 2 cx digitada
   assert.equal(segundaLinhaComprar(5, 3, 1, 'embalagem'), 'sug. 3');
 });
 
-test('R-133: a coluna Dias — perigo abaixo de 30, atenção acima do teto, "s/ venda" sem venda, "> 365 d" no topo', () => {
+test('RN-019 (R-133): a coluna Dias — perigo abaixo de 30, atenção acima do teto, "s/ venda" sem venda, "> 365 d" no topo', () => {
   assert.deepEqual(rotuloDias(null, 45), { texto: 's/ venda', tom: 'off' });
   assert.deepEqual(rotuloDias(12.4, 45), { texto: '12 d', tom: 'alert' });
   assert.deepEqual(rotuloDias(40, 45), { texto: '40 d', tom: 'neutral' });
@@ -64,7 +64,7 @@ test('R-133: a coluna Dias — perigo abaixo de 30, atenção acima do teto, "s/
   assert.equal(rotuloDias(900, 45).texto, '> 365 d');
 });
 
-test('R-133: ordenação em três passos — padrão, invertida, sem ordem; outra coluna recomeça', () => {
+test('RN-017 (R-133): ordenação em três passos — padrão, invertida, sem ordem; outra coluna recomeça', () => {
   let ordem = proximaOrdem(null, 'venda');
   assert.deepEqual(ordem, { coluna: 'venda', invertida: false });
   ordem = proximaOrdem(ordem, 'venda');
@@ -82,7 +82,7 @@ test('R-133: ordenação em três passos — padrão, invertida, sem ordem; outr
   assert.equal(ordenarAnalise(linhas, null, qt, 1.5), linhas, 'sem ordem: a da análise');
 });
 
-test('R-133: o rodapé soma as linhas visíveis — 3 produtos, 2 a comprar, A/B/C, Comprar 60 e o valor', () => {
+test('C-025 (R-133): o rodapé soma as linhas visíveis — 3 produtos, 2 a comprar, A/B/C, Comprar 60 e o valor', () => {
   const linhas = linhasDaAnalise(montados, [base(3, 'Café', 90, 36, { qtPedida: 36, precoCusto: 3 })]);
   const r = rodapeDaAnalise(linhas, (l) => (l.noPedido ? l.noPedido.qtPedida : l.base.qtSugerida));
   assert.equal(r.produtos, 3);
@@ -94,7 +94,7 @@ test('R-133: o rodapé soma as linhas visíveis — 3 produtos, 2 a comprar, A/B
   assert.equal(r.valor, 24 * 2 + 36 * 3);
 });
 
-test('R-133: aba Itens — diferença negativa é perigo e positiva atenção; o rodapé conta especiais e manuais', () => {
+test('C-025 (R-133): aba Itens — diferença negativa é perigo e positiva atenção; o rodapé conta especiais e manuais', () => {
   assert.deepEqual(diferencaDoItem({ qtPedida: 10, qtSugerida: 12 }), { valor: -2, tom: 'alert' });
   assert.deepEqual(diferencaDoItem({ qtPedida: 14, qtSugerida: 12 }), { valor: 2, tom: 'attention' });
   assert.deepEqual(diferencaDoItem({ qtPedida: 12, qtSugerida: 12 }), { valor: 0, tom: 'neutral' });
@@ -105,7 +105,7 @@ test('R-133: aba Itens — diferença negativa é perigo e positiva atenção; o
   assert.equal(rodapeDosItens([{ qtPedida: 1, precoCusto: 1, tipoPreco: 'padrao' }]).custos, 'todos padrão');
 });
 
-test('R-133: o título do Trâns. separa o WinThor dos outros pedidos abertos do Kanban', () => {
+test('C-025 (R-133): o título do Trâns. separa o WinThor dos outros pedidos abertos do Kanban', () => {
   const [l] = linhasDaAnalise([base(1, 'Água', 30, 24, { qtTransito: 12 })], [], {
     pedidoErp: new Map([[1, 6]]), kanban: new Map([[1, [{ idCard: 7, titulo: 'Fresenius · Filial 1', fase: 'tecnica', quantidade: 24 }]]]),
   });
