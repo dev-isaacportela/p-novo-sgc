@@ -25,9 +25,15 @@ export interface LinhaAnalise {
   VENDA_PERIODO: number;
   VENDA_LICITACAO: number;
   CUSTO_ULT_ENTRADA: number;
+  /** R-133: a venda válida dividida (R-131) e o pedido ao ERP — só para mostrar, fora da fórmula. */
+  VENDA_PRIVADO?: number;
+  VENDA_PF?: number;
+  VENDA_PUBLICO?: number;
+  QT_PEDIDA_ERP?: number;
 }
 
-export type TipoPreco = 'padrao' | 'especial';
+/** R-133: `manual` = custo digitado no seletor de custo do item. */
+export type TipoPreco = 'padrao' | 'especial' | 'manual';
 export type CurvaAbc = 'A' | 'B' | 'C';
 
 /** Item do pedido como a aba o edita e como o `sgcItensGravar` o recebe. */
@@ -301,7 +307,7 @@ export function itemDeLinha(linha: Record<string, unknown>): ItemPedido {
     qtSugerida: numero(linha.QT_SUGERIDA),
     qtPedida: numero(linha.QT_PEDIDA),
     precoCusto: numero(linha.PRECO_CUSTO),
-    tipoPreco: String(linha.TIPO_PRECO ?? 'padrao') === 'especial' ? 'especial' : 'padrao',
+    tipoPreco: (['especial', 'manual'].includes(String(linha.TIPO_PRECO)) ? String(linha.TIPO_PRECO) : 'padrao') as TipoPreco,
     curvaAbc: (['A', 'B', 'C'].includes(String(linha.CURVA_ABC)) ? String(linha.CURVA_ABC) : 'C') as CurvaAbc,
     coberturaDias: numero(linha.COBERTURA_DIAS),
     coberturaLimite: numero(linha.COBERTURA_LIMITE) || 0,
