@@ -15,6 +15,7 @@ import {
   itensFaturados, type ConferenciaNf, type ItemFaturadoNf, type NotaNf,
 } from '@/lib/conclusao';
 import { useCarga } from './carga-do-card';
+import { SeloDeValidade } from './nf-cartoes';
 
 const DECISAO = {
   aceito: { tom: 'live', rotulo: 'Aceito' },
@@ -75,6 +76,7 @@ export default function BlocoConcluido(ctx: ExtensaoContexto) {
                 valorMeta={`${numeroPt(item.quantidade)} × ${moeda(item.preco)}`}
               >
                 <Status tone={DECISAO[item.decisao].tom}>{DECISAO[item.decisao].rotulo}</Status>
+                <SeloDeValidade dtValidade={item.validade} />
               </CartaoLinha>
             ))}
           </ListaCartoes>

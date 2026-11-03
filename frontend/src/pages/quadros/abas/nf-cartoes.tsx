@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils';
 import {
   Button, CartaoLinha, Dash, ListaCartoes, MetaDot, Status, TextLink,
 } from '@/components/page';
-import { fmtData, fmtDataHora, moeda, numeroPt } from '@/lib/formato';
-import { ROTULO_OCORRENCIA, textoDaOcorrencia } from '@/lib/nf';
+import { fmtData, fmtDataHora, hojeIso, moeda, numeroPt } from '@/lib/formato';
+import { ROTULO_OCORRENCIA, seloDeValidade, textoDaOcorrencia, type SeloValidade } from '@/lib/nf';
 import type {
   ContatoDaAba, ItemDaAba, NfDaAba, OcorrenciaDaAba, SugestaoDaAba,
 } from './nf-dialogos';
@@ -77,6 +77,20 @@ export function CartoesDeContato({ contatos }: { contatos: ContatoDaAba[] }) {
       ))}
     </ListaCartoes>
   );
+}
+
+const SELO: Record<SeloValidade, { tom: 'alert' | 'attention' | 'live'; rotulo: string }> = {
+  critica: { tom: 'alert', rotulo: 'Validade crítica' },
+  atencao: { tom: 'attention', rotulo: 'Validade em atenção' },
+  conforme: { tom: 'live', rotulo: 'Validade conforme' },
+};
+
+/** R-152 (P-5): o selo 90/120 do legado, com os dias até vencer. Sem data, nada. */
+export function SeloDeValidade({ dtValidade }: { dtValidade: string | null | undefined }) {
+  const selo = seloDeValidade(dtValidade, hojeIso());
+  if (!selo) return null;
+  const { tom, rotulo } = SELO[selo.selo];
+  return <Status tone={tom}>{rotulo} · {selo.dias < 0 ? `vencida há ${-selo.dias} d` : `${selo.dias} d`}</Status>;
 }
 
 type AoDecidir = (ocorrencia: OcorrenciaDaAba, decisao: 'aceito' | 'recusado') => void;
@@ -154,6 +168,7 @@ export function BlocoDaNota({
                 <Status tone={item.CASADO_POR === 'codprod' ? 'live' : item.CASADO_POR === 'nenhum' ? 'alert' : 'attention'}>
                   {ROTULO_CASAMENTO[item.CASADO_POR] ?? item.CASADO_POR}
                 </Status>
+                <SeloDeValidade dtValidade={item.DT_VALIDADE} />
                 <ListaDeConferencias
                   ocorrencias={ocorrencias.filter((o) => o.CODPROD === item.CODPROD && visivel(o))}
                   descricao={item.DESCRICAO}

@@ -179,6 +179,35 @@ export function resultadoDeValidade(dias: number | null, minimo: number): Result
   return dias >= regua ? 'conforme' : 'divergente';
 }
 
+/**
+ * R-152 (P-5, C-032) — o selo de validade do legado (RN-KAN-53/RN-BO-16):
+ * dias até vencer contados de HOJE, crítica abaixo de 90, atenção até 120,
+ * conforme acima. É leitura de olho, ao lado da conferência da RN-005 (que
+ * mede contra a validade mínima do fornecedor, a partir da emissão) — não a
+ * substitui nem decide nada. Sem data, sem selo.
+ */
+export type SeloValidade = 'critica' | 'atencao' | 'conforme';
+export const VALIDADE_CRITICA_DIAS = 90;
+export const VALIDADE_ATENCAO_DIAS = 120;
+
+export function seloDeValidade(dtValidade: string | null | undefined, hoje: string): { selo: SeloValidade; dias: number } | null {
+  if (!dtValidade || !/^\d{4}-\d{2}-\d{2}/.test(String(dtValidade))) return null;
+  const dias = diasEntre(hoje, String(dtValidade).slice(0, 10));
+  if (dias === null) return null;
+  const selo: SeloValidade = dias < VALIDADE_CRITICA_DIAS ? 'critica' : dias <= VALIDADE_ATENCAO_DIAS ? 'atencao' : 'conforme';
+  return { selo, dias };
+}
+
+/** A faixa do resumo de faturamento do legado: quantos itens faturados em cada selo. */
+export function contagemDeValidade(itens: readonly { DT_VALIDADE?: string | null }[], hoje: string): Record<SeloValidade | 'semData', number> {
+  const conta = { critica: 0, atencao: 0, conforme: 0, semData: 0 };
+  for (const item of itens ?? []) {
+    const selo = seloDeValidade(item.DT_VALIDADE, hoje);
+    conta[selo ? selo.selo : 'semData'] += 1;
+  }
+  return conta;
+}
+
 /** RN-006 — acima da pedida é divergente; abaixo é conforme, com o saldo no texto. */
 export function resultadoDeQuantidade(pedida: number, faturada: number): { resultado: Resultado; texto: string } {
   const pedidaN = numero(pedida);

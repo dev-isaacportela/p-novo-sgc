@@ -12,7 +12,7 @@ import * as React from 'react';
 import { CheckCheck, FilePlus2, Mail, PhoneCall } from 'lucide-react';
 import type { ExtensaoContexto } from '@benenutri/mitra-kanban';
 import {
-  Alert, Button, EmptyState, GradeMini, MiniCartao, Panel, PanelHeader,
+  Alert, Button, EmptyState, GradeMini, MiniCartao, Panel, PanelHeader, Status,
 } from '@/components/page';
 import { acao } from '@/lib/mitra-api';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
@@ -27,7 +27,7 @@ import {
   type PedidoDaAba, type SugestaoDaAba,
 } from './nf-dialogos';
 import { BlocoDaNota, CartoesDeContato, CartoesDeSugestao } from './nf-cartoes';
-import { textoDaOcorrencia } from '@/lib/nf';
+import { contagemDeValidade, textoDaOcorrencia } from '@/lib/nf';
 import { lerCarga } from './carga-do-card';
 
 interface ItemDoPedido { CODPROD: number; DESCRICAO: string; QT_PEDIDA: number; PRECO_CUSTO: number }
@@ -192,6 +192,7 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
   }
 
   const saldo = (Number(pedido.VL_TOTAL) || 0) - (Number(pedido.VL_FATURADO) || 0);
+  const validade = dados.itens.length > 0 ? contagemDeValidade(dados.itens, hojeIso()) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -211,6 +212,16 @@ export default function AbaNotasFiscais(ctx: ExtensaoContexto) {
             <MiniCartao rotulo="Saldo" valor={moeda(Math.max(0, saldo))} hint={`de ${moeda(pedido.VL_TOTAL)}`} />
             <MiniCartao rotulo="Notas" valor={dados.nfs.length} hint={pendentes.length > 0 ? `${pendentes.length} conferência(s) pendente(s)` : undefined} />
           </GradeMini>
+          {validade ? (
+            // R-152 (P-5): a faixa de validade do resumo do legado (PW:11349-11365).
+            <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-secondary">
+              <span>Validade dos itens faturados:</span>
+              <Status tone="live">{validade.conforme} conformes</Status>
+              <Status tone="attention">{validade.atencao} em atenção (até 120 d)</Status>
+              <Status tone="alert">{validade.critica} críticas (abaixo de 90 d)</Status>
+              {validade.semData > 0 ? <Status tone="off">{validade.semData} sem data</Status> : null}
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="primary" onClick={() => setRegistrando(true)} disabled={bloqueado}>
               <FilePlus2 aria-hidden />
