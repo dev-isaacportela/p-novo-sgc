@@ -21,6 +21,8 @@
 // e sgcEscCoberturaExcluir (7359) continuam no bloco 73xx, com os ids delas.
 // 83xx pela 013 movimentação de produtos (onda 5, R-140): leituras 8301–8311,
 // escritas 8350–8351.
+// 89xx pela 018 fornecedores — exportar e excluir com cópia (R-190):
+// escritas 8950–8956, JAVASCRIPT 8980.
 
 
 export const SERVER_FUNCTION_NAMES = {
@@ -355,6 +357,14 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscEmpCancelar: 'sgcEscEmpCancelar',
   sgcEmpCarregar: 'sgcEmpCarregar',
   sgcEmpItensGravar: 'sgcEmpItensGravar',
+  sgcEscFornecedorExclusaoRegistrar: 'sgcEscFornecedorExclusaoRegistrar',
+  sgcEscFornecedorExclusaoContatos: 'sgcEscFornecedorExclusaoContatos',
+  sgcEscFornecedorExclusaoFaixas: 'sgcEscFornecedorExclusaoFaixas',
+  sgcEscFornecedorExclusaoLinhas: 'sgcEscFornecedorExclusaoLinhas',
+  sgcEscFornecedorExclusaoFiliais: 'sgcEscFornecedorExclusaoFiliais',
+  sgcEscFornecedorExclusaoDocumentos: 'sgcEscFornecedorExclusaoDocumentos',
+  sgcEscFornecedorExclusaoFornecedor: 'sgcEscFornecedorExclusaoFornecedor',
+  sgcFornecedorExportar: 'sgcFornecedorExportar',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -685,4 +695,12 @@ export const SERVER_FUNCTIONS = {
   sgcEscEmpCancelar: '8668',
   sgcEmpCarregar: '8680',
   sgcEmpItensGravar: '8681',
+  sgcEscFornecedorExclusaoRegistrar: '8950',
+  sgcEscFornecedorExclusaoContatos: '8951',
+  sgcEscFornecedorExclusaoFaixas: '8952',
+  sgcEscFornecedorExclusaoLinhas: '8953',
+  sgcEscFornecedorExclusaoFiliais: '8954',
+  sgcEscFornecedorExclusaoDocumentos: '8955',
+  sgcEscFornecedorExclusaoFornecedor: '8956',
+  sgcFornecedorExportar: '8980',
 };
