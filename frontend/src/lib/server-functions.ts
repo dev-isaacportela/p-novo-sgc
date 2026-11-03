@@ -355,6 +355,13 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscEmpCancelar: 'sgcEscEmpCancelar',
   sgcEmpCarregar: 'sgcEmpCarregar',
   sgcEmpItensGravar: 'sgcEmpItensGravar',
+  // Onda 5 (R-170): fila de e-mail e aviso de pedido pronto para concluir (016, add-018).
+  sgcEscEmailFilaInserir: 'sgcEscEmailFilaInserir',
+  sgcEscEmailFilaReservar: 'sgcEscEmailFilaReservar',
+  sgcEscEmailFilaEnviado: 'sgcEscEmailFilaEnviado',
+  sgcEscEmailFilaFalhou: 'sgcEscEmailFilaFalhou',
+  sgcEmailFilaProcessar: 'sgcEmailFilaProcessar',
+  sgcConclusaoProntosAvisar: 'sgcConclusaoProntosAvisar',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -685,4 +692,11 @@ export const SERVER_FUNCTIONS = {
   sgcEscEmpCancelar: '8668',
   sgcEmpCarregar: '8680',
   sgcEmpItensGravar: '8681',
+  // Onda 5 (R-170): fila de e-mail e aviso de conclusão (016) — faixa 87xx até o sync trazer os reais.
+  sgcEscEmailFilaInserir: '8750',
+  sgcEscEmailFilaReservar: '8751',
+  sgcEscEmailFilaEnviado: '8752',
+  sgcEscEmailFilaFalhou: '8753',
+  sgcEmailFilaProcessar: '8780',
+  sgcConclusaoProntosAvisar: '8781',
 };

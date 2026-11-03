@@ -72,6 +72,9 @@ export const PUBLISH_ORDER = [
   'add-016-galderma.mjs',
   // Onda 5 (R-160): 015 -> add-017-empenhos.mjs (o add-005 importa dele o ramo do gancho, R-161).
   'add-017-empenhos.mjs',
+  // Onda 5 (R-170): 016 -> add-018-fila-email-conclusao.mjs (as rotinas chamam o
+  // sgcEscAvisoInserir do add-008; o add-005 e o add-008 chamam a fila por id).
+  'add-018-fila-email-conclusao.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');

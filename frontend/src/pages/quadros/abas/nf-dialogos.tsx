@@ -17,6 +17,7 @@ import { acao, linhas } from '@/lib/mitra-api';
 import { fmtData, hojeIso, moeda } from '@/lib/formato';
 import { CANAIS_CONTATO } from '@/lib/nf';
 import { resumoDaCobranca } from '@/lib/faturamento';
+import { resumoComFila } from '@/lib/fila-email';
 
 /* ─────────────── o que `sgcNfListar` devolve ─────────────── */
 
@@ -433,7 +434,7 @@ export function DialogoCobranca({
       const quando = agora();
       await acao('sgcEscContatoInserir', {
         cardId: pedido.ID_CARD, dtContato: quando, canalContato: 'email',
-        resumo: resumoDaCobranca(assunto.trim(), para.trim()), previsao: '', criadoEm: quando,
+        resumo: resumoComFila(resumoDaCobranca(assunto.trim(), para.trim()), resposta.emailNaFila), previsao: '', criadoEm: quando,
       });
       await aoEnviar(para.trim());
       onOpenChange(false);
