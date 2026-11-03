@@ -1,6 +1,6 @@
 # Spec: Fila de e-mail com novas tentativas e aviso de pedido pronto para concluir
 
-**ID:** 016-fila-email-e-aviso-conclusao · **Status:** proposta; perguntas P-01..P-09 com a opção recomendada implementada, aguardando aprovação do usuário · **Data:** 2026-11-03 · **Onda:** 5 (lacunas do levantamento legado × SGC 2) · **Origem:** p-60523, `docs/regras-de-negocio/13-fila-email-comunicacoes.md` (RN-EM-01..27, rotina `email_fila_processar`) e `10-nf-automacao-faturamento.md` (B5, RN-NF-34, rotina `sgc_cron_pedidos_prontos_conclusao`)
+**ID:** 016-fila-email-e-aviso-conclusao · **Status:** aprovada (2026-11-03): P-01..P-09 aprovadas como implementadas, R-173 · **Data:** 2026-11-03 · **Onda:** 5 (lacunas do levantamento legado × SGC 2) · **Origem:** p-60523, `docs/regras-de-negocio/13-fila-email-comunicacoes.md` (RN-EM-01..27, rotina `email_fila_processar`) e `10-nf-automacao-faturamento.md` (B5, RN-NF-34, rotina `sgc_cron_pedidos_prontos_conclusao`)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.

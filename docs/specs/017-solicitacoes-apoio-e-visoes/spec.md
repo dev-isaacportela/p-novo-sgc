@@ -1,6 +1,6 @@
 # Spec: Solicitações — apoio à avaliação e visões agrupadas
 
-**ID:** 017-solicitacoes-apoio-e-visoes · **Status:** rascunho, propostas P-01..P-09 implementadas e aguardando o usuário · **Data:** 2026-11-03
+**ID:** 017-solicitacoes-apoio-e-visoes · **Status:** aprovada (2026-11-03): P-01..P-09 aprovadas como implementadas, R-181 · **Data:** 2026-11-03
 
 **Estende:** [`008-solicitacoes-do-comercial`](../008-solicitacoes-do-comercial/spec.md). Tudo que a
 008 fixou (quem registra, quem avalia, o recorte do comercial, a situação de atendimento derivada)

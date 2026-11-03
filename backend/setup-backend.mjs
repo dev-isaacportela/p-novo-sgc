@@ -869,6 +869,9 @@ const DDL_016 = [
     ENVIADO_EM VARCHAR(19),
     UNIQUE KEY UK_SGC_EMAIL_FILA_COMUNICACAO (ID_COMUNICACAO),
     INDEX IX_SGC_EMAIL_FILA_STATUS (STATUS, ID)
+  )`,
+];
+
 // spec 018 — copia da parametrizacao de fornecedor excluida (RN-PAR-08 do
 // legado). Sem FK de proposito: a copia sobrevive ao registro que descreve.
 // UNIQUE por FORNECEDOR_ID: uma copia por parametrizacao (RN-006 da 018).
@@ -884,6 +887,9 @@ const DDL_018 = [
     EXCLUIDO_EM VARCHAR(19),
     UNIQUE KEY UK_SGC_FORNECEDOR_EXCLUSAO (FORNECEDOR_ID),
     INDEX IX_SGC_FORNECEDOR_EXCLUSAO_COD (CODFORNEC)
+  )`,
+];
+
 // spec 019 — projecao manual (R-200). Ajuste percentual da venda projetada por
 // fornecedor + filial + produto, com validade e motivo. Tabela propria (e nao
 // colunas em SGC_PARAMETRO_COMPRA): CREATE TABLE IF NOT EXISTS nao acrescenta
@@ -905,9 +911,8 @@ const DDL_019 = [
 ];
 
 export const DDL = [...DDL_001, ...DDL_002, ...DDL_003, ...DDL_004, ...DDL_005, ...DDL_007,
-  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_016];
-  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_018];
-  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_019];
+  ...DDL_008, ...DDL_011, ...DDL_012, ...DDL_013, ...DDL_014, ...DDL_015, ...DDL_016, ...DDL_018,
+  ...DDL_019];
 
 function isEntrypoint() {
   return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

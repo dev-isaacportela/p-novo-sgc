@@ -1,6 +1,6 @@
 # Spec: Projeção manual — o comprador ajusta a venda futura de um produto, com prazo
 
-**ID:** 019-projecao-manual · **Status:** rascunho (propostas P-01..P-09 implementadas, aguardando aprovação) · **Data:** 2026-11-03 · **Estende:** [011-compras-inteligentes](../011-compras-inteligentes/spec.md)
+**ID:** 019-projecao-manual · **Status:** aprovada (2026-11-03): P-01..P-09 aprovadas como implementadas, R-202 · **Data:** 2026-11-03 · **Estende:** [011-compras-inteligentes](../011-compras-inteligentes/spec.md)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
@@ -165,7 +165,7 @@ segurança 18, ponto de pedido 36 e estoque máximo 70.
 | RN-007 | Gravar e remover: admin e gestor (o mesmo de parametrizar e silenciar na 011) |
 | RN-008 | O selo mostra o percentual com sinal e sem casa quando inteiro ("Projeção +20 %", "Projeção −12,5 %") |
 
-## Perguntas ao usuário (divergências do legado) — propostas implementadas, aguardando aprovação
+## Perguntas ao usuário (divergências do legado) — propostas aprovadas pelo usuário (R-202)
 
 Cada proposta é o que está implementado, e trocar uma é mexer num ponto só. Fonte: RN-CI-23 e a máquina de estados da "Projeção manual" em `06-compras-inteligentes.md` do legado, e o formulário de parâmetros do produto em `ComprasInteligentesPage.tsx`.
 

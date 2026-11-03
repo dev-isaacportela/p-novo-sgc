@@ -1,6 +1,6 @@
 # Spec: Fornecedores — exportar a parametrização e excluí-la guardando uma cópia
 
-**ID:** 018-fornecedores-exportar-excluir · **Status:** em revisão; perguntas P-01..P-07 com proposta implementada, aguardando o usuário · **Data:** 2026-11-03 · **Estende:** [001-fornecedores](../001-fornecedores/spec.md) · **Origem:** p-60523, Parametrização de Fornecedor (`docs/regras-de-negocio/07-parametrizacoes.md`, RN-PAR-07, RN-PAR-08, RN-PAR-12; tela `ParametrizacaoFornecedorPage`)
+**ID:** 018-fornecedores-exportar-excluir · **Status:** aprovada (2026-11-03): P-01..P-07 aprovadas como implementadas, R-192 · **Data:** 2026-11-03 · **Estende:** [001-fornecedores](../001-fornecedores/spec.md) · **Origem:** p-60523, Parametrização de Fornecedor (`docs/regras-de-negocio/07-parametrizacoes.md`, RN-PAR-07, RN-PAR-08, RN-PAR-12; tela `ParametrizacaoFornecedorPage`)
 
 > Escrito para quem usa e para quem paga. **Proibido** citar stack, tabela,
 > endpoint, componente ou biblioteca. Isso é assunto do `plan.md`.
