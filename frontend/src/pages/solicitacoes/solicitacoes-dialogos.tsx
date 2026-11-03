@@ -16,6 +16,7 @@ import { acao, linhas } from '@/lib/mitra-api';
 import { fmtDataHora } from '@/lib/formato';
 import { buscaDeCliente, rotuloStatus, validarSolicitacao, type LinhaSolicitacao } from '@/lib/solicitacoes';
 import { carimboGravado } from './carimbo';
+import ApoioAvaliacao from './ApoioAvaliacao';
 
 const agora = () => new Date().toISOString().slice(0, 19);
 
@@ -408,9 +409,13 @@ export function AvaliarDialogo({
     }
   }
 
+  // Spec 017 (P-01): o apoio só na avaliação da fila — a recusa pelo bloco da
+  // montagem já tem a análise do produto no próprio card.
+  const comApoio = !somenteRecusa && !!solicitacao.CODFILIAL;
+
   return (
     <Dialog open onOpenChange={(estado) => !estado && onFechar()}>
-      <DialogContent className="max-h-[90vh]">
+      <DialogContent className={comApoio ? 'max-h-[90vh] sm:max-w-3xl' : 'max-h-[90vh]'}>
         <DialogHeader>
           <DialogTitle>{somenteRecusa ? 'Recusar a solicitação' : 'Avaliar a solicitação'}</DialogTitle>
         </DialogHeader>
@@ -431,6 +436,15 @@ export function AvaliarDialogo({
             </RowMeta>
             {solicitacao.JUSTIFICATIVA ? <RowMeta>{solicitacao.JUSTIFICATIVA}</RowMeta> : null}
           </div>
+
+          {comApoio ? (
+            <ApoioAvaliacao
+              codprod={Number(solicitacao.CODPROD)}
+              codfilial={String(solicitacao.CODFILIAL)}
+              filial={solicitacao.FILIAL || `filial ${solicitacao.CODFILIAL}`}
+              codcli={Number(solicitacao.CODCLI)}
+            />
+          ) : null}
 
           {somenteRecusa ? null : (
             <Alert tone="info">

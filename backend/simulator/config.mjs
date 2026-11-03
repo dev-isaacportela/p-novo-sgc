@@ -75,6 +75,8 @@ export const PUBLISH_ORDER = [
   // Onda 5 (R-170): 016 -> add-018-fila-email-conclusao.mjs (as rotinas chamam o
   // sgcEscAvisoInserir do add-008; o add-005 e o add-008 chamam a fila por id).
   'add-018-fila-email-conclusao.mjs',
+  // Onda 5 (R-180): 017 -> add-019-solicitacoes-apoio.mjs (lê os fragmentos do add-011).
+  'add-019-solicitacoes-apoio.mjs',
 ];
 
 export const FRONTEND_MAP = join(HERE, '..', '..', 'frontend', 'src', 'lib', 'server-functions.ts');
@@ -166,4 +168,7 @@ export const CHECK_INPUT = {
   // spec 015 (quadro de empenhos): só as chaves NOVAS (D-17). busca, limite, offset,
   // dataInicio/dataFim, codfilial, hoje, codprod, codcli e codprods já servem.
   idPregao: '1',
+  // spec 017 (solicitações: visões agrupadas): só a chave nova (D-17). Os filtros
+  // da sgcSolicitacoesListar já vêm da 008 com valores que servem.
+  dimensao: 'vendedor',
 };

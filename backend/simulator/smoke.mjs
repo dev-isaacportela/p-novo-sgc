@@ -26,6 +26,7 @@ import { suite as galderma } from './smoke/014-galderma.mjs';
 import { suite as movimentacao } from './smoke/013-movimentacao.mjs';
 import { suite as empenhos } from './smoke/015-empenhos.mjs';
 import { suite as filaEmail } from './smoke/016-fila-email.mjs';
+import { suite as solicitacoesApoio } from './smoke/017-solicitacoes-apoio.mjs';
 
 const ctx = await abrirContexto();
 
@@ -56,6 +57,8 @@ await movimentacao(ctx);
 // Onda 5 (R-170): fila de e-mail e aviso de pronto — depois de todas: a rotina
 // das 08h10 avisa qualquer card pronto do banco compartilhado.
 await filaEmail(ctx);
+// Onda 5 (R-180): depois de todas — insere as próprias solicitações (fornecedor 1099) e só lê.
+await solicitacoesApoio(ctx);
 
 console.log(`\n  ${ctx.contagem()} verificacoes passaram.`);
 ctx.fechar();

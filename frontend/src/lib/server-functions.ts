@@ -362,6 +362,9 @@ export const SERVER_FUNCTION_NAMES = {
   sgcEscEmailFilaFalhou: 'sgcEscEmailFilaFalhou',
   sgcEmailFilaProcessar: 'sgcEmailFilaProcessar',
   sgcConclusaoProntosAvisar: 'sgcConclusaoProntosAvisar',
+  // Spec 017 (R-180): visões agrupadas das solicitações (add-019).
+  sgcSolicitacoesAgrupar: 'sgcSolicitacoesAgrupar',
+  sgcSolicitacoesAgruparTotal: 'sgcSolicitacoesAgruparTotal',
 };
 
 export const SERVER_FUNCTIONS = {
@@ -699,4 +702,7 @@ export const SERVER_FUNCTIONS = {
   sgcEscEmailFilaFalhou: '8753',
   sgcEmailFilaProcessar: '8780',
   sgcConclusaoProntosAvisar: '8781',
+  // Spec 017 (R-180): visões agrupadas das solicitações — faixa 88xx até o sync trazer os reais.
+  sgcSolicitacoesAgrupar: '8801',
+  sgcSolicitacoesAgruparTotal: '8802',
 };
