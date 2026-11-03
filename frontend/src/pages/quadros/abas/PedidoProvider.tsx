@@ -33,7 +33,7 @@ export function PedidoProvider({ children }: { children: React.ReactNode }) {
     return () => { vivo = false; };
   }, []);
 
-  const recarregar = React.useCallback(async (cardId: number) => {
+  const carregar = React.useCallback(async (cardId: number) => {
     if (!cardId) { setEstado(ESTADO_VAZIO); return; }
     emCurso.current = cardId;
     setEstado((atual) => ({ ...atual, cardId, carregando: true, erro: '' }));
@@ -60,6 +60,19 @@ export function PedidoProvider({ children }: { children: React.ReactNode }) {
       });
     }
   }, []);
+
+  // R-133: vários blocos leem o pedido (resumo, itens, solicitações, alertas) e
+  // cada um pede a carga no primeiro efeito, antes de o `carregando` chegar a
+  // eles — a carga em voo do MESMO card é uma só (RNF-001: uma execução ao abrir).
+  const emVoo = React.useRef<{ cardId: number; promessa: Promise<void> } | null>(null);
+  const recarregar = React.useCallback((cardId: number): Promise<void> => {
+    if (emVoo.current && emVoo.current.cardId === cardId) return emVoo.current.promessa;
+    const promessa = carregar(cardId).finally(() => {
+      if (emVoo.current?.promessa === promessa) emVoo.current = null;
+    });
+    emVoo.current = { cardId, promessa };
+    return promessa;
+  }, [carregar]);
 
   const definirCapa = React.useCallback((capa: CapaPedido) => {
     setEstado((atual) => ({ ...atual, capa }));
