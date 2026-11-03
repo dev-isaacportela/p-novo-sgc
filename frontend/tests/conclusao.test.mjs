@@ -2,7 +2,9 @@
 // concluir e os itens faturados do card (src/lib/conclusao.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pendentesDeFaturamento, pendenciasDaConclusao, itensFaturados } from '../src/lib/conclusao.ts';
+import {
+  pendentesDeFaturamento, pendenciasDaConclusao, itensFaturados, coberturaDoFaturamento, textoFaltaFaturar, MINIMO_COBERTO_PCT,
+} from '../src/lib/conclusao.ts';
 
 const PEDIDO = [
   { CODPROD: 10, DESCRICAO: 'A', QT_PEDIDA: 100, PRECO_CUSTO: 1 },
@@ -25,17 +27,30 @@ test('C-029: saldo por item soma todas as notas, ignora o que não foi pedido e 
   assert.equal(saldo[1].pct, 70);
 });
 
-test('C-030: pronto para concluir segue o servidor — conferência pendente e B.O. em aberto travam, saldo só avisa', () => {
-  assert.deepEqual(pendenciasDaConclusao({ conferenciasPendentes: 0, boAbertos: 0, saldo: 0 }), { pronto: true, pendencias: [] });
-  const comSaldo = pendenciasDaConclusao({ conferenciasPendentes: 0, boAbertos: 0, saldo: 120 });
-  assert.equal(comSaldo.pronto, true);
-  assert.deepEqual(comSaldo.pendencias.map((p) => p.trava), [false]);
-  const travado = pendenciasDaConclusao({ conferenciasPendentes: 2, boAbertos: 1, saldo: 0 });
+test('C-030: as travas da conclusão são as do servidor — conferência pendente, B.O. em aberto e o faturado; sem nenhuma, pronto', () => {
+  const base = { vlTotal: 1000, vlFaturado: 1000, vlBoCancelado: 0 };
+  assert.deepEqual(pendenciasDaConclusao({ conferenciasPendentes: 0, boAbertos: 0, ...base }), { pronto: true, pendencias: [] });
+  const travado = pendenciasDaConclusao({ conferenciasPendentes: 2, boAbertos: 1, ...base });
   assert.equal(travado.pronto, false);
   assert.deepEqual(travado.pendencias.map((p) => p.texto), [
     'Decida as 2 conferências de nota fiscal pendentes.',
     'Resolva o item em B.O. em aberto.',
   ]);
+});
+
+test('C-033 / RN-016 (P-6): só conclui com 99,5 % do valor coberto — faturado mais o B.O. que não vem mais —, com a frase do servidor', () => {
+  assert.equal(MINIMO_COBERTO_PCT, 99.5);
+  const falta = pendenciasDaConclusao({ conferenciasPendentes: 0, boAbertos: 0, vlTotal: 120000, vlFaturado: 72000, vlBoCancelado: 0 });
+  assert.equal(falta.pronto, false);
+  assert.deepEqual(falta.pendencias, [{
+    trava: true,
+    texto: 'Falta faturar R$ 48.000,00 (60,0 % coberto; o mínimo para concluir é 99,5 %). Registre a nota complementar ou marque o saldo em B.O. como "não vem mais".',
+  }]);
+  assert.equal(coberturaDoFaturamento({ vlTotal: 1000, vlFaturado: 994, vlBoCancelado: 0 }).coberto, false, '99,4 % trava');
+  assert.equal(coberturaDoFaturamento({ vlTotal: 1000, vlFaturado: 995, vlBoCancelado: 0 }).coberto, true, '99,5 % libera');
+  assert.equal(coberturaDoFaturamento({ vlTotal: 1000, vlFaturado: 600, vlBoCancelado: 400 }).coberto, true, 'o B.O. que não vem mais cobre');
+  assert.deepEqual(coberturaDoFaturamento({ vlTotal: 0, vlFaturado: 0, vlBoCancelado: 0 }), { pct: 100, falta: 0, coberto: true });
+  assert.equal(textoFaltaFaturar(1234.5, 98.76), 'Falta faturar R$ 1.234,50 (98,8 % coberto; o mínimo para concluir é 99,5 %). Registre a nota complementar ou marque o saldo em B.O. como "não vem mais".');
 });
 
 test('C-031: itens faturados trazem nota, subtotal, lote, validade e a decisão das conferências daquele item', () => {

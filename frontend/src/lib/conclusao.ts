@@ -3,11 +3,13 @@
 // o saldo por item que a indústria ainda não faturou, o que falta para
 // concluir e os itens faturados do pedido concluído.
 //
-// A trava da conclusão é a do SERVIDOR (`pendencias-conclusao-nf.sql` e
-// `pendencias-conclusao-bo.sql`): conferência de nota sem decisão e item em
-// B.O. em aberto. O saldo não faturado é só aviso — o legado o tratava como
-// trava, e isso é a pergunta P-6 do levantamento, não regra desta tela.
+// A trava da conclusão é a do SERVIDOR (`pendencias-conclusao-nf.sql`,
+// `pendencias-conclusao-bo.sql` e `pendencias-conclusao-faturado.sql`):
+// conferência de nota sem decisão, item em B.O. em aberto e, desde a R-153
+// (P-6, como o legado), menos de 99,5 % do valor coberto — faturado mais o
+// saldo marcado em B.O. como "não vem mais". A frase é a MESMA da SQL.
 // Puro, testado em tests/conclusao.test.mjs.
+import { moeda } from './formato.ts';
 
 export interface ItemPedidoNf { CODPROD: number; DESCRICAO: string; QT_PEDIDA: number; PRECO_CUSTO: number }
 export interface ItemFaturadoNf {
@@ -67,17 +69,44 @@ export function pendentesDeFaturamento(
 
 export interface PendenciaDaConclusao { texto: string; trava: boolean }
 
+/** RN-NF-34 do legado: 99,5 % conta como 100 % (diferença de centavos no preço faturado). */
+export const MINIMO_COBERTO_PCT = 99.5;
+
+/**
+ * Quanto do valor do pedido está coberto: o faturado nas notas mais o saldo
+ * que foi para o B.O. e não vem mais. Pedido sem valor não tem o que cobrir.
+ */
+export function coberturaDoFaturamento(e: { vlTotal: number; vlFaturado: number; vlBoCancelado: number }): {
+  pct: number; falta: number; coberto: boolean;
+} {
+  const total = numero(e.vlTotal);
+  if (total <= 0) return { pct: 100, falta: 0, coberto: true };
+  const coberto = numero(e.vlFaturado) + numero(e.vlBoCancelado);
+  const pct = (coberto / total) * 100;
+  return { pct, falta: Math.max(0, total - coberto), coberto: coberto * 100 >= total * MINIMO_COBERTO_PCT };
+}
+
+/** A frase do servidor (PENDENCIAS_FATURADO_MOTIVO), caractere a caractere. */
+export function textoFaltaFaturar(falta: number, pct: number): string {
+  const r = moeda(falta).replace(/\u00a0/g, ' ');
+  const p = numero(pct).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `Falta faturar ${r} (${p} % coberto; o mínimo para concluir é 99,5 %). Registre a nota complementar ou marque o saldo em B.O. como "não vem mais".`;
+}
+
 /**
  * "Pedido pronto para conclusão" ou a lista do que falta (PW:12402-12443).
- * `pronto` segue o servidor; o saldo entra como aviso, sem travar.
+ * As três travas são as do servidor, na mesma ordem.
  */
 export function pendenciasDaConclusao(entrada: {
   conferenciasPendentes: number;
   boAbertos: number;
-  saldo: number;
+  vlTotal: number;
+  vlFaturado: number;
+  vlBoCancelado: number;
 }): { pronto: boolean; pendencias: PendenciaDaConclusao[] } {
   const conferencias = Math.max(0, Math.trunc(numero(entrada.conferenciasPendentes)));
   const bo = Math.max(0, Math.trunc(numero(entrada.boAbertos)));
+  const cobertura = coberturaDoFaturamento(entrada);
   const pendencias: PendenciaDaConclusao[] = [];
   if (conferencias > 0) {
     pendencias.push({
@@ -88,10 +117,8 @@ export function pendenciasDaConclusao(entrada: {
   if (bo > 0) {
     pendencias.push({ texto: `Resolva ${bo === 1 ? 'o item em B.O. em aberto' : `os ${bo} itens em B.O. em aberto`}.`, trava: true });
   }
-  if (numero(entrada.saldo) > 0.005) {
-    pendencias.push({ texto: 'Ainda há saldo a faturar: registre a nota complementar ou marque o item em B.O.', trava: false });
-  }
-  return { pronto: conferencias === 0 && bo === 0, pendencias };
+  if (!cobertura.coberto) pendencias.push({ texto: textoFaltaFaturar(cobertura.falta, cobertura.pct), trava: true });
+  return { pronto: pendencias.length === 0, pendencias };
 }
 
 export type DecisaoDoItem = 'aceito' | 'pendente' | 'recusado';

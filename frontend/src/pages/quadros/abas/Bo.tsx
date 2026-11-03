@@ -70,6 +70,7 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
   const [dialogoMarcar, setDialogoMarcar] = React.useState(false);
   const [dialogoPrevisao, setDialogoPrevisao] = React.useState(false);
   const [dialogoDocumento, setDialogoDocumento] = React.useState(false);
+  const [confirmandoCancelar, setConfirmandoCancelar] = React.useState(0);
 
   const dados = resposta && resposta.cardId === ctx.card.id ? resposta.dados : VAZIO;
   const carregando = !resposta || resposta.cardId !== ctx.card.id;
@@ -135,6 +136,19 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
     await comRecarga(async () => {
       const r = await acao('sgcBoMarcar', { cardId: ctx.card.id, itensJson: JSON.stringify([{ codprod, status: 'liberado' }]) });
       if (r.ok === false) throw new Error(String(r.erro ?? 'Não foi possível liberar o item.'));
+    });
+  }
+
+  /**
+   * R-153 (P-6): "não vem mais" — a indústria não vai entregar o saldo. O
+   * item sai do aberto como `cancelado` (o `sgcBoMarcar` já aceitava) e o
+   * valor dele passa a contar como coberto na trava de conclusão.
+   */
+  async function naoVemMais(codprod: number) {
+    setConfirmandoCancelar(0);
+    await comRecarga(async () => {
+      const r = await acao('sgcBoMarcar', { cardId: ctx.card.id, itensJson: JSON.stringify([{ codprod, status: 'cancelado' }]) });
+      if (r.ok === false) throw new Error(String(r.erro ?? 'Não foi possível encerrar o item.'));
     });
   }
 
@@ -246,13 +260,32 @@ export default function AbaBo(ctx: ExtensaoContexto & { fases: MapaDeFases; sess
                   valor={moeda(item.VL_PENDENTE)}
                   valorMeta={`${quantidade(item.QT_PENDENTE)} pendente`}
                   acoes={item.STATUS === 'aberto' ? (
-                    <Button size="sm" onClick={() => void liberar(item.CODPROD)} disabled={bloqueado} title={bloqueado ? motivoBloqueio : undefined}>
-                      Liberar
-                    </Button>
+                    <>
+                      <Button size="sm" onClick={() => void liberar(item.CODPROD)} disabled={bloqueado} title={bloqueado ? motivoBloqueio : undefined}>
+                        Liberar
+                      </Button>
+                      {confirmandoCancelar === item.CODPROD ? (
+                        <>
+                          <Button size="sm" variant="danger" onClick={() => void naoVemMais(item.CODPROD)} disabled={bloqueado}>
+                            Confirmar: não vem mais
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setConfirmandoCancelar(0)}>Voltar</Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => setConfirmandoCancelar(item.CODPROD)}
+                          disabled={bloqueado}
+                          title={bloqueado ? motivoBloqueio : 'A indústria não vai entregar: o saldo deixa de ser esperado e conta como coberto para concluir.'}
+                        >
+                          Não vem mais
+                        </Button>
+                      )}
+                    </>
                   ) : undefined}
                 >
                   <Status tone={STATUS_TONE[item.STATUS] ?? 'off'}>
-                    {item.STATUS === 'aberto' ? 'Em aberto' : item.STATUS === 'liberado' ? 'Liberado' : 'Cancelado'}
+                    {item.STATUS === 'aberto' ? 'Em aberto' : item.STATUS === 'liberado' ? 'Liberado' : 'Não vem mais'}
                   </Status>
                   {item.STATUS === 'liberado' && item.RESOLVIDO_POR_NOME ? (
                     <span>{item.RESOLVIDO_POR_NOME} em {fmtDataHora(item.RESOLVIDO_EM)}</span>
